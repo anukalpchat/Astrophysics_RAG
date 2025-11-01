@@ -10,20 +10,13 @@ import time
 # Page configuration
 st.set_page_config(
     page_title="Astrophysics Research Assistant",
-    page_icon="🔭",
+    page_icon="telescope",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for modern, professional UI
-s    # Process question
-    if ask_button and question:
-        # Display user question
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(f"**{question}**")
-        
-        # Generate response with streaming
-        with st.chat_message("assistant", avatar="🤖"):wn("""
+# Custom CSS for better UI
+st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
     
@@ -431,11 +424,11 @@ def main():
     # Process question
     if ask_button and question:
         # Display user question
-        with st.chat_message("user", avatar="�"):
+        with st.chat_message("user"):
             st.markdown(f"**{question}**")
         
         # Generate response with streaming
-        with st.chat_message("assistant", avatar="🤖"):
+        with st.chat_message("assistant"):
             response_placeholder = st.empty()
             full_response = ""
             
