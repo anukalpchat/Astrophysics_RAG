@@ -1,0 +1,2129 @@
+Title: DELOS: Detecting Shallow Transits in Kepler Photometry Using a Contrastive-Learning Framework
+Authors: Qingtian Liu, Jian Ge, XingChen Yan, Kevin Willis, Xinyu Yao, QuanQuan Hu, Jiapeng Zhu
+Published: 2026-05-28
+Categories: astro-ph.EP, astro-ph.IM, cs.AI
+
+Draft version May 29, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX7.0.1
+DELOS: Detecting Shallow T ransits in Kepler Photometry Using a Contrastive-Learning F ramework
+Qingtian Liu
+ ,1, 2 Jian Ge, 1 XingChen Yan
+ ,1, 2 Kevin Willis, 3 Xinyu Yao
+ ,1 QuanQuan Hu
+ ,1, 2 and
+Jiapeng Zhu
+ 1
+1Shanghai Astronomical Observatory, Chinese Academy of Sciences, Shanghai 200030, China
+2School of Astronomy and Space Sciences, University of Chinese Academy of Sciences, Beijing 101408, China
+3Science Talent Training Center, Gainesville, FL, 32606 USA
+(Received May 26, 2026)
+Submitted to ApJ
+ABSTRACT
+We presentDEtection in phase-foldedLight curves with cOntrastiveScoring (DELOS), a
+contrastive-learning-based framework designed to search for shallow transits inKeplerphotome-
+try. DELOS combines GPU-accelerated phase folding, optimized phase binning, and a custom one-
+dimensional convolutional encoder to assign a transit-likeness score to each folded light curve, thereby
+producing a score periodogram over trial periods without relying on pre-detected threshold-crossing
+events. Focusing on intermediate-to-long-period signals with orbital periods of 100–150 days, DELOS
+was trained on 20 million synthetic light curves generated with realistic transit models and Kepler-like
+noise properties, achieving a validation accuracy of 99.3% on the synthetic validation set. In con-
+trolled injection-recovery experiments, DELOS improves the combined precision–recall performance
+by 15.5% relative to Box-fitting Least Squares (BLS) and 11.25% relative to Transit Least Squares
+(TLS) in the low Signal-to-Noise Ratios (low-SNR) regime. It also accelerates the search by factors of
+approximately 3–5 and 74–80 compared with BLS and TLS, respectively. Applied to a selectedKepler
+validation sample, DELOS recovered all known shallow intermediate-to-long-period transit signals in
+the tested period range. These results demonstrate that DELOS provides an efficient and sensitive
+framework for low-SNR transit searches and represents a practical step toward future searches for
+longer-period terrestrial planets inKepler,K2,TESS,PLATO, andEarth 2.0data. Accordingly, this
+work is intended as a methodological development and validation study, with the detailed astrophysical
+validation of newly identified candidates deferred to future work.
+Keywords:Transit photometry (1709) — Surveys (1671) — Photometry (1234) — Astronomy data
+analysis (1858) — Exoplanets (498) — Exoplanet astronomy (486)
+1.INTRODUCTION
+Since the discovery of the first exoplanet orbiting a
+solar-type star (M. Mayor & D. Queloz 1995), over 6,000
+exoplanets have been discovered, with several thousand
+additional candidates yet to be confirmed. The primary
+methods for detecting these exoplanets include transit-
+ing (e.g., D. Charbonneau et al. 2000), radial velocity
+(e.g., B. Campbell et al. 1988), direct imaging (e.g.,
+G. Chauvin et al. 2004), and microlensing (e.g., J.-P.
+Beaulieu et al. 2006). Among these methods, transit
+photometry has been the most productive, contributing
+to the discovery of over 4,600 exoplanets according to
+NASA Exoplanet Archive statistics.
+Corresponding author: Jian Ge
+Email: qtxplorer@shao.ac.cn, jge@shao.ac.cn
+Initially, potential transit signals were detected by
+ground-based photometric observations (D. Charbon-
+neau et al. 2000; G. W. Henry et al. 2000; M. Konacki
+et al. 2003). However, the Kepler mission marked a piv-
+otal shift through four years of continuous space-based
+monitoring of more than 156,000 stars (W. J. Borucki
+et al. 2010; M. C. Stumpe et al. 2012). This space mis-
+sion produced an immense volume of high-precision pho-
+tometric data capable of detecting small planets beyond
+the sensitivity limits of ground-based observations. The
+sheer scale of the dataset necessitated the development
+of automated tools for efficient transit signal detection.
+Similarly, large-scale survey projects like K2 (S. B. How-
+ell et al. 2014) and TESS (G. R. Ricker et al. 2014) have
+also amassed vast observational datasets, further accel-
+erating the development of automated methods (A. Dat-
+tilo et al. 2019; L. Yu et al. 2019).
+arXiv:2605.29428v1  [astro-ph.EP]  28 May 2026
+
+2Liu et al.
+Automated exoplanet detection pipelines generally in-
+volve several key steps for identifying transit-like signals.
+First, light curves are preprocessed to remove signifi-
+cant stellar activity and variability trends (e.g., M. C.
+Stumpe et al. 2012; J. C. Smith et al. 2012). Sub-
+sequently, the Wavelet-based Adaptive-matched Filter
+(WAF) (J. M. Jenkins et al. 2002) or the Box-fitting
+Least Squares (BLS) (G. Kov´ acs et al. 2002) is utilized
+to recognize periodic signals within the light curves. Af-
+ter that, Threshold Crossing Events (TCEs) are iden-
+tified by applying appropriate thresholds to filter peri-
+odic signals detected by WAF or BLS (e.g., J. M. Jenk-
+ins et al. 2010a,b; G. Kov´ acs et al. 2002). Until now,
+numerous improvements have been developed in BLS
+to enhance the speed or precision (A. Collier Cameron
+et al. 2006; S. Renner et al. 2008; J. A. Carter & E. Agol
+2013; A. Ofir 2014). For example, S. Shahaf et al. (2022)
+integrates the Fast Folding Algorithm (D. Staelin 1969)
+with BLS, significantly accelerating the search speed.
+Meanwhile, the Transit Least Squares (TLS) (M. Hippke
+& R. Heller 2019) achieves higher precision by adopt-
+ing the physical limb-darkening model (K. Mandel & E.
+Agol 2002) to fit the observed data. However, this in-
+creased precision comes at the cost of significantly higher
+computational complexity. To address this, the GPU-
+accelerated Transit Least Squares (GTLS; Q. Hu et al.
+2026, in preparation) leverages GPU parallel computing
+technology to accelerate the TLS computational process.
+Next, Machine Learning (ML) is utilized to screen
+TCEs to obtain transit candidates, effectively filtering
+out false positives from instrumental noise, eclipsing
+binaries, and stellar variability. Prominent ML auto-
+vetting methods include AstroNet (C. J. Shallue & A.
+Vanderburg 2018), Autovetter (S. D. McCauliff et al.
+2015), and Robovetter (S. E. Thompson et al. 2018). In
+particular, AstroNet is based on the Convolutional Neu-
+ral Network (CNN, K. Fukushima 1980; Y. LeCun et al.
+1989; Y. Lecun et al. 1998), which successfully identi-
+fied the unknown exoplanets Kepler-80g and Kepler-90i
+(C. J. Shallue & A. Vanderburg 2018). The updated
+versions of AstroNet have been deployed in other sur-
+veys, including K2 (A. Dattilo et al. 2019), TESS (L.
+Yu et al. 2019; H. P. Osborn et al. 2020; G. Olmschenk
+et al. 2021; S. Rao et al. 2021), WASP (N. Schanche
+et al. 2018), and NGTS (A. Chaushev et al. 2019).
+In parallel, several efficient automated exoplanet de-
+tection pipelines that bypass least-squares–based ap-
+proaches for identifying TCEs have seen substantial de-
+velopment (S. Zucker & R. Giryes 2018; K. A. Pear-
+son et al. 2018; P. Chintarungruangchai & I.-G. Jiang
+2019; K. Cui et al. 2021; A. Malik et al. 2021). Re-
+cently, K. Wang et al. (2024a) developed the GPU Phase
+Folding and Convolutional Neural Network (GPFC) sys-
+tem, which accelerates light-curve folding to second-level
+timescales and yields an approximately 7% performance
+gain in detecting shallow, ultra-short-period transits rel-
+ative to BLS. Using this system, K. Wang et al. (2024b)
+identified five previously undetected ultrashort-period
+exoplanets, including Kepler-158d, Kepler-963c, Kepler-
+879c, Kepler-1489c, and KOI-4978.02. Moreover, the
+GPU-Fold developed in K. Wang et al. (2024a) makes
+it possible for large-scale neural networks to quickly
+search for transits. Among the non-least-squares meth-
+ods, some approaches employ a light curve folding pro-
+cess, whereas those that do not are less sensitive to shal-
+low transits (S. Zucker & R. Giryes 2018; K. Cui et al.
+2021).
+With the rapidly increasing number of known exoplan-
+ets, exoplanet science has transitioned from the charac-
+terization of individual systems to population-level sta-
+tistical studies (e.g., F. Fressin et al. 2013; E. A. Pe-
+tigura et al. 2013a; C. D. Dressing & D. Charbonneau
+2013; E. A. Petigura et al. 2013b; D. Foreman-Mackey
+et al. 2014; C. D. Dressing & D. Charbonneau 2015; C. J.
+Burke et al. 2015). On the other hand, small rocky ex-
+oplanets (≤1.25R ⊕) located in the terrestrial planet
+region of our solar system (from Mercury to Mars),
+including true Earth analogs (or Earth 2.0s)—Earth-
+sized planets receiving Earth-like irradiation around
+solar-type stars (F5V-K5V) remain undetected (W. J.
+Borucki et al. 2012; J. M. Jenkins et al. 2015; J. Ge
+et al. 2024a). To date, only a few habitable super-Earths
+have been discovered within these period ranges, such
+as Kepler-442b, Kepler-62e, Kepler-283c, Kepler-1638b,
+Kepler-1652b, Kepler-22b, Kepler-443b, Kepler-1701b,
+Kepler-1606b, Kepler-1540b, Kepler-174b, HD 40307g,
+and HD 206520c according to the Planetary Habitability
+Laboratory. These habitable super-Earths have masses
+between 2-10M ⊕ or radii between 1.25-2.5R ⊕. Fu-
+ture space missions such as thePLATOmission (H.
+Rauer et al. 2014, 2022) and theEarth 2.0(ET) mission
+(J. Ge et al. 2022a,b,c, 2024a,b) adopt wide-field, ultra-
+high-precision photometry to expand the known sample
+of terrestrial exoplanets and aim to discover Earth 2.0s
+while precisely measuring their occurrence rates.
+Importantly, besides the gradual improvement in tele-
+scope performance, the algorithm for detecting weak ter-
+restrial transit signals from extensive photometric data
+is equally crucial. Detecting these exoplanets is partic-
+ularly challenging because of their long orbital periods
+and inherently low Signal-to-Noise Ratios (low-SNR),
+making them difficult to identify in large astronomical
+datasets.
+In conventional exoplanet detection pipelines, classical
+search algorithms such as BLS and TLS construct peri-
+odograms by evaluating the consistency between phase-
+folded light curves and predefined transit templates over
+a grid of trial periods. These methods remain powerful
+and widely used, but their sensitivity can decrease in the
+long-period, low-SNR regime, where only a few transit
+events are available and the statistical distinction be-
+tween genuine shallow transits and noise-induced dips
+becomes increasingly fragile (G. Kov´ acs et al. 2002).
+
+DELOS in Kepler Photometry3
+The primary motivation for developingDEtection
+in phase-foldedLight curves with cOntrastiveScoring
+(DELOS) is to improve the detectability of terrestrial-
+sized planets. The central challenge addressed by DE-
+LOS is not merely the application of machine learning to
+transit detection but the recovery of rare, shallow, long-
+period terrestrial-sized signals for which only a small
+number of transit events are available, and conventional
+periodogram-based statistics become increasingly frag-
+ile under low-SNR and correlated-noise conditions. In
+the Solar System, the orbital periods of terrestrial plan-
+ets span a wide range, from 87.97 days (Mercury) to
+686.98 days (Mars). Owing to this broad period distri-
+bution, it is impractical for a single system to efficiently
+cover the entire range while maintaining high sensitiv-
+ity to shallow transit signals, as different orbital periods
+require different binning strategies during data analysis.
+Specifically, excessively fine binning introduces unneces-
+sary computational overhead for short-period searches,
+whereas overly coarse binning compresses long-period
+signals into too few bins, significantly attenuating or
+even obscuring them. To balance detection sensitivity
+and computational efficiency, we therefore restrict the
+initial search window to orbital periods of 100–150 days,
+targeting Intermediate-to-Long-period (ITL) transit sig-
+nals. This period range serves as a practical first step
+toward Earth-analog searches: it is long enough to en-
+ter the low-SNR, few-transit regime, yet short enough to
+provide a sufficient number of observable transits for ro-
+bust method development and validation. Future exten-
+sions toward∼1-year periods will be necessary to fully
+address true Earth analogs around Sun-like stars. The
+framework is flexible and can be adapted to other period
+ranges once the algorithm is fully developed.
+With DELOS, we significantly improved the sensitiv-
+ity in detecting ITL low-SNR transit signals. We demon-
+strated that DELOS has higher detection performance
+and faster speed compared to BLS and TLS. DELOS
+also identified several dozen high-scoring transit-like sig-
+nals in the Kepler data, which are used here only to
+demonstrate the search capability of DELOS and are
+not claimed as validated planet candidates. DELOS can
+be further applied to K2 and TESS, as well as future
+PLATO and ET missions.
+This paper is organized as follows. Section 2 intro-
+duces the fundamental principles of DELOS and the
+complete workflow of the proposed detection system.
+Section 3 describes the data preparation process, in-
+cluding Kepler light-curve preprocessing, simulated data
+generation, binning strategy, and construction of the
+DELOS training set. Section 4 presents comparative ex-
+periments between DELOS and commonly used transit
+detection algorithms. Section 5 applies DELOS to real
+Kepler mission data, presents high-scoring candidates
+identified by the model, and evaluates its robustness
+under both white-noise and red-noise conditions. Sec-
+tion 6 discusses the limitations and future improvements
+of DELOS, with an emphasis on enhancing cotrending
+and detrending performance to further improve the de-
+tection upper bound, as well as comparing its compu-
+tational efficiency with current fast detection methods.
+Finally, Section 7 concludes the paper by summarizing
+the advantages of DELOS and discussing potential di-
+rections for future research.
+2.METHODS
+2.1.Overview of the DELOS Method
+DELOS is a contrastive learning system designed for
+detecting ITL, low-SNR transit signals in high preci-
+sion photometric data. This detection system identifies
+transit signals in light curves through three key stages.
+First, the raw light curve undergoes preprocessing to re-
+move the long-term stellar activity trend and iteratively
+eliminate outliers. The preprocessed light curve is sub-
+sequently folded over a range of trial periods using the
+GPU-Fold algorithm, followed by noise normalization
+to ensure consistent noise levels across all folded light
+curves. Finally, DELOS assigns a 0–1 transit-likeness
+score to each normalized light curve, producing a score
+periodogram in which peaks indicate trial periods with
+stronger transit-like signatures. This score serves pri-
+marily for the ranking of candidate periods. Unless oth-
+erwise specified, it shall not be regarded as a rigorously
+calibrated astrophysical probability. In summary, DE-
+LOS performs an autonomous transit search without re-
+quiring prior period estimates or TCEs from external
+detection algorithms.
+For the DELOS system, detection sensitivity is
+strongly influenced by how densely the trial periods are
+sampled. An appropriately chosen sampling frequency
+is essential to maintain high sensitivity while avoiding
+excessive computational costs. We adopt the frequency-
+grid sampling prescription discussed by J. T. VanderPlas
+(2018), with an oversampling factor (N o).
+Nsample = NoT
+L (1)
+Here,N o is typically set to 2,Tis the total observed
+time window, andLis the expected transit duration.
+The Kepler mission observed 17 quarters of data from
+2009 to 2013, yielding a total observational baseline of
+four years, i.e.,T= 4×365 days. According to the Ke-
+pler Object of Interest (KOI) archive (S. E. Thompson
+et al. 2018), the transit duration of all known ITL exo-
+planets (candidates and confirmed planets) falls within
+0.05 to 0.93 days. To ensure optimal sensitivity, we
+conservatively adoptL= 0.05 days as the expected
+transit duration. Substituting these parameters into
+Equation 1 yields a sample frequency of the trial pe-
+riodN sample = 2×4×365
+0.05 = 58,400. We uniformly sam-
+pled 58,400 trial periods from 100 to 150 days, with an
+interval of 8.56×10 −4 days between adjacent trial peri-
+ods, ensuring a sampling density sufficient to detect ITL
+
+4Liu et al.
+Figure 1.Comparison of the periodograms generated by
+DELOS, BLS, and TLS on a simulated low-SNR, noise-nor-
+malized light curve, each algorithm using the same trial pe-
+riod sampling rate,N sample = 58,400. The top panel shows
+the light curve folded at the correct 147.8-day transit period,
+highlighting the transit event with a localized zoom. The
+three panels below sequentially present the periodogram re-
+sults from DELOS, BLS, and TLS for this light curve: the
+DELOS score at the transit period exceeds 0.98; the BLS
+Signal Detection Efficiency (SDE) is 8.17; and the TLS SDE
+is 9.73.
+transit signals. Next, we employ the GPU-Fold algo-
+rithm of K. Wang et al. (2024a) to fold the preprocessed
+light curve. To avoid producing empty values due to the
+GPU-Fold mechanism (K. Wang et al. 2024a), we first
+fold the preprocessed light curve into 8192 phase bins
+using the GPU-Fold algorithm, then rebin it to 4096
+points for subsequent analysis. According to the KOI
+archive, the ratio of transit duration to orbital period
+for ITL transits ranges from 0.8×10 −3 to 5.5×10 −3.
+Under our binning strategy, this corresponds to approxi-
+mately 3 to 23 in-transit data points in the binned data,
+a range sufficient for the model to accurately capture
+the transit signals.
+Moreover, the standard deviation of the noise in the
+binned data is effectively reduced by binning over mul-
+tiple folded photometric data. The degree of noise re-
+duction is approximately proportional to
+√
+N, where
+Figure 2.Conceptual diagram of DELOS consisting of four
+core components: the data augmentationAug(·), the en-
+coder networkEnc(·), the projection networkProj(·), and
+the contrastive loss. Their relationship can be formulated
+asz=Proj(Enc(Aug(x))), where the source samplexcan
+represent either transit or noise. The contrastive loss is em-
+ployed to maximize the similarity between two augmented
+representationsz 1 andz 2 derived from the same sample.
+Ndenotes the number of data points averaged within
+each bin. It can be calculated asN= Nraw
+Nbinned
+, where
+Nraw ∈[40,000,70,000] denotes the number of raw Ke-
+pler data points, andN binned = 4096 is the binned num-
+ber. Consequently, 1/
+√
+Nis between 0.24 and 0.32, indi-
+cating that the noise is reduced to 24-32% of its original
+level. Accordingly, the transit SNR is improved, en-
+abling DELOS to detect low-SNR transit signals more
+effectively.
+However, different stellar brightness and variations in
+Nacross different stellar light curves lead to differences
+in the resulting noise levels. To address this, we nor-
+malized the noise distribution of the 58,400 phased light
+curves to followN(0,1), similar to the noise normal-
+ization in K. Wang et al. (2024a). Specifically, we first
+calculated the mean (u binned) and standard deviation
+(σbinned) of the binned light curve, then normalized all
+Nbinned data points by subtractingu binned and divid-
+ing byσ binned. The procedure was then repeated for
+all 58,400 binned light curves at different trial periods,
+ensuring that the scores assigned by DELOS remained
+comparable across light curves with varying noise levels.
+Finally, we evaluated the 58,400 normalized light
+curves using DELOS, generating 58,400 scores that form
+the score periodogram. By analyzing the peaks in this
+periodogram, we can determine the locations of possible
+transit signals, with the peak magnitudes directly re-
+flecting the confidence of the corresponding transit sig-
+nals. To facilitate a clear comparison of the periodogram
+outputs from DELOS, BLS, and TLS, we present in
+Figure 1 a simulated light curve containing a transit
+signal with a period of 147.8 days and a transit SNR
+
+DELOS in Kepler Photometry5
+of 6–7. The corresponding search results obtained using
+DELOS, BLS, and TLS are also shown. The contrast be-
+tween peaks associated with genuine transit signals and
+those arising from noise appears to be most pronounced
+for the DELOS results, followed by those obtained with
+TLS and BLS.
+2.2.Contrastive Learning
+DELOS is designed to identify ITL, low-SNR transit
+signals using a contrastive learning–based framework.
+An overview of the method is provided below.
+The concept of discriminative similarity learning was
+first proposed by S. Chopra et al. (2005) to effectively
+address the challenges of face verification tasks involv-
+ing numerous categories with limited samples per class.
+This research was inspired by the Siamese network intro-
+duced by J. Bromley et al. (1993) to solve the verification
+of signatures. Contrastive learning leverages similarity
+metrics to compare and learn subtle differences between
+distinct signatures or faces, thereby learning robust and
+compact representations that enable accurate discrimi-
+nation. This approach parallels the challenge of distin-
+guishing ITL low-SNR transit signals from noise, where
+the goal is to identify subtle patterns in both the tran-
+sit signals and noisy data to obtain reliable and accu-
+rate representations. Numerous frameworks have been
+proposed to derive representations based on similarity
+more efficiently from data in the field of computer sci-
+ence (e.g., I. Misra & L. van der Maaten 2020; J.-B. Grill
+et al. 2020; K. He et al. 2020; H. Shi et al. 2020; X. Chen
+et al. 2021). In particular, G. Hinton et al. (2020) intro-
+duced and validated the SimCLR framework, which is
+aimed at acquiring high-quality and generalizable rep-
+resentations.
+The design of most contrastive learning models in-
+evitably consists of four core components: the data aug-
+mentation module, the encoder network, the projection
+network, and the contrastive loss. The conceptual de-
+sign of DELOS is shown in Figure 2. DELOS employs
+a supervised contrastive loss to maximize the similar-
+ity between representations of different augmented views
+generated from the same initial sample. These represen-
+tations are obtained by sequentially encoding the aug-
+mented views through the encoder network and the pro-
+jection network. The whole process facilitates DELOS
+in robustly learning high-quality, compact distributional
+representations of transit signals and noise in the em-
+bedding space. The detailed roles of the data augmen-
+tation module, encoder network, and projection network
+in DELOS are described in Appendix A; here, we focus
+on how the supervised contrastive objective separates
+transit and noise representations.
+DELOS uses a supervised contrastive learning loss to
+optimize the encoder and projection network parame-
+ters; this optimization in turn guides the learning di-
+rection of the model. To illustrate the details of super-
+vised contrastive learning loss, we suppose that there
+areNinitial samples{x k}k=1...N and their correspond-
+ing labels{y k}k=1...N , wherey k indicates whetherx k
+corresponds to transit or noise. For simplicity, we as-
+sume that each initial samplex k generates only two
+augmented views, ˜x2k−1 and ˜x2k through the data aug-
+mentation moduleAug(·) along with their labels ˜y 2k−1
+and ˜y2k, wherey k = ˜y2k−1 = ˜y2k, i.e., each transit or
+noise sample includes only two views here. A total of
+2Nviews and their corresponding labels are generated
+for model training (DELOS in practice generates 100N
+views), denoted as{˜xi,˜yi}i∈I={1...2N} , whereIdenotes
+the index set of all augmented views. Each augmented
+view ˜xi is then mapped to the projection representation
+zi =Proj(Enc(˜xi)), which is used in the supervised con-
+trastive loss.
+Among these 2Nviews,A(i) denotes the index set of
+all augmented views except ˜xi, i.e.,A(i) =I \ {i}, and
+thusA(i) contains 2N−1 elements. Although Figure 2
+illustrates two augmented representations derived from
+the same source sample, the supervised contrastive loss
+(P. Khosla et al. 2020) used below treats all augmented
+views with the same label as positive samples.
+Lsup =−
+X
+i∈I
+1
+|P(i)|
+X
+p∈P(i)
+log exp (zi ·z p/τ)P
+a∈A(i) exp (zi ·z a/τ) ,
+(2)
+Here,P(i) denotes the index set of all other augmented
+views among the 2Nviews that belong to the same la-
+bel as ˜xi, i.e.,P(i)≡ {p∈A(i) : ˜y p = ˜yi}, and|P(i)|is
+the cardinality ofP(i). The dot symbol·represents the
+inner product, which is used to quantify the similarity
+betweenz i andz p. The parameterτis a scalar tem-
+perature constant that controls the scaling of similarity
+scores in contrastive learning; it influences the sharpness
+of the resulting distribution and thus affects optimiza-
+tion dynamics and generalization.τis often chosen as
+a positive real number, e.g., 0.07.
+In this supervised contrastive loss shown in Equa-
+tion 2, the numerator exp (z i ·z p/τ) quantitatively cal-
+culates the similarity betweenz i (encoded ˜xi) and all
+other augmented views that share the same label, while
+the denominator P
+a∈A(i) exp (zi ·z a/τ) quantitatively
+calculates the similarity betweenz i and the remaining
+2N−1 augmented views.
+As illustrated in Figure 3, DELOS pulls representa-
+tions of same-label samples closer together in the em-
+bedding space while pushing representations of different-
+label samples farther apart. Finally, DELOS learns both
+the similarity among samples sharing the same label and
+the discriminative differences between samples with dif-
+ferent labels.
+2.3.Overall Framework of DELOS
+DELOS is built upon a supervised contrastive learn-
+ing framework tailored for the detection of ITL low-SNR
+transit signals. Its high performance is driven by the
+combined effects of the contrastive learning mechanism
+
+6Liu et al.
+Figure 3.Multi-view 3D t-SNE visualization of the projection-head representation for the validation set, shown from six
+combinations of viewing angles. Here,Idenotes the input folded light curve, andφ Proj2(I) denotes the representation output
+by the second layer of the projection network. Blue points denote no-transit samples, and red points denote transit samples.
+The multiple viewpoints provide a more complete geometric inspection of the embedding distribution and class-wise structure
+in the learned feature space. The consistent clustering patterns across views indicate that DELOS learns high-quality, compact
+distributional representations, achieving an overall validation accuracy of 99.3%.
+and the structured data organization strategy. To sum-
+marize this organization, Figure 4 presents the two-stage
+architecture of DELOS, consisting of the representation
+learning stage and the transit detection stage.
+DELOS was developed and optimized to resolve the
+confusion between the representation of shallow transit
+and noise. Specifically, we generated 100 distinct transit
+views by randomly shifting the transit midpoint time of
+an initial ITL low-SNR transit source sample. We define
+these views as a transit pair. Similarly, we injected an
+ITL low-SNR transit signal into four years of light curve
+data and randomly folded it using incorrect periods to
+generate 100 distinct noise views, which we define as
+noise pairs. We generated 100,000 distinct transit pairs
+and 100,000 distinct noise pairs. With each sample pair
+containing 100 light curves, the total number of simu-
+lated light curves is 20 million. Afterward, numerous
+pairs are input into DELOS, and the contrastive loss
+and classification loss are used to iteratively optimize
+the network parameters of the Encoder, Projection, and
+Classification layers through backpropagation.
+The implementation settings, network structures, and
+notation of the intermediate features associated with
+this framework are provided in Appendix B, while the
+main text focuses on the overall training organization
+and end-to-end decision process.
+The end-to-end feature evolution and decision-making
+process, including the encoder feature maps, projection-
+head representations, classifier activations, and score pe-
+riodogram, is illustrated in Figure 5. The transit sam-
+ple exhibits progressively concentrated transit-related
+responses and a clear dominant peak in the score pe-
+riodogram, whereas the noise sample shows diffuse ac-
+tivations without a significant peak, leading to a low
+final score. Although DELOS requires constructing nu-
+merous transit and noise pairs during training, for the
+transit search, we only need to input each light curve
+into the optimal DELOS model without the need to re-
+construct pairs. This is because DELOS has learned
+
+DELOS in Kepler Photometry7
+Figure 4.Schematic illustration of the DELOS framework.
+The framework consists of two stages:Representation Learn-
+ingandTransit Detection. In the representation learning
+stage, augmented pairs generated from real transit and noise
+light-curve samples are used to optimize the encoder and
+projection network. Labels such as 4096-D and 2048-D de-
+note the dimensionality of the corresponding input or latent
+feature vectors. In the transit detection stage, folded light
+curves are assigned transit-likeness scores.
+high-quality, compact transit and noise representations,
+which provide two vital insights:
+•The significant similarity of numerous ITL low-
+SNR transits in the embedding space.
+•A clear gap between ITL low-SNR transits and
+noise in the embedding space.
+3.DATA PREPARATION
+3.1.Pre-processing of Light Curve
+We selected targets satisfying the ITL and low-SNR
+criteria from the KOI archive and downloaded their
+KeplerPre-search Data Conditioning Simple Aperture
+Photometry (PDCSAP) long-cadence light curves ac-
+cording to theirKeplerInput Catalog (KIC) (J. M.
+Jenkins et al. 2010b) from the Data Archive ofKepler.
+The data we downloaded have already undergone the
+Cotrending process by theKeplerData Science team.
+Each light curve contains observation time and photo-
+metric measurements, with a time interval of 29.4244
+minutes between data points. The total duration of the
+observation is 4 years, divided into 17 quarters, and the
+total number of data points ranges between 40,000 and
+70,000. Next, we primarily remove the low-frequency
+systematic components in the raw light curves, which are
+mainly attributed to stellar activity, as part of the De-
+trending process similar to the approaches in K. Wang
+et al. (2024a).
+We first masked all known transit signals so that sub-
+sequent processing would not alter them. Next, for each
+quarter, we split the light curve into multiple segments
+based on time gaps and discarded the first and last 30 ca-
+dences to mitigate systematics associated with the quar-
+terly roll maneuvers or data downlinks of theKepler
+spacecraft. We then iteratively fit a smoothing spline
+curve to each segment to model long-term stellar vari-
+ability, rejecting per-segment 3σoutliers. In practice,
+the smoothing parameter of the spline model was adap-
+tively tuned using two criteria:
+•Residual sign balance: approximately equal counts
+of data points above and below the spline curve.
+•RMS conservation: the Root-Mean-Square of the
+light curve changes minimally before and after de-
+trending.
+Finally, we divided the PDCSAP light curve by the
+best-fit spline and concatenated the segments in chrono-
+logical order. These steps were repeated for each quar-
+ter, and the preprocessed data served as input to the
+DELOS detection system. In addition, when searching
+for previously unknown exoplanets, we retained down-
+ward 3σoutliers while directly removing all known tran-
+sit signals.
+An example of the preprocessing applied to a realKe-
+plertarget is shown in Figure 6. The raw PDCSAP light
+curve of KIC 4138008, a detailed local view of the fit in
+the seventh quarter, and the resulting preprocessed light
+curve are presented. After the dominant components of
+stellar activity are effectively removed, the transit sig-
+nals become clearly visible. The preprocessed data can
+then be used by DELOS to validate known candidates
+or to conduct blind searches for previously unknown
+intermediate-to-long-period transit signals.
+3.2.Light Curve Simulation
+The scarcity of real ITL transit samples poses a signif-
+icant challenge for effective model training. To address
+this limitation, we usedBATMAN(L. Kreidberg 2015) to
+generate numerous simulated light curves based on the
+quadratic limb-darkening transit model. Specifically,
+we selected 60 confirmed ITL transits from the KOI
+archive and extracted key transit parameters for simu-
+lation. The distributions of these parameters are shown
+in Figure 7. We applied the formula from K. von Braun
+& D. R. Ciardi (2007) to compute the transit signal-to-
+noise ratio, presented as follows:
+T ransit SN R= d
+σ
+s
+n L
+p (3)
+Here,dis the transit depth,σis the uncertainty in
+the photometric data, assuming identical uncertainty for
+
+8Liu et al.
+Figure 5.End-to-end feature evolution and decision process of DELOS for two simulated examples: transit signal (top panel)
+and noise (bottom panel). The left column shows the folded-and-binned input light curve (4096 bins) and the feature maps of
+the five encoder convolution blocks,φ ci(I) (i= 1, . . . ,5), with channel-statistic traces (e.g., mean/max) summarizing layer-wise
+responses. The right column shows the projection-head outputs (e.g.,φ Proj1(I),φ Proj2(I)), the GlobalAveragePooled feature
+φ6(I), and the classifier activationsφ 7(I) andφ 8(I), together with highlighted high-response units. The decision blocks report
+the final scores∈[0,1] and predicted class, while the bottom-right subpanel shows the DELOS score periodograms(P), whose
+peak indicates the most likely period.
+
+DELOS in Kepler Photometry9
+Figure 6.Preprocessing of a realKeplerlight curve and its
+changes before and after. We used a known ITL transit signal
+KIC 4138008 as the example. The top panel displays the raw
+PDCSAP light curve across 17 quarters, with the transit
+events marked in red. Dashed lines indicate the timing of
+each transit event, while the green line represents the best
+fitted smooth curve. The bottom panel presents the final
+light curve after preprocessing, which is ready for input into
+the DELOS detection system.
+each data point.nis the total number of data points in
+the light curve,Lis the duration of the transit signal,
+andpis its period. Consequently,n L
+p is the number
+of data points in the light curve associated with transit
+events.
+To achieve the scientific goal of DELOS in detecting
+ITL, low-SNR transit signals, we simulated the light
+curve withp∈[100,150] days and transit SNR∈[6,15],
+ensuring that each combination of the parameter space
+(p,transit SNR) contains equal light curves. To accel-
+erate the process, we used 50 parallel processes, each
+assigned to a 1-day interval ofp(e.g., the first process
+generates data forp∈[100,101) d), with uniform sam-
+pling performed within that interval. Within each pro-
+cess, the transit SNR is also evenly divided into 9 subin-
+tervals with a step size of 1, and the light curves are
+simulated sequentially within each subinterval to ensure
+equal sample sizes across different levels of transit SNR.
+For instance, when simulating the light curve with
+transit SNR∈[8,9] in the first process, periodp 0 is
+sampled fromU(100,101). Subsequently, transit mid-
+pointt 0, planetary radiusr p, orbital semimajor axisa,
+orbital inclinationi, limb-darkening coefficientsu 1 and
+u2, and noise levelσare uniformly sampled from the
+reasonable ranges shown in Figure 7. In particular,t 0 is
+Figure 7.Distributions of key intrinsic parameters used
+to simulate light curves. In practice, the ITL noise level is
+determined by measuring the 1σwhite noise level in the light
+curves after Detrending.
+sampled fromU(0, p 0),u 1 is sampled fromU(0.20,0.62),
+u2 is sampled fromU(−0.05,0.38), and these bounds of
+u∗ are derived by cross-referencing the values of logg,
+Teff, and log[M/H] for 60 well-characterized stars with
+the tabulated results provided in the Database Website
+published by A. Claret & S. Bloemen (2011).
+Once the parameter set⟨p 0,t 0,r p,a,i,e(fixed 0),
+w(fixed 90◦),u 1,u 2,σ⟩is sampled, and the key transit
+physical parameters must satisfy certain degeneracies,
+including the following three (G. Kov´ acs et al. 2002):
+•p 0 andaare related by Kepler’s third law, which,
+for circular orbits, is given by:
+p0 = 2π
+s
+a3
+GM∗
+(4)
+Here,Gis the gravitational constant, andM ∗ is
+the stellar mass; we takeM ∗ =M ⊙.
+•The transit durationT dur is related to the impact
+parameterbby:
+Tdur = p0
+π
+p
+1−b 2 (5)
+Here,bis the impact parameter normalized by stel-
+lar radius, the relationship betweenband the or-
+bital inclinationi(for circular orbits,e= 0) is
+
+10Liu et al.
+given by:
+b= cos(i) (6)
+•The semi-major axisais related to the transit du-
+rationT dur and the impact parameterbby:
+a= T 2
+dur ·GM ∗
+π2(1−b 2) (7)
+Finally,BATMANis used to simulate a pure light curve,
+and noise withσstandard deviation is added to it to
+produce the synthetic light curve. We then calculated
+the transit SNR value of the synthetic light curve follow-
+ing Equation 3. If transit SNR/∈[8,9] or if the duration
+and duration/period ratio are outside the valid ranges
+illustrated in Figure 7, a new parameter set is resampled
+until a valid synthetic light curve is produced.
+3.3.Synthetic Data Set for DELOS Training
+To generate 100,000 distinct transit pairs and 100,000
+distinct noise pairs for training DELOS, we synthesized
+light curves resembling those ofKepler, featuring an
+observational timescale of approximately 4 years and a
+time resolution of 29.4244 minutes. So we sampled the
+number of data points fromU(40,000,70,000) and fixed
+the time interval between each point at 29.4244 minutes.
+First, an original 4-year light curve was simulated by the
+pipeline of Section 3.2 and folded into the correct transit
+period. Then, the transit midpoint of the folded light
+curve was randomly shifted 100 times to produce one
+transit ‘pair’. Following the definition of a ‘pair’ in the
+early contrastive learning papers (e.g., P. Khosla et al.
+2020), this pair includes 100 transit views here. Simul-
+taneously, the original light curve was randomly folded
+into incorrect periods 100 times to produce one noise
+pair that includes 100 noise views. This operation effec-
+tively covers the vast majority of potential false signals
+in real transit search scenarios, providing enhanced ro-
+bustness for the model. All folded views were binned
+into 4096 points before being used as DELOS inputs;
+the choice of this binning number is discussed in Ap-
+pendix C.
+By repeating this process for each combination of pa-
+rameter space (p,transit SNR), 100,000 transit pairs
+and 100,000 noise pairs were generated. For one tran-
+sit pair characterized byp 0 = 105.91 days,duration=
+9.19 hours,transit SNR= 9.79,depth= 178.34 ppm,σ
+= 0.00026, we present two out of 100 transit views in
+Figure 8.
+After obtaining these data pairs, they were randomly
+divided into three subsets: 80 percent for the training
+set, 10 percent for the validation set, and the remain-
+ing 10 percent for the test set. The split was performed
+at the level of the original simulated source light curve,
+so that augmented views derived from the same source
+were never shared between the training, validation, and
+test sets. In order to ensure stable training and mitigate
+Figure 8.Two synthetic light curves of a transit pair based
+on the quadratic limb-darkening transit model, and these two
+light curves differ only in the transit midpoint parametert 0.
+The blue line represents the pure light curve generated by
+BATMAN, the black dots indicate the light curve after injecting
+noise at theσ-level, the red dots mark the transit events,
+and the green dashed lines highlight the positions of transit
+events. Additionally, a zoomed-in view of the transit event
+is provided in the bottom-right corner of each panel.
+issues such as gradient explosion or poor convergence,
+we used techniques such as Kaiming initialization (K.
+He et al. 2015) and learning rate warm-up. In addition,
+an early stopping mechanism was implemented to pre-
+vent excessive training times and to detect the optimal
+stopping point.
+The runtime information for data generation and the
+training convergence curves are provided in Appendix D.
+After convergence, DELOS achieved its best perfor-
+mance in the 12th epoch with a validation accuracy of
+99.3 percent, demonstrating optimal generalization to
+unseen data.
+4.COMPARISON
+4.1.Transit-Search Benchmarks: BLS and TLS
+To evaluate the transit-search performance of DE-
+LOS, we conducted comparative experiments with two
+widely used methods: BLS (G. Kov´ acs et al. 2002) and
+TLS (M. Hippke & R. Heller 2019). In brief, BLS is
+a periodogram-based grid search that evaluates a large
+set of trial periods together with corresponding transit
+epochs (phases) and durations using a box-shaped tran-
+sit model. For each trial configuration, the transit depth
+(and baseline level) is determined analytically by mini-
+mizing the squared residuals between the model and the
+observed flux, and the resulting fit improvement is used
+
+DELOS in Kepler Photometry11
+to construct the BLS periodogram and identify candi-
+date periods.
+Meanwhile, the Signal Residual (SR) statistic is com-
+puted in each trial period to obtain the periodogram
+of SR versustrial period. The standardized detection-
+strength of the transit signal in the observed light curve
+is evaluated by calculating the SDE, shown as follows:
+SDE= SRpeak − ⟨SR⟩
+σSR
+(8)
+Here,SR peak is the maximum value in the periodogram,
+⟨SR⟩is the mean SR, andσ SR is the standard deviation
+of SR.
+In practice, since we evaluate the confidence of the
+transit signal based on the magnitude of SDE, we often
+replaceSR peak withSRin Equation 8. This replace-
+ment produces the alternative periodogram ofSDEver-
+sustrial period, as shown in Figure 1(C). This transfor-
+mation makes the detection of the transit signal in the
+periodogram more intuitive.
+Since BLS introduced a breakthrough detection strat-
+egy, numerous improvements have emerged. Among
+them, the TLS method has demonstrated notable gains
+in detection accuracy. Specifically, TLS employs a limb-
+darkened physical transit model, enabling more precise
+detection of transit signals. The developers indicate that
+TLS improves detection efficiency by approximately 10
+percent compared to BLS, according to TLS GitHub.
+To simulate realistic data observed by theKeplermis-
+sion, all the light curves we generated contained 65,536
+data points, each separated by 29.4244 min. The neg-
+ative dataset was generated by simulating light curves
+using Gaussian noise, while the positive dataset was con-
+structed by injecting synthetic transit signals according
+to the pipeline described in Section 3.2, as illustrated in
+Figure 8. Ultimately, we generated a customized dataset
+of light curves with transit SNR∈[6,12], ensuring a
+balanced sample distribution within each transit SNR
+interval.
+In our experiments, the BLS algorithm was imple-
+mented using theautopowerfunction of theBoxLeast-
+Squaresclass in theastropysoftware. Specifically,
+the search period∈[100,150] days and the duration
+∈[0.05,0.93] days. The parameteroversamplewas ad-
+justed to achieve a binned data point count of 4096,
+and the parameterfrequency factorwas adjusted to
+achieve a search frequency of 58,400, ensuring consis-
+tency with the DELOS settings. The TLS algorithm
+was implemented using thepowerfunction from the
+transitleastsquaressoftware, with the same search
+period and duration ranges as BLS. The parameterover-
+sampling factorwas adjusted to achieve a search fre-
+quency of 58,400, maintaining alignment with DELOS.
+4.2.Performance of DELOS versus BLS, TLS
+We evaluated the performance of DELOS, BLS, and
+TLS in practical searches by analyzing their ability
+Figure 9.Comparative experimental results of DELOS,
+BLS, and TLS in terms of Receiver Operating Characteristic
+(ROC) and Area Under the Curve (AUC). The top panel
+shows the ROC curves for three methods at transit SNR
+∈ {6,7,8,11}. The bottom panel shows the AUC of the
+three methods within the transit SNR∈[6,12]. DELOS
+achieves higher performance in distinguishing shallow transit
+from noise.
+to distinguish between simulated positive and negative
+transit signals under different transit SNR conditions.
+For BLS and TLS, the maximum SDE in the peri-
+odogram was adopted as a quantitative metric to as-
+sess the strength of transit signals in the light curves,
+while DELOS utilized the maximum predicted score in
+the periodogram. By gradually changing the detection
+threshold over the full range of values for the BLS/TLS
+SDE and the DELOS score, we evaluated how well
+each method separates simulated transit signals from
+no-transit cases under different threshold choices, we
+obtained a range of discriminative results for simulated
+positive and negative transit signals.
+Based on these results, the false positive rate (FPR)
+and the true positive rate (TPR) were calculated to con-
+struct the ROC curves under different transit SNR, as
+shown in the upper panel of Figure 9. In the ROC
+curve, a lower FPR and a higher TPR signify better
+overall performance. Furthermore, the AUC serves as a
+more intuitive metric of the overall capacity to distin-
+guish positive and negative transit signals. AUC versus
+transit SNR for each method is shown in the lower panel
+of Figure 9. In addition, precision and recall for each
+discriminative result were calculated, Precision-Recall
+
+12Liu et al.
+Figure 10.Comparative experimental results of DELOS,
+BLS, and TLS in terms of PR curve. The PR curves for
+the three methods at transit SNR∈ {6,7,8,11}, DELOS
+achieves higher precision and recall than BLS and TLS in
+the low-SNR regime, particularly for transit SNR below 11.
+(PR) curves were constructed, as shown in Figure 10.
+In the PR curve, higher recall indicates greater sensi-
+tivity to shallow transit signals, while higher precision
+reflects better reliability. Notably, DELOS on average
+outperforms BLS by 15.5 percent and TLS by 11.25 per-
+cent in terms of Precision & Recall when transit SNR
+∈[6,8], highlighting its superior ability under low-SNR.
+However, in practical applications, single-field metrics
+are often prioritized depending on the specific objective.
+For example, when the goal is to detect as many transit
+signals as possible, methods with higher TPR are pre-
+ferred because they exhibit greater sensitivity to transit;
+conversely, when reducing the false-positive rate is crit-
+ical, methods with lower FPR are favored because they
+indicate a lower false-positive rate for transits. To an-
+alyze this trade-off between the three methods, we pre-
+sented the FPR at 90 percent TPR and the TPR at 10
+percent FPR as functions of transit SNR, as shown in
+Figure 11.
+Based on the performance comparison among DELOS,
+BLS, and TLS, we draw the following conclusions. First,
+DELOS achieves the best overall performance in dis-
+tinguishing shallow transit signals from noise. Second,
+DELOS shows higher sensitivity to shallow transit sig-
+nals, as indicated by its higher TPR at a fixed FPR
+of 10 percent. Third, DELOS yields fewer false posi-
+tives, as reflected by its lower FPR at a fixed TPR of
+90 percent. These results suggest that the contrastive-
+learning-based design of DELOS is well suited not only
+for shallow transit detection but also for other astro-
+nomical applications involving faint signal detection.
+Moreover, we have thoroughly analyzed these key rea-
+sons behind the superior performance of DELOS, which
+can be summarized as follows. First, DELOS is devel-
+oped based on contrastive learning, which is highly sen-
+sitive to shallow transit signals. Moreover, this mecha-
+nism is also well suited for other scenarios that require
+the detection of faint signals. Second, DELOS employs a
+Figure 11.Comparative experimental results of DELOS,
+BLS, and TLS in terms of the TPR at 10 percent FPR and
+FPR at 90 percent TPR. DELOS exhibits higher sensitivity
+and lower false positive rate when transit SNR is below 10.
+realistic transit physical model to simulate transit light
+curves, thereby allowing the model to learn features
+closely aligned with observed transit events. Third, DE-
+LOS was trained on numerous and balanced synthetic
+data sets, providing robust support for subsequent tran-
+sit searches.
+4.3.Speed of DELOS versus BLS, TLS
+To evaluate the computational speed of DELOS, we
+compared it with the BLS algorithm and the TLS algo-
+rithm. The process by which DELOS produces the score
+periodogram, together with the GPU profiling metrics
+used to determine the optimalBatchSize, is provided in
+Appendix E. Based on this profiling analysis, we adopt
+BatchSize=128 in all subsequent speed comparisons, for
+which the contrastive-learning inference stage takes 0.97
+seconds, as shown in Figure 12.
+To accelerate BLS computation, we used the fast ver-
+sion implemented in CYTHON. Subsequently, we eval-
+uated the overall runtime of DELOS, BLS, and TLS
+at different period frequencies, and the results are pre-
+sented in Figure 13. The DELOS runtime is approx-
+imately 5 times faster than BLS and around 80 times
+faster than TLS, and it only takes 2.3 seconds to process
+a light curve at an ITL period frequency ofN sample =
+58,400.
+We also note that A. Ofir (2014) proposes an optimal
+frequency sampling strategy for transit signal searches,
+advocating a cubic (rather than linear) frequency distri-
+
+DELOS in Kepler Photometry13
+Figure 12.Time cost of key step,U GPU, andη SM during
+the contrastive learning inference stage vary withBatchSize.
+The solid lines represent the time cost, using the logarithmic
+scale on the left axis; the dashed lines represent GPU metrics,
+using the percentage scale on the right axis.
+bution, which can significantly enhance search efficiency.
+Consequently, to detect ITL low-SNR transits, we com-
+pute the optimal frequency sampling distribution using
+the following formula:
+f(x) =
+ A
+3 x+C
+3
+C≡f 1/3
+min − A
+3
+A≡ (2π)2/3
+π · R⋆
+(GM⋆)1/3 · 1
+S·OS
+(9)
+Nfreq,optimal =
+
+f1/3
+max −f 1/3
+min + A
+3
+
+· 3
+A (10)
+Here,xis the index of thex-th sampling point. The
+frequency boundsf min andf max correspond to 1/150
+and 1/100 day −1, respectively.Gis the gravitational
+constant;R ⋆ andM ⋆ are the stellar radius and mass, for
+which we adopt solar values.Sdenotes the total time
+span ofKeplerobservations (4 years), and OS = 5 is
+the oversampling factor. Consequently,f(x) defines the
+frequency at indexx,Ais the frequency growth factor
+(Hz1/3/step), andN freq,optimal is the total number of
+sampling points under the cubic sampling scheme.
+By substituting all relevant parameters into Equa-
+tions 9 and 10, we determined that 7,567 sampling
+points are required under the cubic distribution. In
+Figure 13, we also compare the runtime of three meth-
+ods applied to the same light curve using this sampling
+scheme. Notably, DELOS breaks the 1-second runtime
+barrier, completing the search in just 0.7 seconds; in con-
+trast, BLS and TLS take 2.3 seconds and 51.9 seconds,
+respectively, indicating that DELOS is approximately 3
+Figure 13.Overall runtime of DELOS, BLS, and TLS
+across different frequencies. All three lines are plotted on
+a logarithmic scale (left axis): red for DELOS, green for
+BLS, and blue for TLS. The shaded regions indicate the±1σ
+variation from repeated experiments. Additionally, we high-
+light the overall runtime of the three methods at the ITL
+sampling resolution ofN sample = 58,400, as well as at the
+cubic sampling frequency proposed in A. Ofir (2014), with
+Nfreq,optimal = 7,567.
+times and 74 times faster than BLS and TLS under the
+same sampling conditions.
+Furthermore, when using DELOS to search for planets
+around approximately 156,000 main-sequence stars ob-
+served by theKeplermission, the estimated processing
+time is about 1.26 to 4.15 days. Essentially, the reasons
+for the faster speed of DELOS can be attributed to two
+main factors. First, DELOS has fewer loops and simpler
+computational rules in its algorithm structure. Second,
+DELOS enables parallel processing on GPU machines by
+setting an appropriateBatchSize, significantly reducing
+overall runtime without sacrificing accuracy. In the fu-
+ture, with the continuous upgrade of GPU hardware,
+the evaluation process will become even faster.
+5.DELOS APPLIED TO REALKEPLERDATA
+5.1.Kepler DR25 Light Curve Processing
+To test the performance of DELOS on realKepler
+data, we downloaded light curves from Q1-Q17Ke-
+plerData Release 25 (DR25), available via theKepler
+archive at the Mikulski Archive for Space Telescopes
+(MAST). These light curves were then processed using the
+data preprocessing pipeline in Section 3.1. The primary
+focus herein is on the detrending preprocessing step for
+already cotrended light curves. While no unified stan-
+dard has been established for this step when processing
+Keplerdata to date, the pipeline presented herein was
+developed in-house, following the processing workflow
+outlined in K. Wang et al. (2024a). The result of this
+approach is demonstrated in Figure 6.
+
+14Liu et al.
+5.2.Construction of Real Kepler Validation Samples
+We downloaded the KOI archive dated January 21,
+2025, which contains 9,564 targets, each with avail-
+able raw PDCSAP long-cadence light curves. This
+archive comprises 2,743 confirmed planets, 1,982 can-
+didate planets, and 4,839 false positives. We also down-
+loaded the corresponding transit parameters, including
+orbital period, transit midpoint, and transit duration;
+these were used for extensive testing and validation.
+Subsequently, we selected ITL low-SNR transit sig-
+nals with exoplanetary archive disposition as “CON-
+FIRMED” to construct the positive data set while ensur-
+ing that each planetary system contained only a single
+star. For each light curve in the positive data set, we re-
+tained the real ITL transit signal and removed other pe-
+riodic signals reported in the KOI archive. Meanwhile,
+we selected “CONFIRMED” or “CANDIDATE” transit
+signals and removed all periodic signals recorded in KOI
+to obtain no-transit light curves, adhering to the same
+single-star system restriction. After removing duplicate
+stellar light curves, we finally obtained 3,493 no-transit
+light curves. Due to the lack of details on “FALSE POS-
+ITIVE” in KOI, we excluded planetary systems with
+“FALSE POSITIVE” signals.
+Finally, we obtained a positive data set consisting of
+60 light curves, which were used to evaluate the recov-
+ery rate of DELOS for realKeplerITL transit signals.
+Accordingly, we also obtained a negative data set con-
+sisting of 3,493 light curves, which were used for transit
+searches by DELOS.
+5.3.Recovery of Confirmed Kepler ITL Exoplanets
+With light curves and transit parameters from the
+KOI archive, we applied DELOS to the positive dataset
+to recover known transit signals. The results are sum-
+marized in Table 1, where for each target we list the
+period, depth, and SNR reported by KOI, together with
+the period and score identified by DELOS.
+Importantly, DELOS recovers all 60 confirmed ITL
+low-SNR signals in the correct period with scores>0.90.
+The upper panel of Figure 14 shows the score distribu-
+tion (mean∼0.99;σ∼0.03); the recovered periods
+deviate from the KOI values by<0.01%. These re-
+sults verify all previously known ITL low-SNR exoplanet
+signals, demonstrate the utility of DELOS for practical
+surveys, and establish a solid foundation for discovering
+unknown ITL signals.
+To further illustrate the ability of DELOS to identify
+real transits, KIC 5977470 (Kepler-1653 b) is selected
+as an example. This system has a transit signal with a
+period of 140.25 days and a transit SNR of 11.90. The
+folded light curve and the DELOS score periodogram
+are illustrated in Figure 15. The maximum score is 1.00,
+corresponding to the 47,012th index among 58,400 trial
+periods. This result indicates that DELOS estimates
+the transit period as 47,012
+58,400 ×50 + 100 = 140.25 days.
+This estimate precisely aligns with the TRUE period
+recorded in the KOI archive.
+Figure 14.DELOS score distributions for realKeplersam-
+ples and noise-control tests. The upper panel compares the
+scores of 3493 KOI non-transit samples with those of 60
+knownKeplerITL, low-SNR transits, selected as described
+in Section 5.2. The red dashed line marks the adopted score
+threshold of 0.90. This threshold also recovers all 60 known
+ITL, low-SNR transit signals. The lower panel shows the
+score distributions for Kepler-like white-noise and red-noise
+control samples. The red dashed line marks the 60% score
+threshold line. The white-noise samples are generated by
+simulating the empiricalKeplernoise distribution under a
+Gaussian assumption, whereas the red-noise samples are con-
+structed by removing known transit signals from the 3493
+real samples and applying time-axis shuffling to the residual
+light curves. The shaded regions indicate score intervals as-
+sociated with different False-Alarm Probability (FAP) levels.
+For the white-noise controls, scores above 0.80 correspond to
+an FAP of approximately 1%, while for the red-noise controls,
+scores above 0.95 are required to reduce the FAP below 1%.
+These results indicate that the DELOS score can serve as an
+effective ranking statistic for separating transit-like signals
+from noise-induced false alarms in realKeplerdata.
+
+DELOS in Kepler Photometry15
+Note— Targets are selected from the KOI catalog (S. E. Thompson et al. 2018) withP∈[100,150] d, Transit SNR<150, Transit Depth<10,000 ppm,
+and labeled as confirmed planets. TLS SDE is computed using the TLS algorithm (M. Hippke & R. Heller 2019). The DELOS period is derived
+from the folded indexiviaP= 50
+58,400 i+ 100 d.
+T able 1.Summary of all known ITL, low-SNR transit signals recovered by DELOS.
+Kepler Name Transit Period Transit SNR Transit Depth TLS SDE DELOS Period Folded Idx DELOS Score
+1 Kepler-1801 c 116.58 8.7 819 5.7 116.58 19370 0.91
+2 Kepler-1620 b 101.95 10.3 153 13.0 101.95 02282 1.00
+3 Kepler-1653 b 140.25 11.9 568 17.3 140.25 47013 1.00
+4 Kepler-1599 b 122.36 12.2 353 10.5 122.36 26114 0.95
+5 Kepler-1609 b 114.34 13.0 240 8.1 114.34 16750 0.92
+6 Kepler-186 f 129.95 13.1 500 21.8 129.95 34983 0.95
+7 Kepler-442 b 112.30 13.1 502 22.9 112.30 14370 1.00
+8 Kepler-351 d 142.54 13.7 905 18.0 142.54 49692 1.00
+9 Kepler-430 c 110.98 14.0 150 9.3 110.98 12830 1.00
+10 Kepler-722 c 105.15 15.4 685 23.4 105.15 06010 1.00
+11 Kepler-1185 b 104.35 15.8 244 6.7 104.32 05040 0.91
+12 Kepler-132 e 110.29 16.4 145 17.2 110.29 12010 1.00
+13 Kepler-1548 b 124.83 17.1 648 29.8 124.83 28998 1.00
+14 Kepler-1883 b 103.43 17.8 950 31.8 103.43 04003 0.98
+15 Kepler-1362 b 136.21 20.0 1209 34.7 136.21 42287 1.00
+16 Kepler-1539 b 133.30 20.6 1018 29.2 133.30 38898 1.00
+17 Kepler-1294 b 115.69 20.7 946 25.9 115.69 18321 1.00
+18 Kepler-281 d 148.27 21.8 1707 41.4 148.27 56381 1.00
+19 Kepler-549 c 117.03 21.9 770 30.0 117.03 19895 1.00
+20 Kepler-1540 b 125.41 22.6 1345 24.2 125.41 29680 0.92
+21 Kepler-309 c 105.36 22.6 1210 38.7 105.36 06258 1.00
+22 Kepler-196 d 122.08 23.3 800 39.9 122.08 25790 1.00
+23 Kepler-344 c 125.60 23.3 926 34.0 125.60 29903 1.00
+24 Kepler-1840 b 131.19 23.9 916 30.0 131.19 36427 1.00
+25 Kepler-1177 b 106.25 24.0 397 24.2 106.25 07297 1.00
+26 Kepler-440 b 101.11 24.1 878 31.5 101.11 01297 1.00
+27 Kepler-1126 b 108.59 24.3 338 31.3 108.59 10037 1.00
+28 Kepler-90 f 124.92 24.4 499 7.4 124.92 29108 1.00
+29 Kepler-1936 b 126.56 24.8 366 31.0 126.56 31018 0.91
+30 Kepler-1810 b 101.13 25.7 1503 39.6 101.13 01323 1.00
+31 Kepler-1678 b 147.97 26.4 1267 35.1 147.97 56033 1.00
+32 Kepler-1333 b 109.65 26.7 900 38.0 109.65 11267 1.00
+33 Kepler-896 b 144.55 27.1 1035 21.0 144.55 52035 1.00
+34 Kepler-1535 b 138.94 28.0 530 29.2 138.94 45486 1.00
+35 Kepler-264 c 140.11 29.0 267 23.3 140.11 46845 1.00
+36 Kepler-1341 b 132.99 29.3 1275 35.3 132.99 38532 1.00
+37 Kepler-1780 b 109.45 30.1 1270 43.6 109.45 11032 1.00
+38 Kepler-266 c 107.72 30.5 1396 29.4 107.72 09018 1.00
+39 Kepler-985 b 116.33 31.5 1586 31.2 116.33 19074 0.95
+40 Kepler-1038 b 148.46 33.7 1532 39.4 148.46 56601 1.00
+41 Kepler-1766 b 105.01 33.9 296 34.6 105.01 05857 1.00
+42 Kepler-920 c 100.83 36.7 1779 28.9 100.83 00967 1.00
+43 Kepler-841 b 124.42 39.9 4107 48.4 124.42 28522 1.00
+44 Kepler-987 b 105.30 40.6 1362 39.3 105.30 06194 1.00
+45 Kepler-1036 b 122.88 41.9 718 33.7 122.88 26724 1.00
+46 Kepler-1058 b 110.96 42.1 1283 29.7 110.96 12806 1.00
+47 Kepler-1016 c 105.65 42.3 1367 38.1 105.65 06605 1.00
+48 Kepler-1000 b 120.02 46.1 886 28.4 120.02 23368 0.92
+49 Kepler-62 e 122.39 46.3 711 38.3 122.39 26146 1.00
+50 Kepler-218 d 124.52 47.5 690 33.6 124.52 28644 1.00
+51 Kepler-976 b 105.96 51.8 2286 35.3 105.96 06963 1.00
+52 Kepler-965 b 134.25 57.2 832 31.7 134.25 40012 1.00
+53 Kepler-397 c 135.49 73.2 5038 42.8 135.49 41461 1.00
+54 Kepler-820 b 127.83 76.9 1830 28.7 127.83 32509 0.99
+55 Kepler-126 d 100.28 81.9 351 29.7 100.28 00331 1.00
+56 Kepler-11 g 118.38 83.1 1083 32.0 118.38 21466 1.00
+57 Kepler-1718 b 135.19 85.8 663 34.9 135.19 41099 1.00
+58 Kepler-952 b 130.35 103.7 5129 40.7 130.35 35453 1.00
+59 Kepler-302 c 127.28 148.1 8089 37.2 127.28 31865 1.00
+60 Kepler-1662 b 134.48 149.9 4034 42.9 134.48 40270 0.93
+
+16Liu et al.
+Figure 15.Example of aKeplerITL exoplanetary signal
+recovered by DELOS. The upper panel presents the folded
+light curve of Kepler-1653 b at the correct transit period of
+140.25 days, and the inset in the lower right corner provides a
+zoomed-in view of this transit. The lower panel displays the
+score periodogram produced by DELOS, revealing a promi-
+nent peak at 140.25 days with 1.00 score, precisely aligning
+with the TRUE period.
+5.4.Search for Additional High-scoring ITL
+Transit-like Signals
+Subsequently, DELOS was deployed on the negative
+dataset, from which all reported periodic signals in KOI
+were removed. For each light curve, we selected the max-
+imum score from the searched score periodogram, with
+the additional requirements that, to suppress spuriously
+high scores caused by accidental noise folding, the peak
+exceeds the 3σupper limit of the remaining scores and
+has a width of at least five data points.
+We used DELOS to search 3,493 stellar targets (see
+Section 5.2), yielding 3,493 scores. Their distribution
+is shown by the black histogram in the upper panel of
+Figure 14. We found that the majority of no-transit
+light curves produced scores below the 0.70 threshold.
+In contrast, DELOS identified periodic signals exceeding
+this threshold as potential transit candidates.
+Among these high-scoring signals, further scrutiny will
+be conducted, potentially revealing some as genuine ITL
+transit candidates. However, they require independent
+recovery, contamination analysis, and full astrophysi-
+cal vetting before any planetary interpretation can be
+claimed.
+5.5.Robustness of DELOS to Realistic White Noise
+To quantify the FAP of DELOS for high-scoring detec-
+tions, we first constructed a white-noise control sample
+designed to mimic the observational baseline and noise
+amplitude of realKeplerlight curves. After the prepro-
+cessing procedure described in Section 3.1, we assume
+in this test that the residual light curves are dominated
+by approximately Gaussian white noise. Each simulated
+light curve contains 65,536 data points with a cadence of
+29.4244 minutes, corresponding to the four-year observ-
+ing window of theKeplermission. The noise amplitude
+of each curve was randomly sampled from the empir-
+ical noise distribution of real ITL light curves shown
+in Figure 7. In total, we generated 3,493 white-noise
+light curves, matching the number of non-transit sam-
+ples used in Section 5.2, and processed them with the
+same DELOS search pipeline described in Section 5.3.
+The resulting score distribution is shown in the lower
+panel of Figure 14. Using score thresholds of>0.70,>
+0.80, and>0.90, DELOS identifies 289, 37, and 1 white-
+noise light curves as transit-like signals, respectively.
+The corresponding empirical FAPs are 289/3493 =
+8.27%, 37/3493 = 1.06%, and 1/3493 = 0.03%. Under
+the white-noise assumption, a score threshold of 0.90 is
+sufficient to suppress the false-alarm probability to well
+below 1%. This result indicates that high DELOS scores
+are unlikely to be produced by purely white-noise fluc-
+tuations in the adopted validation setting.
+5.6.Robustness of DELOS to Realistic Red Noise
+Although the white-noise experiment demonstrates a
+low FAP at a score threshold of 0.90, this assumption
+is likely optimistic for realKeplerobservations. The
+actualKeplerbackground can contain correlated noise,
+residual stellar variability, quarter-boundary effects, in-
+strumental systematics, harmonics, aliases, and contam-
+ination from nearby sources. Therefore, we further con-
+structed a red-noise control sample to evaluate whether
+DELOS can distinguish genuine transit-like signals from
+more realistic noise-induced periodic patterns.
+For this test, we started from the 3,493 realKepler
+samples used in Section 5.2. Known transit signals were
+first removed from these light curves. We then applied a
+target-wise time-shuffling procedure to the residual light
+curves, preserving the empirical residual-noise distribu-
+tion of each target while destroying coherent transit pe-
+riodicity. The resulting red-noise control sample was
+processed using the same DELOS search pipeline as in
+the white-noise experiment.
+The red-noise score distribution is also shown in the
+lower panel of Figure 14. At score thresholds of>
+0.70,>0.80,>0.90, and>0.95, DELOS identifies
+429, 189, 73, and 30 red-noise light curves as transit-
+like signals, respectively. The corresponding empiri-
+cal FAPs are 429/3493 = 12.30%, 189/3493 = 5.40%,
+73/3493 = 2.08%, and 30/3493 = 0.87%. Compared
+with the white noise case, the red-noise control sam-
+ple produces a broader high-score tail, confirming that
+realistic residual structures are more challenging than
+Gaussian white noise. Nevertheless, increasing the score
+threshold to 0.95 reduces the red-noise FAP below 1%,
+demonstrating that DELOS retains strong discrimina-
+tory power against noise-induced false alarms in realistic
+Keplerresiduals.
+
+DELOS in Kepler Photometry17
+In practical searches, a lower score threshold may still
+be adopted to avoid missing weak long-period transit
+candidates, followed by additional vetting and valida-
+tion procedures. The red-noise experiment, therefore,
+provides a conservative noise-control test rather than a
+final planet-validation criterion and supports the use of
+the DELOS score as a ranking statistic for prioritizing
+low-SNR ITL transit candidates.
+6.DISCUSSION
+6.1.Improvements from Cotrending and Detrending
+With the advent of theKeplermission, the transit
+method has become the most prolific technique for ex-
+oplanet detection. However, despite extensive observa-
+tions over the years, a bona fide Earth twin remains elu-
+sive, primarily due to the inherently long periods, shal-
+low, and narrow features of Earth-like transit signals.
+To overcome this challenge, beyond the design of high-
+sensitivity detection algorithms to enhance the iden-
+tification of shallow signals, enhancing the noise sup-
+pression capability of the Cotrending and Detrending
+algorithms within theKeplerpipeline is another cru-
+cial strategy. These preprocessing algorithms critically
+shape the initial light curve fidelity on which all subse-
+quent detection methods are based. Therefore, integrat-
+ing more sophisticated noise suppression techniques (e.g.
+T. Liu et al. 2025; R. C. Boufleur et al. 2014) into the
+Cotrending and Detrending processes would markedly
+elevate the quality ofKeplerdata while substantially
+increasing the probability of detecting Earth-sized exo-
+planets in subsequent analyzes.
+6.2.Further Speed Tests
+We noticed the development of faster transit detec-
+tion algorithms, such as GPU-accelerated BLS GBLS
+and GTLS (Q. Hu et al. 2026, in preparation), which
+employed GPU parallel computing to accelerate inter-
+nal computations without compromising detection per-
+formance. To assess the computational speed of DE-
+LOS relative to these algorithms, we conducted speed
+tests using the same dataset, computing hardware, and
+parameter configurations as described in Section 4.2.
+The experimental results show that GBLS and GTLS
+required only 0.7 s and 18.3 s, respectively, to pro-
+cess a single light curve at a sampling frequency of
+Nsample = 58,400. However, despite its higher speed,
+GBLS achieved worse overall performance than DELOS.
+In addition, we noticed that while the runtime of each
+algorithm was influenced to some extent by the hard-
+ware configuration, the relative speed differences among
+the algorithms remained consistent.
+7.CONCLUSION AND FUTURE DIRECTIONS
+We have presentedDELOS, a contrastive-learning
+approach for identifying intermediate-to-long-period
+shallow transit signals inKeplerphotometry. Unlike
+many neural-network vetters that classify pre-detected
+threshold-crossing events, DELOS directly scores phase-
+folded light curves over a dense grid of trial periods and
+produces a score periodogram. It can therefore operate
+as a first-stage transit-search engine rather than only as
+a post-detection classifier.
+For the initial 100–150 day search window, DELOS
+was trained on 20 million synthetic light curves gener-
+ated with realistic transit models and Kepler-like noise
+properties. The trained model achieved a validation ac-
+curacy of 99.3% on synthetic low-SNR light curves. In
+controlled injection-recovery experiments, DELOS im-
+proved the combined precision–recall performance by
+15.5% relative to BLS and 11.25% relative to TLS. It
+also provided substantial computational speedups, run-
+ning approximately 3–5 times faster than BLS and 74–80
+times faster than TLS in the tested configuration. Ap-
+plied to a selectedKeplervalidation sample, DELOS
+recovered all 60 known shallow intermediate-to-long-
+period signals in the targeted period range.
+These results demonstrate that contrastive represen-
+tation learning, combined with GPU-accelerated phase
+folding and optimized phase binning, provides an effi-
+cient and sensitive approach for searching for low-SNR
+transit signals. At the same time, DELOS scores should
+be interpreted as transit-likeness rankings rather than
+calibrated astrophysical probabilities. High-scoring sig-
+nals identified by DELOS require independent recov-
+ery with other search algorithms, contamination checks,
+temporal-consistency tests, false-alarm analysis, and full
+astrophysical vetting before they can be considered val-
+idated planet candidates.
+The present work should therefore be viewed as a
+methodological development and validation study. Fu-
+ture improvements will focus on extending the frame-
+work to longer orbital periods, improving robustness to
+correlated noise and stellar variability, optimizing de-
+trending and cotrending procedures, and applying the
+method to larger samples fromKepler,K2, andTESS,
+as well as future missions such asPLATO(H. Rauer
+et al. 2014, 2022) andET(J. Ge et al. 2022b,a, 2024a).
+With these extensions, DELOS may become a useful
+tool for expanding the search for shallow, terrestrial-
+sized planets in long-baseline photometric surveys.
+ACKNOWLEDGMENTS
+Funding for this study is provided by the Strate-
+gic Priority Program on Space Science of the Chinese
+Academy of Sciences (XDA15020600) and China’s Space
+Origins Exploration Program (GJ11030405). XYY ac-
+knowledges the support of the Young Scientists Fund
+of the National Natural Science Foundation of China,
+Grant No. 12303068, and the Special Research Assis-
+tant Program of the Chinese Academy of Sciences for
+high-precision photometric research with the Earth 2.0
+satellite, Grant No. E283071009; JPZ is also grateful
+for the support of the National Natural Science Founda-
+
+18Liu et al.
+tion of China, Grant No. 12203087. We thank Bo Ma,
+Shiyin Shen, Luoxi Jin, Wanchang Xiao, and Hao Ding
+for valuable suggestions that improved the manuscript.
+The public photometric data analyzed here are the
+Q1–Q17 long-cadence PDCSAP light curves from the
+Keplermission archive at the Mikulski Archive for Space
+Telescopes (MAST), available via 10.17909/T9488N.
+The KOI and exoplanet parameters used in this work
+were obtained from the NASA Exoplanet Archive, in-
+cluding the KOI cumulative table ( NASA Exoplanet
+Archive 2025), available at 10.26133/NEA4, accessed
+on 2025 January 21. The derived light curves, simu-
+lated light curves, trained DELOS model, preprocess-
+ing and simulation scripts, score-periodogram outputs,
+benchmark outputs, and figure-source data are based
+on these public data and will be made available upon
+reasonable request from the corresponding author.
+Software:BATMAN(L. Kreidberg 2015), Astropy (A.
+Collaboration et al. 2022),transitleastsquares(M.
+Hippke & R. Heller 2019), PyTorch (A. Paszke et al.
+2019)
+APPENDIX
+A.CONTRASTIVE LEARNING IN DELOS
+As described in Section 2.2, DELOS follows the gen-
+eral design of contrastive learning frameworks and con-
+sists of the data augmentation module, the encoder net-
+work, the projection network, and the contrastive loss.
+This appendix provides the detailed roles of these com-
+ponents in the DELOS framework, while the main text
+focuses on the motivation of contrastive learning and the
+supervised contrastive objective.
+•A stochasticdata augmentationmodule, referred
+to asAug(·)in Figure 2, generates different aug-
+mented views from the same initial transit or noise
+samplex. These augmented views form a tran-
+sit or noise pair, and in the DELOS framework,
+each pair consists of up to 100 augmented views.
+For simplicity, we illustrate this module using two
+views in a pair, denoted as ˜x 1, ˜x2, both gener-
+ated fromx, where ˜x 1 =Aug(x), ˜x 2 =Aug(x).
+Each view captures a distinct perspective of the
+underlying shallow transit signal or noise realiza-
+tion while retaining partial original information.
+In the DELOS framework, generating more diverse
+augmented views from the same sample facilitates
+robustness against observational noise and system-
+atic variations (G. Hinton et al. 2020).
+•A flexibleencoder network, referred to asEnc(·) in
+Figure 2, extracts representations from augmented
+views ˜x. This encoder outputs high-quality, com-
+pact distributional representations, which help
+DELOS enhance the separability between shal-
+low transit signals and noise. To illustrate this
+process, we denote the encoded representations
+ash 1 =Enc(˜x 1) andh 2 =Enc(˜x 2), where
+h1,2 ∈R De,R De is theD e-dimensional REAL
+vector. In the DELOS framework, the best perfor-
+mance was achieved withD e = 2048. The encoder
+network is typically initialized from a pre-trained
+Transformer-based model that has been trained to
+convergence on large-scale ImageNet, as such pre-
+training enables the encoder to learn compact and
+transferable distributional representations (K. He
+et al. 2016). However, transit detection is fun-
+damentally an anomaly detection problem in one-
+dimensional time-series data, for which no suit-
+able large-scale pre-trained encoder is currently
+available. Therefore, DELOS employs a custom-
+designed CNN-based encoder that is trained en-
+tirely on our simulated dataset and tailored to cap-
+ture the characteristic structures of shallow transit
+signals under realistic noise conditions.
+•An auxiliary but indispensableprojection network,
+referred to asProj(·) in Figure 2. DELOS in-
+cludes two losses: the contrastive loss and the
+classification loss. They are jointly computed to
+update the network parameters via backpropaga-
+tion. The contrastive loss optimizes the encoder
+and projection networks, while the classification
+loss is used only to optimize the classifier net-
+work, keeping the encoder and projection param-
+eters fixed. These two objectives are not neces-
+sarily aligned in their optimization directions and
+may introduce objective interference when opti-
+mized on the same representation space (G. Hin-
+ton et al. 2020). Therefore, the encoder output
+representation is used to compute the classification
+loss, while we project the encoder output represen-
+tationshinto more compact representationszto
+compute the contrastive loss, i.e.,z 1 =Proj(h 1)
+andz 2 =Proj(h 2), wherez 1, z2 ∈R Dp, andR Dp
+is theD p-dimensional real-valued vector.
+Together, these components define how each original
+transit or noise sample is transformed into augmented
+views and then mapped into the representation space
+used by the supervised contrastive loss. The learned
+organization of this space is shown in Figure 3, where
+samples with the same label form compact structures,
+and transit and no-transit samples become separated.
+B.DELOS IMPLEMENTATION
+This appendix describes the implementation settings
+and network structures of the DELOS framework intro-
+duced in Section 2.3. The main text presents the overall
+
+DELOS in Kepler Photometry19
+training organization and end-to-end decision process,
+while the following paragraphs provide the correspond-
+ing implementation environment, batch configuration,
+classifier, projection network, and encoder architecture.
+To implement this, we used thePyTorchprogram-
+ming framework to develop DELOS and trained it on
+an NVIDIA 4090 graphics card. The overall framework
+of DELOS is shown in Figure 4. Each batch input to
+DELOS consists of 32 pairs that form the basic unit for
+gradient computation and parameter updates. Mean-
+while, the temperature parameterτof the loss is set to
+0.07. This framework is divided into two stages: the
+representation learning stage and the transit identifi-
+cation stage. The two stages update the parameters
+simultaneously during training but are driven by differ-
+ent losses. In the former stage, we use the supervised
+contrastive loss of Equation 2 to optimize the encoder
+and projection networks. In the latter stage, we freeze
+the parameters of the encoder and projection networks
+and optimize only the classifier using the cross-entropy
+loss. The classifier is composed of three fully connected
+layers, as shown in the following equation:
+ˆy=σ
+
+W (3)R
+
+W (2)R
+
+W (1)h
+
+(B1)
+Here,σ(·) is the softmax function,W ∗ is the weight ma-
+trix of each layer, andR(·) represents the ReLU activa-
+tion. ˆyis a transit-likeness score in (0,1), where higher
+values closer to 1 indicate stronger transit-like signa-
+tures in the folded light curve rather than a calibrated
+probability.
+The DELOS projection network is also a fully con-
+nected, two-layer neural network, as shown in the fol-
+lowing equation:
+z=W (2)R
+
+W (1)h
+
+(B2)
+Here,his the representation output by the Encoder,
+used for calculating the classification loss, andzis the
+decoupled representation obtained through the Projec-
+tion network, used for calculating the contrastive loss.
+We customized the encoder network, which consists of
+five convolutional blocks, where the number of channels
+empirically increases while the vector size decreases as
+the data is processed sequentially. The specific encoder
+architecture is continuously tuned to obtain the optimal
+encoder network, as illustrated in Figure 16, which can
+effectively capture both global and local multiscale rep-
+resentations of the light curves. BatchNorm layer and
+Dropout layer were added after each MaxPooling layer
+to improve model convergence and mitigate overfitting.
+Furthermore, GlobalAveragePooling layer was applied
+at the end of the model to standardize the output to
+2048 dimensions, ensuring robust generalization across
+varying input sizes.
+C.BINNING STRATEGY
+An appropriate binning strategy is particularly criti-
+cal for DELOS because it can suppress noise while pre-
+serving ITL, low-SNR transit signals potentially indica-
+tive of habitable exoplanets inKeplerdata. Specifically,
+when the number of bins is relatively small, weak tran-
+sit signals may be smoothed out by background noise,
+resulting in a reduced transit SNR; in contrast, a rela-
+tively large number of bins improves temporal resolution
+but also leads to higher noise levels, a greater probabil-
+ity of missed detections, and increased computational
+overhead.
+In the BLS algorithm paper, G. Kov´ acs et al. (2002)
+stated that using a bin width smaller than the expected
+transit duration does not affect the detection perfor-
+mance. However, if light curves are dominated by cor-
+related noise (A. Collier Cameron et al. 2006) or con-
+tain particularly weak signals, such strategies often lead
+to the signal being smoothed out, especially for Earth-
+like transit signals. Consequently, several subsequent
+studies (P. Plavchan et al. 2008; M. Hippke & R. Heller
+2019; A. Panahi & S. Zucker 2021) convergently pro-
+posed a folded but binless BLS-like search strategy to
+preserve the full structure of such transit signals, al-
+though these approaches may naturally incur substan-
+tially higher computational overhead. With the ad-
+vancement of neural networks in the 2010s, a growing
+body of studies by C. J. Shallue & A. Vanderburg (2018);
+N. Schanche et al. (2018); A. Dattilo et al. (2019); L. Yu
+et al. (2019); A. Chaushev et al. (2019) has introduced
+AI-based approaches to identify transit signals. These
+methods typically do not impose strict constraints on
+bin width, and H. P. Osborn et al. (2020) have even
+shown that using fewer bins can improve detection per-
+formance in theTESSmission. The use of relaxed bin
+width settings is reasonable because these approaches
+construct network inputs based on prior transit param-
+eters derived from BLS or TLS, such as global, local, or
+half-phase views (S. Rao et al. 2021). Even if binning
+causes signal distortion in the global view, the local or
+half-phase view can still retain critical transit features,
+thereby mitigating the impact.
+However, this reliance on traditional algorithmic pri-
+ors imposes a critical limitation: the overall detection
+capability of the neural network becomes bounded by
+the performance ceiling of BLS or TLS. In both the
+periodic detection algorithms mentioned above and the
+end-to-end models, the low-SNR nature of transit sig-
+nals remains one of the most critical and challenging is-
+sues. Fortunately, binning can improve the initial SNR
+of transit signals to some extent, thereby increasing the
+detection sensitivity of algorithms to low-SNR events.
+Accordingly, we systematically investigate the optimal
+number of bins from two perspectives.
+•Signal preservation: The duration and depth of
+the binned transit should remain consistent with
+
+20Liu et al.
+Figure 16.Encoder network architecture of DELOS. The red cubes represent 1DConvolution layers(Conv1d) withReLU
+activation, the blue cubes represent 1DMax Pooling layers(MaxPool1d) withBatchNorm layer(BN) andDropout layer(DP),
+and the gray cubes represent 1DGlobal Average Pooling layers(GlobalAvgPool1d). The numbers on the slanted edge of each
+cube indicate information related to the output. Specifically, the Encoder network is composed of five convolutional blocks. We
+show the dimensions of feature mapφ ci(I)<a,c,b>obtained as input dataIpasses through theci-th convolutional block,
+along with the input and output dimensions<a,b>, wherearefers to the batch size·the number of light curves in each pair,
+brefers to the number of data points in a light curve, andcrefers to the number of channels in the feature map.
+Figure 17.Variation of binned transit SNR with increasing
+binning number. The upper panel shows results for 4,000
+synthetic light curves with original transit SNR∈[6, 8], while
+the lower panel corresponds to 6,000 synthetic light curves
+with original transit SNR∈[8, 11]. The red curves represent
+the binned transit SNR variations for each individual light
+curve. The yellow-shaded region marks the optimal binning
+region, also called the golden bin area, defined by the lowest
+30%σof the SNR. Black error bars indicate the±1σat each
+binning number. The results show that for ITL, low-SNR
+transits, the transit SNR becomes stable when the binning
+number exceeds a threshold of about 2000.
+those of the original signal, introducing no signifi-
+cant distortion or bias.
+•Transit SNR trade-off: The binning should sup-
+press noise effectively while ensuring that the re-
+sulting SNR is not less than that of the original
+signal and ideally achieves a measurable improve-
+ment.
+Specifically, we adopt the data simulation pipeline de-
+scribed in Section 3.2 to generate a synthetic dataset
+consisting of 10,000 light curves, each mimicking a four
+year Kepler-like observational baseline. The transit sig-
+nals embedded in these light curves have uniformly dis-
+tributed SNRs in the range [6, 11], with corresponding
+orbital periods in the range [100, 150] days. The noise
+data for all synthetic light curves are derived from real
+Keplerdata. Each light curve is first folded in its true
+orbital period and then binned into a range of numbers,
+from 128 to 16,384 in steps of 128.
+We recorded changes in transit SNR, duration, and
+depth before and after binning the folded light curves to
+evaluate the impact of binning on signal characteristics.
+To more intuitively demonstrate the sensitivity of Low
+SNR transits to binning size, we divided the 10,000 sim-
+ulated light curves into two subsets based on their SNR
+values: an Extremely Low SNR group (ELS) with SNR
+∈[6, 8] and a Low SNR Group (LSG) with SNR∈[8,
+11]. Figure 17 illustrates how the binned transit SNR
+evolves with the binning numbers for both the ELS and
+LSG groups. In this Figure, when the number of bins
+is below 2000, the transit signal is largely smoothed out
+by background noise, resulting in high variance of tran-
+sit SNR, sometimes even lower SNR than the original
+unbinned transit.
+To balance signal stability and computational effi-
+ciency, we highlight in Figure 17 the binning intervals
+corresponding to the lowest 30%σof the SNR, which we
+
+DELOS in Kepler Photometry21
+Figure 18.Dependence of transit-duration and transit-depth preservation on the adopted phase-binning number. The relative
+error is defined as (binned value−original value)/original value×100%, with values closer to zero indicating better preservation
+of the original transit morphology after binning. The left panel shows the relative error in transit duration, while the right panel
+shows the relative error in transit depth, measured for 10,000 simulated light curves. The yellow curves represent individual
+simulated light curves, and the black error bars indicate the±1σscatter at each binning number. The green shaded regions
+mark the optimal binning intervals: for transit duration, the region corresponding to the lowest 30% of the scatter in relative
+error; for transit depth, the region where the relative error remains below 0.1%. These results show that both transit-duration
+and transit-depth information are well preserved once the binning number is sufficiently large, supporting the choice of 4096
+bins adopted in DELOS.
+define as the optimal binning region. In particular, the
+ELS and LSG groups exhibit different behaviors in this
+regard. Since LSG signals are inherently stronger than
+those in ELS, their SNRσis generally smaller across
+binning scales, and their optimal binning region tends
+to lie at lower binning numbers. Specifically, the opti-
+mal binning range for ELS is [3456, 8832], while that for
+LSG is [2688, 7680].
+In addition, Figure 18 presents the change in error for
+binned transit duration and depth relative to their origi-
+nal values across different binning numbers for the entire
+set of 10,000 light curves. The left panel of Figure 18
+shows that the binned duration error exhibits noticeable
+σdepending on the number of bins, with a trend sim-
+ilar to the physical mechanism described in Figure 17.
+Based on the interval with the 30% smallestσ, we cal-
+culate its optimal binning region to be approximately
+[2048, 6912]. In the right panel of Figure 18, the tran-
+sit depth error rapidly converges to near zero once the
+binning number exceeds around 2000. Consequently, we
+define the optimal binning region for depth error as the
+binning range in which the error remains below 0.1%,
+corresponding to [3200,10000).
+By overlaying the four optimal binning regions dis-
+cussed above, we identify the range [3456, 6912] as the
+most stable interval for the enhancement of transit SNR
+after binning, while preserving the morphology of the
+transit. The 4096 binning number adopted by DE-
+LOS falls precisely within this interval, further validat-
+ing the effectiveness of binning strategies in detecting
+weak Earth-like transits. Moreover, as the target search
+period increases, the optimal binning number tends to
+shift toward higher values. This trend provides meaning-
+ful guidance for future applications of DELOS, GPFC,
+or similar methods to efficiently identify low-SNR tran-
+sits across arbitrary periods.
+As noted in K. A. Pearson et al. (2018), encoder
+networks such as the one shown in Figure 16 inher-
+ently perform a binning-like operation through pooling-
+layer downsampling when extracting temporal represen-
+tations from light curves. Based on this insight, we ar-
+gue that it is preferable to select binning numbers to-
+ward the upper end of the optimal binning region to
+ensure that the encoder retains more in-transit data
+points during the downsampling process, thereby im-
+proving the effectiveness of feature extraction. Impor-
+tantly, the optimal encoder architecture should follow
+several principles: progressively increasing the number
+of channels layer by layer, maintaining sufficiently dense
+sampling along the one-dimensional feature vector, and
+minimizing the span between the input and output vec-
+tors. These designs are particularly crucial for extract-
+ing sparse transit features, and they can significantly
+enhance the representational capacity of the model in
+detecting low-SNR transit signals with longer orbital pe-
+riods.
+D.RUNTIME AND CONVERGENCE
+This appendix summarizes the runtime information
+for synthetic data generation and DELOS training,
+
+22Liu et al.
+along with the recorded training convergence curves ref-
+erenced in Section 3.3.
+Our parallel program was executed onthe Ubuntuop-
+erating system, equipped withan AMD Ryzen 9 7950X
+16 core processor, requiring approximately 6 to 7 hours
+to generate the 200,000 pairs.
+The training loss and accuracy were recorded through-
+out the optimization process to monitor convergence.
+Figure 19.Variations in DELOS loss and accuracy versus
+epochs during training. The bold red triangle highlights the
+epochs where DELOS achieved best performance.
+Trends in loss and accuracy throughout the training
+process were recorded, as shown in Figure 19. DELOS
+was implemented onthe Ubuntuoperating system pow-
+ered by an NVIDIA 4090 graphics card, completing 14
+epochs in approximately 6 hours.
+E.INFERENCE PROFILING
+This appendix summarizes the inference procedure of
+DELOS and the GPU profiling analysis used to deter-
+mine theBatchSizeadopted in Section 4.3. The process
+by which DELOS produces the score periodogram is de-
+tailed in the Algorithm 1.
+Algorithm 1DELOS for Detecting Transits
+Require:lc, periods, device, batchSize
+Ensure:results (list of predicted results)
+1:Preliminary Step: F olded and Normalized Data
+2:foldLc←GpuFold(lc, periods, device)
+3:data←BinAndNoiseNormalize(foldLc)
+4:Step 1: Load Data onto GPU
+5:gpuData←LoadToGpu(data)
+6:Step 2-5: Iterate Over Batches
+7:i←0
+8:whilei <58,400/batchSizedo
+9:Step 2: Slice+Reshape Data
+10:batchData←Deal(gpuData, i, batchSize)
+11:Step 3: F eature Extract
+12:feature←ExtractFeatures(batchData, Extractor)
+13:Step 4: T ransit Classify
+14:batchPredictions←Classify(feature, classifier)
+15:Step 5: Collect Results
+16:results←AppendResults(batchPredictions, results)
+17:i←i+ 1
+18:end while
+19:returnresults
+The score-periodogram generation consists of two
+main stages: GPU-Fold in the preliminary step and
+contrastive-learning inference in Steps 1–5. During the
+latter stage, the computational speed is strongly influ-
+enced by theBatchSizehyperparameter. To investi-
+gate this, we conducted experiments that analyzed DE-
+LOS speed under varyingBatchSizesettings, focusing
+on minimizing the time cost of key steps and maximizing
+two GPU metrics from M. Abadi et al. (2015): GPU uti-
+lization (U GPU) and estimated Streaming Multiproces-
+sor (SM) efficiency (η SM). We monitored these metrics
+usingTensorBoardsoftware, and the calculation formu-
+las forU GPU,η SM are presented below:
+UGPU = Tbusy
+Ttotal
+(E3)
+Here,T busy represents the GPU busy time, andT total
+refers to the total execution time. Consequently, it mea-
+sures the activity level of the GPU during task execu-
+tion, reflecting its overall workload.
+ηSM = 1
+Ttotal
+·
+KX
+k=1
+
+min
+ Nblocks,k
+NSM
+,1.0
+
+·T exec,k
+
+(E4)
+Here,N blocks,k represents the number of thread blocks
+allocated to thek-th kernel,N SM denotes the number of
+SMs in the GPU, andT exec,k is the execution time of the
+k-th kernel. Consequently, it quantifies the utilization
+of computational resources within each SM, indicating
+the effectiveness of the thread-block distribution.
+
+DELOS in Kepler Photometry23
+Generally, larger values ofU GPU andη SM result in
+faster speeds. However, excessively large values may in-
+troduce new issues, increasing overall runtime. For ex-
+ample, data transfer between the CPU and GPU can be-
+come a bottleneck; improper thread block size or shared
+memory configuration may lead to register or shared
+memory becoming performance bottlenecks; and task
+scheduling and context switching can add additional
+overhead. Therefore, identifying thesweet spotfor DE-
+LOS in the light curve evaluation process is crucial, i.e.,
+exploring the optimalBatchSizevalue. We conducted
+experiments on anUbuntuoperating system with two
+NVIDIA 4090 graphics cards andAMD Ryzen 9 7950X
+16-core processor, ensuring that all other processes were
+terminated. Moreover, all experiments were repeated 50
+times with the sameBatchSizeconfiguration.
+Finally, we found that when theBatchSizeis set to
+128, the time cost during the contrastive learning infer-
+ence stage broke the one-second barrier, achieving 0.97
+seconds. At the same time,U GPU andη SM were ap-
+proximately 91 percent. However, beyond this value, the
+overall runtime increased, as shown in Figure 12. There-
+fore, we identifyBatchSize= 128 as thesweet spotin the
+DELOS detection system and maintain it in subsequent
+experiments.
+REFERENCES
+Abadi, M., Agarwal, A., Barham, P., et al. 2015,
+TensorFlow: Large-Scale Machine Learning on
+Heterogeneous Systems, https://www.tensorflow.org/
+Beaulieu, J.-P., Bennett, D. P., Fouqu´ e, P., et al. 2006,
+Nature, 439, 437, doi: 10.1038/nature04441
+Borucki, W. J., Koch, D., Basri, G., et al. 2010, Science,
+327, 977, doi: 10.1126/science.1185402
+Borucki, W. J., Koch, D. G., Batalha, N., et al. 2012, The
+Astrophysical Journal, 745, 120,
+doi: 10.1088/0004-637X/745/2/120
+Boufleur, R. C., Emilio, M., Pacheco, E. J., de La Reza,
+J. R., & da Rocha, J. C. 2014, in IAU Symposium, Vol.
+293, Formation, Detection, and Characterization of
+Extrasolar Habitable Planets, ed. N. Haghighipour,
+410–412, doi: 10.1017/S1743921313013288
+Bromley, J., Guyon, I., LeCun, Y., S¨ ackinger, E., & Shah,
+R. 1993, in Proceedings of the 6th International
+Conference on Neural Information Processing Systems,
+NIPS’93 (San Francisco, CA, USA: Morgan Kaufmann
+Publishers Inc.), 737–744, doi: 10.5555/2987189.2987282
+Burke, C. J., Christiansen, J. L., Mullally, F., et al. 2015,
+The Astrophysical Journal, 809, 8,
+doi: 10.1088/0004-637X/809/1/8
+Campbell, B., Walker, G. A. H., & Yang, S. 1988, The
+Astrophysical Journal, 331, 902, doi: 10.1086/166608
+Carter, J. A., & Agol, E. 2013, The Astrophysical Journal,
+765, 132, doi: 10.1088/0004-637X/765/2/132
+Charbonneau, D., Brown, T. M., Latham, D. W., & Mayor,
+M. 2000, The Astrophysical Journal, 529, L45,
+doi: 10.1086/312457
+Chaushev, A., Raynard, L., Goad, M. R., et al. 2019,
+Monthly Notices of the Royal Astronomical Society, 488,
+5232, doi: 10.1093/mnras/stz2058
+Chauvin, G., Lagrange, A.-M., Dumas, C., et al. 2004,
+Astronomy & Astrophysics, 425, L29,
+doi: 10.1051/0004-6361:200400056
+Chen, X., Xie, S., & He, K. 2021, in 2021 IEEE/CVF
+International Conference on Computer Vision (ICCV),
+9620–9629, doi: 10.1109/ICCV48922.2021.00950
+Chintarungruangchai, P., & Jiang, I.-G. 2019, Publications
+of the Astronomical Society of the Pacific, 131, 064502,
+doi: 10.1088/1538-3873/ab13d3
+Chopra, S., Hadsell, R., & LeCun, Y. 2005, in 2005 IEEE
+Computer Society Conference on Computer Vision and
+Pattern Recognition (CVPR’05), Vol. 1, 539–546 vol. 1,
+doi: 10.1109/CVPR.2005.202
+Claret, A., & Bloemen, S. 2011, Astronomy & Astrophysics,
+529, A75, doi: 10.1051/0004-6361/201116451
+Collaboration, A., Price-Whelan, A. M., Lim, P. L., et al.
+2022, The Astrophysical Journal, 935, 167,
+doi: 10.3847/1538-4357/ac7c74
+Collier Cameron, A., Pollacco, D., Street, R. A., et al. 2006,
+Monthly Notices of the Royal Astronomical Society, 373,
+799, doi: 10.1111/j.1365-2966.2006.11074.x
+Cui, K., Liu, J., Feng, F., & Liu, J. 2021, The Astronomical
+Journal, 163, 23, doi: 10.3847/1538-3881/ac3482
+Dattilo, A., Vanderburg, A., Shallue, C. J., et al. 2019, The
+Astronomical Journal, 157, 169,
+doi: 10.3847/1538-3881/ab0e12
+Dressing, C. D., & Charbonneau, D. 2013, The
+Astrophysical Journal, 767, 95,
+doi: 10.1088/0004-637X/767/1/95
+Dressing, C. D., & Charbonneau, D. 2015, The
+Astrophysical Journal, 807, 45,
+doi: 10.1088/0004-637X/807/1/45
+Foreman-Mackey, D., Hogg, D. W., & Morton, T. D. 2014,
+The Astrophysical Journal, 795, 64,
+doi: 10.1088/0004-637X/795/1/64
+Fressin, F., Torres, G., Charbonneau, D., et al. 2013, The
+Astrophysical Journal, 766, 81,
+doi: 10.1088/0004-637X/766/2/81
+
+24Liu et al.
+Fukushima, K. 1980, Biological Cybernetics, 36, 193,
+doi: 10.1007/BF00344251
+Ge, J., Zhang, H., Deng, H., & Howell, S. B. 2022a, The
+Innovation, 3, doi: 10.1016/j.xinn.2022.100271
+Ge, J., Zhang, H., Zand, W., & Deng, H. 2022b,
+arXiv:2206.06693,
+doi: https://doi.org/10.48550/arXiv.2206.06693
+Ge, J., Zhang, H., Zhang, Y., et al. 2022c, in Space
+Telescopes and Instrumentation 2022: Optical, Infrared,
+and Millimeter Wave, ed. L. E. Coyle, S. Matsuura, &
+M. D. Perrin, Vol. 12180, International Society for Optics
+and Photonics (SPIE), 1218015, doi: 10.1117/12.2630656
+Ge, J., Chen, W., Chen, Y., et al. 2024a, Chinese Journal
+of Space Science, 44, 400, doi: 10.11728/cjss2024.03.yg05
+Ge, J., Zhang, H., Zhang, Y., et al. 2024b, in Space
+Telescopes and Instrumentation 2024: Optical, Infrared,
+and Millimeter Wave, ed. L. E. Coyle, S. Matsuura, &
+M. D. Perrin, Vol. 13092, International Society for Optics
+and Photonics (SPIE), 1309218, doi: 10.1117/12.3018669
+Grill, J.-B., Strub, F., Altch´ e, F., et al. 2020, in
+Proceedings of the 34th International Conference on
+Neural Information Processing Systems, NIPS ’20 (Red
+Hook, NY, USA: Curran Associates Inc.),
+doi: 10.5555/3495724.3497510
+He, K., Fan, H., Wu, Y., Xie, S., & Girshick, R. 2020, in
+2020 IEEE/CVF Conference on Computer Vision and
+Pattern Recognition (CVPR), 9726–9735,
+doi: 10.1109/CVPR42600.2020.00975
+He, K., Zhang, X., Ren, S., & Sun, J. 2015, in 2015 IEEE
+International Conference on Computer Vision (ICCV),
+1026–1034, doi: 10.1109/ICCV.2015.123
+He, K., Zhang, X., Ren, S., & Sun, J. 2016, in 2016 IEEE
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 770–778, doi: 10.1109/CVPR.2016.90
+Henry, G. W., Marcy, G. W., Butler, R. P., & Vogt, S. S.
+2000, The Astrophysical Journal Letters, 529, L41,
+doi: 10.1086/312458
+Hinton, G., Chen, T., Kornblith, S., & Norouzi, M. 2020, in
+Proceedings of the 37th International Conference on
+Machine Learning, ICML’20 (JMLR.org),
+doi: 10.5555/3524938.3525087
+Hippke, M., & Heller, R. 2019, Astronomy & Astrophysics,
+623, A39, doi: 10.1051/0004-6361/201834672
+Howell, S. B., Sobeck, C., Haas, M., et al. 2014,
+Publications of the Astronomical Society of the Pacific,
+126, 398, doi: 10.1086/676406
+Jenkins, J. M., Caldwell, D. A., & Borucki, W. J. 2002, The
+Astrophysical Journal, 564, 495, doi: 10.1086/324143
+Jenkins, J. M., Caldwell, D. A., Gilliland, R. L., et al.
+2010a, in AAS/Division for Planetary Sciences Meeting
+Abstracts, Vol. 42, AAS/Division for Planetary Sciences
+Meeting Abstracts #42, 27.09
+Jenkins, J. M., Caldwell, D. A., Chandrasekaran, H., et al.
+2010b, The Astrophysical Journal Letters, 713, L87,
+doi: 10.1088/2041-8205/713/2/L87
+Jenkins, J. M., Twicken, J. D., Batalha, N. M., et al. 2015,
+The Astronomical Journal, 150, 56,
+doi: 10.1088/0004-6256/150/2/56
+Khosla, P., Teterwak, P., Wang, C., et al. 2020, in
+Proceedings of the 34th International Conference on
+Neural Information Processing Systems, NIPS ’20 (Red
+Hook, NY, USA: Curran Associates Inc.),
+doi: 10.5555/3495724.3497291
+Konacki, M., Torres, G., Jha, S., & Sasselov, D. D. 2003,
+Nature, 421, 507, doi: 10.1038/nature01379
+Kov´ acs, G., Zucker, S., & Mazeh, T. 2002, Astronomy &
+Astrophysics, 391, 369, doi: 10.1051/0004-6361:20020802
+Kreidberg, L. 2015, Publications of the Astronomical
+Society of the Pacific, 127, 1161, doi: 10.1086/683602
+LeCun, Y., Boser, B., Denker, J. S., et al. 1989, Neural
+Computation, 1, 541, doi: 10.1162/neco.1989.1.4.541
+Lecun, Y., Bottou, L., Bengio, Y., & Haffner, P. 1998,
+Proceedings of the IEEE, 86, 2278, doi: 10.1109/5.726791
+Liu, T., Quan, Y., Su, Y., et al. 2025, Nature Astronomy, 9,
+608, doi: 10.1038/s41550-025-02484-z
+Malik, A., Moster, B. P., & Obermeier, C. 2021, Monthly
+Notices of the Royal Astronomical Society, 513, 5505,
+doi: 10.1093/mnras/stab3692
+Mandel, K., & Agol, E. 2002, The Astrophysical Journal
+Letters, 580, L171, doi: 10.1086/345520
+Mayor, M., & Queloz, D. 1995, Nature, 378, 355,
+doi: 10.1038/378355a0
+McCauliff, S. D., Jenkins, J. M., Catanzarite, J., et al.
+2015, The Astrophysical Journal, 806, 6,
+doi: 10.1088/0004-637X/806/1/6
+Misra, I., & van der Maaten, L. 2020, in 2020 IEEE/CVF
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 6706–6716,
+doi: 10.1109/CVPR42600.2020.00674
+NASA Exoplanet Archive. 2025, KOI Cumulative Table,
+IPAC, doi: 10.26133/NEA4
+Ofir, A. 2014, Astronomy & Astrophysics, 561, A138,
+doi: 10.1051/0004-6361/201220860
+Olmschenk, G., Silva, S. I., Rau, G., et al. 2021, The
+Astronomical Journal, 161, 273,
+doi: 10.3847/1538-3881/abf4c6
+
+DELOS in Kepler Photometry25
+Osborn, H. P., Ansdell, M., Ioannou, Y., et al. 2020,
+Astronomy & Astrophysics, 633, A53,
+doi: 10.1051/0004-6361/201935345
+Panahi, A., & Zucker, S. 2021, Publications of the
+Astronomical Society of the Pacific, 133, 024502,
+doi: 10.1088/1538-3873/abd9ab
+Paszke, A., Gross, S., Massa, F., et al. 2019, in Advances in
+Neural Information Processing Systems 32, 8024–8035,
+doi: 10.5555/3454287.3455008
+Pearson, K. A., Palafox, L., & Griffith, C. A. 2018,
+Monthly Notices of the Royal Astronomical Society, 474,
+478, doi: 10.1093/mnras/stx2761
+Petigura, E. A., Howard, A. W., & Marcy, G. W. 2013a,
+Proceedings of the National Academy of Science, 110,
+19273, doi: 10.1073/pnas.1319909110
+Petigura, E. A., Marcy, G. W., & Howard, A. W. 2013b,
+The Astrophysical Journal, 770, 69,
+doi: 10.1088/0004-637X/770/1/69
+Plavchan, P., Jura, M., Kirkpatrick, J. D., Cutri, R. M., &
+Gallagher, S. C. 2008, The Astrophysical Journal
+Supplement Series, 175, 191, doi: 10.1086/523644
+Rao, S., Mahabal, A., Rao, N., & Raghavendra, C. 2021,
+Monthly Notices of the Royal Astronomical Society, 502,
+2845, doi: 10.1093/mnras/stab203
+Rauer, H., Catala, C., Aerts, C., et al. 2014, Experimental
+Astronomy, 38, page range,
+doi: 10.1007/s10686-014-9383-4
+Rauer, H., Aerts, C., Deleuil, M., et al. 2022, in Europlanet
+Science Congress 2022, doi: 10.5194/epsc2022-453
+Renner, S., Rauer, H., Erikson, A., et al. 2008, Astronomy
+& Astrophysics, 492, 617,
+doi: 10.1051/0004-6361:200810148
+Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2014,
+Journal of Astronomical Telescopes, Instruments, and
+Systems, 1, 014003, doi: 10.1117/1.JATIS.1.1.014003
+Schanche, N., Cameron, A. C., H´ ebrard, G., et al. 2018,
+Monthly Notices of the Royal Astronomical Society, 483,
+5534, doi: 10.1093/mnras/sty3146
+Shahaf, S., Zackay, B., Mazeh, T., Faigler, S., & Ivashtenko,
+O. 2022, Monthly Notices of the Royal Astronomical
+Society, 513, 2732, doi: 10.1093/mnras/stac960
+Shallue, C. J., & Vanderburg, A. 2018, The Astronomical
+Journal, 155, 94, doi: 10.3847/1538-3881/aa9e09
+Shi, H., Luo, D., Tang, S., Wang, J., & Zhuang, Y. 2020,
+arXiv e-prints, arXiv:2011.10944,
+doi: 10.48550/arXiv.2011.10944
+Smith, J. C., Stumpe, M. C., Cleve, J. E. V., et al. 2012,
+Publications of the Astronomical Society of the Pacific,
+124, 1000, doi: 10.1086/667697
+Staelin, D. 1969, Proceedings of the IEEE, 57, 724,
+doi: 10.1109/PROC.1969.7051
+Stumpe, M. C., Smith, J. C., Cleve, J. E. V., et al. 2012,
+Publications of the Astronomical Society of the Pacific,
+124, 985, doi: 10.1086/667698
+Thompson, S. E., Coughlin, J. L., Hoffman, K., et al. 2018,
+The Astrophysical Journal Supplement Series, 235, 38,
+doi: 10.3847/1538-4365/aab4f9
+VanderPlas, J. T. 2018, The Astrophysical Journal
+Supplement Series, 236, doi: 10.3847/1538-4365/aab766
+von Braun, K., & Ciardi, D. R. 2007, Proceedings of the
+International Astronomical Union, 3, 93–100,
+doi: 10.1017/S1743921308016451
+Wang, K., Ge, J., Willis, K., Wang, K., & Zhao, Y. 2024a,
+Monthly Notices of the Royal Astronomical Society, 528,
+4053, doi: 10.1093/mnras/stae245
+Wang, K., Ge, J., Willis, K., et al. 2024b, Monthly Notices
+of the Royal Astronomical Society, 534, 1913,
+doi: 10.1093/mnras/stae2155
+Yu, L., Vanderburg, A., Huang, C., et al. 2019, The
+Astronomical Journal, 158, 25,
+doi: 10.3847/1538-3881/ab21d6
+Zucker, S., & Giryes, R. 2018, The Astronomical Journal,
+155, 147, doi: 10.3847/1538-3881/aaae05

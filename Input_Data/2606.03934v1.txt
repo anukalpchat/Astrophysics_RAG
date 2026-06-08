@@ -1,0 +1,1842 @@
+Title: Spectral Handling and Estimation of AGN Parameters (SHEAP), The first AGN fitting GPU-based code
+Authors: F. Ávila-Vera, P. Sánchez-Sáez, V. Motta, S. Bernal
+Published: 2026-06-02
+Categories: astro-ph.GA, astro-ph.IM
+
+Astronomy&Astrophysicsmanuscript no. aanda©ESO 2026
+June 3, 2026
+Spectral Handling and Estimation of AGN Parameters
+(SHEAP)
+The first AGN fitting GPU-based code
+F. Ávila-Vera 1, P. Sánchez-Sáez 2, V . Motta 1, and S. Bernal 3,4
+1 Instituto de Física y Astronomía, Facultad de Ciencias, Universidad de Valparaíso, Av. Gran Bretaña 1111, Valparaíso, Chile
+e-mail:felipe.avilav@postgrado.uv.cl, veronica.motta@uv.cl
+2 European Southern Observatory, Karl-Schwarzschild-Str. 2, 85748 Garching, Germany
+3 Departamento de Astronomía, Universidad de Chile, Camino El Observatorio 1515, Santiago, Chile
+4 Millennium Nucleus on Transversal Research and Technology to Explore Supermassive Black Holes (TITANS), Chile
+Received –, –; accepted –,–
+ABSTRACT
+Context.In the coming years, the number of discovered active galactic nuclei (AGN) is expected to significantly increase due to
+upcoming surveys. This rapid expansion of data will test our existing data analysis and modeling techniques and necessitate new
+methods for managing and interpreting large, complex datasets, particularly for next-generation surveys delivering heterogeneous
+spectra with a wide range of signal-to-noise ratios, spectral resolutions, and host-galaxy contamination.
+Aims.We present SHEAP (Spectral Handling and Estimation of AGN Parameters), a spectral fitting framework able to handle large
+quantities of data while being fast and reliable, without sacrificing physical interpretability, reproducibility, and robust uncertainty
+estimation for derived quantities.
+Methods.We use JAX, a Python GPU-powered framework, to implement a flexible modeling approach with modular components
+(continuum, host galaxy, Feiipseudo-continuum, and multi-component emission lines) and support for parameter tying and physically
+motivated constraints. We combine first-order gradient-based optimization with automatic differentiation to efficiently solve the highly
+complex problem, enabling stable convergence even in highly blended spectral regions (such as Hβ) and reducing runtime through
+vectorization and just-in-time compilation.
+Results.We compare our measurements against literature results and public fitting pipelines across four independent samples covering
+the Civ, Mgii, Hβ, and Hαspectral regions. We find generally good agreement for the main AGN spectral parameters, with typically
+∼85–100% of the objects lying within the±0.3 dex band, depending on the sample and parameter. The fits are statistically acceptable,
+with reduced chi-square distributions generally centered close to unity. Relative to the runtime reported by Bernal et al. (2026)
+using thepPXFframework, the fitting stage requires only∼1.7% of the computational time, corresponding to an improvement of
+approximately 100 times.
+Conclusions.These results show that our method can deliver reliable AGN spectral decompositions with substantially lower compu-
+tational cost than classical approaches.SHEAPis therefore well suited for the analysis of forthcoming massive spectroscopic datasets,
+where scalability, reproducibility, flexible model configurations, and robust uncertainty estimation are essential.
+Key words.(Galaxies:) quasars: absorption lines, (Galaxies:) quasars: emission lines, (Galaxies:) quasars: general, (Galaxies:)
+quasars: supermassive black holes, Methods: analytical Methods: data analysis
+1. Introduction
+Since the discovery of active galactic nuclei (AGN) in 1960, they
+have opened a new field in astronomy (Kellermann 2015, for
+a historical review). These objects are characterized by strong
+emission across the entire electromagnetic spectrum, powered
+by the accretion of material onto a central supermassive black
+hole (SMBH; see Padovani 2017, for a detailed review).
+Accretion not only powers the emission, but also gives rise
+to several substructures, including the broad-line region (BLR),
+a high-density, dust-free gas component moving at high velocity
+(e.g.,≳10 3 km s−1 Shen et al. 2011; Rakshit et al. 2017); the
+narrow-line region (NLR), a lower-velocity and lower-density
+ionized gas component (e.g.,≲10 3 km s−1 Mullaney et al. 2013;
+Calderone et al. 2017); the dusty torus (Assef et al. 2013); and,
+in some systems, a central radio jet (see Netzer 2015, for a de-
+tailed discussion of these regions). AGN are also classified into
+different types, largely interpreted within orientation-based uni-
+fication schemes (Padovani et al. 2017). In this context, one of
+the most relevant distinctions is whether broad emission lines
+(i.e., evidence for the BLR) are present (type I) or absent (type II;
+Antonucci 1993; Urry & Padovani 1995).
+Many of these components (e.g., the BLR and NLR, and
+accretion-disc emission) can be studied spectroscopically, as dis-
+tinct spectral features trace different physical regions (Boroson
+& Green 1992). Nevertheless, this is not an easy task: opti-
+cal spectra typically contain blended contributions from multi-
+ple components. For example, broad Feiimultiplets can form
+a “pseudo-continuum” (the optical “iron shelf”) that partially
+overlaps the Balmer lines and Mgii, complicating continuum
+placement and line deblending (e.g. Boroson & Green 1992;
+Véron-Cetty et al. 2004; Kova ˇcevi´c et al. 2010). In addition,
+non-virial kinematic components such as ionized outflows can
+Article number, page 1 of 16
+arXiv:2606.03934v1  [astro-ph.GA]  2 Jun 2026
+
+A&A proofs:manuscript no. aanda
+produce asymmetric, blueshifted wings and extra broad compo-
+nents in narrow lines (e.g., Oiiiλ5007), biasing measurements if
+not modeled explicitly (e.g. Mullaney et al. 2013; Harrison et al.
+2014; Villar-Martín et al. 2016). Finally, accretion-disc winds
+can imprint systematic blueshifts and broad absorption/emission
+signatures in high-ionization lines (classically in the UV , e.g.,
+Civ), linking line profiles to large-scale mass loss and feedback
+(e.g. Crenshaw et al. 2003; King & Pounds 2015; Vietri et al.
+2018). Moreover, AGN optical spectra can be contaminated by
+host-galaxy light (e.g., stellar absorption features and a stellar
+continuum), which can dilute emission-line equivalent widths
+(EW) and bias continuum-based measurements if not properly
+accounted for (Kauffmann et al. 2003), adding another level of
+complexity to the physical interpretation of AGN spectra. These
+effects are particularly relevant for SMBH mass estimates based
+on virial broad-line methods, which rely on accurate measure-
+ments of the broad-line width and the AGN continuum luminos-
+ity (Popovi´c 2020).
+Several tools have been developed over the years to iden-
+tify AGN and to infer their physical properties, from the earli-
+est spectroscopic classifications (Khachikian & Weedman 1974)
+to modern large-scale characterization pipelines. Nevertheless,
+many analysis pipelines have historically been developed for in-
+dividual projects and have remained private (Calderone et al.
+2017). This began to change over the last∼15 years, as open-
+source practices became increasingly common in astronomy
+(Weiner et al. 2009), and multiple community tools have been re-
+leased with different methodological approaches to model AGN
+spectra.
+A milestone was the release ofQSFit(Calderone et al.
+2017) and its Python implementation,PyQSOFit(Guo et al.
+2018), which have been used to characterize large samples, in-
+cluding 750,414 AGN spectra (Wu & Shen 2022) (hereafter,
+Wu&Shen22) observed with the SDSS (Lyke et al. 2020). Since
+then, additional tools have appeared to address specific chal-
+lenges. For instance, because Feiiemission can strongly affect
+continuum placement and measurements of blended lines, dedi-
+cated methodologies and automated pipelines such asFANTASY
+(Ili´c et al. 2020; Raki ´c 2022; Ili ´c et al. 2023) have been de-
+veloped. More broadly, the need for robust host–AGN sepa-
+ration and more realistic uncertainty estimates has motivated
+approaches that incorporate full stellar-continuum and kine-
+matic modeling, such as Bayesian AGN Decomposition Analy-
+sis (BADASS; Sexton et al. 2019, 2021).BADASSintegrates Penal-
+ized PiXel-Fitting (pPXF) (Cappellari & Emsellem 2004; Cap-
+pellari 2012, 2017, 2023), a widely used tool for galaxy spectra,
+to model the host-galaxy component in AGN observations.
+The release of the Dark Energy Spectroscopic Instrument
+(DESI) is already delivering spectra at an unprecedented volume,
+with DR1 providing spectra for≳18 million unique targets. This
+scale forces analysis frameworks to prioritize automation, ro-
+bustness, and well-characterized systematics (e.g., pipeline and
+value-added products, Siudek et al. 2024). It has also motivated
+survey-optimized approaches such asFastSpecFit(Mous-
+takas et al. 2023), as well as AGN-focused decomposition ef-
+forts such asDASpec(Du 2024), which incorporate instrument-
+and survey-level information directly into the fitting process.
+More broadly, next-generation multi-object facilities are ex-
+pected to push these requirements even further (e.g., the discus-
+sion of survey-scale spectroscopy and end-to-end data products
+in Mainieri et al. 2024).
+Nevertheless, all of them have been used, and remain widely
+adopted, in a variety of scientific applications (Bernal et al. 2026;
+Hutsemékers et al. 2026; Layek et al. 2025; Ren et al. 2024; Fu
+et al. 2023), each of them presents potential drawbacks: some
+rely on specific minimizers that may not be optimal for uncom-
+mon object populations; others lack flexibility in the choice of
+components (e.g., templates or parametric components); some
+have been developed primarily for a particular instrument or type
+of dataset; and others lack native value-added products1, as well
+as the ability to efficiently process enormous quantities of data
+(i.e., scalability).
+In an era in which next-generation surveys demand not only
+fast methodologies, but also flexible and physically motivated
+modeling frameworks to interpret heterogeneous AGN popula-
+tions, these limitations may become significant. This becomes
+even more relevant with the start of 4MOST operations, which
+will further extend the observational landscape by delivering an
+exceptionally large AGN census: the 4MOST AGN survey is
+designed to provide physical properties for up to∼10 6 AGN,
+enabling population-scale tests of SMBH growth and AGN–
+galaxy co-evolution (de Jong et al. 2019; Merloni et al. 2019).
+Within this context, the Chilean AGN/Galaxy Extragalactic Sur-
+vey (ChAnGES) will provide complementary, targeted science
+cases (Bauer et al. 2023), focusing on uncommon AGN popula-
+tions.
+In parallel, high-performance computing, including GPU ac-
+celeration, has become increasingly important for large-scale in-
+ference and model evaluation in astronomy (e.g., Galan et al.
+2022; Gu et al. 2022; Michalewicz et al. 2023; Wang et al. 2025),
+in line with broader “astroinformatics” and big-data trends in
+survey science (e.g., Borne et al. 2009; Zhang & Zhao 2015;
+Vavilova et al. 2020). Such developments provide a practical
+route to meet the computational demands posed by the rapidly
+increasing volume of spectroscopic data expected in the coming
+years.
+In this context, we presentSpectral Handling and
+Estimation of AGN Parameters(SHEAP) 2, a GPU-enabled
+spectral decomposition tool designed to analyse large samples of
+optical AGN spectra, as well as spectra of inactive galaxies, and
+to deliver reliable parameter estimates with substantially reduced
+runtimes. To testSHEAP, we apply it to∼2000 AGN spectra,
+performing a consistent multi-component decomposition over a
+rest frame broad wavelength range (1100–7000 Å) and across
+different AGN populations and spectral resolutions.
+The paper is structured as follows. In Section 2, we de-
+scribe our methodology. In Section 3, we present the valida-
+tion tests used to assess the reliability of the code. In Section 4,
+we discuss our results and conclusions. Through this work we
+adopt a flatΛCDM cosmology withΩ Λ =0.7,Ω M =0.3, and
+H0 =70 km s −1 Mpc−1.
+2. Methods
+In this section, we present and outline the different steps and
+strategies in our approach to modeling AGNs spectra using
+SHEAP, a Python 3 package powered byJAX(Bradbury et al.
+2021).
+2.1. Data pre-processing
+Before delving into the modeling procedure of our method, it is
+important to explore the data structure and the corrections re-
+quired to obtain physically representative results.
+1 e.g., line flux, EW, luminosities, and SMBH mass
+2 https://sheap.readthedocs.io/
+Article number, page 2 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+2.1.1. Data handling & structure
+Our method operates on data stored as a three-dimensional array
+Ai,j,k , where:
+–i∈ {0, . . . ,N−1}indexes the spectra in the batch,
+–j∈ {0, . . . ,2}indexes the data component, corresponding to
+wavelength, flux density, and per-pixel observational uncer-
+tainty (σ),
+–k∈ {0, . . . ,L−1}indexes pixels within a spectrum.
+Given the complexity of spectral modeling (e.g. Cappellari 2017;
+Guo et al. 2018; Ili ´c et al. 2023), an array-based, batched data
+layout enables efficient batch processing and GPU-based vector-
+ization during model evaluation and optimization. By expressing
+the computation in terms of array-shaped operations, the data-
+parallel structure of the problem is made explicit to the under-
+lying compiler and accelerator backends. This facilitates opti-
+mized memory access patterns (for more details, see Bradbury
+et al. 2021) and significantly accelerates both forward-model
+evaluation and automatic differentiation, particularly in large pa-
+rameter spaces and in workflows that require repeated evalua-
+tions, such as gradient-based optimization and posterior sam-
+pling (as in our case; see Section 2.3 Dalalyan 2017; Ma et al.
+2019).
+2.1.2. Spectral corrections
+We first apply the standard cosmological corrections to our sam-
+ple3 (Hogg et al. 2002; Blanton & Roweis 2007). Since the
+observed spectra are also affected by Galactic dust extinction
+(Fitzpatrick 1999), given the object coordinate we correct for
+extinction using E(B−V) values, computed with thesfdmap 4
+Python package, based on the full-sky dust maps of Schlegel
+et al. (1998). The extinction correction is then applied using the
+reddening law of Cardelli et al. (1989) withR V =3.1, together
+with the recalibration of Schlafly & Finkbeiner (2011).
+2.2. Modeling withSHEAP
+TheSHEAPmodeling pipeline constructs a spectral model (SM)
+that depends on a defined wavelength range, this interval de-
+termines the set of physical components that will appear in an
+AGN spectrum model as host-galaxy starlight, Feiiemission,
+non-thermal continuum, and emission lines (EL). Then, for a
+general spectral model:
+FSM(λrest)=F host(λrest)+F Fe(λrest)
++F cont(λrest)+F Balmer(λrest)+F EL(λrest),(1)
+whereF SM(λrest) is the total modeled flux density of the spec-
+trum in the rest frame. The individual terms represent the dif-
+ferent spectral components contributing to the observed emis-
+sion:F host(λrest) is the stellar continuum from the host galaxy,
+FFe(λrest) accounts for the blended Feiiemission complexes,
+Fcont(λrest) represents the featureless AGN continuum emission,
+FBalmer(λrest) describes the Balmer continuum emission, and
+FEL(λrest) represents the sum of all emission-line component (e.g
+narrow, broad, outflow, Winds).
+3 λrest =λ obs/(1+z) andF rest
+λ =(1+z)F obs
+λ (λobs)
+4 https://github.com/kbarbary/sfdmap
+2.2.1. The host galaxy model
+It is well known that, atz≲1, the stellar continuum and ab-
+sorption features of the host galaxy can contribute significantly
+to the observed AGN spectrum (e.g., Greene & Ho 2005; Jalan
+et al. 2023; Ren et al. 2024). To account for this effect, we imple-
+mented a lightweight host-galaxy module inspired by the penal-
+ized Pixel-Fitting (pPXF) methodology (Cappellari & Emsellem
+2004; Cappellari 2017), designed specifically for AGN+host
+spectra.
+In our approach, the host-galaxy stellar emission is modeled
+as a linear combination of single stellar population (SSP) tem-
+plates spanning a grid of stellar ages and metallicities (Vazdekis
+et al. 2010). The composite template is convolved with a Gaus-
+sian line-of-sight velocity distribution (LOSVD) to reproduce
+the broadening induced by the stellar motions within the galaxy
+(van der Marel & Franx 1993). The convolution is performed
+efficiently in Fourier space (Brigham 1974), ensuring consis-
+tent spectral broadening while keeping the kinematic description
+minimal.
+In contrast to full spectral-fitting frameworks such aspPXF,
+which can simultaneously recover detailed stellar kinematics and
+population properties using penalized likelihoods and Gauss–
+Hermite expansions (e.g., Cappellari & Emsellem 2004; Cid
+Fernandes et al. 2005), our current implementation restricts the
+LOSVD to a purely Gaussian kernel. In this approximation, the
+LOSVD is parameterized only by the mean line-of-sight veloc-
+ityVand the velocity dispersionσ, without including higher-
+order Gauss–Hermite moments. Similarly, the method does not
+attempt to infer non-parametric star-formation histories. This
+design choice prioritizes numerical stability and computational
+speed in regimes where the host contribution is typically sub-
+dominant and strongly blended with the AGN continuum and
+emission-line components.
+We built a custom cube of SSP templates from E-MILES
+(Vazdekis et al. 2016) using the “Tune SSP Models” web
+tool5. The original library spans 1,680–49,999.4 Å; which we
+selected the 1,680–8,950 Å interval, representative of the typ-
+ical wavelength coverage of UV/optical instruments. For con-
+sistency, we adopted the values used in Cappellari (2023). Ac-
+cordingly, the templates were generated with linear sampling,
+∆λ=0.9 Å pix −1, and have a native spectral resolution of
+FWHM≃2.51–5 Å across the selected range. We used the
+Padova+00 (Girardi et al. 2000) isochrones, a unimodal IMF
+with slope 2.30, the base Fe abundance pattern, and the full
+E-MILES metallicity ([M/H]=−2.32 to 0.22) and age (0.1–
+10 Gyr) grids.
+2.2.2. The AGN Continuum model
+Our method provides flexibility in the continuum component,
+allowing the background model to be chosen according to the
+physical nature of the source and the wavelength range under
+analysis. Among the available options are a linear baseline for
+small spectral windows with nearly flat local continua (Van-
+den Berk et al. 2001), a power-law continuum for the feature-
+less accretion-disk emission commonly observed in AGN (e.g.,
+Richards et al. 2006), and a broken power law for wider wave-
+length ranges where a single slope does not adequately describe
+the continuum shape (Dong et al. 2008).
+5 https://research.iac.es/proyecto/miles/pages/
+webtools/tune-ssp-models.php
+Article number, page 3 of 16
+
+A&A proofs:manuscript no. aanda
+2.2.3. The Balmer emission model
+We model the Balmer emission as an independent set compo-
+nents (Sulentic et al. 2000) that shape the pseudo-continuum in
+the near-ultraviolet (UV) region. The Balmer continuum, pro-
+duced by bound–free recombination of hydrogen in partially op-
+tically thick gas, becomes significant shortward of the Balmer
+edge at 3,646 Å (Sulentic et al. 2000; Dong et al. 2011).
+Meanwhile, at longer wavelengths (3,700–4,000 Å) emission
+from high-order Balmer lines (typicallyn≳7) blends together
+due to Doppler broadening and instrumental resolution, form-
+ing a quasi-continuum that further elevates the background level.
+This blended Balmer emission is particularly prominent in lumi-
+nous and high-redshift AGNs, where it can substantially affect
+the apparent continuum shape and the measurement of nearby
+spectral line features (Dietrich et al. 2002).
+Formally, we split the total Balmer contribution as:
+FBalmer(λrest)=F PB (λrest)+F HighBalmer(λrest),(2)
+whereF PB(λrest) represents a parametric model of the Balmer
+continuum, defined as in Grandi (1982); Dietrich et al. (2002),
+andF HighBalmer(λrest) accounts for the high-order Balmer pseudo-
+continuum.
+On the other hand, the high-order Balmer component is mod-
+eled using an empirical template,T HBalmer(λ), constructed from
+the blend of high-nBalmer emission lines that merge blueward
+of 4 000 Å (Storey & Hummer 1995). In this work, we adopt
+the updated version of this template presented in Bernal et al.
+(2025) (hereafter, Bernal+25), which extends the modeled se-
+ries ton>7. The template is first convolved with a Gaussian
+kernel to reproduce the observed line broadening, and it may
+subsequently be shifted in velocity and scaled by a multiplica-
+tive factor to match the observed spectrum.
+2.2.4. The Feiitreatment
+The Feiiemission is a prominent source of contamination and
+degeneracy in the study of AGN spectra, arising from a mul-
+titude of blended transitions of singly ionized iron. It spans a
+broad wavelength range, from the ultraviolet (e.g., around Mgii;
+Vestergaard & Wilkes 2001; Popovi ´c et al. 2019), through the
+optical (e.g., near Hβand Hα; Véron-Cetty et al. 2004; Park et al.
+2022), to the near-infrared (e.g., around Paγ; Rudy et al. 2000;
+Landt et al. 2008; Garcia-Rissmann et al. 2012). This pseudo-
+continuum frequently overlaps with key diagnostic lines and can
+significantly bias measurements of broad-line widths and fluxes
+if not properly accounted for. Accurate modeling and subtrac-
+tion of both Feiiand Feiiiemission are therefore essential for
+recovering the intrinsic properties of the BLR and for robustly
+measuring the Balmer and Mgiiline parameters.
+To model this component, we adopt the classical template-
+fitting approach, in which an empirical Fe template is scaled,
+broadened through convolution with a Gaussian kernel, and al-
+lowed to shift in velocity to match the data, following the same
+procedure described in Section 2.2.3. In particular, we use the
+Fe,iitemplates from Boroson & Green (1992) and Vestergaard
+& Wilkes (2001), following implementations such as Calderone
+et al. (2017), which provide continuous coverage from 1,074 to
+7,000 Å by combining UV and optical Fe emission complexes.
+In this scheme, no explicit separation into broad” and narrow”
+Fe components is introduced; instead, the template is treated as
+a single blended complex whose effective kinematics are cap-
+tured by the broadening and velocity shift. Nevertheless, we note
+that the use of templates may be insufficiently flexible in par-
+ticularly complex regions, such as the vicinity of Hα. For this
+reason, we also implemented the empirical Fe modeling strategy
+available inFANTASY, which includes a full model of Feiiemis-
+sion based solely on atomic data. This model includes a total of
+283 transitions, divided into 17 atomic groups, over the wave-
+length range 3,700–11,000 Å (see Ili´c et al. 2023, for details). In
+this approach, pseudo-templates are generated for the different
+Fe atomic groups and tied together in velocity shift and width.
+2.2.5. Emission-lines treatment
+Emission-line fitting is a central component of AGN spectral
+modeling, since line profiles trace the kinematic signatures of
+different emitting regions, including broad and narrow compo-
+nents, as well as winds and outflows. Our method is designed to
+efficiently fit complex models comprising multiple profile fam-
+ilies (e.g., Gaussian, Lorentzian, and V oigt), multiple kinematic
+components within a given line, and multiple spectral regions
+simultaneously. It also accounts for the kinematics of Feiiemis-
+sion, the stellar component, and Balmer emission. As part of the
+modeling strategy, we adopt a predefined list of emission lines
+that distinguishes between transitions known to exhibit broad
+emission, transitions typically associated only with narrow emis-
+sion, and transitions that can display both narrow and broad com-
+ponents (Ili´c et al. 2023). This scheme helps define a consistent
+and physically motivated line configuration for each fitted re-
+gion. The parameter bounds for these regions are set according to
+the values presented in Table A.1, ensuring that the fitted param-
+eters remain physically meaningful. In addition, we incorporate
+a set of known atomic constraints into the main fitting structure,
+as in the cases of [Oiii] and [Nii] (Vestergaard & Peterson 2006;
+Mejía-Restrepo et al. 2016).
+2.3. Optimization Strategy
+Over the past decades, optimization strategies for non-linear
+spectral fitting have evolved substantially. Early and widely
+adopted approaches rely on classical non-linear least-squares
+solvers such as the Levenberg–Marquardt (LM) algorithm (Moré
+1978), which remains a standard choice in many fitting pack-
+ages (e.g.,LMFIT; Newville et al. 2014) andMPFIT(Mark-
+wardt 2009). In parallel, posterior exploration via Monte Carlo
+Markov Chain (MCMC) samplers, such asemcee(Foreman-
+Mackey et al. 2013a,b), has become common when robust un-
+certainty quantification is required. More recently, constrained
+non-linear least-squares minimizers have also been introduced
+in widely used spectral-fitting frameworks (e.g.,capfitwithin
+pPXF; Cappellari 2023 and references therein), reflecting the
+need to handle increasingly flexible and high-dimensional mod-
+els.
+In this work, we adopt a first-order, gradient-based optimiza-
+tion strategy within theJAXframework. With the model defined
+for the different spectral regions (Eq. 1), we impose physically
+motivated bounds that depend on the kinematic component, sum-
+marized in Table A.1. The optimization inSHEAPis performed
+using the Adam optimizer (Kingma & Ba 2014), implemented
+through theOptaxlibrary (DeepMind et al. 2020), that depends
+on two hyper parameters: the learning rate and the number of it-
+erations. This choice enables efficient and adaptive gradient up-
+dates, while leveraging automatic differentiation and accelerated
+compilation for fast model evaluation and differentiation.
+Article number, page 4 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+Our minimization strategy accounts for fixed and bounded
+parameters (as well as tied relations where applicable). Param-
+eter bounds are enforced via smooth re-parameterizations to an
+unconstrained optimization space, avoiding hard projections that
+can hinder gradient-based methods. This approach is concep-
+tually similar to the bound-handling strategy adopted inLMFIT
+(Newville et al. 2014), where bounds are implemented through
+internal parameter transformations. This design keeps the opti-
+mizer agnostic to the underlying spectral model and ensures that
+constraints are applied consistently across components and re-
+gions.
+Residuals are evaluated in a weighted manner using the spec-
+tral uncertainties, so that high-S/N pixels carry greater influence
+in the fit. The normalized residual vector is defined as
+ri = fmodel,i −f obs,i
+σi
+,(3)
+wheref model,i corresponds to the model evaluated at pixeli,f obs,i
+is the observed flux at pixeli,andσ i is the uncertainty by pixel.
+We adopt a robust residual loss based on the log-cosh function,
+Lresidual = 
+log cosh(ri) .(4)
+The log-cosh function provides a smooth and outlier-tolerant
+alternative to a purely quadratic (L 2) loss: it behaves approxi-
+mately quadratically for small residuals, while transitioning to
+an approximately linear (L 1-like) penalty at large|r i|. As a re-
+sult, isolated deviant pixels (e.g., residual sky features, imper-
+fect masking, or artifacts) have reduced leverage on the solu-
+tion, while the loss remains differentiable and therefore well-
+suited for gradient-based optimization (see Saleh & Ehsanes
+Saleh 2022, for a detailed discussion).
+It is important to highlight that this procedure is applied con-
+sistently to the full batch of fitted spectra, using the same model
+configuration for all objects. BecauseSHEAPis implemented to
+run natively in parallel (i.e., the same computation is evaluated
+over a batch of spectra in a single compiled call), the optimiza-
+tion is carried out simultaneously across the batch rather than
+spectrum-by-spectrum.
+2.4. Uncertainty Estimation
+Because AGN spectral decomposition is intrinsically nonlinear,
+the best-fit parameters alone may not capture the full correlation
+structure among parameters, nor the impact of local degeneracies
+between continuum components and emission-line profiles. To
+estimate uncertainties beyond local curvature approximations,
+SHEAPprovides a Monte Carlo (MC) resampling mode based on
+perturbation sampling (e.g., Press et al. 1992). In this approach,
+the observed spectrum is repeatedly perturbed according to its
+per-pixel uncertainties, and the full model is re-fit for each per-
+turbed realization. The ensemble of re-fits yields an empirical
+distribution of model parameters that naturally captures parame-
+ter covariances and certain nonlinear effects (Andrae 2010; Shen
+et al. 2011).
+Each MC realization is initialized at the same initial con-
+ditions as the main fitting. This choice accelerates convergence
+while still allowing the optimizer to explore nearby basins of
+the loss landscape when the likelihood surface is multimodal or
+exhibits strong degeneracies. Similar “flux-randomization+re-
+fitting” strategies are commonly used in quasar spectral fitting
+pipelines to obtain robust measurement uncertainties (e.g., Guo
+et al. 2018; Wu & Shen 2022).
+2.5. Post-fit derived quantities
+Beyond delivering a single best-fitting model,SHEAPis designed
+to support a consistent post-processing stage in which both best-
+fit parameters and sampled parameters can be propagated into
+physically relevant (“added-value”) quantities. In practice, the
+code can (i) evaluate derived quantities directly from the best-fit
+solution and/or (ii) evaluate them for each sample obtained (see
+Section 2.4), thereby producing posterior distributions for quan-
+tities such as line fluxes and luminosities, monochromatic con-
+tinuum luminosities, EW, and measurements of post-processed
+(combined) broad-line profiles.
+This design ensures that uncertainties in derived quantities
+are derived from the same modeling assumptions used during
+the fit (e.g., the adopted continuum and pseudo-continuum defi-
+nitions, kinematic ties, and line-profile parameterization), while
+enabling downstream analyses to use either point estimates or
+full posterior samples. In the next sections, we explain how these
+are defined.
+2.5.1. Additional products derived bySHEAP
+A central goal ofSHEAPis to translate spectral fits into physi-
+cally meaningful and reproducible measurements. For each fit-
+ted spectrum and, when available, for each MC realization, the
+code provides a set of value-added products, including:
+–Emission-line products (per line and, when applicable, for
+post-processed combined profiles): integrated line fluxes and
+line luminosities; EW; and kinematic/profile measurements
+such as FWHM and velocity shift, together with the other
+line parameters returned by the fit (e.g., amplitudes and
+profile-shape parameters, depending on the adopted parame-
+terization).
+–Monochromatic continuum luminosities:λL λ evaluated at
+the standard wavelengths used in AGN applications (e.g.,
+5,100, 3,000, and 1,350 Å)
+For emission lines, EW is computed using the standard def-
+inition relative to a local continuum level. In a decomposition
+context, this pseudo-continuum must be defined consistently
+(e.g., an AGN power-law plus additional continuum-like compo-
+nents such as Fe, host-galaxy starlight, and/or the Balmer con-
+tinuum, depending on the adopted model) (e.g., Calderone et al.
+2017; Bernal et al. 2025). For cosmological distances, we use the
+cosmological module ofastropy(Astropy Collaboration et al.
+2013, 2018, 2022).
+Our method also allows the main broad-line component to
+be estimated using different approaches, either by combining all
+broad components or by combining only those that are kinemat-
+ically consistent (see Appendix B).
+In this way, our uncertainty-estimation framework (see Sec-
+tion 2.4) provides a natural mechanism for propagating uncer-
+tainties to all post-processing quantities, including luminosities,
+EW, combined-profile FWHM, and single-epoch SMBH mass
+estimates.
+3. Performance validation ofSHEAP
+To evaluate the performance of our method across different spec-
+tral regions, resolutions, and AGN populations, we perform a se-
+ries of tests by comparing our results with those from previously
+published studies. To avoid bias toward any single methodology,
+we include comparisons spanning a variety of independent ap-
+proaches.
+Article number, page 5 of 16
+
+A&A proofs:manuscript no. aanda
+0.0 0.5 1.0 1.5 2.0 2.5
+Redshift (z)
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30Fraction of objects
+0 20 40 60 80
+Mean Signal-to-Noise Ratio
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5Fraction of objects
+SDSS DR16 
+Wu&Shen22 (500) Pan+25 (500) Sánchez-Sáez+18 (151) Bernal+25 (413)
+Fig. 1.Left: Redshift distribution by sample. Right: Mean signal-to-noise ratio (S/N) distribution by sample. Sample names are shown at the top
+of the figure, with the number of objects in parentheses, and the distribution of S/N in DR16 has an example of the expected distribution
+0 2 4 6 8 10
+2
+red
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Fraction of objects
+Wu&Shen22 (500)
+Pan+25 (500)
+Sánchez-Sáez+18 (151)
+Bernal+25 (413)
+Wu&Shen22 (masked, 500)
+2
+red = 1.0
+0 20 40 60
+S/N
+100
+101
+102
+2
+red
+Pan+25 (500)
+Sánchez-Sáez+18 (151)
+Bernal+25 (413)
+Wu&Shen22 (500)
+Wu&Shen22 (masked, 500)
+Fig. 2.Right: Distribution of reducedχ 2 by sample, normalized to the fraction of objects in each sample. The vertical step line marksχ 2
+red =1.
+Left: Relation between signal-to-noise ratio (S/N) and the reduced chi-square,χ 2
+red. Each color represent a different sample.
+In these tests, all emission-line profiles are modeled with
+Gaussian components, and the full list of emission lines used
+in each model is given in Table D.1. The underlying AGN con-
+tinuum is represented by a power law and, as in Ili´c et al. (2023),
+we adopt a single baseline model for each sample. This ensures
+that differences within each sample primarily reflect data quality
+and population diversity, rather than changes in the model con-
+figuration.
+For the results presented in this paper, we optimize each
+model for 2000 iterations using a learning rate of 0.01 (see Sec-
+tion 2.3). Uncertainties are estimated using our framework for
+50 realizations (see Section 2.4).
+For each compared parameter (X), we define the logarithmic
+difference as
+∆X =log 10(XSHEAP)−log 10(Xlit),(5)
+and quantify the agreement using the fraction of objects satisfy-
+ing|∆ X| ≤0.3 dex. We complement this metric with the median
+offset and the normalized median absolute deviation (NMAD),
+which characterize the systematic and random differences be-
+tween our measurements and those from the literature.
+All computations were performed on a workstation equipped
+with two Intel Xeon Gold 5220R (2.20,GHz) CPUs and an
+NVIDIA RTX A5000 GPU.
+In Fig. 1, we present the signal-to-noise ratio distributions for
+the different samples, together with their corresponding redshift
+distributions.
+3.1. The Wu&Shen22 sample
+We first test the performance ofSHEAPagainstPyQSOFit(Guo
+et al. 2018), as applied by Wu&Shen22 to the DR16Q catalog of
+750,414 broad-line quasars over 0.1≤z≤6. We select a strati-
+fied subsample with 2.0≤z≤2.25 to test the Civregion, corre-
+sponding to a rest-frame wavelength coverage of 950–2,968 Å.
+To reduce redshift-related systematics, we require consistency
+among the catalog redshift estimates, enforcing|∆z| ≤0.01.
+As described in Section 2.1.1,SHEAPoperates on array-
+based inputs. Since SDSS spectra can have different wavelength
+coverages and array lengths (Bolton et al. 2012), we resam-
+ple the selected spectra onto a common wavelength grid us-
+ingSpectRes(Carnall 2017), which conserves flux density and
+propagates uncertainties during rebinning. For this test, we fit the
+1,100–2,750 Å range using a power-law continuum and Gaus-
+sian emission-line components, adopting three broad compo-
+nents for the Civregion, resulting in a model with 41 param-
+eters.
+Examples of the best-fit models are shown in Figs. C.1 and
+C.2. The main source of increasedχ 2
+red is absorption from the
+Lyαforest atλ rest ≲1300 Å. After masking this region, theχ 2
+red
+distribution becomes significantly narrower, with the median and
+scatter decreasing from 4.3±3.7 to 1.5±0.95 (Fig. 2). We find
+no strong dependence of fit quality on S/N, although the highest-
+S/N objects show slightly largerχ 2
+red values.
+Article number, page 6 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+3.00 3.25 3.50 3.75 4.00 4.25 4.50
+log(FWHMCIV /[km s 1]) (Wu&Shen22)
+3.00
+3.25
+3.50
+3.75
+4.00
+4.25
+4.50
+log(FWHMCIV /[km s 1]) (this work)
+1:1 line
+±0.3 dex
+45.5 46.0 46.5 47.0
+log(L1350 /[erg s 1]) (Wu&Shen22)
+45.5
+46.0
+46.5
+47.0
+log(L1350 /[erg s 1]) (this work)
+1:1 line
+±0.3 dex
+Fig. 3.Comparison between our measurements and those of
+Wu&Shen22. Top: Civemission-line FWHM in logarithmic scale. Bot-
+tom: Monochromatic continuum luminosity at 1350 Å in logarithmic
+scale. In both panels, the black dashed line indicates the 1:1 relation,
+while the gray dashed lines mark the±0.3 dex region.
+We compare our measurements with the CivFWHM and
+L1350 values reported by Wu&Shen22, combining broad compo-
+nents following the same strategy described in Appendix B. The
+results are shown in Fig. 3. For FWHM C IV, 96.40% of the ob-
+jects lie within the±0.3 dex band, with a median bias of+0.04
+dex and NMAD=0.07 dex. ForL 1350, the agreement is tighter,
+with 99.8% of objects within±0.3 dex, a median bias of+0.01
+dex, and NMAD=0.02 dex. The broader scatter in FWHM C IV
+is expected because the broad profile is modeled with multiple
+components that are later combined.
+The full distributions of the logarithmic differences are
+shown in Fig. 4A, and their dependence on S/N is shown in
+Fig. 5A. Overall, we find good agreement with Wu&Shen22,
+with no strong increase in scatter toward lower S/N, although
+the largest outliers occur preferentially at the lowest S/N.
+3.2. The Pan+25 sample
+The second test uses DESI DR1 spectra, which provide higher
+spectral resolution than SDSS and a uniform wavelength sam-
+pling across all spectra. We draw a subsample from theDESI
+DR1 value-added catalog v1.7(hereafter theBHMass Catalog;
+Pan et al. 2025), which contains spectral properties for 490,468
+1.0
+ 0.5
+ 0.0 0.5 1.0
+log10 (XSHEAP) log10 (XWu&Shen22)
+0
+5
+10
+15Density
+A)FWHMC IV
+L1350
+| | 0.3 dex
+1.0
+ 0.5
+ 0.0 0.5 1.0
+log10 (XSHEAP) log10 (XPan + 25)
+0.0
+2.5
+5.0
+7.5
+10.0Density
+B)FWHMMg II DAS 
+FWHMMg II FSF 
+L3000 FSF (h=0.7)
+L3000 DAS
+(FFe II/FMg II) DAS 
+| | 0.3 dex
+Fig. 4.Distributions of the logarithmic differences, log 10(XSHEAP)−
+log10(Xlit), for the set of spectral parameters compared in each sample.
+Panel A shows against Wu&Shen22, while Panel B shows against Pan
+et al. (2025). In each panel, the legend reports the compared parameters.
+The grey dashed line indicates the 1:1 relation, while the black dashed-
+lines demark the±0.3 dex.
+0.25
+0.00
+0.25
+0.50
+0.75
+1.00
+log10 (XSHEAP) log10 (XWu&Shen22)
+ A)
+FWHMC IV
+L1350
+| | 0.3 dex
+0 10 20 30 40 50 60 70
+S/N
+1.0
+0.5
+0.0
+0.5
+log10 (XSHEAP) log10 (XPan + 25)
+B)
+FWHMMg II DAS 
+FWHMMg II FSF 
+L3000 FSF (h=0.7)
+L3000 DAS
+(FFe II/FMg II) DAS 
+| | 0.3 dex
+Fig. 5.Differences between our measurements and those from the lit-
+erature as a function of signal-to-noise ratio (S/N; x-axis). The y-axis
+shows log 10(XSHEAP)−log 10(Xlit). Panel A against Wu&Shen22, and
+Panel B against Pan+25. The legend identifies each parameter, and the
+horizontal dashed lines mark the±0.3 dex band.
+objects over 0.6≤z≤1.6 and covers the Mgiiregion. The
+catalog reports measurements from two independent pipelines,
+FastSpecFit(FSF; Moustakas et al. 2023) andDASpec(DAS;
+Du 2024).
+We select 500 sources over 0.60≤z≤0.622 and download
+their spectra following the official DESI data access procedure.6
+Each spectrum contains 7,781 pixels, and the redshift and S/N
+distributions are shown in Fig. 1. We compare our measurements
+6 https://data.desi.lbl.gov/doc/access/
+Article number, page 7 of 16
+
+A&A proofs:manuscript no. aanda
+with the catalog values of MgiiFWHM,L 3000, andR Fe II, where
+RFe II = FFe
+FMg II
+,(6)
+withF Fe measured over 2,250–2,650 Å.
+Since this test focuses on the Mgiiregion, we fit the spectra
+over 1,750–4,400 Å. The model includes a power-law contin-
+uum, Feiiemission, the Balmer continuum, higher-order Balmer
+lines, and one broad Gaussian component for the emission lines.
+Although Pan+25 model Mgiiwith multiple broad and narrow
+components, we find that adding a second broad Gaussian does
+not significantly improve the fit quality. We therefore retain the
+simplest 26-parameter model for this validation test.
+The fit-quality distribution gives a medianχ 2
+red =1.3±0.25,
+with more than 90% of the objects havingχ 2
+red ≤2 (Fig. 2).
+We observe a mild increase inχ 2
+red toward higher S/N, likely be-
+cause higher-quality spectra reveal small model imperfections
+more clearly. Representative spectra close to the median S/N and
+medianχ 2
+red are shown in Figs. C.3 and C.4.
+The comparison with the catalog measurements is shown in
+Fig. 6. For FWHM Mg II, 96.6% of theDASvalues and 97.0% of
+theFSFvalues lie within the±0.3 dex band, with median biases
+of+0.12 and−0.02 dex, respectively. ForL 3000, the agreement
+is tighter: 99.20% of theDASvalues and 96.00% of the corrected
+FSFvalues lie within the band, with median biases of−0.02 and
+−0.07 dex, respectively. These results indicate that the contin-
+uum luminosity is robustly recovered, while the FWHM com-
+parison is more sensitive to differences in the adopted Mgiide-
+composition and Feiitreatment.
+Finally, we compareR Fe II against theDASmeasurements
+only. We find that 96.80% of the objects lie within the±0.3 dex
+band, with a median bias of−0.07 dex and NMAD=0.01 dex.
+The systematic underestimation ofR Fe II is consistent with the
+broader trends shown in Fig. 4B, where our method generally
+returns slightly smaller values than the catalog, except for quan-
+tities directly tied to the Mgiiprofile. As shown in Fig. 5B, most
+outliers occur at low S/N, with no strong increase in scatter to-
+ward higher S/N.
+3.3. The Sánchez-Sáez+18 sample
+In Sánchez-Sáez et al. (2018) (hereafter, Sánchez-Sáez+18), the
+authors analyzed 2,345 SDSS AGN spectra using the method-
+ology of Mejía-Restrepo et al. (2016). For 224 sources, they
+performed detailed fits to the Hβand Mgiiregions, including
+host-galaxy subtraction through thek-starmethod (Greene & Ho
+2005; Kim et al. 2006). From this set, we retain 151 objects with
+0.45≤z≤0.8, which provides rest-frame coverage from 3,000
+to 5,000 Å and enables a simultaneous analysis of the Hβand
+Mgiiregions. The S/N and redshift distributions are shown in
+Fig. 1. Since this sample is based on SDSS spectra, we resample
+it as described in Section 3.1.
+We compare our results with the reported FWHM values for
+Hβand Mgii, together with the monochromatic continuum lu-
+minosities at 5,100 and 3,000 Å. The reference measurements
+were obtained by modeling the spectra with a double-Gaussian
+description of the broad emission lines, a narrow component,
+and Feiiemission, after subtracting the host-galaxy contribution
+based on the CaiiK absorption feature. In our analysis, we fit
+the common 2,450–5,500 Å window using two broad compo-
+nents plus a narrow component, Feiiemission, Balmer contin-
+uum and higher-order Balmer lines, possible outflow compo-
+nents, a power-law continuum, and our host-galaxy modeling
+3.0 3.2 3.4 3.6 3.8 4.0 4.2
+log(FWHMMgII /[km s 1]) (Pan + 25)
+3.0
+3.2
+3.4
+3.6
+3.8
+4.0
+4.2
+log(FWHMMgII /[km s 1]) (this work)
+1:1 line
+±0.3 dex
+DAS values
+FSF values
+45.0 45.5 46.0 46.5
+log(L3000 /[erg s 1]) (Pan + 25)
+45.0
+45.5
+46.0
+46.5
+log(L3000 /[erg s 1]) (this work)
+1:1 line
+±0.3 dex
+FSF (h=0.7)
+DAS
+Fig. 6.Comparison between our measurements and those of Pan+25.
+Top: Mgiiemission-line FWHM in logarithmic scale. Bottom:
+Monochromatic continuum luminosity at 3000 Å in logarithmic scale.
+In both panels, the black dashed line indicates the 1:1 relation, while
+the gray lines mark the±0.3 dex region. Red circles represent values
+computed withFSF, while black squares correspond toDAS.
+method (Section 2.2.1). The resulting model contains 421 pa-
+rameters.
+This sample has the lowest S/N distribution among our tests.
+Nevertheless, the fit quality remains good, with a medianχ 2
+red =
+0.4
+ 0.2
+ 0.0 0.2 0.4 0.6
+log(RFeII) (Pan + 25)
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+log(RFeII) (this work)
+1:1 line
+±0.3 dex
+Fig. 7.Comparison between our results and Pan et al. (2025) for the
+RFeII in logarithmic scale. The black dashed line indicates the 1:1 rela-
+tion, while the grey lines demark the±0.3 dex.
+Article number, page 8 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+1.2±0.2 and no objects exceedingχ 2
+red ∼3 (Fig. 2). As in the
+previous samples,χ 2
+red shows a mild increase with S/N, while
+low-S/N spectra remain close to unity. Representative fits near
+the median S/N and medianχ 2
+red are shown in Figs. C.5 and C.6.
+Even in the lowest-S/N cases, the main components are recov-
+ered, although Feiiis less tightly constrained.
+Line widths are measured from the combined broad com-
+ponents using the “combining all broad components” approach
+(Section B). The comparison is shown in Fig. 8Top. For
+FWHMHβ, 95.36% of the objects fall within the±0.3 dex band,
+with a median bias of+0.01 dex and NMAD=0.08 dex. For
+FWHMMg II, considering the 117 objects with available catalog
+values, 92.30% lie within the band, with a median bias of+0.08
+dex and NMAD=0.08 dex. The somewhat larger Mgiivalues
+may reflect the degeneracy between Feiiemission and the Mgii
+wings.
+The continuum-luminosity comparison is shown in
+Fig. 8Bottom. ForL 5100, 77.48% of the objects lie within
+the±0.3 dex band, with a median bias of−0.13 dex and
+NMAD=0.17 dex. This offset is likely driven by differences
+in host-galaxy subtraction, since thek-starmethod relies on
+the CaiiK absorption feature, whereas our approach uses a
+broader set of spectral features. ForL 3000, the agreement is
+stronger: 99.12% of the 117 objects with available catalog
+values fall within the band, with a median bias of−0.10 dex and
+NMAD=0.07 dex.
+Overall, the parameter-difference distributions are shown in
+Fig. 9A, and their dependence on S/N is shown in Fig. 10A. The
+largest discrepancies occur preferentially at low S/N, but we do
+not find evidence for a strong systematic trend with S/N.
+3.4. The Bernal+25 sample
+To evaluate the performance of our method in a low-redshift,
+host-dominated sample, we use the dataset presented by
+Bernal+25. This sample spans 0.01≤z≤0.14 and was ana-
+lyzed with a customizedpPXFwrapper to decompose the AGN
+and host-galaxy components. From the publicly available cata-
+log,7 we construct a sample of 413 objects, whose redshift and
+S/N distributions are shown in Fig. 1. The spectra cover 3,559–
+10,394 Å in the observed frame and, since they are based on
+SDSS data products, are resampled as described in Section 3.1.
+We compare the host-to-continuum ratio at 5,100 Å,
+(Star/Cont)5100, the monochromatic luminosityL 5100, the
+FWHM of the broad Hαcomponent, and the broad Hαlumi-
+nosity. To obtain comparable measurements, we adopt a model
+similar to that of Bernal+25, including two broad components,
+a narrow component, Feiiemission, Balmer emission, and a
+host-galaxy component. We fit the rest-frame wavelength range
+3,800–8,000 Å, resulting in a model with 427 parameters.
+Despite the complexity of these spectra, the reduced chi-
+square distribution has a median ofχ 2
+red =1.8±0.9 (Fig. 2). As
+in the other samples,χ 2
+red increases mildly with S/N, likely be-
+cause higher-S/N spectra reveal small model imperfections more
+clearly. A representative fit near the median S/N is shown in
+Fig. C.7, where the host-galaxy component is well reproduced.
+For (Star/Cont)5100, 86.90% of the objects lie within the±0.3
+dex band, with a median bias of−0.04 dex and NMAD=0.129
+dex (Fig. 11). When separating the sample according to the BLR
+classification of Bernal+25, the agreement is 86.42% for the
+7 https://cdsarc.cds.unistra.fr/viz-bin/cat/J/A+A/
+694/A127
+3.0 3.2 3.4 3.6 3.8 4.0
+log(FWHM /[km s 1]) (Sánchez Sáez + 18)
+3.0
+3.2
+3.4
+3.6
+3.8
+4.0
+log(FWHM /[km s 1]) (this work)
+1:1 line
+±0.3 dex
+H
+MgII
+43.0 43.5 44.0 44.5 45.0 45.5
+log( L /[erg s 1]) (Sánchez Sáez + 18)
+43.0
+43.5
+44.0
+44.5
+45.0
+45.5
+log( L /[erg s 1]) (this work)
+1:1 line
+±0.3 dex
+L5100
+L3000
+Fig. 8.Comparison between our measurements and those of Sánchez-
+Sáez+18. Top: comparison of the emission-line FWHM in logarithmic
+scale. Bottom: comparison of the monochromatic continuum luminosity
+in logarithmic scale. In both panels, the black dashed line indicates the
+1:1 relation, while the gray lines mark the±0.3 dex region. In the top
+panel, black circles correspond to Hβmeasurements, while red squares
+represent Mgii. In the bottom panel, black circles correspond toL 5100
+measurements, while red squares representL 3000.
+1.0
+ 0.5
+ 0.0 0.5 1.0
+log10 (XSHEAP) log10 (XSánchez Sáez + 18)
+0
+2
+4
+6Density
+A)FWHMH
+FWHMMg II
+L5100
+L3000
+| | 0.3 dex
+6
+ 4
+ 2
+ 0 2 4 6
+log10 (XSHEAP) log10 (XBernal + 25)
+0
+1
+2
+3Density
+B)LH
+L5100
+FWHMH
+(Star/Cont)5100 ('No BLR')
+(Star/Cont)5100 ('With BLR')
+| | 0.3 dex
+Fig. 9.Same as Fig. 4 but this time Panel A shows the comparison
+against Sánchez-Sáez+18, meanwhile Panel B shows the comparison
+against Bernal+25.
+Article number, page 9 of 16
+
+A&A proofs:manuscript no. aanda
+1.0
+0.5
+0.0
+0.5
+log10 (XSHEAP) log10 (XSánchez Sáez + 18)
+A)
+FWHMH
+FWHMMg II
+L5100
+L3000
+| | 0.3 dex
+0 10 20 30 40 50 60 70
+S/N
+6
+4
+2
+0
+2
+log10 (XSHEAP) log10 (XBernal + 25)
+ B)
+LH
+L5100
+FWHMH
+(Star/Cont)5100 ('No BLR')
+(Star/Cont)5100 ('With BLR')
+| | 0.3 dex
+Fig. 10.Same as Fig. 5 but this time Panel A compares against Sánchez-
+Sáez+18, and Panel B compares against Bernal+25.
+BLR subsample and 93.10% for the no-BLR subsample. A small
+number of extreme outliers are present, but visual inspection
+shows that most BLR outliers do not exhibit a clear host-galaxy
+contribution, while the no-BLR outliers have unreliable fits with
+χ2
+red >10.
+For the remaining comparisons, we restrict the analysis to
+the 384 objects with a detected broad component. The Hα
+FWHM and luminosity comparisons are shown in Fig. 12.
+For FWHM Hα, using the kinematic-combination method (Sec-
+tion B), 88.80% of the objects fall within the±0.3 dex band,
+with a median bias of+0.04 dex and NMAD=0.11 dex. For the
+broad Hαluminosity, 87.76% fall within the band, with a median
+bias of+0.04 dex and NMAD=0.15 dex. In both cases, the
+largest discrepancies occur preferentially in low-EW systems,
+while objects with EW≳100 Å show the tightest agreement.
+Finally, forL 5100, 84.33% of the objects lie within the±0.3
+dex band, with a median bias of+0.08 dex and NMAD=
+0.15 dex (Fig. 13). The parameter-difference distribution in
+Fig. 9B shows that our values are systematically larger, consis-
+tent with differences in the AGN–host decomposition: relative
+to Bernal+25, our fits assign a smaller contribution to the stellar
+component, increasing the inferred AGN continuum luminosity
+at 5,100 Å.
+4. Discussion & Conclusions
+In this work, we presentedSHEAP, a GPU-enabled AGN
+spectral-fitting code designed for efficient, flexible, and scalable
+analysis of large spectroscopic datasets. We validated its per-
+formance using four literature-based comparison samples span-
+ning different redshift ranges, spectral regions, resolutions, and
+AGN populations, including SDSS and DESI spectra covering
+the Civ, Mgii, Hβ, and Hαregions. This strategy demonstrates
+thatSHEAPperforms robustly under heterogeneous observational
+and modelling conditions, rather than being tuned to a single ho-
+mogeneous dataset.
+Overall,SHEAPprovides statistically acceptable fits across
+all samples. The reduced chi-square distributions are typically
+centered near unity, with median values of ˜χ 2
+red ∼1.2–1.8 for
+1.5
+ 1.0
+ 0.5
+ 0.0
+log(RStar/Cont(5100)) (Bernal + 25)
+1.5
+1.0
+0.5
+0.0
+log(RStar/Cont(5100)) (this work)
+1:1 line
+±0.3 dex
+No BLR
+With BLR
+Fig. 11.Comparison between the stellar-to-continuum flux ratio at
+5,100 Å derived by Bernal+25 and the values obtained in this work.
+Red points show all objects in the sample, while blue points highlight
+sources with a confirmed broad emission-line component. The dashed
+line marks the 1:1 relation, and the shaded region indicates the±0.3 dex
+agreement band.
+3.0 3.5 4.0 4.5
+log(FWHMH /[km s 1]) (Bernal + 25)
+3.00
+3.25
+3.50
+3.75
+4.00
+4.25
+4.50
+log(FWHMH /[km s 1]) (this work)
+1:1 line
+±0.3 dex
+0
+50
+100
+150
+200
+250
+300
+EW [Å]-Bernal+25
+38 39 40 41 42 43
+log(LH /[erg s 1]) (Bernal + 25)
+38
+39
+40
+41
+42
+43
+log(LH /[erg s 1]) (this work)
+1:1 line
+±0.3 dex
+0
+50
+100
+150
+200
+250
+300
+EW [Å]-Bernal+25
+Fig. 12.Comparison between our measurements and those of
+Bernal+25. Top: Hαemission-line FWHM in logarithmic scale. Bot-
+tom: Hαemission-line luminosity in logarithmic scale. In both panels,
+the black dashed line indicates the 1:1 relation, while the gray lines
+mark the±0.3 dex region. Point colors represent the EW reported by
+Bernal+25.
+the Pan+25, Sánchez-Sáez+18, and Bernal+25 samples. The
+Wu&Shen+22 sample initially shows a broader distribution, but
+after masking the region atλ rest <1300 Å, affected by the Lyα
+forest, the median ˜χ2
+red improves from 4.3+5.5
+−1.8 to 1.5+1.4
+−0.5. Across
+all samples, we do not find evidence for a strong degradation of
+fit quality toward lower S/N; instead, the mild increase ofχ 2
+red at
+high S/N likely reflects the increased visibility of subtle spectral
+features and modelling imperfections.
+Article number, page 10 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+Table 1.Summary of fit quality, model complexity, and computational performance for the literature comparison samples.
+SampleN spec ˜S/NN λ Npar ˜χ2
+red tfit [min]t MC [min]
+Wu&Shen+22 (Civ) 500 11.93 3809 41 4.3 +5.5
+−1.8(1.5+1.4
+−0.5) 0.2 5.3
+Pan+25 (Mgii) 500 15.25 7781 26 1.3 +0.4
+−0.1 0.9 42.1
+Sánchez-Sáez+18 (Hβ/Mgii) 151 9.33 3808 421 1.2 +0.3
+−0.1 0.9 16.9
+Bernal+25 (Hα) 413 24.13 2878 427 1.8 +1.4
+−0.4 1.3 35.5
+Bernal et al. (2026) (pPXFiteration) 413 – – – – 130.8 +123.9
+−41.3 –
+Notes. eχ2
+red denotes the median reduced chi-square, reported together with the 16th and 84th percentiles as asymmetric uncertainties. For
+Wu&Shen+22, we report the unmasked value, with the value obtained after maskingλ <1300 Å given in parentheses. gS/N is the median
+signal-to-noise ratio of the sample.N par is the number of free parameters used in the fit, corresponding to the length of the optimized parameter
+vector.N λ denotes the number of pixels per spectrum.t fit is the runtime for a single best-fit optimization per spectrum, andt MC is the runtime for
+the Monte Carlo posterior stage per spectrum.
+40 41 42 43 44
+log(L5100 /[erg s 1]) (Bernal + 25)
+40
+41
+42
+43
+44
+log(L5100 /[erg s 1]) (this work)
+1:1 line
+±0.3 dex
+Fig. 13.Comparison between our results and Bernal+25 for the
+monochromatic continuum luminosity at 5,100 Å in log scale.The black
+dashed line indicates the 1:1 relation, while the grey lines demark the
+±0.3 dex.
+The comparison with literature measurements shows that
+SHEAPrecovers the main AGN spectral parameters with gen-
+erally good agreement. The fraction of objects within the±0.3
+dex band is typically above 90% for line-width and continuum-
+luminosity measurements in the Wu&Shen+22, Pan+25, and
+Sánchez-Sáez+18 samples, including FWHM C IV, FWHM Mg II,
+FWHMHβ,L 1350,L 3000, andR Fe II. Lower agreement is found for
+host-sensitive quantities, such asL 5100 and (Star/Cont)5100, par-
+ticularly in the Sánchez-Sáez+18 and Bernal+25 samples, where
+differences in host-galaxy subtraction and AGN–host decompo-
+sition become more important.
+The main residual discrepancies are therefore linked to
+methodological differences rather than to a single systematic
+bias inSHEAP. In the UV and Mgiiregions, differences are
+mainly associated with the parameterization and combination of
+broad-line components, as well as the treatment of Feiiemis-
+sion. In the optical region, the largest offsets arise in continuum-
+related quantities, especiallyL 5100, where the balance between
+stellar and AGN continuum components becomes critical.
+A major result of this work is that this level of agreement is
+achieved at low computational cost. The runtime depends more
+strongly on the number of pixels per spectrum and the number
+of spectra being fitted than on the formal number of free param-
+eters, allowing models with hundreds of parameters to remain
+tractable. In absolute terms, the best-fit optimization requires be-
+tween 0.2 and 1.3 minutes for the tested subsamples, whereas
+the Monte Carlo stage requires between 5.3 and 42.1 minutes
+per tested subsample, this including 50 Monte Carlo realizations
+plus the initial best-fit run.
+As a direct benchmark, our implementation requires 1.3 min-
+utes for the fitting stage, compared to the 130.8 +123.9
+−41.3 minutes
+reported by Bernal et al. (2026) for theirpPXF-based iterative
+pipeline. This corresponds to an improvement factor of approx-
+imately 101 times, or∼1.0% of the reported fitting time. This
+comparison should be interpreted with caution, since differences
+in hardware and computational environment may also contribute
+to the runtime difference.
+Taken together, these results show thatSHEAPcan recover
+key AGN spectral properties across heterogeneous datasets
+while substantially reducing computational cost. Its GPU-
+accelerated, gradient-based framework makes it well suited for
+upcoming large spectroscopic surveys, where scalability, repro-
+ducibility, and flexible model configurations are essential. Future
+developments will extend this framework through more flexi-
+ble line-profile parameterizations, applications to integral-field
+spectroscopy data cubes, and adaptations to related problems
+such as galaxy stellar-population analysis and dynamical spec-
+tral modelling.
+Data availability
+In the body of the paper, we presented Figures and results for a
+series of comparisons. We include an online appendix that repro-
+duces all the results presented in this work. We provide an on-
+line appendix athttps://github.com/felavila/Results_
+paper_SHEAP.
+Acknowledgements.FA V acknowledges funding from the Doctorate Fellowship
+Program FIB-UV of the Universidad de Valparaíso. FA V and PSS acknowledge
+support from the ESO Early-Career Visitor Programme and the ESO Science
+Support Discretionary Fund, project No. 4/25-G. This work was supported by
+ANID FONDECYT Regular grant No. 1231418 (VM, FA V) and by the Cen-
+tro de Astrofísica de Valparaíso (CIDI 21). SB acknowledges support from the
+National Agency for Research and Development (ANID) through grant Gemini-
+32240014. This research made use of Astropy, SpectRes, JAX, Matplotlib,
+NumPy, SciPy, pandas, Optax, uncertainties, and sfdmap2.
+References
+Andrae, R. 2010, arXiv e-prints, arXiv:1009.2755
+Antonucci, R. 1993, ARA&A, 31, 473
+Assef, R. J., Stern, D., Kochanek, C. S., et al. 2013, ApJ, 772, 26
+Astropy Collaboration, Price-Whelan, A. M., Lim, P. L., et al. 2022, ApJ, 935,
+167
+Astropy Collaboration, Price-Whelan, A. M., Sip˝ocz, B. M., et al. 2018, AJ, 156,
+123
+Article number, page 11 of 16
+
+A&A proofs:manuscript no. aanda
+Astropy Collaboration, Robitaille, T. P., Tollerud, E. J., et al. 2013, A&A, 558,
+A33
+Bauer, F. E., Lira, P., Anguita, T., et al. 2023, The Messenger, 190, 34
+Bernal, S., Sánchez-Sáez, P., Arévalo, P., et al. 2026, A&A, 707, A206
+Bernal, S., Sánchez-Sáez, P., Arévalo, P., et al. 2025, A&A, 694, A127
+Blanton, M. R. & Roweis, S. 2007, AJ, 133, 734
+Bolton, A. S., Schlegel, D. J., Aubourg, É., et al. 2012, AJ, 144, 144
+Borne, K., Accomazzi, A., Bloom, J., et al. 2009, in astro2010: The Astronomy
+and Astrophysics Decadal Survey, V ol. 2010, P6
+Boroson, T. A. & Green, R. F. 1992, ApJS, 80, 109
+Bradbury, J., Frostig, R., Hawkins, P., et al. 2021, JAX: Autograd and XLA,
+Astrophysics Source Code Library, record ascl:2111.002
+Brigham, E. O. 1974, The fast Fourier Transform
+Bruzual, G. & Charlot, S. 2003, MNRAS, 344, 1000
+Calderone, G., Nicastro, L., Ghisellini, G., et al. 2017, MNRAS, 472, 4051
+Cappellari, M. 2012, pPXF: Penalized Pixel-Fitting stellar kinematics extraction,
+Astrophysics Source Code Library, record ascl:1210.002
+Cappellari, M. 2017, MNRAS, 466, 798
+Cappellari, M. 2023, MNRAS, 526, 3273
+Cappellari, M. & Emsellem, E. 2004, PASP, 116, 138
+Cardelli, J. A., Clayton, G. C., & Mathis, J. S. 1989, ApJ, 345, 245
+Carnall, A. C. 2017, arXiv e-prints, arXiv:1705.05165
+Cid Fernandes, R., Mateus, A., Sodré, L., Stasi ´nska, G., & Gomes, J. M. 2005,
+MNRAS, 358, 363
+Circosta, C., Mainieri, V ., Padovani, P., et al. 2018, A&A, 620, A82
+Coatman, L., Hewett, P. C., Banerji, M., & Richards, G. T. 2016, MNRAS, 461,
+647
+Coatman, L., Hewett, P. C., Banerji, M., et al. 2017, MNRAS, 465, 2120
+Crenshaw, D. M., Kraemer, S. B., & George, I. M. 2003, ARA&A, 41, 117
+Dalalyan, A. S. 2017, arXiv e-prints, arXiv:1704.04752
+de Jong, R. S., Agertz, O., Berbel, A. A., et al. 2019, The Messenger, 175, 3
+DeepMind, Babuschkin, I., Baumli, K., et al. 2020, The DeepMind JAX Ecosys-
+tem
+Dietrich, M., Appenzeller, I., Vestergaard, M., & Wagner, S. J. 2002, ApJ, 564,
+581
+Dong, X., Wang, T., Wang, J., et al. 2008, MNRAS, 383, 581
+Dong, X.-B., Wang, J.-G., Ho, L. C., et al. 2011, ApJ, 736, 86
+Du, P. 2024, PuDu-Astro/DASpec: DASpec: A code for spectral decomposition
+of active galactic nuclei
+Fitzpatrick, E. L. 1999, PASP, 111, 63
+Foreman-Mackey, D., Conley, A., Meierjurgen Farr, W., et al. 2013a, emcee: The
+MCMC Hammer, Astrophysics Source Code Library, record ascl:1303.002
+Foreman-Mackey, D., Hogg, D. W., Lang, D., & Goodman, J. 2013b, PASP, 125,
+306
+Fu, Y ., Cappellari, M., Mao, S., et al. 2023, MNRAS, 524, 5827
+Galan, A., Vernardos, G., Peel, A., Courbin, F., & Starck, J.-L. 2022, A&A, 668,
+A155
+Garcia-Rissmann, A., Rodríguez-Ardila, A., Sigut, T. A. A., & Pradhan, A. K.
+2012, ApJ, 751, 7
+Girardi, L., Bressan, A., Bertelli, G., & Chiosi, C. 2000, A&AS, 141, 371
+Grandi, S. A. 1982, ApJ, 255, 25
+Greene, J. E. & Ho, L. C. 2005, ApJ, 630, 122
+Gu, A., Huang, X., Sheu, W., et al. 2022, ApJ, 935, 49
+Guo, H., Shen, Y ., & Wang, S. 2018, PyQSOFit: Python code to fit the spectrum
+of quasars, Astrophysics Source Code Library, record ascl:1809.008
+Harrison, C. M., Alexander, D. M., Mullaney, J. R., & Swinbank, A. M. 2014,
+MNRAS, 441, 3306
+Harrison, C. M., Costa, T., Tadhunter, C. N., et al. 2018, Nature Astronomy, 2,
+198
+Hogg, D. W., Baldry, I. K., Blanton, M. R., & Eisenstein, D. J. 2002, arXiv e-
+prints, astro
+Hutsemékers, D., Marin, F., Agís González, B., Acosta Pulido, J.-A., & Kokubo,
+M. 2026, A&A, 707, A17
+Ili´c, D., Oknyansky, V ., Popovi´c, L. ˇC., et al. 2020, A&A, 638, A13
+Ili´c, D., Raki´c, N., & Popovi´c, L. ˇC. 2023, ApJS, 267, 19
+Jalan, P., Rakshit, S., Woo, J.-J., Kotilainen, J., & Stalin, C. S. 2023, MNRAS,
+521, L11
+Jin, C., Ward, M., Done, C., & Gelbord, J. 2012, MNRAS, 420, 1825
+Kauffmann, G., Heckman, T. M., Tremonti, C., et al. 2003, MNRAS, 346, 1055
+Kellermann, K. I. 2015, in IAU Symposium, V ol. 313, Extragalactic Jets from
+Every Angle, ed. F. Massaro, C. C. Cheung, E. Lopez, & A. Siemiginowska,
+190–195
+Khachikian, E. Y . & Weedman, D. W. 1974, ApJ, 192, 581
+Kim, M., Ho, L. C., & Im, M. 2006, ApJ, 642, 702
+King, A. & Pounds, K. 2015, ARA&A, 53, 115
+Kingma, D. P. & Ba, J. 2014, arXiv e-prints, arXiv:1412.6980
+Kovaˇcevi´c, J., Popovi´c, L. ˇC., & Dimitrijevi´c, M. S. 2010, ApJS, 189, 15
+Kovaˇcevi´c, J., Popovi ´c, L. ˇC., & Kollatschny, W. 2014, Advances in Space Re-
+search, 54, 1347
+Landt, H., Bentz, M. C., Ward, M. J., et al. 2008, ApJS, 174, 282
+Layek, N., Nandi, P., Naik, S., et al. 2025, ApJ, 994, 216
+Lyke, B. W., Higley, A. N., McLane, J. N., et al. 2020, ApJS, 250, 8
+Ma, L., Liu, Y ., Zhang, X., et al. 2019, ISPRS Journal of Photogrammetry and
+Remote Sensing, 152, 166
+Mainieri, V ., Anderson, R. I., Brinchmann, J., et al. 2024, arXiv e-prints,
+arXiv:2403.05398
+Markwardt, C. B. 2009, in Astronomical Society of the Pacific Conference Se-
+ries, V ol. 411, Astronomical Data Analysis Software and Systems XVIII, ed.
+D. A. Bohlender, D. Durand, & P. Dowler, 251
+Mejía-Restrepo, J. E., Trakhtenbrot, B., Lira, P., Netzer, H., & Capellupo, D. M.
+2016, MNRAS, 460, 187
+Merloni, A., Alexander, D. A., Banerji, M., et al. 2019, The Messenger, 175, 42
+Michalewicz, K., Millon, M., Dux, F., & Courbin, F. 2023, The Journal of Open
+Source Software, 8, 5340
+Moré, J. J. 1978, in Lecture Notes in Mathematics, Berlin Springer Verlag, V ol.
+630, 105–116
+Moustakas, J., Buhler, J., Scholte, D., Dey, B., & Khederlarian, A. 2023, Fast-
+SpecFit: Fast spectral synthesis and emission-line fitting of DESI spectra, As-
+trophysics Source Code Library, record ascl:2308.005
+Mullaney, J. R., Alexander, D. M., Fine, S., et al. 2013, MNRAS, 433, 622
+Netzer, H. 2015, ARA&A, 53, 365
+Newville, M., Stensitzki, T., Allen, D. B., & Ingargiola, A. 2014, LMFIT: Non-
+Linear Least-Square Minimization and Curve-Fitting for Python
+Padovani, P. 2017, Frontiers in Astronomy and Space Sciences, 4, 35
+Padovani, P., Alexander, D. M., Assef, R. J., et al. 2017, A&A Rev., 25, 2
+Pan, Z., Jiang, L., Guo, W.-J., et al. 2025, ApJ, 987, 48
+Park, D., Barth, A. J., Ho, L. C., & Laor, A. 2022, ApJS, 258, 38
+Popovi´c, L. ˇC. 2020, Open Astronomy, 29, 1
+Popovi´c, L. ˇC., Kovaˇcevi´c-Dojˇcinovi´c, J., & Marˇceta-Mandi´c, S. 2019, MNRAS,
+484, 3180
+Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. 1992, Numer-
+ical recipes in FORTRAN. The art of scientific computing
+Raki´c, N. 2022, MNRAS, 516, 1624
+Rakshit, S., Stalin, C. S., Chand, H., & Zhang, X.-G. 2017, ApJS, 229, 39
+Ren, W., Guo, H., Shen, Y ., et al. 2024, ApJ, 974, 153
+Richards, G. T., Kruczek, N. E., Gallagher, S. C., et al. 2011, AJ, 141, 167
+Richards, G. T., Lacy, M., Storrie-Lombardi, L. J., et al. 2006, ApJS, 166, 470
+Rudy, R. J., Mazuk, S., Puetter, R. C., & Hamann, F. 2000, ApJ, 539, 166
+Saleh, R. A. & Ehsanes Saleh, A. K. M. 2022, arXiv e-prints, arXiv:2208.04564
+Sánchez-Blázquez, P., Peletier, R. F., Jiménez-Vicente, J., et al. 2006, MNRAS,
+371, 703
+Sánchez-Sáez, P., Lira, P., Mejía-Restrepo, J., et al. 2018, ApJ, 864, 87
+Schlafly, E. F. & Finkbeiner, D. P. 2011, ApJ, 737, 103
+Schlegel, D. J., Finkbeiner, D. P., & Davis, M. 1998, ApJ, 500, 525
+Sexton, R. O., Canalizo, G., Hiner, K. D., et al. 2019, ApJ, 878, 101
+Sexton, R. O., Matzko, W., Darden, N., Canalizo, G., & Gorjian, V . 2021, MN-
+RAS, 500, 2871
+Shen, Y ., Richards, G. T., Strauss, M. A., et al. 2011, ApJS, 194, 45
+Siudek, M., Pucha, R., Mezcua, M., et al. 2024, A&A, 691, A308
+Storey, P. J. & Hummer, D. G. 1995, MNRAS, 272, 41
+Sulentic, J. W., Marziani, P., & Dultzin-Hacyan, D. 2000, ARA&A, 38, 521
+Urry, C. M. & Padovani, P. 1995, PASP, 107, 803
+van der Marel, R. P. & Franx, M. 1993, ApJ, 407, 525
+Vanden Berk, D. E., Richards, G. T., Bauer, A., et al. 2001, AJ, 122, 549
+Vavilova, I., Pakuliak, L., Babyk, I., et al. 2020, in Knowledge Discovery in Big
+Data from Astronomy and Earth Observation, ed. P. Škoda & F. Adam, 57–
+102
+Vazdekis, A., Koleva, M., Ricciardelli, E., Röck, B., & Falcón-Barroso, J. 2016,
+MNRAS, 463, 3409
+Vazdekis, A., Sánchez-Blázquez, P., Falcón-Barroso, J., et al. 2010, in IAU Sym-
+posium, V ol. 262, Stellar Populations - Planning for the Next Decade, ed.
+G. R. Bruzual & S. Charlot, 65–68
+Véron-Cetty, M.-P., Joly, M., & Véron, P. 2004, A&A, 417, 515
+Vestergaard, M. & Peterson, B. M. 2006, ApJ, 641, 689
+Vestergaard, M. & Wilkes, B. J. 2001, ApJS, 134, 1
+Vietri, G., Piconcelli, E., Bischetti, M., et al. 2018, A&A, 617, A81
+Villar-Martín, M., Arribas, S., Emonts, B., et al. 2016, MNRAS, 460, 130
+Wang, H., Suyu, S. H., Galan, A., et al. 2025, A&A, 701, A280
+Weiner, B., Blanton, M. R., Coil, A. L., et al. 2009, in astro2010: The Astronomy
+and Astrophysics Decadal Survey, V ol. 2010, P61
+Wu, Q. & Shen, Y . 2022, ApJS, 263, 42
+Zhang, Y . & Zhao, Y . 2015, Data Science Journal, 14, 11
+Article number, page 12 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+Table A.1.SHEAPkinematic region limits.
+Region FWHM limits±v shift References
+[km s−1] [km s −1]
+Broad 1500–10000 3000 Shen et al. 2011; Rakshit et al. 2017
+Narrow 100–500 500 Mullaney et al. 2013; Calderone et al. 2017
+Outflow 500–1500 500 Mullaney et al. 2013; Circosta et al. 2018; Harrison et al. 2018
+Winds 3000–15000 8000 Richards et al. 2011; Coatman et al. 2016, 2017
+Host 100–1000 2896 Bruzual & Charlot 2003; Sánchez-Blázquez et al. 2006; Cappellari & Emsellem 2004
+Fe 100–7000 3000 Vestergaard & Wilkes 2001; Kova ˇcevi´c et al. 2010
+Balmer 100–11000 500 Jin et al. 2012; Kova ˇcevi´c et al. 2014
+Notes.Columns list the region name, the allowed FWHM range, the maximum absolute velocity offset, and the references used to define or
+motivate these limits.
+Appendix A: Kinematic region limits
+Article number, page 13 of 16
+
+A&A proofs:manuscript no. aanda
+Appendix B: Broad Component Combination
+Methods
+Broad emission lines in Type 1 AGNs are often modeled with
+multiple components (e.g., multiple Gaussians or others profiles,
+see Section 2.2.5) to reproduce asymmetric wings, intermediate-
+width structure, or blended sub-features. While this improves fit
+flexibility, it introduces the practical question of how to report a
+single set of broad-line measurements (e.g., velocity shift, line
+luminosity, and FWHM) for subsequent analysis.
+InSHEAP, broad-line observables can be measured on recon-
+structed broad-line profiles obtained under different component-
+combination schemes. In particular, the FWHM is measured as
+the full width of a reconstructed broad-line profile at half the
+maximum of that profile peak. Because multi-component broad
+lines admit more than one physically motivated definition of
+the “main” broad profile,SHEAPcomputes broad-line measure-
+ments for two complementary strategies: (i) combining all fitted
+broad components, and (ii) combining only those broad com-
+ponents that are kinematically consistent with the systemic ref-
+erence frame (as defined by the narrow lines). For the analyses
+presented in this work, we calculate both sets of measurements
+and compare them as appropriate to the sample under study; ul-
+timately, the choice depends on the scientific application.
+Combining all broad components.This method assumes that
+the set of broad components included in the model is an ade-
+quate description of the physical broad-line region signal. All
+broad components associated with a given transition are added,
+and a single set of broad-line observables is measured from the
+resulting total profile. This approach mirrors common practice in
+automated quasar-fitting tools, in which multiple broad subcom-
+ponents are treated collectively when reporting global broad-line
+properties (e.g., Guo et al. 2018).
+Combining kinematically reasonable componentsThis alter-
+native method does not assume that all fitted broad components
+are physically associated with the main virialized broad-line
+emission. Instead, it uses the systemic reference frame defined
+by narrow emission lines to determine which broad components
+are plausibly associated with the AGN systemic velocity. Nar-
+row lines are widely used as kinematic anchors in AGN spectral
+decomposition and quasar catalogs (e.g., Shen et al. 2011). In
+SHEAP, a broad component is included in the “main” broad pro-
+file only if its velocity shift relative to the narrow-line systemic
+velocity falls within a predefined threshold (|vshift| ≤v th).
+In our implementation we adopt, for example,v th =
+150 km s −1 following the criterion used in (Bernal et al. 2026,
+2025). The combined profile is then formed by summing only
+the selected components, and all reported broad-line measure-
+ments (including FWHM, centroid shift, and integrated flux) are
+derived from that kinematically filtered total profile.
+Appendix C: Example modeled spectra
+0.00
+0.25
+0.50
+0.75
+1.00
+Flux [erg s 1 cm 2 Å 1]
+ 1e 15
+ID 012520.48+262429.5 (163)
+ z = 2.569000005722046
+SNR = 11.92
+red = 9.33
+Broad
+Broad 2
+Broad 3
+Cont.
+Model
+Obs.
+1200 1400 1600 1800 2000 2200 2400 2600
+Rest wavelength [Å]
+0
+50Norm. Res.
+Fig. C.1.Example of fited spectra for the Wu&Shen sample for the
+object with median S/N
+0
+2
+4
+6
+8
+Flux [erg s 1 cm 2 Å 1]
+ 1e 16
+ID 164526.27+171153.5 (183)
+ z = 2.575000047683716
+SNR = 13.31
+red = 4.29
+Broad
+Broad 2
+Broad 3
+Cont.
+Model
+Obs.
+1200 1400 1600 1800 2000 2200 2400 2600
+Rest wavelength [Å]
+0
+25Norm. Res.
+Fig. C.2.Example of fited spectra for the Wu&Shen sample for the
+object with medianχ 2
+red
+0
+2
+4
+Flux [erg s 1 cm 2 Å 1]
+ 1e 16
+ID 39633068461395048 (364)
+ z = 1.1970000267028809
+SNR = 15.26
+red = 1.26
+Balmer Cont.
+Higher-order Balmer
+Broad
+Cont.
+Fe II
+Model
+Obs.
+2000 2500 3000 3500 4000
+Rest wavelength [Å]
+10
+0
+Norm. Res.
+Fig. C.3.Example of fited spectra for the Pan+25 sample for the object
+with median S/N
+0.00
+0.25
+0.50
+0.75
+1.00
+Flux [erg s 1 cm 2 Å 1]
+ 1e 15
+ID 39628236430249414 (41)
+ z = 1.2419999837875366
+SNR = 20.12
+red = 1.27
+Balmer Cont.
+Higher-order Balmer
+Broad
+Cont.
+Fe II
+Model
+Obs.
+2000 2500 3000 3500 4000
+Rest wavelength [Å]
+5
+0
+Norm. Res.
+Fig. C.4.Example of fited spectra for the Pan+25 sample for the object
+with medianχ 2
+red
+0.0
+0.5
+1.0
+1.5
+2.0
+Flux [erg s 1 cm 2 Å 1]
+ 1e 16
+ID 022003.08-035247.3 (131)
+ z = 0.770035982131958
+SNR = 9.33
+red = 1.05
+Balmer Cont.
+Higher-order Balmer
+Broad
+Broad 2
+Cont.
+Fe II
+Host
+Narrow
+Outflow
+Model
+Obs.
+2500 3000 3500 4000 4500 5000 5500
+Rest wavelength [Å]
+0
+5Norm. Res.
+Fig. C.5.Example of fited spectra for the Sánchez-Sáez+18 sample for
+the object with median S/N
+Article number, page 14 of 16
+
+F. Ávila-Vera et al.: Spectral Handling and Estimation of AGN Parameters (SHEAP)
+0
+2
+4
+6
+8
+Flux [erg s 1 cm 2 Å 1]
+ 1e 17
+ID 020924.70-021456.5 (65)
+ z = 0.6512690186500549
+SNR = 6.13
+red = 1.23
+Balmer Cont.
+Higher-order Balmer
+Broad
+Broad 2
+Cont.
+Fe II
+Host
+Narrow
+Outflow
+Model
+Obs.
+2500 3000 3500 4000 4500 5000 5500
+Rest wavelength [Å]
+2.5
+0.0
+2.5
+Norm. Res.
+Fig. C.6.Example of fited spectra for the Sánchez-Sáez+18 sample for
+the object with medianχ 2
+red
+0.0
+0.5
+1.0
+1.5
+Flux [erg s 1 cm 2 Å 1]
+ 1e 15
+ID 0518-52282-0218 (128)
+ z = 0.07095715403556824
+SNR = 24.13
+red = 3.62
+Balmer Cont.
+Higher-order Balmer
+Broad
+Broad 2
+Cont.
+Fe II
+Host
+Narrow
+Model
+Obs.
+4000 4500 5000 5500 6000 6500 7000 7500 8000
+Rest wavelength [Å]
+20
+0
+Norm. Res.
+Fig. C.7.Example of fited spectra for the Bernal+25 sample for the
+object with median S/N
+0
+2
+4
+6
+8
+Flux [erg s 1 cm 2 Å 1]
+ 1e 16
+ID 1300-52973-0127 (187)
+ z = 0.083344966173172
+SNR = 19.36
+red = 1.84
+Balmer Cont.
+Higher-order Balmer
+Broad
+Broad 2
+Cont.
+Fe II
+Host
+Narrow
+Model
+Obs.
+4000 4500 5000 5500 6000 6500 7000 7500 8000
+Rest wavelength [Å]
+5
+0
+Norm. Res.
+Fig. C.8.Example of fited spectra for the Bernal+25 sample for the
+object with medianχ 2
+red
+Article number, page 15 of 16
+
+A&A proofs:manuscript no. aanda
+Appendix D: Emission lines in the models
+Table D.1.Emission lines used by each the sample. Counts: Wu&Shen22 (broad=3); Pan+25 (broad=1); Sánchez-Sáez+18 (broad=2, narrow=1,
+outflow=1); Bernal+25 (broad=2, narrow=1).
+Region Wu&Shen22 Pan+25 Sánchez-Sáez+18 Bernal+25
+broad Lyα λ1215.670
+NVλ1240.812
+OI+SiIIλ1304.350
+SiIVλ1393.755
+OIV]λ1402.770
+CIVλ1549.479
+HeIIaλ1640.420
+AlIIIλ1858.753
+SiIII]λ1892.000
+CIII]λ1908.730
+HeIIbλ2733.290
+AlIIIλ1858.753
+SiIII]λ1892.000
+CIII]λ1908.730
+HeIIbλ2733.290
+MgIIλ2799.000
+HeIaλ2945.106
+HeIbλ3187.745
+HeIIcλ3203.100
+Hϵ λ3970.072
+Hδ λ4101.742
+HeIcλ4143.761
+Hgλ4340.471
+HeIIbλ2733.290
+MgIIλ2799.000
+HeIaλ2945.106
+HeIbλ3187.745
+HeIIcλ3203.100
+Hϵ λ3970.072
+Hδ λ4101.742
+HeIcλ4143.761
+Hgλ4340.471
+HeIdλ4471.479
+HeIIdλ4685.710
+Hβ λ4861.333
+Hϵ λ3970.072
+Hδ λ4101.742
+HeIcλ4143.761
+Hgλ4340.471
+HeIdλ4471.479
+HeIIdλ4685.710
+Hβ λ4861.333
+HeIeλ5877.254
+NaIaλ5890.000
+NaI1aλ5896.000
+OIaλ6046.440
+Hα λ6562.820
+OIbλ7002.230
+HeIfλ7065.196
+OIcλ7254.448
+HeIgλ7281.349
+OIdλ7774.170
+HeIhλ7816.136
+narrow – – HeIIbλ2733.290
+HeIaλ2945.106
+HeIbλ3187.745
+HeIIcλ3203.100
+[NeV]aλ3346.790
+[NeV]bλ3426.850
+[OII]λ3728.000
+[NeIII]λ3868.760
+Hϵ λ3970.072
+Hδ λ4101.742
+HeIcλ4143.761
+Hgλ4340.471
+OIIIaλ4363.214
+HeIdλ4471.479
+HeIIdλ4685.710
+Hβ λ4861.333
+OIIIbλ4958.896
+OIIIcλ5006.803
+[NeIII]λ3868.760
+Hϵ λ3970.072
+Hδ λ4101.742
+HeIcλ4143.761
+Hgλ4340.471
+OIIIaλ4363.214
+HeIdλ4471.479
+HeIIdλ4685.710
+Hβ λ4861.333
+OIIIbλ4958.896
+OIIIcλ5006.803
+HeIeλ5877.254
+OIaλ6300.304
+OIbλ6363.776
+NIIaλ6548.050
+Hα λ6562.820
+NIIbλ6583.460
+SIIaλ6716.440
+SIIbλ6730.810
+HeIfλ7065.196
+HeIgλ7281.349
+HeIhλ7816.136
+outflow – – [NeV]aλ3346.790
+[NeV]bλ3426.850
+[OII]λ3728.000
+[NeIII]λ3868.760
+OIIIbλ4958.896
+OIIIcλ5006.803
+–
+Article number, page 16 of 16

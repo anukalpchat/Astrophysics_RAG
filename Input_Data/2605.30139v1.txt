@@ -1,0 +1,1204 @@
+Title: Cosmo-PINN: A Physics-Informed Neural Network for Cosmological Reconstruction
+Authors: Andronikos Paliathanasis
+Published: 2026-05-28
+Categories: astro-ph.CO, gr-qc
+
+Cosmo-PINN: A Physics-Informed Neural Network for Cosmological Reconstruction
+Andronikos Paliathanasis 1, 2, 3, 4,∗
+1Institute of Systems Science, Durban University of Technology, Durban 4000, South Africa
+2Centre for Space Research, North-West University, Potchefstroom 2520, South Africa
+3Departamento de Matem` aticas, Universidad Cat` olica del Norte,
+Avda. Angamos 0610, Casilla 1280 Antofagasta, Chile
+4National Institute for Theoretical and Computational Sciences (NITheCS), South Africa.
+(Dated: May 29, 2026)
+We introduce Cosmo-PINN, a Physics-Informed Neural Network for reconstruction of the cosmo-
+logical theory. In this work we demonstrate the application of the Cosmo-PINN in the reconstruction
+of the dark energy equation of state parameterw DE (z) directly from late-time cosmological obser-
+vations. This framework overcomes the main limitation shared by Gaussian Process and Artificial
+Neural Network reconstruction approaches, where the recovered solution is driven by the data and
+it is not necessarily true that it is physically consistent, by embedding the cosmological constraints
+directly into the loss function as hard constraints, ensuring that the reconstructed quantities satisfy
+the physical laws at every point during the training. For the training of the network, we employed
+background data, and specifically the Baryon Acoustic Oscillation from DESI DR2, the Cosmic
+Chronometers and three different Supernova compilations, while we simultaneously introduce the
+cosmological parametersH 0,Ω m0 andr drag as trained parameters. The reconstruction shows that
+the trainedw DE (z) crosses the phantom divide within the redshift rangez= 0.27−0.42 in agree-
+ment with the value obtained by the Chevallier-Polarski-Linder model. In the quintessence scenario,
+for large redshifts the dark energy Ω DE (z) provides a pressureless nonzero contribution to the cos-
+mological fluid suggesting a unified scenario. Finally, we demonstrate the significance of imposing
+the physical constraints within the loss function by comparing the Cosmo-PINN reconstruction
+against a purely data-driven neural network with the same architecture.
+Keywords: Dark Energy; Model-Independent Reconstruction; Physics-Informed Neural Network; Machine
+Learning
+I. INTRODUCTION
+The mechanism responsible for the late-time acceleration phase of the observable universe [1–5] remains one of
+the central open problems in modern cosmology. The gravitational field describes attractive interactions, however
+in order to describe the late-time acceleration in the framework of General Relativity, it is required to introduce a
+matter source with repulsive force contribution in order to drive the cosmic acceleration. This component, which
+is detected only through its gravitational effects, is referred as dark energy [6, 7]. The cosmological constant is the
+simplest theoretical motivated dark energy candidate. The cosmological constant introduces the minimum degrees of
+freedom in the gravitational field equations and until recently it was the standard model for the description of the
+cosmic acceleration. The corresponding cosmological model, the ΛCDM, is nowadays challenged on the observational
+side by the cosmological tensions [8]. Furthermore, the cosmological constant suffers from two other major problems,
+the fine tuning and the coincidence problems [9–11].
+A plethora of alternative proposals to the cosmological constant have been introduced in the literature in order to
+address the above issues, we refer the reader to [12] for a systematic review. The proposed solutions can be classified
+into models which modify the matter sector, such as Chaplygin gas models [13], interacting dark sector [14–16], scalar
+fields [17–23],k-essence [24], and modifications of the gravitational action integral, including scalar-tensor models
+[25], Horndeski theory [26],f(R)-gravity [27], teleparallelf(T)-gravity [28], symmetric teleparallelf(Q)-gravity [29]
+and many others [30–39].
+Phenomenological approaches form an alternative and simpler framework for the description of the cosmological
+data, which allows us to extract important information about the nature of dark energy, since they allow us to explore
+how dark energy is distinct from the cosmological constant scenario [40, 41]. The most widely used phenomenological
+dark energy model is the Chevallier-Polarski-Linder (CPL) model [42, 43]. CPL belongs to the class ofw 0waCDM
+models, in which the dark energy equation of state parameter is considered to be a function of the redshift with two
+∗Electronic address:anpaliat@phys.uoa.gr
+arXiv:2605.30139v1  [astro-ph.CO]  28 May 2026
+
+2
+free variables, wherew 0 usually refers to the value of the dark energy equation of state parameter at the present, for
+more details we refer the reader to [44–50] and references therein. Nevertheless, phenomenological parametrizations
+are model-dependent because the functional form of thew DE (z) is imposed a priori, and the resulting observable
+predictions therefore carry the imprint of the assumed function rather than of the underlying physics.
+A reconstruction approach is essential in order to extract information for the properties of the physical theory,
+directly from the observational data, without restricting the free functional forms of the theory beforehand. In
+the standard Bayesian method, the parameter estimation is usually performed under a specific assumption for the
+cosmological model, that is a given functional form of the dark energy equation of statew DE (z), or the Hubble
+functionH(z) , such as the ΛCDM model or the CPL parametrization discussed above. The limitation of the Bayesian
+approach is that the conclusions made are valid only for the specific model assumed. Various phenomenological
+models for the dark energy equation of state can exhibit similar behaviour at a given cosmological epoch and fit
+the observational data in a similar way, such that the models are statistically indistinguishable [51]. Moreover, in
+theoretically motivated models, such as the quintessence scalar field, there exists a plethora of scalar field potentials
+that share a common attractor solution, causing all such models to predict a similar dynamical evolution [52] which
+as a result leads to a similar fitting to the background data. Two main approaches to the reconstruction problem
+which can be found in the literature are the Gaussian Process (GP) [53–67] and the Artificial Neural Networks
+(ANNs) [68–77]. GP is a model-independent approach, however, it suffers from two main issues. The selection of
+the kernel may affect the reconstructed physical parameters [78, 79], while the GP suffers from overfitting issues
+and it is sensitive to theH 0 value. On the other hand, the ANN approach provides a fully data-driven, model-
+independent reconstruction framework; however, there is no guarantee that the trained solution satisfies the field
+equations governing the cosmological dynamics, since the physical laws are not incorporated into the training.
+Physics-Informed Neural Networks (PINNs) [80], in which the physical laws, that is, the field equations in cos-
+mological studies, are embedded directly into the loss function offer a natural approach to overcome this limitation
+during the reconstruction [81]. PINNs have been applied previously in cosmological studies. In [82] a PINN was used
+to solve the background cosmological field equations both in General Relativity and in modified theories of gravity.
+Furthermore, in [83, 84], the PINN approach was employed to reconstruct the Hubble function within the Tsallis and
+Barrow holographic dark energy models, where the field equations were embedded directly into the network training.
+Moreover, in [85], a PINN framework was introduced to perform parameter estimation for parametric dark energy
+models. On the other hand, in [86] a PINN network was applied to solve the linear matter perturbations. In all
+these approaches the PINN applied within a specific cosmological model, and the reconstructed solution is therefore
+model-dependent.
+In this work we introduce Cosmo-PINN, a framework that combines the ANN reconstructions with the physics
+enforcement of PINNs. Cosmo-PINN imposes the cosmological field equations as hard constraints in the loss function,
+ensuring that the reconstructed observables are consistent with the observational data at each point and with the
+underlying physical law throughout the training domain. The framework can be applied to any cosmological model.
+However, in order to demonstrate its application in the following we focus on the reconstruction of the dark energy
+equation of state parameterw DE (z) and of the related cosmological parameters. The structure of the paper is as
+follows.
+In Section II we present the cosmological framework under consideration, namely the spatially flat Friedmann-
+Lemaˆ ıtre-Robertson-Walker universe consisting of radiation, baryons, dark matter and a dark energy fluid, charac-
+terized by a parametric equation of state parameterw DE (z). The basic architecture features of the Cosmo-PINN
+framework are introduced in Section III. In Section IV we demonstrate the application of the Cosmo-PINN for the
+reconstruction of the dark energy equation of state parameter from the cosmological data by imposing the cosmolog-
+ical field equations as hard constraints in the loss function. We examine two scenarios, thew DE (z) to be unbound,
+and the quintessence scenario in whichw DE (z)≥ −1. Furthermore, in Section V we perform the same reconstruction
+by considering a Neural Network with the same architecture but without imposing the physical constraints. Finally,
+in Section VI we summarize our results and discuss future applications of the Cosmo-PINN framework.
+II. FLR W COSMOLOGY AND DARK ENERGY
+On very large scales, the universe is observed to be both isotropic and homogeneous. The geometry which defines
+the distances in cosmological scales is described by the spatially flat FLRW metric, with line element
+ds2 =−dt 2 +a 2 (t)
+ 
+dx2 +dy 2 +dz 2
+,(1)
+Functiona(t) is the scale factor which describes the radius of the three-dimensional hypersurface, andH= ˙a
+a is the
+Hubble function which describes the expansion history, and an overdot means differentiation with respect to the time
+parametert, i.e. ˙a= da
+dt .
+
+3
+Within the framework of General Relativity, the dynamical evolution of scale factora(t) is given by the Einstein
+field equations
+3H2 =ρ,(2)
+−2 ˙H−3H 2 =p(3)
+whereρandpare the energy density and pressure components for the cosmic fluid, with energy momentum tensor
+Tµν = (ρ+p)u µuν +pg µν,(4)
+andu µ =δ µ
+t withu µuµ =−1, be the comoving observer. The equation of state parameter for the cosmological fluid
+isw tot = p
+ρ, and the deceleration parameter is given by the expressionq= 1
+2 (1 + 3wtot).
+Furthermore, by differentiating equation (2) and by using equation (3), we obtain the equation of motion for the
+cosmic fluid
+˙ρ+ 3H(ρ+p) = 0.(5)
+The latter equation is the conservation law of energy for the cosmic fluid and it can be derived from the application
+of the Bianchi identity for the Einstein field equations, that is, in tensor form equation (5) reads∇ νT µν = 0, in
+which∇ µ defines covariant derivative with respect to the Levi-Civita connection for the FLRW geometry (1).
+The cosmological fluid is assumed to be composed of the following components, the radiationρ r,p r = 1
+3 ρr, the
+pressureless baryonic matterρ b, p b = 0, the cold dark matterρ m, p m = 0 and the dark energy component which drives
+the cosmic acceleration, with energy densityρ DE and equation of state parameterw DE, that is,p DE =w DE ρDE.
+Thus, the energy momentum tensor (4) is expressed as
+Tµν =
+
+ρm +ρ b + 4
+3 ρr + (1 +w DE)ρ DE
+
+uµuν +
+1
+3 ρr +w DE ρDE
+
+gµν.(6)
+Therefore, the equation of state parameter for the cosmic fluid is expressed asw tot =
+1
+3 ρr+wDE ρDE
+ρ ,or equivalently,
+wtot = 1
+3Ωr +w DEΩDE ,(7)
+in which the components Ω i = ρi
+3H 2 describe the energy density for the fluidρ i, and from equation (2) the following
+algebraic constraint expression follows
+Ωm + Ωb + Ωr + ΩDE = 1.(8)
+With the use of the latter variables, equation (3) reads
+dlnH
+dlna =− 3
+2
+
+1 + 1
+3Ωr +w DE (z) ΩDE
+
+,(9)
+Assuming that the components constituting the cosmic fluid interact only gravitationally, then from the conservation
+law of energy (5) it follows
+˙ρm + 3Hρm = 0,(10)
+˙ρb + 3Hρb = 0,(11)
+˙ρr + 4Hρr = 0,(12)
+˙ρDE + 3H(1 +w DE)ρ DE = 0.(13)
+From where we derive
+ρm =ρ m,0
+ a
+a0
+−3
+, ρ b =ρ b,0
+ a
+a0
+−3
+, ρ r =ρ r,0
+ a
+a0
+−4
+(14)
+and
+ρd =ρ d,0 exp
+
+−3
+Z a0
+a
+1 +w DE (α)
+α dα
+
+.(15)
+
+4
+in whicha 0 is the value of the scale factor at the present,a(t 0) =a 0, and parametersρ i,0 are integration constants
+and define the energy density of the fluid at the present time. The energy density for each fluid at the present is
+defined as Ω i,0 = ρi,0
+3H 2
+0
+,H 0 is the Hubble constant.
+Therefore, the Hubble function is given by the expression
+ H(a)
+H0
+2
+= Ωr0
+ a
+a0
+−4
++ Ωb0
+ a
+a0
+−3
++ Ωm0
+ a
+a0
+−3
++ Ωd0 exp
+
+−3
+Z a0
+a
+1 +w DE (α)
+α dα
+
+,(16)
+where the energy densities Ω i,0 satisfy the algebraic constraint (8).
+In the case wherew DE (a) =−1, the dark energy component becomes a constant, such that the Hubble function
+(16) describes the so-called ΛCDM. The nature of the equation of state parameter affects dramatically the cosmic
+evolution. The equation of state parameter for the CPL model is a linear function on the scale factor, that is,
+wCP L
+DE (z) =w 0 +w a
+
+1−
+
+a
+a0
+
+or, in terms of the redshiftz= 1
+a −1, it followsw CP L
+DE (z) =w 0 +w a
+
+z
+1+z
+
+. For
+values of the free parametersw 0wa <0, then thew CP L
+DE (z) crosses the phantom divide line, that is, the boundary−1.
+On the other hand, from a theoretical perspective, scalar fields along with modified theories of gravity have been
+widely used to describe the dark energy component and to connect the early inflationary epoch with the late-time
+accelerated expansion. The quintessence scalar field stands as one of the well-studied and simplest dark energy
+candidates [17, 18]. In this theory the equation of state parameter is bounded within the rangew DE ∈[−1,1], with
+the lower limit being that of the cosmological constant.
+Since the present analysis is restricted to late-time observational data, the contribution of radiation is omitted in
+what follows, as its effect on the cosmic fluid at late times is negligible.
+III. COSMO-PINN: A PHYSICS-INFORMED NEURAL NETWORK FOR COSMOLOGICAL
+RECONSTRUCTION
+We introduce a Physics Informed Neural Network (PINN) for the study of the dark energy problem, which we call
+Cosmo-PINN.
+PINNs are Neural Networks (NN) that are trained to solve supervised learning tasks while respecting any given
+laws of physics described [80]. Thus, within the framework of Cosmo-PINN the cosmological field equations are
+embedded directly within the loss function as a hard constraint. Thus the learning solution is not only a data-fitting
+reconstruction but is governed by a physical law, ensuring that the reconstructed cosmological history is consistent
+with the given gravitational theory at every point of the redshift domain. Cosmo-PINN is an optimization-based
+reconstruction framework, it provides a single optimal solution that minimizes the total loss. Posterior uncertainties
+on the reconstructed functions are obtained by sampling around this optimum solution.
+The Cosmo-PINN architecture is designed to reconstruct the Hubble functionH(z) and the free function of the
+theory, such as the equation of state parameterwDE (z), or the function related to the scalar field potential. Moreover,
+the cosmological parametersH 0, Ω m0,r drag are simultaneously inferred within the same framework. The input to
+the network is the redshift scalarz∈[0, z max], in whichz max is the maximum value for the redshift as provided
+by the datasets. Prior to entering the network, the redshift is mapped onto the unit interval via the normalized
+transformationx= z
+zmax
+, such thatx∈[0,1].
+1. Physical law
+The full set of physical quantities is trained under the requirement of physical consistency. In order to guarantee
+the trained solution possesses the initial condition for the Hubble function we assume the expression
+H(x) =H 0 exp [x NH(x)],
+in which
+NH(x) =
+NX
+n=1
+c(H)
+n Tn(2x−1),(17)
+is a Chebyshev polynomial expansion, and coefficientsc (H)
+n are trained variables. The Chebyshev polynomial ex-
+pansions have been introduced in order to reduce the effects of overfitting and to enforce smoothness in the trained
+solutions.
+
+5
+Moreover, for the energy density for the dark matter fluid Ω m (z), we assume
+Ωm (z) = Ωm0 +xN m (x) (18)
+whereN m (x) is a trained parameter which satisfies the differential equation
+R1 : (1 +xz max)
+zmax
+dΩm
+dx + 3w DE(x) Ωm ΩDE = 0.(19)
+Moreover, the dark energy equation parameterw DE(z) is enforced through the second Friedmann equation (9), that
+is,
+R2 : (1 +xz max)
+zmax
+dH
+dx − 3
+2(1 +w DE(x) ΩDE)H= 0,(20)
+and in order to avoid overfitting, we employ a Chebyshev polynomial expansion [87]
+wDE(x) =
+NX
+n=0
+c(w)
+n Tn(2x−1). (21)
+The derivatives are computed by automatic differentiation through the network graph. The PDE loss over theN c
+collocation points is defined as
+LPDE = λPDE
+2Nc
+NcX
+i=1
+ 
+R2
+1(xi) +R 2
+2(xi)
+
+.(22)
+This loss component imposes the physical law.
+2. Initial conditions
+As far as the baryons are concerned, we express them as Ω b(z) = ωb (1+z)3
+H(z) 2 , whereω b is the value obtained by the
+Planck 2018 collaboration. On the other hand, regarding the free parametersH 0,Ω m0 andr drag we introduce them
+into the total loss via the expression
+LIC = λH0
+2
+ HPINN
+0 −H P lanck
+0
+σH0
+2
++ λΩm0
+2
+ΩPINN
+m0 −Ω P lanck
+m0
+σΩm0
+2
++ λrdrag
+2
+ 
+rPINN
+drag −r P lanck
+drag
+σrdrag
+!2
+.(23)
+These terms act as soft priors that anchor the learnable cosmological parameters. In this work we consider priors
+near the Planck 2018 [88] values.
+3. Smoothness penalties and physical boundaries
+We introduce aL bounds component in the loss function, in order to impose strong boundary conditions on the
+trained functions such that the obtained solution satisfies Ωm ∈[0,1], or in the case of quintessence thew DE is within
+the rangew DE ∈[−1,1].
+Last but not least, in order to avoid unphysical oscillations related to overfitting, we introduce weak smoothness
+penaltiesL SP.
+A. Cosmological Likelihoods and Loss F unction
+The analysis performed in this work is based on late-time cosmological observations. Specifically, we employ
+observational datasets from Baryon Acoustic Oscillations BAO, Type Ia Supernova (SNIa) and Cosmic Chronometers
+(CC).
+
+6
+1. Cosmic Chronometers
+Finally, we employ the cosmic chronometers, which are old galaxies, passively evolving with synchronous stellar
+populations and similar cosmic evolution [89]. We consider the 31 model independent direct measurements of the
+Hubble parameter within the redshift range 0.09≤z≤1.965 [90]. The Hubble function is trained by the PINN and
+theχ 2
+CC is defined as
+χ2
+CC =
+NCCX
+i=1
+ HPINN
+i −H obs
+i
+σi
+2
+.(24)
+2. Baryon Acoustic Oscillations
+We consider the recent BAO DESI DR2 catalogue [91, 92]. This dataset consists of 13 measurements from DESI
+DR2 at seven redshifts with the rangez∈[0.295,2.33],of the Hubble distance ratio the comoving angular distance
+ratio and the volume-averaged distance ratio, each normalized by the sound horizon at the baryon drag epochr drag,
+DH(z)
+rdrag
+= c
+H(z) , DM(z)
+rdrag
+=c
+Z z
+0
+dz′
+H(z ′) , DV (z)
+rdrag
+=
+ c z D2
+M(z)
+H(z)
+1/3
+.(25)
+We employ the full 13×13 covariance matrixC BAO, such that the likelihood is defined as
+χ2
+BAO = (dPINN
+BAO −d obs
+BAO)T C−1
+BAO (dPINN
+BAO −d obs
+BAO).(26)
+The comoving distanceD M is evaluated by differentiable trapezoidal quadrature on a grid ofN BAO
+grid points.
+3. Type Ia Supernovae
+We make use of three different (SNIa) compilations, the PantheonPlus (PP) catalogue without the SH0ES Cepheid
+calibration [93], the Union3.0 (U3) [94] and the recent DES-Dovekie (DESD) [95]. The catalogues provide measure-
+ments of the distance modulusµ obs
+i as a function of redshiftz i. The U3 and PP catalogues provide events within
+the redshift range 10 −3 < z <2.27. The latter catalogues share 1363 common SNIa events; they are constructed
+from different photometric reduction pipelines. On the other hand, the DESD catalogue released recently after the
+re-analysis of the five-year Dark Energy Survey supernova program (DES-SN5YR), yielding 1820 SNIa measurements
+at lower redshiftsz <1.13.
+The SNIa likelihood marginalizes analytically over the absolute magnitudeM, giving the marginalizedχ 2
+SNIa
+χ2
+SNIa = ∆µT C−1
+SNIa ∆µ− (1T C−1
+SNIa∆µ)2
+1T C−1
+SNIa 1 ,(27)
+where ∆µi =µ obs
+i −µ PINN
+i andµ PINN(z) = 5 log10[(1 +z)D M(z)] + 25.
+4. Data Loss function
+The component of the loss function related to the training given by the cosmological data is defined as
+LDATA =λ CC LCC +λ BAO LBAO +λ SN LSN,(28)
+whereλare the data weights, the loss function related to the CC is defined as
+LCC = 1
+NCC
+χ2
+CC,(29)
+
+7
+and for the loss functionL BAO,L SN we introduce a logarithmic cap, that is,
+LBAO =γ 2 ln
+
+1 + 1
+γ2
+χ2
+BAO
+NBAO
+
+,
+LSN =γ 2 ln
+
+1 + 1
+γ2
+χ2
+SNIa
+NSNIa
+
+,(30)
+whereγis a normalized parameter. For 1
+NData
+χ2
+Data << γ 2, theL DATA ≃ 1
+NData
+χ2
+Data. The logarithmic function
+has been introduced to avoid a dominance of the high values ofχ 2
+Data at the initial states of the training, when
+1
+NData
+χ2
+Data >> γ 2. Parameterγ 2 is important for the rescaling of the loss function, nevertheless, we assume that
+γ2 >1.
+It is important to note that instead of introducing the standard totalχ 2
+tot in the loss function we introduce the
+reducedχ 2/Ndata for each observational data set. We made this selection in order to avoid the the dominance of
+datasets with the larger number of data, i.e. the SNIa catalogue, to dominate. Thus, with this approach we ensure
+a balanced contribution among the different cosmological data during the reconstruction process. This procedure
+modifies the relative statistical weighting of the datasets and therefore should be interpreted as an reconstruction
+criterion and not right strict likelihood combination.
+B. T otal Loss F unction
+The total loss function of Cosmo-PINN is constructed as a weighted combination of all the individual components
+introduced above, that is,
+LPINN =L PDE +L DATA+L IC +L SP +L bounds.(31)
+The weights for the PDE loss component and of theLDATA, that is,λ PDE,λ CC,λ BAO andλ SN are adapted dynamically
+during training using the GradNorm method introduced in [96]. We consider adaptive weights because the different
+components of the loss function have different scales during training, and by considering constant weights it is possible
+for one of the loss components to dominate over the others.
+0.0 0.5 1.0 1.5 2.0
+z
+50
+100
+150
+200
+250H(z)  [km s 1 Mpc 1]
+0.0 0.5 1.0 1.5 2.0
+z
+0.4
+0.2
+0.0
+0.2
+0.4
+q(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8(z)
+m(z)
+de(z)
+FIG. 1: Trained Hubble functionH(z), deceleration parameterq(z) and evolution of the energy densities Ω m (z) and Ω DE (z),
+for five different sets of initial conditions.
+C. T raining
+The network consists of four hidden layers with 64 neurons each, and as activation function we consider the tanh.
+The training proceeds in two sequential phases, an Adam optimizer and the L-BFGS optimizer epochs. The Adam
+optimizer is employed for 10000 epochs and the L-BFGS optimizer is applied for up to 200 epochs, with early stopping
+when the total loss reaches a minimum. The dynamic adjustment of the loss weightsλ PDE,λ CC,λ BAO andλ SN via
+
+8
+0 2000 4000 6000 8000 10000
+Epoch
+66
+68
+70
+72
+74H0  [km s 1 Mpc 1]
+0 2000 4000 6000 8000 10000
+Epoch
+0.25
+0.30
+0.35
+0.40
+0.45
+0.50
+0.55m0
+0 2000 4000 6000 8000 10000
+Epoch
+145.5
+146.0
+146.5
+147.0
+147.5
+148.0
+148.5
+149.0
+rdrag  [Mpc]
+FIG. 2: Training trajectories of the cosmological parametersH 0,Ω m0 andr drag, for five different set of initial conditions. The
+figures indicate that the trajectories reach consistent values during the training independent of the initial conditions.
+0 2000 4000 6000 8000 10000
+Epoch
+10 3
+10 2
+10 1
+100
+PDE loss
+0 2000 4000 6000 8000 10000
+Epoch
+101
+102
+Total loss
+FIG. 3: Evolution of the PDE loss parameter and of the total loss function during training for five different sets of initial
+conditions.
+the GradNorm method take place for the first 5000 epochs of the Adam optimizer. After this epoch the weights are
+frozen and remain fixed for the rest of the training.
+1. Stability and Robustness Tests
+Before we proceed with the reconstruction of the dark energy equation of state parameterw DE (z) we present two
+tests to assess the viability of the Cosmo-PINN. First, we perform training runs with different sets of initial conditions
+to verify whether the PINN converges to a consistent solution. Second, we train the network using expansions of
+different orders of Chebyshev polynomials to study their effect on the obtained solutions.
+In Fig. 1 we present the reconstructed Hubble function, the deceleration parameter and the energy densities for the
+five different trainings. The training trajectories of the cosmological parametersH 0, Ω m0 andr drag are presented in
+Fig. 2, while in Fig. 3 we present the evolution of the total loss and of the PDE loss functions during the training. We
+note that the solutions provided by the Cosmo-PINN are consistent and insensitive to the choice of initial conditions.
+For these training runs, the prior of the cosmological parameters was selected to be medium.
+Furthermore in Fig. 4 we present the trained cosmological solution for the same set of initial conditions and
+different degrees of the Chebyshev polynomials. Specifically we trained the network forN= 2,3,6 and 8, in order
+to understand the effects of the oscillations within the obtained solution. Recall that forN= 1, the Chebyshev
+polynomial is the linear function. From the reconstruction we infer that there is not any artifact introduced by
+the degree of the Chebyshev polynomials in the training, and the solutions are consistent. Furthermore, from the
+evolution of the loss functions during training, as presented in Fig. 5, we see that the Cosmo-PINN is stable and not
+sensitive to the choice of degree for the Chebyshev expansion. For the analysis which follows below, we consider the
+
+9
+fifth-degree Chebyshev polynomial.
+0.0 0.5 1.0 1.5 2.0
+z
+50
+100
+150
+200
+250H(z)  [km s 1 Mpc 1]
+N = 2
+N = 3
+N = 6
+N = 8
+0.0 0.5 1.0 1.5 2.0
+z
+0.4
+0.2
+0.0
+0.2
+0.4
+q(z)
+N = 2
+N = 3
+N = 6
+N = 8
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8(z)
+m(z)
+de(z)
+FIG. 4: Trained Hubble functionH(z), deceleration parameterq(z) and evolution of the energy densities Ω m (z) and Ω DE (z),
+for different Chebyshev polynomial expansions. The plots are forN= 2,3,6 and 8.
+0 2000 4000 6000 8000 10000
+Epoch
+10 3
+10 2
+10 1
+100
+PDE loss
+N = 2
+N = 3
+N = 6
+N = 8
+0 2000 4000 6000 8000 10000
+Epoch
+101
+102
+Total loss
+N = 2
+N = 3
+N = 6
+N = 8
+FIG. 5: Evolution of the PDE loss parameter and of the total loss function during training for different Chebyshev polynomial
+expansions. The plots are forN= 2,3,6 and 8.
+D. Posterior Uncertainties
+In order to determine the uncertainties of the determined functions, that is,H(z) andw DE (z), we use the re-
+constructed solution as given by the L-BFGS optimizer We employ the Hamiltonian Monte Carlo [97] approach by
+considering the NUTS sampler [98], sampling the posterior distribution over the free cosmological parameters, that is,
+Ωm0, H 0 andr drag, together with the Chebyshev coefficients and the weights of the final network layer that directly
+parametrizeH(z) andw DE (z). Priors are placed on the three cosmological parameters, and the log-likelihood com-
+bination contribution from the cosmological data. Propagating the posterior samples through the network we obtain
+68% and 95% credible intervals on the reconstructed functions.
+IV. RECONSTRUCTION OF THE DARK ENERGY EQUA TION OF ST A TE
+We have demonstrated that the network is stable and capable of training solutions which simultaneously satisfy
+the observational data and the corresponding physical laws. We proceed with the reconstruction of the dark energy
+
+10
+equation of state parameterw DE (z). For the training we select soft prior constraints for the cosmological parameters
+H0,Ω m0 andr drag, near to the Planck values. From expression (16) it follows thatw DE (z) and Ωm0 are not indepen-
+dent. Therefore the introduction of a prior on Ω m0 is necessary in order to avoid degeneracies in the reconstructed
+solution. On the other hand, if we assume a smaller value for the Ω m0, the Cosmo-PINN will reconstruct a unified
+dark energy-dark matter cosmological scenario.
+0.0 0.5 1.0 1.5 2.0
+z
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+wDE(z)
+z = 0.42
+No SNIa
+Dynamical Dark Energy
+Quintessence
+0.0 0.5 1.0 1.5 2.0
+z
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+wDE(z)
+z = 0.27
+PantheonPlus
+0.0 0.5 1.0 1.5 2.0
+z
+2.50
+2.25
+2.00
+1.75
+1.50
+1.25
+1.00
+0.75
+0.50
+wDE(z)
+z = 0.39
+Union3
+0.0 0.5 1.0 1.5 2.0
+z
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+wDE(z)
+z = 0.30
+DES-D
+FIG. 6: Model-independent reconstruction of the dark energy equation of state parameterw DE (z) for four different data set
+combinations. Black lines are for the case wherew DE (z) is allowed to cross the phantom divide line, and red lines are for the
+quintessence case. Bands are for the 68% and 95% credible intervals.
+We reconstruct the dark energy equation of state parameter for four different combinations of the observational
+datasets. Specifically, we consider the combinations CC+BAO and CC+BAO+SNIa, where the SNIa dataset corre-
+sponds to the PP, U3 and DD compilations. The reconstruction is performed under the strong physical constraint
+ΩDE (z)∈[0,1]. Furthermore, for the dark energy equation of state parameterw DE (z) we investigate two different
+scenarios, in the first casew DE (z) can cross the phantom divide line, andw DE (z) has the value−1 as lower bound,
+such thatw DE (z)≥ −1.
+In Fig. 6 we present the reconstructedw DE (z), while in Fig. 7 the evolution of the physical parameters
+q(z), Ω m (z),Ω DE (z) andp DE (z) are given for the four different datasets applied. When thew DE (z) has no
+lower bound, that is, the corresponding weight in the loss function is zero, i.e.λ wDE≥−1 = 0, thew DE (z) at the
+presentw DE (0)>−1,while it crosses the phantom divide line within the range of redshiftsz= 0.27−0.42. The
+function is monotonically decreasing. The latter are in agreement with the results obtained by the CPL model [51].
+The corresponding physical quantities have a similar behaviour independent of the SNIa compilation, where the ac-
+celeration starts aroundz≃0.7. However, the Ω DE (z)→0, such that the effects of the dark energy fluid in the past
+are negligible.
+On the other hand, in the quintessence scenario, the behaviour of thew DE (z) is different. In all cases the present
+value of the equation of state parameter is larger than in the previous reconstruction. For U3 dataset, thew DE (z)
+reaches the minimumw DE =−1, atz≃1.2, while for the rest of the datasets it is a monotonically increasing
+function. The behaviour of the reconstructed deceleration parameters and the correspondingp DE (z) are similar as
+before. Nevertheless, that is not true for the Ω m (z) and Ω DE (z) reconstruction. In the quintessence scenario there
+is a systematically lower value for the Ω m0, while for large redshifts the Ω DE (z) does not become zero. Thus the
+
+11
+0.0 0.5 1.0 1.5 2.0
+z
+0.6
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+No SNIa
+q(z)
+q(z)
+Dynamical Dark Energy
+Quintessence
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8i(z)
+m(z) and DE(z)
+m Dynamical Dark Energy
+DE Dynamical Dark Energy
+m Quintessence
+DE Quintessence
+0.0 0.5 1.0 1.5 2.0
+z
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0.0
+0.1
+pDE(z)
+pDE(z)
+Dynamical Dark Energy
+Quintessence
+0.0 0.5 1.0 1.5 2.0
+z
+0.6
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+PantheonPlus
+q(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8i(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.8
+0.6
+0.4
+0.2
+0.0
+pDE(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.6
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+Union3
+q(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8i(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1
+0.0
+0.1
+pDE(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.6
+0.4
+0.2
+0.0
+0.2
+0.4
+0.6
+DES-D
+q(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.0
+0.2
+0.4
+0.6
+0.8i(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.8
+0.6
+0.4
+0.2
+0.0
+pDE(z)
+FIG. 7: Model-independent reconstruction of the cosmological parameterq(z), Ω m (z) (solid lines),Ω DE (z) (dashed lines) and
+pDE (z) for the four different combinations of the data sets. Black lines are for the case wherew DE (z) is allowed to cross the
+phantom divide line, and red lines are for the quintessence case. Bands are for the 68% and 95% credible intervals.
+quintessence contributes to the cosmic fluid, but with zero or very small pressure, which means that the quintessence
+field should mimic dark matter at higher redshifts. This leads to the unified dark sector scenario [99–104]. Such kind
+of behaviour is well described by the exponential potential or potentials with exponential limit [105]. This has been
+discussed before in the literature after the DESI DR2 release [108, 109]. On the other hand, the reconstruction with
+the U3 SNIa catalogue indicates that thew DE (z) moves to an unstable point where the quintessence behaves like
+
+12
+100 101 102 103 104
+Epoch
+100
+101
+102
+103
+104
+2/Ndata
+BAO
+CC
+No SNIa
+Dynamical Dark Energy
+Quintessence
+100 101 102 103 104
+Epoch
+100
+101
+102
+103
+104
+2/Ndata
+BAO
+SNIa
+CC
+PantheonPlus
+100 101 102 103 104
+Epoch
+100
+101
+102
+103
+104
+2/Ndata
+BAO
+SNIa
+CC
+Union3
+100 101 102 103 104
+Epoch
+100
+101
+102
+103
+104
+2/Ndata
+BAO
+SNIa
+CC
+DES-D
+FIG. 8: Evolution of theχ 2/Ndata for each observable during training for the four different dataset combinations. Black lines
+are for the dynamical dark energy model and red lines for the quintessence.
+a cosmological constant, while the rest of the behaviour is similar to the exponential potential. Hence, the U3 data
+suggests a potential for the quintessence model beyond the exponential function. Last but not least in the quintessence
+scenario, the Ωm0 is trained to have a much lower value from the prior considered, indicating that the soft constraints
+introduced inL IC does not dominate over the reconstructed solutions.
+The evolution of theχ 2/Ndata during training is presented in Fig. 8 for each observable for the four different
+datasets. We observe that the training history is similar for the quintessence and the dynamical dark energy model.
+There are small differences in the first 1000 epochs of the training. Fig. 9 presents the difference inχ 2/Ndata between
+the dynamical dark energy and the quintessence at the reconstructions.
+The SNIa data are reproduced with comparable fit quality by both reconstructions, with a marginal difference for the
+U3 catalogue in favour of the dynamical dark energy case. The CC observable shows a mixed behaviour with similar
+fit quality across both scenarios. For the BAO data, a slightly lowerχ 2/NBAO for the quintessence reconstruction
+is observed only when the PantheonPlus catalogue is employed. However, the differences are very small and no
+conclusion can be made regarding the statistical preference of one model over the other. These results should be
+interpreted only as a qualitative indication from the PINN reconstruction. A formal Bayesian model comparison is
+necessary in order to draw conclusions about the statistical preference between the two models.
+
+13
+2
+CC/NCC
+ 2
+BAO/NBAO
+ 2
+SN/NSNIa
+0.008
+0.006
+0.004
+0.002
+0.000
+0.002
+0.004
+( 2/Ndata)
++0.0012
+-0.0066
++0.0000+0.0000
++0.0026
++0.0001
+-0.0018
+-0.0022
+-0.0008
++0.0013
+-0.0050
++0.0001
+Quintessence
+Dynamical Dark Energy
+No SNIa
+PantheonPlus
+Union3
+DES-D
+FIG. 9: Differences inχ 2/Ndata training diagnostic between the dynamical dark energy and quintessence reconstructions, for
+the four dataset combinations. Negative values indicate that the dynamical dark energy reconstruction attains a lowerχ 2/Ndata
+positive values indicate the same for the quintessence reconstruction. These differences are optimization diagnostics only and
+should not be interpreted as likelihood ratios.
+V. THE ROLE OF PHYSICAL CONSTRAINTS WITHIN THE NEURAL NETWORK
+In order to understand the importance of the physical law and of the physical constraints within the NN during the
+reconstruction we perform the same reconstruction approach by using the CC+BAO+PP dataset. We consider a NN
+where the trained physical variable is the Hubble function as obtained directly by the cosmological data. After the
+reconstruction of theH(z) the physical parametersw DE (z),Ω m (z) and Ω DE (z) are calculated. The two networks
+share the same initial conditions and the same network architecture. For the NN, the Hubble function is trained
+without using the Chebyshev expansion, nevertheless we impose the same smoothness penalties with the same weight.
+Another difference between the two networks is that theL PDE is not introduced in the total loss function.
+The comparison of the cosmological parameters of the NN with those obtained from the Cosmo-PINN is presented
+in Fig. 10. The Hubble function reconstructed by the NN is similar to that obtained from the Cosmo-PINN, that
+is, an expected result because in both networks the Hubble function is fitted to the data. Small oscillations appear
+in the NN reconstruction, which can be attributed to the absence of both the Chebyshev expansion and the physical
+constraints that are imposed on the solution in the Cosmo-PINN. Moreover, the obtained reconstructed solution for
+the ΩDE (z), becomes negative as we reach the matter epoch, which explains the ill-defined behaviour of thew DE (z)
+during the transition epoch. Finally, in the low-redshift regime oscillations are also present inw DE (z),that is largely
+a numerical artifact due to the direct derivation from theH(z), and not through the training of the network as in
+the case of the Cosmo-PINN.
+VI. CONCLUSIONS
+We have introduced Cosmo-PINN, a framework for the reconstruction of free functions and parameters of cosmo-
+logical theories. In Cosmo-PINN, the physical laws are embedded directly within the loss function of the network,
+ensuring that the trained solution satisfies the corresponding field equations at every point of the redshift region where
+the reconstruction takes place.
+We focus on the reconstruction of the dark energy equation of state parameterw DE (z), by using late-time ob-
+servational data, such as the BAO measurements from DESI DR2, the CC and three catalogues for the SNIa, the
+
+14
+0.0 0.5 1.0 1.5 2.0
+z
+50
+100
+150
+200
+250
+300H(z) [km s 1 Mpc 1]
+Cosmo-PINN
+NN
+0.0 0.5 1.0 1.5 2.0
+z
+2.0
+1.8
+1.6
+1.4
+1.2
+1.0
+0.8
+0.6
+wDE(z)
+0.0 0.5 1.0 1.5 2.0
+z
+0.2
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+i(z)
+FIG. 10: Comparison of the reconstructed cosmological parameters between the Cosmo-PINN and the NN with the same
+architecture, without the physical constraints in the loss function.
+PP, the U3 and the DD. Furthermore, the cosmological parametersH 0,Ω m0 andr drag, are treated as training
+variables, constrained by soft priors anchored near the Planck 2018 values. The framework is trained to reconstruct
+the Hubble functionH(z) from the cosmological data, while the Ω m (z) and thew DE (z) are recovered through the
+cosmological field equations embedded in the loss function. Smoothness penalties and physical boundary conditions
+are additionally imposed to ensure the lack of numerical artifacts in the reconstructed solution. Chebyshev polyno-
+mial expansions are introduced as basis for the reconstruction of theH(z) andw DE (z) functions providing flexible
+functional representations while avoiding overfitting and numerical oscillations.
+Furthermore, two main tests have been performed in order to study the stability and the robustness of the network.
+Specifically, we studied the reconstruction process by using different degrees of the Chebyshev polynomials. We found
+that betweenN= 3−8, the obtained results are consistent. Furthermore, in order to examine the stability of
+the network we trained the model with different sets of initial values for the cosmological parametersH 0,Ω m0 and
+rdrag. The reconstructed solutions are consistent across all runs and insensitive to the choice of initial conditions,
+demonstrating that the network is stable and that the training converges to a unique physical solution.
+For the reconstruction of the dark energy equation of state parameterw DE (z) we considered two scenarios. In the
+first,w DE (z) is allowed to cross the phantom-divide line, while in the second the quintessence boundw DE (z)≥ −1
+is imposed in the network as a physical constraint. In the first scenario thew DE (z) is found to be a monotonically
+decreasing function that crosses the phantom divide line at the redshiftz= 0.27−0.42. This behaviour is consistent
+with the CPL model forw 0wa <0. Furthermore, the Ω DE (z) reaches zero at higher redshifts which means that there
+is zero contribution of the dark energy fluid in the cosmological fluid in the matter dominated era.
+In the quintessence scenario the picture changes dramatically, where thew DE (z) is reconstructed to be a monoton-
+ically increasing function for three of the four data set combinations, and when the U3 supernova are employed the
+wDE (z) has the local minimum−1.The obtained values of the Ω m0 are systematically smaller than in the unbounded
+case, and the contribution of the quintessence field to the total cosmic fluid at high redshifts is found to be non-zero,
+revealing a unified mechanism in which the quintessence field mimics the matter component. This behaviour of the
+physical parameters is naturally described by the exponential potential, or by a hyperbolic potential when the U3
+SNIa data are employed. The explicit reconstruction of the scalar field potential, however, lies beyond the scope of
+the present work and will be addressed in a forthcoming study.
+Finally, we consider a NN with the same architecture, the same datasets, and the same smoothness penalties as
+Cosmo-PINN, but without imposing the cosmological field equations as hard constraints in the loss function. The
+purely data-driven reconstruction produced small oscillations in the Hubble function leading to numerical artifacts
+in the reconstructed physical parameters. Furthermore, the data was found to support a ghost scenario where the
+ΩDE (z) can have values Ω DE (z)<0 during the matter dominated era, which led to an ill-defined behaviour for the
+wDE (z) at the transition redshift. This comparison demonstrates the necessity of imposing the physical laws within
+the loss function for obtaining physically consistent solutions.
+The Cosmo-PINN provides a stable and physically consistent framework for the reconstruction of cosmological
+observables and of the underlying cosmological theory. In this study we applied the Cosmo-PINN architecture to the
+reconstruction of the dark energy equation of state parameterw DE (z), nevertheless, the framework is general and
+can be naturally extended to the reconstruction of free functions in scalar field cosmologies, in modified theories of
+gravity, and in interacting dark energy–dark matter scenarios, where the field equations admit an analogous PDE-
+
+15
+residual formulation. The Cosmo-PINN framework has been shown to extract physical information directly from the
+cosmological observations while remaining consistent with the underlying physical laws.
+Posterior uncertainties on the reconstructed functions are obtained via Hamiltonian Monte Carlo sampling, and the
+obtained confidence intervals derived. A systematic study of the sensitivity of the uncertainty quantification to the
+choice of sampler, prior, and network architecture will be performed elsewhere.
+Acknowledgments
+The author acknowledges the support from FONDECYT Grant 1240514.
+[1] A.G. Riess et al., Astron. J. 116, 1009 (1998)
+[2] M. Tegmark et al., Astrophys. J. 606, 702 (2004)
+[3] M. Kowalski et al., Astrophys. J. 686, 749 (2008)
+[4] E. Komatsu et al., Astrophys. J. Suppl. Ser. 180, 330 (2009)
+[5] N. Suzuki et al., Astrophys. J. 746, 85 (2012)
+[6] J. Yoo and Y. Watanabe, Int. J. Mod. Phys. D 21, 1230002 (2012)
+[7] G. Gutierrez, Nucl. Part. Phys. Proceedings, 267, 332 (2015)
+[8] E. Di Valentino et al., Atropharticle Physics 131, 102605 (2021)
+[9] S. Weinberg, Rev. Mod. Phys. 61, 1 (1989)
+[10] T. Padmanabhan, Phys. Rept. 380, 235 (2003)
+[11] L. Perivolaropoulos, (2008) arXiv.0811.4684
+[12] E. Di Valentino et al. [CosmoVerse Network], Phys. Dark Univ. 49, 101965 (2025)
+[13] V. Gorini, A. Kamenshchik and U. Moschella, Phys. Rev. D 67, 063509 (2003)
+[14] J. Valiviita, E. Majerotto, and R. Maartens, JCAP 07, 020 (2008)
+[15] B. Wang, E. Abdalla, F. Atrio-Barandela, and D. Pavon, Rept. Prog. Phys. 79, 096901 (2016)
+[16] A. Paliathanasis, Phys. Dark Univ. 52, 102306 (2026)
+[17] B. Ratra and P.J.E. Peebles, Phys. Rev. D 37, 3406 (1988)
+[18] P.J.E. Peebles and B. Ratra, Rev. Mod. Phys. 75, 559 (2003)
+[19] K.J. Ludwick, Mod. Phys. Lett. A 32, 28 (2017)
+[20] J.A. V´ azquez, D. Tamayo, G. Garcia-Arroyo, I. G´ omez-Vargas, I. Quiros, A.A. Sen, Phys. Rev. D 109, 023511 (2024)
+[21] A.J. Shajib and J.A. Frieman, Phys. Rev. D 112, 063508 (2025)
+[22] C. van de Bruck, G. Poulot and E.M. Teixeira, JCAP 07, 019 (2023)
+[23] A. Paliathanasis, T. Mengoni, G. Leon and O. Luongo, Constraints on Chiral-Quintom dark energy after DESI DR2 and
+impact on unifying dark energy with inflation, (2025) [arXiv:2512.00558]
+[24] C. Deffayet, X. Gao, D.A. Steer and G. Zahariade, Phys. Rev. D 84, 064039 (2011)
+[25] V. Faraoni, Cosmology in Scalar-Tensor Gravity, Springer Dordrecht (2004)
+[26] R. Kase and S. Tsujikawa, Int. J. Mod. Phys. D 28, 1942005 (2019)
+[27] H.A. Buchdahl, Mon. Not. Roy. Astron. Soc. 150, 1 (1970)
+[28] R. Ferraro and F. Fiorini, Phys. Rev. D 75, 084031 (2007)
+[29] L. Heisenberg, Physics Rept. 1066, 1 (2024)
+[30] T. Clifton, P.G. Ferreira, A. Padilla and C. Skordis, Phys. Rept. 513, 1 (2012)
+[31] S. Nojiri, S.D. Odintsov and V.K. Oikonomou, Phys.Rept. 692, 1 (2017)
+[32] A. Joyce, L. Lombriser and F. Schmidt, Annu. Rev. Nucl. Part. Sci. 66, 122 (2016)
+[33] J. Yoo and Y. Watanabe, Int. J. Mod. Phys. D 21, 1230002 (2012)
+[34] S. Nojiri, S.D. Odintsov and M. Sasaki, Phys. Rev. D 71, 123509 (2005)
+[35] E.N. Saridakis, Phys. Rev. D 102, 123525 (2020)
+[36] S. Basilakos, A. Lymperis, M. Petronikopoulou and E.N. Saridakis, Nucl. Phys. B 1015, 116904 (2025)
+[37] S. Sahlu, A. de la Cruz-Dombriz and A. Abebe, MNRAS 539, 690 (2025)
+[38] A. Paliathanasis, JHEAp 52, 100609 (2026)
+[39] A. Paliathanasis, Phys. Dark Univ. 52, 102337 (2026)
+[40] A. Shafiello, V. Sahni and A. Starobinsky, Annalen Phys. 19, 316 (2010)
+[41] W. Giare, M. Najadi, S. Pan, E. Di Valentino and J.T. Firouzjaee, JCAP 10, 035 (2024)
+[42] M. Chevaller and D. Polarski, Int. J. Mod. Phys. D 10, 213 (2001)
+[43] E.V. Linder, Phys. Rev. Lett. 90, 091301 (2003)
+[44] M. Rezaei, M. Malekjani, S. Basilakos, A. Mehrabi, and D. F. Mota, Astrophys. J. 843, 65 (2017)
+[45] L. Xing, J. Chen, Y. Gui, E. Schlegel and J. Lu, Mod. Phys. Lett. A 26, 885 (2011)
+
+16
+[46] E.M. Barboza Jr. and J.S. Alcaniz, Phys. Lett. B 666, 415 (2008)
+[47] N. Dimakis, A. Karagiorgos, A. Zampeli, A. Paliathanasis, T. Christodoulakis and Petros A. Terzis, Phys. Rev. D 93,
+123518 (2016)
+[48] E.V. Linder, Astropart. Phys. 25, 167 (2006)
+[49] A. Tripathi, A. Sangwan and H.K. Jassal, JCAP 06, 012 (2017)
+[50] L.A. Escamilla, S. Pan, E. Di Valentino, A. Paliathanasis and J.A. Vazquez, Phys. Rev. D 111, 2 (2025)
+[51] A. Paliathanasis, Phys. Dark Univ. 48, 101956 (2025)
+[52] A. Paliathanasis, M. Tsamparlis, S. Basilakos and J.D. Barrow, Phys. Rev. D 91, 123535 (2015)
+[53] A. Shafieloo, A.G. Kim and E.V Linder, Phys. Rev. 85, 123530 (2012)
+[54] M. Seikel, C. Clarkson and M. Smith, JCAP 06, 036 (2012)
+[55] T. Yang, Z.-K. Guo and R.-G. Cai, Phys. Rev. D 91, 123533 (2015)
+[56] M.-J. Zhang and J.-Q. Xia, JCAP 12, 005 (2016)
+[57] J.F. Jesus, R. Valentim, A.A. Escobal and S.H. Pereira, JCAP 04, 053 (2020)
+[58] M.K. Yennapureddy and F. Melia, EPJC 78, 258 (2018)
+[59] R.C. Bernado and J.L. Said, JCAP 09, 014 (2021)
+[60] Y.-F. Cai, M. Khurshudyan and E.N. Saridakis, Asrtroph. J. 888, 62 (2020)
+[61] X. Ren, S.-F. Yan, Y. Zhao, Y.-F. Cai and E.N. Saridakis, Astrophys. J. 932, 131 (2022)
+[62] Y. Mu, B. Chang and L. Xu, JCAP 09, 041 (2023)
+[63] D. Wang and X.-H. Meng, Phys. Rev. D 95, 023508 (2017)
+[64] S. Dhawan, J. Alsing and S. Vagnozzi, MNRAS 506, L1 (2021)
+[65] M.-J. Zhang and H. Li, EPJC 78, 460 (2018)
+[66] J.P. Johnson and H.K. Jassal, EPJC 85, 996 (2025)
+[67] R. El Ouardi, A. Bouali, A. Errahmani, R.E. Keely, A. Shafieloo and T. Ouali, (2026) [arXiv:2604.04056]
+[68] G.-J. Wang, X.-J. Ma, S.-Y. Li and J.-Q. Xia, ApJS 246, 13 (2020)
+[69] J.-C. Zhang, Y. Hu, K. Jiao, H.-F. Wang, Y.-B. Xie, B. Yu, L.-L. Zhao and T.-J. Zhang, ApJS 270, 23 (2024)
+[70] I. Gomez-Vargas, R. Medel-Esquivel, R. Gacia-Salcedo and J.A. Vazquez, EPJC 83, 304 (2023)
+[71] K.F. Dialektopoulos, P. Mukherjee, J.L. Said and J. Mifsud, EPJC 83, 956 (2023)
+[72] K.F. Dialektopoulos, P. Mukherjee, J.L. Said and J. Mifsud, Physics Dark Universe 43, 101383 (2024)
+[73] P. Mukherjee, M.G. Dainotti, K.F. Dialektopoulos, J.L. Said and J. Mifsud, JHEAp 49, 100439 (2026)
+[74] P. Mukherjee, K.F. Dialektopoulos, J.L. Said and J. Mifsud, JCAP 09, 060 (2024)
+[75] L.W. Goh, I. Ocampo, S. Nesseris and V. Pettorino, A&A 692, A101 (2024)
+[76] L. Thummel, B. Bose, A. Pourtsidou and L. Lombriser, MNRAS 535, 3141, (2024)
+[77] Q. Zhang, G.-J. Wang and J.-Q. Xia, ApJ 1002, 128 (2026)
+[78] H. Zhang, Y.-C. Wang, T.-J. Zhang and T. Zhang, APJs 266, 27 (2023)
+[79] Ruchika, P. Mukherjee and A. Favale, Revisiting Gaussian Process Reconstruction for Cosmological Inference: The
+Generalised GP (Gen GP) Framework (2025) [arXiv:2510.03742]
+[80] M. Raissi, P. Perdikaris and G.E. Karniadakis, J. Comput. Phys. 378, 686 (2019)
+[81] G.R. Liu, PINN with Python: An Introduction, Scientech Publisher, Mason, USA (2025)
+[82] A.T. Chantada, S.J. Landau, P. Protopapas, C.G. Sc´ occola and C. Garraffo, Phys. Rev. D 107, 063523 (2023)
+[83] M. Yarahmadi and A. Salehi, EPJC 85, 1301 (2025)
+[84] M. Yarahmadi and A. Salehi, JHEAp 50, 100498 (2026)
+[85] A. Verna, S. Sourav, P.K. Aluri and D.F. Mota (2025) [arXiv:2508.12032]
+[86] L. Gomez, A.T. Chantada, S.J. Landau, C.G. Sc´ occola and P. Protopapas, Phys. Rev. D 112, 063515 (2025)
+[87] Biao Chen, Jing Wang, Hairun Xie, Qineng Wang, Shuai Zhang, Yifan Xia, Jifa Zhang (2026) [arXiv:2602.01737]
+[88] Planck Collaboration: N. Aghanim et al., A&A 641, A6 (2020)
+[89] M. Moresco, R. Jimenez, L. Verde, A. Cimatti, and L. Pozzetti, Astrophys. J. 898, 82 (2020), [arXiv:2003.07362]
+[90] S. Vagnozzi, A. Loeb and M. Moresco, Asrophys. J. 908, 84 (2021)
+[91] M. Abdul Karim et al. (DESI), Phys. Rev. D 112, 083515 (2025), [arXiv:2503.14738]
+[92] M. Abdul Karim et al. (DESI), Phys. Rev. D 112, 083514 (2025), [arXiv:2503.14739]
+[93] D. Brout et al., The Astrophysical Journal 938, 110 (2022)
+[94] D. Rubin et al. (2023) [arXiv:2311.12098]
+[95] B. Popovic et al. (DES) (2025), [arXiv:2511.07517]
+[96] Z. Chen, V. Badrinarayanan, C.-Y. Lee and A. Rabinovich, GradNorm: Gradient Normalization for Adaptive Loss
+Balancing in Deep Multitask Networks, Proceedings of the 35th International Conference on Machine Learning 793
+(2018)
+[97] R.M. Neal, Handbook of Markov Chain Monte Carlo, Chapman and Hall, CRC (2011)
+[98] M.D. Hoffman and A. Gelman, J. Machine Learning 15, 1593 (2014)
+[99] D. Bertacca, S. Matarrese, M. Pietroni M., Mod. Phys. Lett. A, 22, 2893, (2007)
+[100] D. Bertacca, N. Bartolo and S. Matarrese, Advances in Astronomy 2010, 904379 (2010)
+[101] A. Arbey and J.-F. Coupechoux, JCAP 01, 033 (2021).
+[102] L. A. Urena-Lopez, T. Matos, Phys. Rev. D 62, 081302 (2000)
+[103] V. Sahni and A. Starobinsky, Int. J. Mod. Phys. D 9 373 (2000)
+[104] A. Paliathanasis, Open Astron. 35, 20250021 (2026)
+[105] E.J. Copeland, A.R. Liddle and D. Wands, Phys. Rev. D 57, 4866 (1998)
+
+17
+[106] C. Rubano and J. D. Barrow, Phys. Rev. D. 64, 127301 (2001)
+[107] A. Paliathanasis, M. Tsamparlis, S. Basilakos and J.D. Barrow, Phys. Rev. D 91, 123535 (2015)
+[108] Y. Akrami, G. Alestas and S. Nesseris, (2025) [arXiv:2504.04226]
+[109] B.R. Dinda, R. Maartens and S. Saito (2006) [arXiv:2605.13546]

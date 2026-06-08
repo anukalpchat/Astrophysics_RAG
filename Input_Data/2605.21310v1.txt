@@ -1,0 +1,1568 @@
+Title: Contrastive self-supervised convolutional autoencoder for core-collapse supernova gravitational-wave detection
+Authors: Tian-Yang Sun, Yue Niu, Chun-Yan Jiang, Shang-Jie Jin, Yong Yuan, Xin Zhang
+Published: 2026-05-20
+Categories: gr-qc, astro-ph.CO, astro-ph.IM, hep-ph
+
+Contrastive self-supervised convolutional autoencoder for core-collapse supernova
+gravitational-wave detection
+Tian-Yang Sun
+ ,1 Yue Niu
+ ,1 Chun-Yan Jiang
+ ,1 Shang-Jie Jin
+ ,1 Yong Yuan
+ ,2 and Xin Zhang
+ 1, 3, 4,∗
+1Liaoning Key Laboratory of Cosmology and Astrophysics & College of Sciences,
+Northeastern University, Shenyang 110819, China
+2Center for Gravitational Wave Experiment, National Microgravity Laboratory,
+Institute of Mechanics, Chinese Academy of Sciences, Beijing, China
+3Key Laboratory of Data Analytics and Optimization for Smart Industry (Ministry of Education),
+Northeastern University, Shenyang 110819, China
+4National Frontiers Science Center for Industrial Intelligence and Systems Optimization,
+Northeastern University, Shenyang 110819, China
+Gravitational-wave astronomy has opened a direct observational window onto compact-object dy-
+namics, strong-field gravity, and cosmology. Among the transient sources accessible through this
+window, core-collapse supernovae (CCSNe) are uniquely valuable because their signals can probe the
+engine of stellar collapse, proto-neutron-star dynamics, and explosion asymmetries, yet their weak,
+stochastic, and model-dependent waveforms remain difficult to detect. In this work, we develop
+a contrastive self-supervised convolutional autoencoder (CS-CAE) for CCSNe gravitational-wave
+signal detection. The method combines a convolutional autoencoder (CAE), a noise-centered latent
+regularizer, and a projection head trained with a contrastive objective. This design encourages inde-
+pendent noisy realizations of the same CCSNe signal to be mapped to nearby latent representations,
+thereby reducing the influence of random noise fluctuations. CS-CAE achieves performance compa-
+rable to a supervised convolutional neural network while clearly outperforming a conventional CAE
+baseline, and generalizes better to unseen numerical CCSNe waveform families. Under the Einstein
+Telescope (ET) detector configuration, the method achieves an effective sensitive distance of ap-
+proximately 120 kpc and shows improved separation of CCSNe signals from stationary noise and
+transient glitches in the low-false-alarm regime. These results highlight the potential of CS-CAE as
+a robust and less template-dependent framework for CCSNe gravitational-wave searches.
+I. INTRODUCTION
+The direct detection of gravitational waves (GWs)
+has opened a new observational window onto the dy-
+namical Universe, enabling tests of general relativity in
+the strong-field regime [1–6], independent constraints on
+compact-object populations, and new probes of cosmol-
+ogy and large-scale structure [7–9]. In particular, GW
+standard sirens provide calibration-independent distance
+measurements and can be combined with other probes
+to break cosmological parameter degeneracies and con-
+strain the late-time expansion history [10–24]. These
+GW-based applications are closely connected to broader
+efforts to constrain dark energy, neutrino physics, and
+other late-Universe probes [25–50]. The current ground-
+based detector network, including LIGO [51], Virgo [52],
+and KAGRA [53], has firmly established the detec-
+tion of compact-binary coalescences and has progres-
+sively improved its sensitivity across successive observ-
+ing runs [54]. Beyond these realized detections, next-
+generation ground-based observatories, such as ET [55,
+56] and Cosmic Explorer (CE) [57, 58], are expected to
+substantially enlarge the accessible source volume and
+improve the prospects for detecting weak or rare tran-
+sient sources [59, 60]. This expected expansion of the ob-
+servable transient population motivates detection meth-
+∗ Corresponding author; zhangxin@neu.edu.cn
+ods that are not limited to well-modeled, phase-coherent
+chirp signals [61–63]. Core-collapse supernovae (CCSNe)
+are a particularly important target in this context, be-
+cause their GW emission may be accompanied by elec-
+tromagnetic and neutrino counterparts and can provide
+a direct multimessenger view of stellar death [64–66].
+CCSNe arise from the gravitational collapse of mas-
+sive stellar cores and involve a sequence of strongly cou-
+pled physical processes, including core bounce, shock
+stalling and revival, turbulent convection, standing accre-
+tion shock instability (SASI), proto-neutron-star (PNS)
+oscillations, rotation, magnetic fields, and anisotropic
+neutrino emission [67]. Their GW signals can encode
+information that is largely inaccessible through electro-
+magnetic observations alone [68]. Direct detection of CC-
+SNe GWs would therefore constrain stellar evolution, nu-
+clear microphysics, nucleosynthesis conditions, neutron-
+star formation, and black-hole formation in a way that
+is complementary to optical, neutrino, and high-energy
+observations [69, 70]. The challenge is that the predicted
+CCSNe GW strain is weak and its morphology depends
+sensitively on progenitor mass, equation of state, rota-
+tion, numerical transport scheme, dimensionality, and
+viewing angle [67].
+Searches for CCSNe GWs have traditionally relied on
+minimally modeled burst strategies, including excess-
+power statistics, coherent network likelihoods, time-
+frequency clustering, and Bayesian wavelet reconstruc-
+tion [61, 71–87]. These methods underpin both all-sky
+arXiv:2605.21310v1  [gr-qc]  20 May 2026
+
+2
+short-duration burst searches and externally triggered
+searches for optically observed CCSNe in LIGO-Virgo-
+KAGRA data [62, 63, 66, 88, 89]. Matched filtering is
+optimal under stationary Gaussian noise when accurate
+templates are available [90], and recent work has explored
+theoretically informed template banks for CCSNe GW
+searches [91], but it remains challenging for CCSNe be-
+cause the relevant waveform family is broad, stochastic,
+and incompletely known. Even if phenomenological tem-
+plates are constructed to capture PNS frequency tracks
+or other dominant components, these templates cannot
+fully represent the broad waveform diversity arising from
+the strongly coupled physical processes involved in CC-
+SNe [92]. Unmodeled burst searches are more model-
+agnostic, but they may lose sensitivity in the low signal-
+to-noise-ratio (SNR) regime and can be affected by non-
+Gaussian transient artifacts, or glitches, that can resem-
+ble short astrophysical bursts [93–95]. These consider-
+ations have motivated the use of deep learning for fast
+detection statistics, representation learning, and classifi-
+cation in CCSNe GW data analysis [96–116].
+Deep learning has been explored broadly in GW, astro-
+nomical, and cosmological data analysis [117–138]. Many
+GW applications use supervised models, such as convo-
+lutional neural networks (CNN) trained on labeled sig-
+nal and noise samples [97–99, 139, 140]. These mod-
+els can learn nonlinear features from time-domain strain
+data or time-frequency representations and can provide
+fast detection statistics once trained [108]. However,
+their performance is tied to the labeled waveform bank
+and detector-noise model used during training [97, 141].
+This limitation is particularly important for CCSNe, be-
+cause reliable labels are obtained mainly from simulations
+and the predicted waveforms depend on progenitor struc-
+ture, equation of state, rotation, dimensionality, neutrino
+transport, and viewing angle [142–145]. A supervised
+classifier that performs well on one waveform family may
+therefore generalize poorly to waveforms generated under
+different physical or numerical assumptions.
+Autoencoder-based self-supervised learning offers a
+natural way to reduce the dependence of GW searches
+on labeled signal banks and precomputed templates [146,
+147]. A recent autoencoder-based framework shows
+that learned low-dimensional representations can pro-
+vide useful separation of compact-binary signals, detec-
+tor glitches, and unmodeled transients [148]. In par-
+allel, contrastive self-supervised learning has been ex-
+plored for GW signal identification by associating dif-
+ferent noisy or augmented views of the same underlying
+signal [149]. However, contrastive latent representation
+learning for CCSNe GW detection remains less explored.
+This is an important gap because CCSNe GW signals are
+stochastic, and strongly dependent on uncertain source
+physics, requiring representations that are robust to de-
+tector noise and transferable across waveform morpholo-
+gies.
+In this work, we develop a contrastive self-supervised
+convolutional autoencoder (CS-CAE) for CCSNe GW
+detection. The model extends a reconstruction-based
+convolutional autoencoder (CAE) by combining a re-
+construction loss, a noise-centered latent regulariza-
+tion term, and an InfoNCE-style contrastive objective.
+The contrastive pairs are constructed from independent
+detector-noise realizations of the same underlying CC-
+SNe waveform, so that the encoder is encouraged to learn
+signal-consistent representations that are less sensitive
+to incidental noise fluctuations. We compare CS-CAE
+with a supervised convolutional neural network and a
+CAE baseline on in-distribution simulated data, cross-
+distribution numerical CCSNe waveforms, and glitch-
+contaminated test samples. In particular, we assess
+whether contrastive self-supervised representation learn-
+ing can improve generalization across waveform families
+and robustness to glitches while maintaining competitive
+detection sensitivity.
+II. METHODS
+A. Data simulation and preprocessing
+We use a phenomenological CCSNe source model and
+an ET detector-noise model to construct the training
+data. The overall data-generation procedure follows the
+standard gravitational-wave injection pipeline: source-
+frame polarizations are projected into the detector chan-
+nels using antenna response functions, and the result-
+ing detector-frame strains are whitened using the target
+one-sided noise power spectral density. Each detector-
+frame sample is represented as a three-channel time se-
+ries corresponding to the ET interferometer channels
+{E1,E2,E3}[56, 60].
+The source-frame waveform contains two polarizations,
+h+(t) andh ×(t). For thek-th ET channel, the projected
+detector-frame strain can be written schematically as
+hk(t) =F +,k(α, δ, ψ, tgps)h+(t) +F ×,k(α, δ, ψ, tgps)h×(t),
+(1)
+whereF +,k andF ×,k are the detector antenna pattern
+functions, andα,δ,ψ, andt gps denote the right ascen-
+sion, declination, polarization angle, and GPS time, re-
+spectively [150]. During data generation, the sky loca-
+tion is sampled isotropically and the GPS time is ran-
+domized to vary the detector response. The detector
+response is computed using thePyCBCdetector mod-
+ule [151]. The waveform amplitude is scaled according
+to the inverse-distance dependence of gravitational-wave
+strain. When the waveform is expressed in the commonly
+used distance-scaledhDnormalization, the detector-
+frame strain is obtained by dividing by the source dis-
+tance [64, 68, 92].
+The phenomenological CCSNe source model used
+for the training set is designed to reproduce char-
+acteristic time-frequency features reported in multi-
+dimensional CCSNe simulations, rather than to per-
+form a full radiation-hydrodynamics simulation [68,
+
+3
+152–157]. In particular, the model includes compo-
+nents motivated by the rising high-frequency emission
+associated with proto-neutron-star (PNS) oscillations,
+low-frequency SASI/convection activity, rapid-rotation
+bounce-like emission, and broadband stochastic emission.
+The resulting waveform is written as
+h+,×(t) =h PNS
++,× (t) +h SASI
++,× (t) +h rot
++,×(t) +h stoch
++,× (t),(2)
+where the PNS component is parameterized by a time-
+dependent central frequency,
+fPNS(t) =f 0 + ˙f t+ 1
+2
+¨f t2.(3)
+This parameterization is used as a simplified representa-
+tion of the upward-drifting high-frequency emission com-
+monly observed in CCSNe simulations. Stochastic com-
+ponents are added around this central frequency track
+to emulate the broad and non-phase-coherent morphol-
+ogy of CCSNe GW emission. The simulated popula-
+tion therefore includes PNS-dominated stochastic emis-
+sion, broadband high-frequency components, SASI-like
+low-frequency emission when present, and possible rapid-
+rotation bounce-like bursts [82, 87, 157–159]. In the de-
+fault training configuration, the memory-like component
+is not included.
+Detector noise is generated as Gaussian noise consis-
+tent with the ET-D amplitude spectral density and inde-
+pendently sampled for the three ET channels. The data
+are whitened in the frequency domain using the corre-
+sponding one-sided noise power spectral density, follow-
+ing standard GW data-analysis practice [56, 160, 161].
+The frequency band used for noise generation, whiten-
+ing, and SNR evaluation is 10–2048 Hz. For a time series
+d(t) with Fourier transform ˜d(f), the whitened data are
+computed as
+˜dw(f) =
+˜d(f)q
+1
+2 fsSn(f)
+,(4)
+wheref s is the sampling rate andS n(f) is the one-sided
+noise power spectral density.
+B. Deep-learning model architectures
+We compare three neural-network architectures, as
+summarized in Fig. 1: a supervised CNN classifier, a
+reconstruction-based CAE baseline, and the proposed
+CS-CAE model. The three models share the same four-
+stage one-dimensional convolutional backbone for a fair
+comparison, but differ in their output heads, detection
+statistics, and training objectives.
+1. Convolutional neural network baseline
+The first baseline is a conventional supervised CNN
+classifier, shown in Fig. 1(A). The input is a three-
+channel whitened time seriesx∈R 3×N, and the network
+outputs two logits for the noise and signal classes. The
+convolutional backbone consists of four one-dimensional
+convolutional blocks with channel widths 32, 64, 128,
+and 256, kernel sizes 16, 8, 8, and 4, a stride of 2 in
+each block, and padding values of 7, 3, 3, and 1, respec-
+tively. Each block contains convolution, batch normal-
+ization, and ReLU activation, and the first three blocks
+are followed by max pooling with kernel size 2. An adap-
+tive average pooling layer maps the final feature map to a
+fixed-length vector, and the classification head consists of
+a linear layer with 128 hidden units, a ReLU activation,
+dropout with rate 0.2, and a final linear layer producing
+two class logits. The signal probability is obtained by
+applying a softmax function,
+ˆyi =P(y i = 1|x i) = exp(ℓi,1)P1
+c=0 exp(ℓi,c)
+, ℓ i =g sup(Eθ(xi)),
+(5)
+whereE θ denotes the CNN backbone,g sup is the super-
+vised classification head, andℓ i,1 denotes the logit of the
+signal class. The supervised baseline is trained with the
+cross-entropy loss,
+LCE =− 1
+B
+BX
+i=1
+log exp(ℓi,yi)P1
+c=0 exp(ℓi,c)
+,(6)
+whereℓ i,c is the logit of classcfor thei-th sample.
+2. Convolutional autoencoder baseline
+The second baseline is a reconstruction-based CAE,
+shown in Fig. 1(B). Its encoder uses the same four convo-
+lutional channel widths, kernel sizes, strides, and padding
+values as the CNN backbone, but does not include the
+max-pooling layers used in the supervised CNN classifier.
+After adaptive average pooling, a linear embedding layer
+maps the encoder output to a 128-dimensional normal-
+ized latent feature. The decoder upsamples the encoded
+feature map through four linear upsampling stages with
+scale factor 2, followed by one-dimensional convolutional
+layers with kernel size 7 and padding 3. The first three
+decoder blocks use channel widths 128, 64, and 32 with
+batch normalization and ReLU activation, and the final
+output block maps the feature map back to the original
+three channels. Its self-supervised objective is to recon-
+struct pure-noise inputs,
+ˆxi =D ϕ(Eθ(xi)),(7)
+with mean-squared reconstruction loss
+Lrec = 1
+B
+BX
+i=1
+∥xi −ˆxi∥2
+2 .(8)
+After training, the CAE is used directly as a
+reconstruction-based detector rather than being followed
+
+4
+(A) CNN baseline
+(B) CAE baseline
+(C) CS-CAE
+Input
+3 channels
+Conv block 1
+32 channels
+Conv block 2
+64 channels
+Conv block 3
+128 channels
+Conv block 4
+256 channels Global pooling Classification head Output
+Input
+3 channels
+Encoder block 1
+32 channels
+Encoder block 2
+64 channels
+Encoder block 3
+128 channels
+Encoder block 4
+256 channels Latent feature
+Encoder
+Decoder block 1
+128 channels
+Decoder block 2
+64 channels
+Decoder block 3
+32 channels
+Output block
+3 channelsOutput
+Decoder
+ 
+Projection head
+Decoder block 1
+128 channels
+Decoder block 2
+64 channels
+Decoder block 3
+32 channels
+Output block
+3 channelsOutput
+Encoder block 1
+32 channels
+Encoder block 2
+64 channels
+Encoder block 3
+128 channels
+Encoder block 4
+256 channels Latent feature
+Pure noise
+Input
+Encoder
+Decoder
+FIG. 1. Network architectures of the supervised CNN baseline, the CAE baseline, and the proposed CS-CAE. Panel (A) shows
+the CNN classifier, panel (B) shows the CAE baseline, and panel (C) shows the CS-CAE. Light blue blocks denote inputs, blue
+blocks denote convolutional or encoder blocks, green blocks denote pooled or latent features, yellow blocks denote classification
+or projection heads, pink blocks denote decoder blocks, and light red blocks denote outputs. In panel (C), the dashed box
+indicates the construction of two noisy views from the same CCSNe waveform and independent noise realizations.
+by an additional classification head. The detection statis-
+tic is the mean-squared reconstruction error,
+SCAE(x) = 1
+3N ∥x−D ϕ(Eθ(x))∥2
+2 .(9)
+The CAE baseline therefore isolates the behavior of
+a purely reconstruction-based self-supervised detector
+without the contrastive term introduced in the proposed
+model.
+3. Contrastive self-supervised convolutional autoencoder
+The proposed CS-CAE, shown in Fig. 1(C), uses the
+same encoder–decoder structure as the CAE baseline and
+further adds a projection head for contrastive learning.
+The projection head is a two-layer multilayer perceptron
+consisting of a linear layer from 128 to 128 dimensions,
+a ReLU activation, and a final linear layer from 128 to
+128 dimensions. The encoder first maps an input time
+series to a convolutional feature map and then to a 128-
+dimensional normalized embedding,
+zi = Wemb Pool(Eθ(xi))
+∥Wemb Pool(Eθ(xi))∥2
+.(10)
+The projection headq ψ mapsz i to a normalized con-
+trastive vector,
+pi = qψ(zi)
+∥qψ(zi)∥2
+.(11)
+For contrastive pretraining, the projected signal wave-
+forms i is combined with two independently sampled
+pure-noise realizations,n (a)
+i andn (b)
+i , to construct two
+noisy views,
+x(1)
+i =s i +n (a)
+i , x (2)
+i =s i +n (b)
+i .(12)
+These two views form a positive pair because they share
+the same underlying CCSNe waveform while differing in
+detector-noise realization. This construction follows the
+general contrastive-learning principle of bringing the rep-
+resentations of positive pairs closer together in represen-
+tation space, but adapts the positive-pair definition to
+CCSNe signal injections in independent detector-noise
+realizations [149, 162, 163].
+For a mini-batch containingBclean signals and two in-
+dependent noise realizations per signal, the positive pair
+is (p(1)
+i , p(2)
+i ), and the remaining 2B−2 views act as neg-
+atives. The contrastive loss is an InfoNCE-style cross-
+
+5
+entropy loss [162],
+Lcon =− 1
+2B
+2BX
+i=1
+log exp (sim(pi, pi+)/τ)P2B
+j=1, j̸=i exp (sim(pi, pj)/τ)
+,(13)
+wherei + is the paired view of the same signal, sim(a, b) =
+aTbfor normalized vectors, andτ= 0.1.
+A noise-center regularizer is also used to concentrate
+pure-noise embeddings around an exponential-moving-
+average noise centerc n [164],
+Lcen = 1
+B
+BX
+i=1
+znoise
+i −c n
+2
+2 .(14)
+In each mini-batch, the two pure-noise realizations are
+concatenated and used to compute the reconstruction
+loss and the noise-center regularization. The same clean
+signal combined with the two independent noise realiza-
+tions forms a positive pair for the contrastive loss. The
+total training objective is
+L=λ recLrec +λ cenLcen +λ conLcon.(15)
+In this work,λ rec = 1.0,λ cen = 0.1, andλ con = 1.0,
+according to the overall validation performance. After
+training, CS-CAE is used without an additional classifi-
+cation head. Its detection statistic combines the distance
+to the learned noise center and the reconstruction error,
+SCS-CAE(x) =∥z(x)−c n∥2+β rec
+1
+3N ∥x−D ϕ(Eθ(x))∥2
+2 ,
+(16)
+withβ rec = 0.5.
+C. Experimental setup
+At each training epoch, 10 4 projected CCSNe signal
+samples and two independent sets of 104 pure-noise sam-
+ples are generated. For the supervised CNN, the first
+noise set is added to the CCSNe signals to construct 10 4
+noisy signal samples, while the second noise set provides
+104 pure-noise samples. For the CAE and CS-CAE, the
+two noise sets serve as independent noise realizations,
+and noisy CCSNe views are constructed during train-
+ing as needed. The sampling rate is 4096 Hz, the full
+detector-frame data segment has a duration of 1.5 s, and
+the intrinsic CCSNe waveform duration is 1 s. The injec-
+tion start time is randomized in the interval [0.2,0.3] s.
+The source distance is sampled from a log-uniform prior
+over [1,200] kpc, and signal samples with network SNR
+below 8 are rejected. For the test sets containing CC-
+SNe injections, signal samples with network SNR below
+5 are rejected. In the training data generated at each
+epoch, the generated signal set consists of whitened pro-
+jected CCSNe waveforms before noise addition, while the
+two noise sets consist of independent pure detector-noise
+realizations.
+To evaluate generalization beyond the phenomenologi-
+cal waveform distribution used for training, we construct
+a cross-distribution test set from independent numeri-
+cal CCSNe waveform catalogs. Specifically, we use the
+waveform families summarized in Table I of Ref. [114].
+The selected catalogs include rotational and neutrino-
+driven CCSNe waveforms from multiple simulation stud-
+ies [68, 145, 155, 165–170][171]. These catalogs cover
+progenitor masses from 9M ⊙ to 60M ⊙ and contain
+waveform morphologies that are not generated by the
+phenomenological source model used for training.
+We also construct a glitch-contaminated test set as
+a generic stress test of robustness against non-Gaussian
+transient noise. The glitch waveforms are simulated with
+gengli, a generative package designed to produce blip-
+like transient noise artifacts in gravitational-wave de-
+tectors [172, 173]. The glitch injections have SNRs in
+the range 8–30, with parametersα= 0.2 andf high =
+250.0 Hz. The glitch-contaminated test set contains pure-
+noise samples and noise-plus-glitch samples. The noise-
+plus-glitch samples are used to quantify the rate at which
+transient instrumental artifacts are misidentified as CC-
+SNe signals and to examine whether the learned latent
+representations separate CCSNe waveforms from glitch-
+dominated backgrounds.
+Table I summarizes the datasets used in this work.
+Here, Test I denotes the in-distribution test set, Test
+II denotes the cross-distribution numerical-waveform test
+set, and Test III denotes the glitch-robustness test set.
+All neural-network models are implemented in Py-
+Torch [174] and are trained and evaluated under the same
+preprocessing and metric definitions. The CNN is trained
+with the cross-entropy loss, while the CAE and CS-CAE
+are trained with the self-supervised objectives described
+above. The models are optimized with AdamW [175] us-
+ing a learning rate of 10 −3, weight decay of 10 −4, batch
+size of 512, and 100 training epochs. We use the PyTorch
+ReduceLROnPlateaulearning-rate scheduler, monitoring
+the validation loss, with reduction factor 0.5 and patience
+5. The training/validation split is 80%/20%.
+The detection performance is primarily evaluated using
+the receiver operating characteristic (ROC) curve and
+the corresponding area under the curve (AUC). For each
+model, a scalar detection statistic is assigned to every
+input sample. For the supervised CNN, this statistic is
+the signal probability, while for the CAE and CS-CAE
+it is the corresponding anomaly score defined above. By
+fixing a thresholdS ∗, samples withS > S ∗ are classified
+as CCSNe signal candidates, whereas samples withS <
+S∗ are classified as noise.
+From the entries of the confusion matrix, we define
+the detection efficiency, which is equivalent to the true
+positive rate (TPR), as
+TPR = TP
+TP + FN,(17)
+
+6
+TABLE I. Summary of the datasets used for training and evaluation.
+Dataset Purpose Composition
+Training Model training Phenomenological CCSNe injections
+Test I In-distribution evaluation Independent phenomenological CCSNe injections
+Test II Cross-distribution evaluation Numerical CCSNe waveform injections from independent catalogs
+Test III Glitch robustness evaluationGengli-simulated noise-plus-glitch samples
+and the false positive rate (FPR) as
+FPR = FP
+TN + FP,(18)
+where TP, FN, FP, and TN denote true positives, false
+negatives, false positives, and true negatives, respec-
+tively. The ROC curve is then obtained by varying
+the thresholdS ∗ and plotting the detection efficiencyµ
+against the false positive rate, FPR.
+III. RESUL TS
+A. Detection performance
+We first evaluate the detection performance of the
+three models using ROC curves under two complemen-
+tary test scenarios. The first scenario adopts an in-
+distribution simulated test set generated according to the
+same data-generation prescription as the training sam-
+ples. This setting evaluates the detection performance
+of each model on test data drawn from the same distri-
+bution as the training set. The second scenario employs
+numerical CCSNe waveforms that are not generated by
+the training simulation prescription, thereby providing a
+more stringent assessment of cross-waveform and cross-
+simulation generalization.
+Figure 2 presents the ROC curves obtained on the
+in-distribution simulated test set. In this matched set-
+ting, the supervised CNN achieves the highest area un-
+der the curve, with AUC = 0.9838, followed by the pro-
+posed CS-CAE with AUC = 0.9759 and the CAE with
+AUC = 0.9161. The superior performance of the super-
+vised CNN is expected, because its discriminative deci-
+sion boundary is directly optimized using binary labels
+drawn from the same simulation prescription as the test
+set. The more relevant observation is that CS-CAE sub-
+stantially improves upon the conventional self-supervised
+CAE baseline and achieves performance comparable to
+that of the supervised CNN, despite not relying on the
+same fully supervised discriminative objective. This indi-
+cates that the contrastive learning constraint effectively
+enhances the signal-sensitive representation learned by
+the autoencoder, enabling the self-supervised framework
+to approach the detection capability of a label-trained
+CNN in the matched in-distribution setting.
+10 4
+ 10 3
+ 10 2
+ 10 1
+ 100
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0TPR
+CNN (AUC = 0.9838)
+CAE (AUC = 0.9161)
+CS-CAE (AUC = 0.9759)
+Random
+FIG. 2. ROC curves on the in-distribution simulated test set
+generated with the same prescription as the training data.
+The blue, orange, and green solid curves correspond to the
+CNN, CAE, and CS-CAE, respectively. The gray dashed di-
+agonal line denotes random classification, and the legend lists
+the AUC value for each model.
+A different performance hierarchy is observed when the
+models are evaluated on the numerical CCSNe waveform
+test set. As shown in Fig. 3, CS-CAE achieves the high-
+est AUC, AUC = 0.9951, compared with AUC = 0.9926
+for the supervised CNN and AUC = 0.9787 for the CAE.
+Although the absolute difference between CS-CAE and
+the CNN is modest, the reversal in ranking is noteworthy.
+It suggests that the representation learned through con-
+trastive self-supervision transfers more effectively when
+the CCSNe waveform morphology differs from that of
+the phenomenological simulations used during training.
+In this sense, the supervised CNN performs slightly bet-
+ter under the in-distribution evaluation, whereas CS-
+CAE exhibits stronger robustness under the numerical-
+waveform evaluation.
+This behavior can be understood from the nature of
+the contrastive objective. During training, CS-CAE con-
+structs positive pairs from independent noise realizations
+of the same underlying waveform. This encourages the
+encoder to retain features that are invariant to detector-
+noise fluctuations rather than features specific to the
+
+7
+10 4
+ 10 3
+ 10 2
+ 10 1
+ 100
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0TPR
+CNN (AUC = 0.9926)
+CAE (AUC = 0.9787)
+CS-CAE (AUC = 0.9951)
+Random
+FIG. 3. ROC curves on the numerical CCSNe waveform test
+set. The blue, orange, and green solid curves correspond to
+the CNN, CAE, and CS-CAE, respectively. The gray dashed
+diagonal line denotes random classification, and the legend
+lists the AUC value for each model.
+phenomenological waveform morphology. As a result,
+the learned representations capture more general sig-
+nal characteristics, such as multi-channel coherence and
+time-frequency structure, that are shared across differ-
+ent CCSNe waveform families. In contrast, the super-
+vised CNN is trained with binary labels derived from
+the phenomenological simulation prescription, so its de-
+cision boundary is more tightly coupled to the morpho-
+logical features of that specific waveform family. This
+distributional coupling explains why the supervised CNN
+achieves higher AUC on the in-distribution test set but
+is surpassed by CS-CAE on the numerical waveform test
+set.
+Taken together with the in-distribution results, this
+comparison shows that the proposed CS-CAE does not
+merely optimize detection performance under a single
+matched distribution. Instead, it retains sensitivity com-
+parable to the supervised CNN in the matched test set-
+ting while achieving improved transfer performance on
+the numerical CCSNe waveform set. This behavior is
+particularly relevant for CCSNe GW searches, where the
+true astrophysical waveform family is uncertain and can-
+not be exhaustively represented by a single simulation
+prescription.
+B. Distance-dependent sensitivity
+Figure 4 shows the detection efficiency as a function
+of source distance. Compared with a single global AUC
+value, the distance-dependent efficiency provides a more
+physically interpretable measure of sensitivity, because
+the observed CCSNe GW strain amplitude decreases with
+101 102 103
+Distance (kpc)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Detection efficiency / TPR
+Supervised
+Self-supervised
+Self-supervised + contrastive
+FIG. 4. Detection efficiency as a function of source distance.
+The vertical axis gives the true positive rate at the adopted
+operating threshold, and the horizontal axis gives the source
+distance in kpc on a logarithmic scale. The blue, orange,
+and green curves correspond to the supervised CNN, the self-
+supervised CAE, and the self-supervised contrastive CS-CAE,
+respectively.
+increasing distance. As expected, the detection efficiency
+decreases as the injected source distance increases. Un-
+der the adopted operating threshold, the characteristic
+distance corresponding to approximately 50% detection
+efficiency is about 120 kpc for the proposed CS-CAE
+method.
+At small distances, where the injected CCSNe signals
+have relatively high SNR, all three models recover a large
+fraction of the signals. The differences among the mod-
+els become more informative near the transition region,
+where the signal amplitude becomes comparable to the
+background noise fluctuations. In this regime, CS-CAE
+maintains the highest detection efficiency over most of
+the tested distance range. This improvement suggests
+that the contrastive objective encourages the encoder to
+preserve waveform components that remain stable under
+independent noise realizations, thereby improving the ef-
+fective detection range. Overall, the distance-dependent
+analysis shows that CS-CAE retains higher efficiency
+than both the supervised CNN and the conventional CAE
+over most of the tested distance range.
+Figure 5 further compares the ROC curves at repre-
+sentative source distances of 10 kpc, 100 kpc, and 500 kpc.
+This comparison is particularly relevant for practical GW
+transient searches, because the low-false-positive-rate re-
+gion of the ROC curve corresponds to the low-false-
+alarm regime required in observational analyses. A model
+with a high global AUC may still be suboptimal for real
+searches if its sensitivity degrades substantially after im-
+posing a strict false-alarm constraint.
+At 10 kpc, the injected signals are strong, and all three
+models achieve high detection performance. At 100 kpc,
+the separation among the models becomes more pro-
+nounced, with CS-CAE showing its clearest advantage in
+
+8
+10 4
+ 10 3
+ 10 2
+ 10 1
+ 100
+FPR
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0TPR
+CNN CAE CS-CAE
+10 kpc 100 kpc 500 kpc
+FIG. 5. ROC curves at representative source distances of
+10 kpc, 100 kpc, and 500 kpc. Blue, orange, and green curves
+correspond to the CNN, CAE, and CS-CAE, respectively.
+Solid, dashed, and dotted line styles denote source distances
+of 10 kpc, 100 kpc, and 500 kpc, respectively.
+the low-FPR region. At 500 kpc, which lies beyond the
+training-distance range, the overall true-positive rates are
+lower because of the weaker signals. Nevertheless, CS-
+CAE still retains a relative advantage in the low-FPR
+region. Therefore, the primary advantage of CS-CAE is
+not simply a marginal improvement in a global metric,
+but its ability to better preserve detection efficiency in
+the low-false-alarm regime where a realistic CCSNe GW
+search would operate.
+C. Detection statistics
+Figure 6 compares the detection-statistic distributions
+for pure-noise samples and CCSNe injections. The de-
+tection statistics should be interpreted differently for the
+supervised and self-supervised models. For the super-
+vised CNN, the statistic corresponds to a discriminative
+classification score optimized directly using binary labels,
+whereas for the CAE and CS-CAE, the statistics are de-
+rived from reconstruction behavior.
+The pure-noise distributions are approximately
+Gaussian-like, consistent with the Gaussian background-
+noise setting adopted in the simulations. The CCSNe
+distributions are more sparsely populated toward larger
+statistic values, which is consistent with the log-uniform
+distance sampling of the test set and the resulting larger
+fraction of low-SNR injections. Compared with the con-
+ventional CAE baseline, the CS-CAE signal distribution
+is shifted more clearly toward larger statistic values,
+yielding better separation from the noise distribution.
+The learned feature representations are visualized
+using uniform manifold approximation and projection
+(UMAP) [176] in Fig. 7. The supervised CNN repre-
+sentation shows substantial overlap among pure noise,
+glitch-contaminated samples, and CCSNe signals, indi-
+cating that the label-trained classifier does not form a
+clean separation among these different inputs. The CAE
+representation improves the separation, but the CCSNe
+samples are still relatively extended and partially con-
+nected with background-like samples. In contrast, CS-
+CAE gives a clearer organization of the latent space.
+The CCSNe samples form a compact structure, while the
+glitch-contaminated samples are separated into several
+isolated clusters.
+The separated glitch clusters have a direct physical in-
+terpretation. In the glitch-contaminated test set, a glitch
+is injected into one detector channel at a time. There-
+fore, the different glitch clusters in the UMAP space
+correspond to glitches appearing in different ET chan-
+nels. This indicates that the learned representation does
+not treat glitches as coherent CCSNe-like signals. In-
+stead, CS-CAE preserves information about the channel-
+localized nature of the transient. Thus, the UMAP re-
+sult suggests that glitch candidates can be identified
+as channel-localized artifacts rather than multi-channel
+CCSNe-like events.
+Figure 8 presents an example of the channel-wise CS-
+CAE response in the three ET channels. The upper pan-
+els show the whitened strain data, and the lower pan-
+els show the corresponding reconstruction-error response.
+This plot gives a more direct explanation of the glitch
+behavior observed in the UMAP space. The glitch-like
+transient produces a large reconstruction-error peak only
+in the affected ET channel, while the other channels do
+not show a consistent excess at the same time. Therefore,
+although the glitch is anomalous, it is a single-channel
+anomaly.
+This behavior is different from the expected response of
+a genuine CCSNe GW signal. After projection onto the
+ET detector channels, a CCSNe signal should leave cor-
+related responses across multiple channels. The channel-
+wise reconstruction-error pattern therefore provides a
+simple way to reject this type of glitch: an anomalous
+event dominated by only one channel can be removed
+as a glitch-like artifact, whereas an event with corre-
+lated responses in multiple ET channels is retained as a
+CCSNe-like candidate. This explains why the glitch sam-
+ples can be excluded by channel-consistency information
+even though they may also produce large anomaly values.
+IV. CONCLUSION
+In this work, we proposed a CS-CAE for the detec-
+tion of CCSNe gravitational-wave signals in simulated
+ET data. The method combines a reconstruction-based
+detection statistic with a contrastive learning objective.
+By constructing positive pairs from independent noisy
+views of the same underlying CCSNe waveform, CS-CAE
+
+9
+0.0 0.2 0.4 0.6 0.8 1.0
+Detection statistic
+0
+5
+10
+15
+20
+25
+30
+35
+40Density
+CNN
+T0 noise
+10 kpc CCSN
+threshold
+0 20 40 60 80 100 120 140
+Detection statistic
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5Density
+CAE
+T0 noise
+10 kpc CCSN
+threshold
+0 20 40 60 80 100 120 140 160
+Detection statistic
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5Density
+CS-CAE
+T0 noise
+10 kpc CCSN
+threshold
+0.00 0.05 0.10 0.15 0.20
+0
+10
+20
+30
+40
+0.38 0.40 0.42 0.44
+0
+20
+40
+60
+1.34 1.36 1.38
+0
+20
+40
+60
+80
+FIG. 6. Detection-statistic distributions for the CNN, CAE, and CS-CAE. The left, middle, and right panels correspond to
+the CNN, CAE, and CS-CAE, respectively. Gray distributions denote pure-noise samples, colored distributions denote 10 kpc
+CCSNe samples, and black dashed vertical lines indicate the adopted decision thresholds. The inset in each panel shows an
+enlarged view of the threshold region.
+5
+ 0 5 10 15
+5
+0
+5
+10
+15
+CNN
+T0 noise
+T2 glitch+noise
+10 kpc CCSN
+4
+ 2
+ 0 2 4 6 8
+2
+0
+2
+4
+6
+8
+CAE
+T0 noise
+T2 glitch+noise
+10 kpc CCSN
+5
+ 0 5 10 15
+5.0
+2.5
+0.0
+2.5
+5.0
+7.5
+10.0
+12.5
+CS-CAE
+T0 noise
+T2 glitch+noise
+10 kpc CCSN
+FIG. 7. UMAP visualizations of learned representations for pure noise, glitch-plus-noise, and 10 kpc CCSNe samples. The left,
+middle, and right panels correspond to the CNN, CAE, and CS-CAE, respectively. Gray, brown, and blue points denote pure
+noise, glitch-plus-noise, and 10 kpc CCSNe samples, respectively.
+encourages the encoder to learn signal-consistent repre-
+sentations that are less sensitive to incidental detector-
+noise fluctuations.
+The experimental results show that CS-CAE pro-
+vides a favorable trade-off between in-distribution sen-
+sitivity and cross-waveform generalization. On the in-
+distribution simulated test set, the supervised CNN
+achieves the highest AUC, while CS-CAE remains close
+to the supervised CNN and clearly outperforms the con-
+ventional CAE. On the numerical CCSNe waveform test
+set, CS-CAE achieves the best AUC among the three
+models. We attribute this improved generalization to
+the noise-realization contrastive objective, which encour-
+ages the encoder to learn waveform features that are in-
+variant to detector-noise fluctuations rather than features
+specific to the phenomenological simulation prescription
+used during training. Because the positive pairs are
+constructed from independent noisy realizations of the
+same signal without using waveform-family labels, the
+learned representations are less coupled to the particular
+waveform family seen during training and transfer more
+readily to numerical waveforms generated under differ-
+ent physical and numerical assumptions. This property
+is particularly important for CCSNe GW searches, where
+the true signal family is uncertain and cannot be fully
+represented by a single phenomenological simulation pre-
+scription.
+The distance-dependent analysis further demonstrates
+that CS-CAE maintains higher detection efficiency over
+most of the tested distance range, with a characteris-
+tic 50% detection-efficiency distance of approximately
+120 kpc under the adopted operating threshold. The
+fixed-distance ROC curves show that the main advantage
+of CS-CAE appears in the low-FPR region, correspond-
+ing to the low-false-alarm regime required for practical
+GW transient searches. At the largest tested distance of
+500 kpc, although the absolute detection performance is
+reduced by the weaker signals, CS-CAE still preserves a
+relative advantage in the low-FPR region.
+The detection-statistic distributions, UMAP visualiza-
+tions, and channel-wise response examples provide addi-
+tional insight into the learned behavior of the models.
+The supervised CNN output is a label-trained discrim-
+inative score, whereas the CAE and CS-CAE statistics
+are reconstruction-based and are therefore more natu-
+rally related to deviations from a learned noise recon-
+struction model. Among the three models, CS-CAE
+yields the clearest latent-space organization. In par-
+
+10
+20
+10
+0
+10
+20
+Strain
+ET 1 ET 2 ET 3
+0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+Time (s)
+0
+20
+40
+60
+80
+100MSE
+0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+Time (s)
+0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+Time (s)
+FIG. 8. Example channel-wise CS-CAE response in the three ET channels. The left, middle, and right columns correspond to
+ET 1, ET 2, and ET 3, respectively. The upper panels show the whitened strain time series, and the lower panels show the
+corresponding mean-squared-error (MSE) reconstruction response. The glitch-like transient produces a localized excess mainly
+in one channel, while a CCSNe-like signal is expected to produce correlated responses across multiple channels. Black dashed
+vertical lines mark the reference transient times shown in each channel.
+ticular, the glitch-contaminated samples form separated
+clusters associated with glitches in different ET chan-
+nels, while the CCSNe samples form a compact signal-
+like structure. The channel-wise reconstruction-error ex-
+ample further shows that the glitch response is mainly
+a single-channel anomaly. Therefore, such glitches can
+in principle be rejected by a channel-consistency check,
+while multi-channel correlated responses can be retained
+as CCSNe-like candidates.
+The results demonstrate that contrastive self-
+supervised representation learning provides an effec-
+tive strategy for improving the robustness and transfer-
+ability of CCSNe GW detection models. By combin-
+ing reconstruction-based anomaly sensitivity with con-
+trastive constraints on signal-consistent latent represen-
+tations, CS-CAE achieves competitive in-distribution
+performance, improved generalization to numerical CC-
+SNe waveforms, enhanced sensitivity in the low-FPR
+regime, and clearer diagnostic separation between multi-
+channel CCSNe-like responses and single-channel glitch-
+like artifacts. These properties are particularly valuable
+for CCSNe searches, where the signal morphology is un-
+certain, the available waveform catalogs remain incom-
+plete, and fully supervised models may overfit to the
+adopted simulation prescription. Several limitations nev-
+ertheless remain. To maintain a controlled architectural
+comparison with the supervised CNN and the CAE base-
+line, the self-supervised models in this work are also im-
+plemented with convolutional networks. Future work
+will extend the present framework to long short-term
+memory-based self-supervised architectures, motivated
+by their strong performance in related sequence-modeling
+and gravitational-wave anomaly-detection studies [108,
+147, 148]. The present CS-CAE processes the three ET
+channels jointly and does not explicitly enforce cross-
+channel coherence, which may limit its rejection of glitch
+morphologies that partially resemble weak CCSNe sig-
+nals. Future work will incorporate detector-wise fea-
+ture extraction, cross-channel coherence constraints, and
+glitch-aware contrastive training to further improve ro-
+bustness against instrumental transients. Taken to-
+gether, these results highlight the potential of contrastive
+self-supervised learning to enable more robust, transfer-
+able, and less template-dependent CCSNe gravitational-
+wave searches with next-generation detectors.
+ACKNOWLEDGEMENTS
+This work was supported by the National Natural
+Science Foundation of China (Grants Nos. 12473001,
+12575049, and 12533001), the National SKA Pro-
+gram of China (Grants Nos. 2022SKA0110200 and
+2022SKA0110203), the China Manned Space Program
+(Grant No. CMS-CSST-2025-A02), and the 111 Project
+(Grant No. B16009).
+DA T A A V AILABILITY
+The data supporting the results of this article will be
+made publicly available in an online repository upon pub-
+lication.
+[1] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev.
+Lett.116, 061102 (2016), arXiv:1602.03837 [gr-qc].
+[2] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev.
+Lett.116, 221101 (2016), [Erratum: Phys.Rev.Lett.
+
+11
+121, 129902 (2018)], arXiv:1602.03841 [gr-qc].
+[3] J. M. Ezquiaga and M. Zumalac´ arregui, Phys. Rev.
+Lett.119, 251304 (2017), arXiv:1710.05901 [astro-
+ph.CO].
+[4] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev.
+D100, 104036 (2019), arXiv:1903.04467 [gr-qc].
+[5] C. Gong, T. Zhu, R. Niu, Q. Wu, J.-L. Cui, X. Zhang,
+W. Zhao, and A. Wang, Phys. Rev. D105, 044034
+(2022), arXiv:2112.06446 [gr-qc].
+[6] R. Abbottet al.(LIGO Scientific, VIRGO, KAGRA),
+Phys. Rev. D112, 084080 (2025), arXiv:2112.06861 [gr-
+qc].
+[7] B. P. Abbottet al.(LIGO Scientific, Virgo, 1M2H, Dark
+Energy Camera GW-E, DES, DLT40, Las Cumbres
+Observatory, VINROUGE, MASTER), Nature551, 85
+(2017), arXiv:1710.05835 [astro-ph.CO].
+[8] M. Soares-Santoset al.(DES, LIGO Scientific, Virgo),
+Astrophys. J. Lett.876, L7 (2019), arXiv:1901.01540
+[astro-ph.CO].
+[9] R. Abbottet al.(KAGRA, VIRGO, LIGO Scientific),
+Phys. Rev. X13, 011048 (2023), arXiv:2111.03634
+[astro-ph.HE].
+[10] D. E. Holz and S. A. Hughes, Astrophys. J.629, 15
+(2005), arXiv:astro-ph/0504616.
+[11] S. R. Taylor and J. R. Gair, Phys. Rev. D86, 023502
+(2012), arXiv:1204.6739 [astro-ph.CO].
+[12] H.-Y. Chen, M. Fishbach, and D. E. Holz, Nature562,
+545 (2018), arXiv:1712.06531 [astro-ph.CO].
+[13] L.-F. Wang, Z.-W. Zhao, J.-F. Zhang, and X. Zhang,
+JCAP11, 012 (2020), arXiv:1907.01838 [astro-ph.CO].
+[14] R. Grayet al., Phys. Rev. D101, 122001 (2020),
+arXiv:1908.06050 [gr-qc].
+[15] Z.-Q. You, X.-J. Zhu, G. Ashton, E. Thrane, and Z.-H.
+Zhu, Astrophys. J.908, 215 (2021), arXiv:2004.00036
+[astro-ph.CO].
+[16] T. Yang, JCAP05, 044 (2021), arXiv:2103.01923 [astro-
+ph.CO].
+[17] S.-J. Jin, L.-F. Wang, P.-J. Wu, J.-F. Zhang,
+and X. Zhang, Phys. Rev. D104, 103507 (2021),
+arXiv:2106.01859 [astro-ph.CO].
+[18] S.-J. Jin, T.-N. Li, J.-F. Zhang, and X. Zhang, JCAP
+08, 070 (2023), arXiv:2202.11882 [gr-qc].
+[19] J. R. Gairet al., Astron. J.166, 22 (2023),
+arXiv:2212.08694 [gr-qc].
+[20] J.-Y. Song, L.-F. Wang, Y. Li, Z.-W. Zhao, J.-F. Zhang,
+W. Zhao, and X. Zhang, Sci. China Phys. Mech. Astron.
+67, 230411 (2024), arXiv:2212.00531 [astro-ph.CO].
+[21] S.-J. Jin, Y.-Z. Zhang, J.-Y. Song, J.-F. Zhang, and
+X. Zhang, Sci. China Phys. Mech. Astron.67, 220412
+(2024), arXiv:2305.19714 [astro-ph.CO].
+[22] R. Grayet al., JCAP12, 023 (2023), arXiv:2308.02281
+[astro-ph.CO].
+[23] Q.-H. Zhu, Z.-C. Zhao, S. Wang, and X. Zhang, Chin.
+Phys. C48, 125105 (2024), arXiv:2307.13574 [astro-
+ph.CO].
+[24] S.-J. Jin, J.-Y. Song, T.-Y. Sun, S.-R. Xiao,
+H. Wang, L.-F. Wang, J.-F. Zhang, and X. Zhang,
+Sci. China Phys. Mech. Astron.69, 220401 (2026),
+arXiv:2507.12965 [astro-ph.CO].
+[25] Y.-Z. Ma and X. Zhang, Phys. Lett. B661, 239 (2008),
+arXiv:0709.1517 [astro-ph].
+[26] E. Komatsuet al.(WMAP), Astrophys. J. Suppl.180,
+330 (2009), arXiv:0803.0547 [astro-ph].
+[27] J.-L. Cui, L. Zhang, J.-F. Zhang, and X. Zhang, Chin.
+Phys. B19, 019802 (2010), arXiv:0902.0716 [astro-
+ph.CO].
+[28] T.-F. Fu, J.-F. Zhang, J.-Q. Chen, and X. Zhang,
+Eur. Phys. J. C72, 1932 (2012), arXiv:1112.2350 [astro-
+ph.CO].
+[29] J. Lesgourgues and S. Pastor, Adv. High Energy Phys.
+2012, 608515 (2012), arXiv:1212.6154 [hep-ph].
+[30] M. Wyman, D. H. Rudd, R. A. Vanderveld, and W. Hu,
+Phys. Rev. Lett.112, 051302 (2014), arXiv:1307.7715
+[astro-ph.CO].
+[31] J.-F. Zhang, J.-J. Geng, and X. Zhang, JCAP10, 044
+(2014), arXiv:1408.0481 [astro-ph.CO].
+[32] J. Lesgourgues and S. Pastor, New J. Phys.16, 065002
+(2014), arXiv:1404.1740 [hep-ph].
+[33] P. A. R. Adeet al.(Planck), Astron. Astrophys.594,
+A13 (2016), arXiv:1502.01589 [astro-ph.CO].
+[34] L. Feng, J.-F. Zhang, and X. Zhang, Eur. Phys. J. C
+77, 418 (2017), arXiv:1703.04884 [astro-ph.CO].
+[35] S. Vagnozzi, E. Giusarma, O. Mena, K. Freese,
+M. Gerbino, S. Ho, and M. Lattanzi, Phys. Rev. D
+96, 123503 (2017), arXiv:1701.08172 [astro-ph.CO].
+[36] L. Feng, J.-F. Zhang, and X. Zhang, Phys. Dark Univ.
+23, 100261 (2019), arXiv:1712.03148 [astro-ph.CO].
+[37] N. Aghanimet al.(Planck), Astron. Astrophys.641, A6
+(2020), [Erratum: Astron.Astrophys. 652, C4 (2021)],
+arXiv:1807.06209 [astro-ph.CO].
+[38] R.-Y. Guo, J.-F. Zhang, and X. Zhang, Chin. Phys. C
+42, 095103 (2018), arXiv:1803.06910 [astro-ph.CO].
+[39] S. Vagnozzi, S. Dhawan, M. Gerbino, K. Freese, A. Goo-
+bar, and O. Mena, Phys. Rev. D98, 083501 (2018),
+arXiv:1801.08553 [astro-ph.CO].
+[40] K. C. Wonget al.(H0LiCOW), Mon. Not. Roy. Astron.
+Soc.498, 1420 (2020), arXiv:1907.04869 [astro-ph.CO].
+[41] L. Feng, D.-Z. He, H.-L. Li, J.-F. Zhang, and X. Zhang,
+Sci. China Phys. Mech. Astron.63, 290404 (2020),
+arXiv:1910.03872 [astro-ph.CO].
+[42] J. P. Macquartet al., Nature581, 391 (2020),
+arXiv:2005.13161 [astro-ph.CO].
+[43] Z.-W. Zhao, Z.-X. Li, J.-Z. Qi, H. Gao, J.-F.
+Zhang, and X. Zhang, Astrophys. J.903, 83 (2020),
+arXiv:2006.01450 [astro-ph.CO].
+[44] L.-F. Wang, J.-H. Zhang, D.-Z. He, J.-F. Zhang, and
+X. Zhang, Mon. Not. Roy. Astron. Soc.514, 1433
+(2022), arXiv:2102.09331 [astro-ph.CO].
+[45] T.-N. Li, P.-J. Wu, G.-H. Du, S.-J. Jin, H.-L. Li, J.-
+F. Zhang, and X. Zhang, Astrophys. J.976, 1 (2024),
+arXiv:2407.14934 [astro-ph.CO].
+[46] T.-N. Li, Y.-H. Li, G.-H. Du, P.-J. Wu, L. Feng, J.-F.
+Zhang, and X. Zhang, Eur. Phys. J. C85, 608 (2025),
+arXiv:2411.08639 [astro-ph.CO].
+[47] A. G. Adameet al.(DESI), JCAP02, 021 (2025),
+arXiv:2404.03002 [astro-ph.CO].
+[48] T.-N. Li, G.-H. Du, Y.-H. Li, P.-J. Wu, S.-J. Jin, J.-F.
+Zhang, and X. Zhang, Sci. China Phys. Mech. Astron.
+69, 210413 (2026), arXiv:2501.07361 [astro-ph.CO].
+[49] M. Abdul Karimet al.(DESI), Phys. Rev. D112,
+083515 (2025), arXiv:2503.14738 [astro-ph.CO].
+[50] T.-N. Li, W. Giar` e, G.-H. Du, Y.-H. Li, E. Di Valentino,
+J.-F. Zhang, and X. Zhang, (2026), arXiv:2601.07361
+[astro-ph.CO].
+[51] J. Aasiet al.(LIGO Scientific), Class. Quant. Grav.32,
+074001 (2015), arXiv:1411.4547 [gr-qc].
+
+12
+[52] F. Acerneseet al.(VIRGO), Class. Quant. Grav.32,
+024001 (2015), arXiv:1408.3978 [gr-qc].
+[53] T. Akutsuet al.(KAGRA), PTEP2021, 05A101
+(2021), arXiv:2005.05574 [physics.ins-det].
+[54] A. G. Abacet al.(LIGO Scientific, VIRGO, KAGRA),
+(2025), arXiv:2508.18082 [gr-qc].
+[55] M. Punturoet al., Classical and Quantum Gravity27,
+194002 (2010).
+[56] S. Hildet al., Class. Quant. Grav.28, 094013 (2011),
+arXiv:1012.0908 [gr-qc].
+[57] D. Reitzeet al., Bull. Am. Astron. Soc.51, 035 (2019),
+arXiv:1907.04833 [astro-ph.IM].
+[58] M. Evanset al., (2021), arXiv:2109.09882 [astro-ph.IM].
+[59] V. Srivastava, S. Ballmer, D. A. Brown, C. Afle, A. Bur-
+rows, D. Radice, and D. Vartanyan, Phys. Rev. D100,
+043026 (2019), arXiv:1906.00084 [gr-qc].
+[60] A. Abacet al.(ET), JCAP03, 081 (2026),
+arXiv:2503.12263 [gr-qc].
+[61] M. Dragoet al., (2020), 10.1016/j.softx.2021.100678,
+arXiv:2006.12604 [gr-qc].
+[62] R. Abbottet al.(KAGRA, VIRGO, LIGO Scientific),
+Phys. Rev. D104, 122004 (2021), arXiv:2107.03701 [gr-
+qc].
+[63] A. G. Abacet al.(KAGRA, LIGO Scientific, VIRGO),
+Phys. Rev. D112, 102005 (2025), arXiv:2507.12374
+[astro-ph.HE].
+[64] S. E. Gossan, P. Sutton, A. Stuver, M. Zanolin, K. Gill,
+and C. D. Ott, Phys. Rev. D93, 042002 (2016),
+arXiv:1511.02836 [astro-ph.HE].
+[65] O. Halim, C. Casentini, M. Drago, V. Fafone, K. Schol-
+berg, C. F. Vigorito, and G. Pagliaroli, JCAP11, 021
+(2021), arXiv:2107.02050 [astro-ph.HE].
+[66] M. J. Szczepa´ nczyket al., Phys. Rev. D110, 042007
+(2024), arXiv:2305.16146 [astro-ph.HE].
+[67] E. Abdikamalov, G. Pagliaroli, and D. Radice, (2020),
+arXiv:2010.04356 [astro-ph.SR].
+[68] D. Vartanyan, A. Burrows, T. Wang, M. S. B. Coleman,
+and C. J. White, Phys. Rev. D107, 103015 (2023),
+arXiv:2302.07092 [astro-ph.HE].
+[69] J. Logue, C. D. Ott, I. S. Heng, P. Kalmus, and
+J. H. C. Scargill, Phys. Rev. D86, 044023 (2012),
+arXiv:1202.3256 [gr-qc].
+[70] J. Powell and B. M¨ uller, Class. Quant. Grav.42, 215002
+(2025), arXiv:2506.03581 [astro-ph.HE].
+[71] W. G. Anderson, P. R. Brady, J. D. E. Creighton,
+and E. E. Flanagan, Phys. Rev. D63, 042003 (2001),
+arXiv:gr-qc/0008066.
+[72] S. Klimenko, I. Yakushin, A. Mercer, and G. Mit-
+selmakher, Class. Quant. Grav.25, 114029 (2008),
+arXiv:0802.3232 [gr-qc].
+[73] P. J. Suttonet al., New J. Phys.12, 053034 (2010),
+arXiv:0908.3665 [gr-qc].
+[74] I. S. Heng, Class. Quant. Grav.26, 105005 (2009),
+arXiv:0810.5707 [gr-qc].
+[75] C. Rover, M.-A. Bizouard, N. Christensen, H. Dim-
+melmeier, I. S. Heng, and R. Meyer, Phys. Rev. D80,
+102004 (2009), arXiv:0909.1093 [gr-qc].
+[76] E. Thrane and M. Coughlin, Phys. Rev. D88, 083010
+(2013), arXiv:1308.5292 [astro-ph.IM].
+[77] N. J. Cornish and T. B. Littenberg, Class. Quant. Grav.
+32, 135012 (2015), arXiv:1410.3835 [gr-qc].
+[78] S. Klimenkoet al., Phys. Rev. D93, 042004 (2016),
+arXiv:1511.05999 [gr-qc].
+[79] M. Millhouse, N. J. Cornish, and T. Littenberg, Phys.
+Rev. D97, 104057 (2018), arXiv:1804.03239 [gr-qc].
+[80] V. Roma, J. Powell, I. S. Heng, and R. Frey, Phys. Rev.
+D99, 063018 (2019), arXiv:1901.08692 [astro-ph.IM].
+[81] S. Suvorova, J. Powell, and A. Melatos, Phys. Rev. D
+99, 123012 (2019), arXiv:1901.02535 [astro-ph.IM].
+[82] M. Takedaet al., Phys. Rev. D104, 084063 (2021),
+arXiv:2107.05213 [astro-ph.HE].
+[83] N. Raza, J. McIver, G. D´ alya, and P. Raffai, Phys. Rev.
+D106, 063014 (2022), arXiv:2203.08960 [astro-ph.HE].
+[84] Y. Yuan, X.-L. Fan, H.-J. L¨ u, Y.-Y. Sun, and
+K. Lin, Mon. Not. Roy. Astron. Soc.529, 3235 (2024),
+arXiv:2309.06011 [astro-ph.HE].
+[85] C. Pastor-Marcos, P. Cerd´ a-Dur´ an, D. Walker,
+A. Torres-Forn´ e, E. Abdikamalov, S. Richers, and
+J. A. Font, Phys. Rev. D109, 063028 (2024),
+arXiv:2308.03456 [astro-ph.HE].
+[86] Y. Yuan, A.-R. Wang, Z.-T. Li, G. Yu, H.-J. L¨ u, P. Xu,
+and X.-L. Fan, Mon. Not. Roy. Astron. Soc.538, 820
+(2025), arXiv:2412.05962 [astro-ph.HE].
+[87] A. Veutro, I. Di Palma, and A. Zegarelli, Phys. Rev. D
+112, 103020 (2025), arXiv:2510.17636 [astro-ph.HE].
+[88] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev.
+D94, 102001 (2016), arXiv:1605.01785 [gr-qc].
+[89] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev.
+D101, 084002 (2020), arXiv:1908.03584 [astro-ph.HE].
+[90] B. Allen, W. G. Anderson, P. R. Brady, D. A. Brown,
+and J. D. E. Creighton, Phys. Rev. D85, 122006 (2012),
+arXiv:gr-qc/0509116.
+[91] H. Andresen and B. Finkel, (2024), arXiv:2411.12524
+[astro-ph.HE].
+[92] P. Cerd´ a-Dur´ an, M. L´ opez, A. Favali, I. Di Palma,
+M. Drago, and F. Ricci, Phys. Rev. D111, 083022
+(2025), arXiv:2501.11401 [astro-ph.HE].
+[93] M. Zevinet al., Class. Quant. Grav.34, 064003 (2017),
+arXiv:1611.04596 [gr-qc].
+[94] M. Caberoet al., Class. Quant. Grav.36, 15 (2019),
+arXiv:1901.05093 [physics.ins-det].
+[95] M. Szczepanczyket al., Phys. Rev. D104, 102002
+(2021), arXiv:2104.06462 [astro-ph.HE].
+[96] P. Astone, P. Cerd´ a-Dur´ an, I. Di Palma, M. Drago,
+F. Muciaccia, C. Palomba, and F. Ricci, Phys. Rev.
+D98, 122002 (2018), arXiv:1812.05363 [astro-ph.IM].
+[97] M. L. Chan, I. S. Heng, and C. Messenger, Phys. Rev.
+D102, 043022 (2020), arXiv:1912.13517 [astro-ph.HE].
+[98] A. Iess, E. Cuoco, F. Morawski, and J. Powell, (2020),
+arXiv:2001.00279 [gr-qc].
+[99] M. L´ opez Portilla, I. D. Palma, M. Drago, P. Cerd´ a-
+Dur´ an, and F. Ricci, Phys. Rev. D103, 063011 (2021),
+arXiv:2011.13733 [astro-ph.IM].
+[100] M. Cavaglia, S. Gaudio, T. Hansen, K. Staats,
+M. Szczepanczyk, and M. Zanolin, Mach. Learn. Sci.
+Tech.1, 015005 (2020), arXiv:2002.04591 [astro-ph.IM].
+[101] M. C. Edwards, Phys. Rev. D103, 024025 (2021),
+arXiv:2009.07367 [astro-ph.IM].
+[102] A. Saiz-P´ erez, A. Torres-Forn´ e, and J. A. Font,
+Mon. Not. Roy. Astron. Soc.512, 3815 (2022),
+arXiv:2110.12941 [gr-qc].
+[103] J. M. Antelis, M. Cavaglia, T. Hansen, M. D.
+Morales, C. Moreno, S. Mukherjee, M. J. Szczepa´ nczyk,
+and M. Zanolin, Phys. Rev. D105, 084054 (2022),
+arXiv:2111.07219 [gr-qc].
+[104] Y.-S. Chao, C.-Z. Su, T.-Y. Chen, D.-W. Wang, and K.-
+C. Pan, Astrophys. J.939, 13 (2022), arXiv:2209.10089
+
+13
+[astro-ph.HE].
+[105] A. Mitra, B. Shukirgaliyev, Y. S. Abylkairov, and
+E. Abdikamalov, Mon. Not. Roy. Astron. Soc.520, 2473
+(2023), arXiv:2209.14542 [astro-ph.HE].
+[106] A. C. Lagos, J. M. Antelis, C. Moreno, M. Zanolin,
+A. Mezzacappa, and M. J. Szczepa´ nczyk, Phys. Rev. D
+108, 084027 (2023), arXiv:2304.11498 [gr-qc].
+[107] A. Mitra, D. Orel, Y. S. Abylkairov, B. Shukirgaliyev,
+and E. Abdikamalov, Mon. Not. Roy. Astron. Soc.529,
+3582 (2024), arXiv:2310.15649 [astro-ph.HE].
+[108] A. Iess, E. Cuoco, F. Morawski, C. Nicolaou, and
+O. Lahav, Astron. Astrophys.669, A42 (2023),
+arXiv:2301.09387 [astro-ph.IM].
+[109] J. Powell, A. Iess, M. Llorens-Monteagudo, M. Ober-
+gaulinger, B. M¨ uller, A. Torres-Forn´ e, E. Cuoco,
+and J. A. Font, Phys. Rev. D109, 063019 (2024),
+arXiv:2311.18221 [astro-ph.HE].
+[110] M. D. Morales, J. M. Antelis, and C. Moreno, Gen. Rel.
+Grav.57, 162 (2025), arXiv:2406.00422 [astro-ph.HE].
+[111] S. Nunes, G. Escrig, O. G. Freitas, J. A. Font, T. Fer-
+nandes, A. Onofre, and A. Torres-Forn´ e, Phys. Rev. D
+110, 064037 (2024), arXiv:2403.04938 [astro-ph.HE].
+[112] Y. S. Abylkairov, M. C. Edwards, D. Orel, A. Mitra,
+B. Shukirgaliyev, and E. Abdikamalov, Mach. Learn.
+Sci. Tech.5, 045077 (2024), arXiv:2409.14508 [astro-
+ph.HE].
+[113] A. Veutro, I. Di Palma, M. Drago, P. Cerd´ a-Dur´ an,
+R. van der Laag, M. L´ opez, and F. Ricci, Phys. Rev. D
+112, 103042 (2025), arXiv:2512.04804 [astro-ph.HE].
+[114] A.-B. Wang, Y. Yuan, H. Cai, and X.-L. Fan, (2026),
+arXiv:2601.01376 [astro-ph.HE].
+[115] A. Akhmetali, Y. S. Abylkairov, M. Zaidyn, A. Sakan,
+A. Zhunuskanov, N. Ussipov, J. A. Font, A. Torres-
+Forn´ e, and E. Abdikamalov, (2026), arXiv:2603.27680
+[astro-ph.HE].
+[116] A. Akhmetali, Y. S. Abylkairov, D. Orel, S. Nunes,
+A. Sakan, A. Zhunuskanov, M. Zaidyn, N. Ussipov, J. A.
+Font, and E. Abdikamalov, (2026), arXiv:2605.04896
+[astro-ph.HE].
+[117] M. Razzano and E. Cuoco, Class. Quant. Grav.35,
+095016 (2018), arXiv:1803.09933 [gr-qc].
+[118] P. G. Krastev, Phys. Lett. B803, 135330 (2020),
+arXiv:1908.03151 [astro-ph.IM].
+[119] E. Cuocoet al., Mach. Learn. Sci. Tech.2, 011002
+(2021), arXiv:2005.03745 [astro-ph.HE].
+[120] S. R. Green and J. Gair, Mach. Learn. Sci. Tech.2,
+03LT01 (2021), arXiv:2008.03312 [astro-ph.IM].
+[121] R. Ormiston, T. Nguyen, M. Coughlin, R. X. Adhikari,
+and E. Katsavounidis, Phys. Rev. Res.2, 033066 (2020),
+arXiv:2005.06534 [astro-ph.IM].
+[122] H. Yu and R. X. Adhikari, Front. Artif. Intell.5, 811563
+(2022), arXiv:2111.03295 [astro-ph.IM].
+[123] M. Dax, S. R. Green, J. Gair, J. H. Macke, A. Buo-
+nanno, and B. Sch¨ olkopf, Phys. Rev. Lett.127, 241103
+(2021), arXiv:2106.12594 [gr-qc].
+[124] T. Zhao, R. Lyu, H. Wang, Z. Cao, and Z. Ren, Com-
+mun. Phys.6, 212 (2023), arXiv:2207.07414 [gr-qc].
+[125] M. Dax, S. R. Green, J. Gair, M. P¨ urrer, J. Wildberger,
+J. H. Macke, A. Buonanno, and B. Sch¨ olkopf, Phys.
+Rev. Lett.130, 171403 (2023), arXiv:2210.05686 [gr-
+qc].
+[126] M. Saleemet al., Class. Quant. Grav.41, 195024 (2024),
+arXiv:2306.11366 [gr-qc].
+[127] Y.-X. Wang, S.-J. Jin, T.-Y. Sun, J.-F. Zhang,
+and X. Zhang, Chin. Phys. C48, 125107 (2024),
+arXiv:2305.19003 [gr-qc].
+[128] T.-Y. Sun, C.-Y. Xiong, S.-J. Jin, Y.-X. Wang, J.-F.
+Zhang, and X. Zhang, Chin. Phys. C48, 045108 (2024),
+arXiv:2312.08122 [gr-qc].
+[129] C.-Y. Xiong, T.-Y. Sun, J.-F. Zhang, and X. Zhang,
+Phys. Rev. D111, 024019 (2025), arXiv:2405.09475 [gr-
+qc].
+[130] M. Dax, S. R. Green, J. Gair, N. Gupte, M. P¨ urrer,
+V. Raymond, J. Wildberger, J. H. Macke, A. Buo-
+nanno, and B. Sch¨ olkopf, Nature639, 49 (2025),
+arXiv:2407.09602 [gr-qc].
+[131] Y.-X. Wang, X. Wei, C.-Y. Li, T.-Y. Sun, S.-J. Jin,
+H. Wang, J.-L. Cui, J.-F. Zhang, and X. Zhang, Phys.
+Rev. D112, 024030 (2025), arXiv:2410.20129 [gr-qc].
+[132] T.-Y. Sun, Y. Shao, Y. Li, Y. Xu, H. Wang,
+and X. Zhang, Commun. Phys.8, 220 (2025),
+arXiv:2407.14298 [astro-ph.CO].
+[133] E. Cuoco, M. Cavagli` a, I. S. Heng, D. Keitel,
+and C. Messenger, Living Rev. Rel.28, 2 (2025),
+arXiv:2412.15046 [gr-qc].
+[134] Z. Qin, T.-Y. Sun, B.-Y. Li, J.-F. Zhang, X. Guo,
+and X. Zhang, Phys. Rev. D113, 104023 (2026),
+arXiv:2505.20996 [gr-qc].
+[135] T.-Y. Sun, T.-N. Li, H. Wang, J.-F. Zhang, and
+X. Zhang, (2025), arXiv:2510.27086 [astro-ph.CO].
+[136] Y.-X. Zhang, T.-Y. Sun, C.-Y. Xiong, S.-T. Liu, Y.-X.
+Wang, S.-J. Jin, J.-F. Zhang, and X. Zhang, (2026),
+arXiv:2602.01319 [astro-ph.IM].
+[137] S.-T. Liu, T.-Y. Sun, Y.-X. Wang, Y.-X. Zhang,
+S.-J. Jin, J.-F. Zhang, and X. Zhang, (2026),
+arXiv:2603.12032 [gr-qc].
+[138] T.-Y. Sun, B. Liang, J.-Y. Song, S.-T. Liu, S.-J. Jin,
+H. Wang, M.-H. Du, J.-F. Zhang, and X. Zhang,
+(2026), arXiv:2604.13867 [gr-qc].
+[139] H. Gabbard, M. Williams, F. Hayes, and C. Messenger,
+Phys. Rev. Lett.120, 141103 (2018), arXiv:1712.06041
+[astro-ph.IM].
+[140] D. George and E. A. Huerta, Phys. Lett. B778, 64
+(2018), arXiv:1711.03121 [gr-qc].
+[141] T. D. Gebhard, N. Kilbertus, I. Harry, and
+B. Sch¨ olkopf, Phys. Rev. D100, 063015 (2019),
+arXiv:1904.08693 [astro-ph.IM].
+[142] C. Ott, Class. Quant. Grav.26, 063001 (2009),
+arXiv:0809.0695 [astro-ph].
+[143] K. Kotake, Comptes Rendus Physique14, 318 (2013),
+arXiv:1110.5107 [astro-ph.HE].
+[144] S. Richers, C. D. Ott, E. Abdikamalov, E. O’Connor,
+and C. Sullivan, Phys. Rev. D95, 063019 (2017),
+arXiv:1701.02752 [astro-ph.HE].
+[145] H. Andresen, E. M¨ uller, H. T. Janka, A. Summa,
+K. Gill, and M. Zanolin, Mon. Not. Roy. Astron. Soc.
+486, 2238 (2019), arXiv:1810.07638 [astro-ph.HE].
+[146] F. Morawski, M. Bejger, E. Cuoco, and L. Petre, Mach.
+Learn. Sci. Tech.2, 045014 (2021), arXiv:2103.07688
+[astro-ph.IM].
+[147] E. A. Moreno, B. Borzyszkowski, M. Pierini, J.-R. Vli-
+mant, and M. Spiropulu, Mach. Learn. Sci. Tech.3,
+025001 (2022), arXiv:2107.12698 [gr-qc].
+[148] R. Raikmanet al., Mach. Learn. Sci. Tech.5, 025020
+(2024), arXiv:2309.11537 [astro-ph.IM].
+[149] H.-Y. Liu and Y.-T. Wang, (2023), arXiv:2302.00295
+[gr-qc].
+
+14
+[150] P. Jaranowski, A. Krolak, and B. F. Schutz, Phys. Rev.
+D58, 063001 (1998), arXiv:gr-qc/9804014.
+[151] A. Nitzet al., “gwastro/pycbc: v2.3.3 release of pycbc,”
+(2024).
+[152] J. W. Murphy, C. D. Ott, and A. Burrows, Astrophys.
+J.707, 1173 (2009), arXiv:0907.4762 [astro-ph.SR].
+[153] B. Mueller, H.-T. Janka, and A. Marek, Astrophys. J.
+766, 43 (2013), arXiv:1210.6984 [astro-ph.SR].
+[154] V. Morozova, D. Radice, A. Burrows, and D. Var-
+tanyan, Astrophys. J.861, 10 (2018), arXiv:1801.01914
+[astro-ph.HE].
+[155] D. Radice, V. Morozova, A. Burrows, D. Vartanyan,
+and H. Nagakura, Astrophys. J. Lett.876, L9 (2019),
+arXiv:1812.07703 [astro-ph.HE].
+[156] A. Mezzacappaet al., Phys. Rev. D107, 043008 (2023),
+arXiv:2208.10643 [astro-ph.SR].
+[157] R. D. Murphy, A. Mezzacappa, E. J. Lentz, and
+P. Marronetti, Phys. Rev. D112, 063062 (2025),
+arXiv:2503.06406 [astro-ph.HE].
+[158] K. Hayama, T. Kuroda, K. Nakamura, and S. Yamada,
+Phys. Rev. Lett.116, 151102 (2016), arXiv:1606.01520
+[astro-ph.HE].
+[159] M. L. Chan and K. Hayama, Phys. Rev. D103, 103024
+(2021), arXiv:2008.01984 [astro-ph.HE].
+[160] S. A. Usmanet al., Class. Quant. Grav.33, 215004
+(2016), arXiv:1508.02357 [gr-qc].
+[161] C. M. Biwer, C. D. Capano, S. De, M. Cabero, D. A.
+Brown, A. H. Nitz, and V. Raymond, Publ. Astron.
+Soc. Pac.131, 024503 (2019), arXiv:1807.10312 [astro-
+ph.IM].
+[162] A. van den Oord, Y. Li, and O. Vinyals, CoRR
+abs/1807.03748(2018), 1807.03748.
+[163] T. Chen, S. Kornblith, M. Norouzi, and G. E. Hinton,
+inProceedings of the 37th International Conference on
+Machine Learning, ICML 2020, 13-18 July 2020, Vir-
+tual Event, Proceedings of Machine Learning Research
+(PMLR, 2020) pp. 1597–1607.
+[164] L. Ruff, N. G¨ ornitz, L. Deecke, S. A. Siddiqui, R. A.
+Vandermeulen, A. Binder, E. M¨ uller, and M. Kloft,
+inProceedings of the 35th International Conference
+on Machine Learning, ICML 2018, Stockholmsm¨ assan,
+Stockholm, Sweden, July 10-15, 2018, Proceedings of
+Machine Learning Research, edited by J. G. Dy and
+A. Krause (PMLR, 2018) pp. 4390–4399.
+[165] E. Muller, H. T. Janka, and A. Wongwathanarat,
+Astron. Astrophys.537, A63 (2012), arXiv:1106.6301
+[astro-ph.SR].
+[166] C. D. Ott, E. Abdikamalov, P. M¨ osta, R. Haas,
+S. Drasco, E. P. O’Connor, C. Reisswig, C. A. Meakin,
+and E. Schnetter, Astrophys. J.768, 115 (2013),
+arXiv:1210.6674 [astro-ph.HE].
+[167] T. Kuroda, K. Kotake, K. Hayama, and T. Takiwaki,
+Astrophys. J.851, 62 (2017), arXiv:1708.05252 [astro-
+ph.HE].
+[168] J. Powell and B. M¨ uller, Mon. Not. Roy. Astron. Soc.
+487, 1178 (2019), arXiv:1812.05738 [astro-ph.HE].
+[169] A. Mezzacappaet al., Phys. Rev. D102, 023027 (2020),
+arXiv:2007.15099 [astro-ph.HE].
+[170] J. Powell and B. M¨ uller, Mon. Not. Roy. Astron. Soc.
+494, 4665 (2020), arXiv:2002.10115 [astro-ph.HE].
+[171]https://wwwmpa.mpa-garching.mpg.de/ccsnarchive/
+data/Andresen2019/,https://www.astro.princeton.
+edu/~burrows/gw.3d/.
+[172] M. Lopez, V. Boudart, K. Buijsman, A. Reza,
+and S. Caudill, Phys. Rev. D106, 023027 (2022),
+arXiv:2203.06494 [astro-ph.IM].
+[173] M. Lopez, V. Boudart, S. Schmidt, and S. Caudill,
+(2022), arXiv:2205.09204 [astro-ph.IM].
+[174] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury,
+G. Chanan, T. Killeen, Z. Lin, N. Gimelshein, L. Antiga,
+A. Desmaison, A. K¨ opf, E. Z. Yang, Z. DeVito, M. Rai-
+son, A. Tejani, S. Chilamkurthy, B. Steiner, L. Fang,
+J. Bai, and S. Chintala, inAdvances in Neural Infor-
+mation Processing Systems 32: Annual Conference on
+Neural Information Processing Systems 2019, NeurIPS
+2019, December 8-14, 2019, Vancouver, BC, Canada,
+edited by H. M. Wallach, H. Larochelle, A. Beygelzimer,
+F. d’Alch´ e-Buc, E. B. Fox, and R. Garnett (2019) pp.
+8024–8035.
+[175] I. Loshchilov and F. Hutter, in7th International Con-
+ference on Learning Representations, ICLR 2019, New
+Orleans, LA, USA, May 6-9, 2019(OpenReview.net,
+2019).
+[176] L. McInnes and J. Healy, CoRRabs/1802.03426
+(2018), 1802.03426.

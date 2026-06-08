@@ -1,0 +1,745 @@
+Title: Automating the detection of polarization angle rotations in blazars. Re-analysis of RoboPol data reveals 27 new rotations
+Authors: Anastasia Glykopoulou, Ioannis Liodakis, Dmitry Blinov
+Published: 2026-05-18
+Categories: astro-ph.HE
+
+Astronomy&Astrophysicsmanuscript no. aa58360-25©ESO 2026
+May 20, 2026
+Automating the detection of polarization angle rotations in blazars
+Re-analysis of RoboPol data reveals 27 new rotations.
+Anastasia Glykopoulou1,2⋆ , Ioannis Liodakis2, Dmitry Blinov1,2
+1 Department of Physics, University of Crete, GR-70013 Heraklion, Greece
+2 Institute of Astrophysics, Foundation for Research and Technology-Hellas, Vasilika V outon, GR-70013 Heraklion, Greece
+Received December 2, 2025; accepted May 18, 2026
+ABSTRACT
+We present an automated pipeline for the detection of EVPA rotations in blazars, integrating correction of the 180 ◦ ambiguity,
+Bayesian Blocks segmentation, and statistical validation. Applied to RoboPol monitoring data, the method identified 48 rotations
+across 25 sources, including multiple events in RBPLJ2232+1143, RBPLJ1751+0939, RBPLJ1800+7828, and RBPLJ2253+1608.
+The rotations span amplitudes from 90.8 ◦ to 359.7 ◦, durations between 7.0 and 111.3 days, and rotation rates averaging 5.0 ◦/day.
+Comparison with previous catalogs reveals systematic differences: Bayesian Blocks rotations are on average∼10% larger in ampli-
+tude, about twice as long in duration, and roughly two-thirds slower in angular velocity, reflecting systematic biases between adaptive
+binning and manual segmentation. In addition, we report 27 previously unreported rotations, including 11 from the final 2016–2017
+season. A correlation analysis with contemporaneous Fermi–LATγ-ray light curves shows that longer rotations tend to coincide with
+enhancedγ-ray activity, while rotation amplitude alone is not predictive ofγ-ray brightness. Our pipeline minimizes subjective biases,
+expands the list of known EVPA rotations, and provides a reproducible framework for future multiwavelength studies of blazar jet
+dynamics and particle acceleration.
+Key words.blazars: general – polarization – methods: statistical –γ-rays: general – magnetic fields – jets
+1. Introduction
+Blazars are a subclass of active galactic nuclei (AGN) whose
+powerful relativistic jets are oriented within a few degrees from
+the observer’s line of sight on Earth (Blandford et al. 2019;
+Hovatta & Lindfors 2019), producing bright and strong vari-
+ability across the electromagnetic spectrum. The optical emis-
+sion is dominated by synchrotron radiation from the jet, and
+therefore is highly polarized. Optical polarization monitoring
+programs have revealed that the electric vector position angle
+(EVPA) of the jet often undergoes large and systematic rotations,
+which provide a unique probe of the magnetic field structure
+and particle acceleration processes in jets. Such rotations have
+been associated with shocks (e.g., Marscher et al. 2008), turbu-
+lence (e.g., Marscher 2014), or geometrical changes in the jet
+(Abdo et al. 2010; Raiteri et al. 2017; Britzen et al. 2018), and
+have been found to statistically coincide with enhancedγ-ray
+activity (Blinov et al. 2018), suggesting a physical connection
+between polarization variability and high-energy emission.
+The first systematic study of EVPA rotations was carried
+out in the framework of the RoboPol program (Angelakis et al.
+2016; Blinov et al. 2015, 2016a,b, 2018; Blinov & Pavlidou
+2019), which provided dense, multi-epoch polarimetric monitor-
+ing of a large blazar sample (Pavlidou et al. 2014). These efforts
+established the first statistical catalogs of EVPA rotations, em-
+ploying well-defined algorithmic procedures for event identifica-
+tion. While effective, these methods remained sensitive to mea-
+surement uncertainty and intrinsic variability, which could influ-
+ence the outcome. The highly stochastic nature of blazar jet vari-
+ability (Marscher 2014; Kiehlmann et al. 2017) therefore war-
+⋆ glykopoulouanastasia@gmail.com
+rants more robust identification techniques. More recently, long-
+term monitoring ofγ-ray blazars has emphasized the importance
+of reproducible methodologies to quantify such correlations
+across large samples (Otero-Santos et al. 2023; Savchenko et al.
+2024).
+Motivated by Savchenko et al. (2024), we developed a fully
+automated pipeline tailored to the RoboPol blazar sample, capa-
+ble of resolving the 180◦ ambiguity, segmenting time series with
+Bayesian Blocks, and applying rigorous statistical tests.
+In this work we present the pipeline and its application to
+the RoboPol dataset, producing a reproducible catalog of rota-
+tion events, recovering previously overlooked cases, and extend-
+ing the sample into the final RoboPol observing season 2016–
+2017 that had not been previously used to detect rotations. By
+comparing our results with earlier catalogs and examining cor-
+relations with contemporaneousγ-ray activity from Fermi–LAT
+(Abdollahi et al. 2023), we aim to provide new insights into the
+physical mechanisms driving EVPA rotations and their role in
+blazar jet dynamics.
+2. Data and Methods
+2.1. Data sample and observations
+The dataset used in this analysis originates from the RoboPol
+monitoring data described by Blinov et al. (2020), which in-
+cludes all sources of the main and control samples as well as in-
+dividual sources observed with RoboPol over the duration of the
+program that were not part of the statistical analysis. Details on
+the monitoring program can be found in Pavlidou et al. (2014)
+& Angelakis et al. (2016) , and the data analysis procedures
+Article number, page 1
+arXiv:2605.18955v1  [astro-ph.HE]  18 May 2026
+
+A&A proofs:manuscript no. aa58360-25
+in King et al. (2014); Panopoulou et al. (2015); Blinov et al.
+(2020).
+The monitoring campaign lasted from 2013–2017 and pro-
+vides multi-epoch polarimetric measurements with dense tempo-
+ral coverage, enabling the study of EVPA variability and long-
+term polarization behavior. In addition to the optical polariza-
+tion data, we made use of theFermi-LAT light curve repository
+(Abdollahi et al. 2023) to examine the contemporaneousγ-ray
+activity of the sources and assess potential correlations with the
+optical polarization behavior.
+2.2. Pipeline Structure
+2.2.1. Preprocessing
+The monitoring data were ingested from CSV files contain-
+ing the polarization measurements of each source. Julian dates
+were converted to Modified Julian Dates (MJD) for convenience.
+Time differences between consecutive observations were com-
+puted to facilitate the identification of observing gaps. To en-
+sure statistical reliability, only measurements with a polarization
+degree significance of at least three (PD/err PD ≥3) were re-
+tained. The resulting dataset thus contains chronologically or-
+dered, high-quality observations with consistent time stamps,
+forming the basis for subsequent segmentation and EVPA anal-
+ysis.
+2.2.2. EVPA180 ◦ Ambiguity
+EVPA measurements are defined modulo 180◦, which can intro-
+duce artificial discontinuities in time series analysis. To avoid
+spurious rotations, we implemented an error-weighted adjust-
+ment procedure that explicitly accounts for EVPA measurement
+uncertainties e.g.(Blinov et al. 2018). Gaps larger than 30 days
+between consecutive observations prevent reliable angle dis-
+ambiguation; such gaps are therefore used as natural segment
+boundaries (see also the section on rotation detection below).
+For each new data point, the measured angle was compared
+to the previously adjusted value, taking into account the com-
+bined uncertainty of the two measurements. If the difference was
+smaller than ninety degrees after weighting by the uncertain-
+ties, the angle was retained. Otherwise, integer multiples of 180◦
+were added to the measured angle, and the candidate value that
+minimized the weighted difference with respect to the previous
+adjusted angle was selected.
+2.2.3. Bayesian Blocks Analysis
+For the segmentation of the EVPA time series we employed
+the Bayesian Blocks algorithm (Scargle et al. 2013), using
+the implementation provided in theastropy.statspackage
+(Astropy Collaboration et al. 2022). The input consisted of the
+observation times (MJD), the adjusted EVPA values, and their
+measurement uncertainties. Since the EVPA data represent con-
+tinuous measurements with Gaussian errors, we adopted the
+fitness=’measures’option. The sensitivity to change points
+was controlled through the false-alarm probability parameterp 0,
+which we set to 0.001. This configuration yields an adaptive
+segmentation of the EVPA time series into statistically homoge-
+neous blocks, suitable for subsequent rotation and extrema anal-
+ysis.
+2.2.4. Identification of Local Extrema and Rotation Detection
+Algorithm
+The identification of EVPA rotation events was performed with a
+dedicated pipeline that integrates Bayesian Blocks segmentation,
+local-extrema analysis, and statistical validation. In contrast to
+the previous EVPA identification method used by RoboPol, our
+method does not impose smoothness constraints on the EVPA
+curve; candidate rotations are identified solely on the basis of
+statistically significant extrema pairs, regardless of the deriva-
+tive behavior. As a result, events which would not have qualified
+as rotations under earlier criteria are included here. An example
+is shown in the middle panel of the bottom row of Fig. 2: the ro-
+tation was interrupted at the second point of the third Bayesian
+Block, meaning the previous method would have split it into two
+distinct rotations that both fail to satisfy the 90◦ criterion.
+As a first step, the time series of each source was divided into
+contiguous segments, which were retained only if they contained
+more than four data points and no pair of consecutive points was
+separated by more than 30 days. This segmentation is illustrated
+in Fig. 1, where each accepted segment is shown together with
+its Bayesian Blocks step representation and the global minima
+and maxima are marked with triangles.
+Within each accepted segment, Bayesian Blocks were ap-
+plied to obtain block means and uncertainties, from which
+local maxima and minima were extracted. Local extrema
+were identified using theargrelextremafunction from the
+scipy.signalPython library.
+The procedure also explicitly checks the first and last bins
+to ensure that boundary points are included if they represent ex-
+trema. The resulting sets of maxima and minima are stored to-
+gether with their corresponding MJDs.
+Adjacent extrema pairs of type max→min or min→max were
+treated as candidate rotations, with their temporal boundaries de-
+fined by the corresponding block edges. Only candidate rotations
+with an EVPA amplitude exceeding 90◦ were retained, ensuring
+that only large variations are considered.
+Candidate rotation intervals were retained only if the sub-
+segmentation comprised three or more Bayesian Blocks, ensur-
+ing that detected rotations exhibit sufficient internal structure.
+In addition, each candidate interval was required to contain at
+least four data points, so that subsequent statistical tests could
+be meaningfully applied and spurious fluctuations avoided.
+Each candidate interval was then subjected to statistical tests:
+a one-samplet-test to assess deviation from a reference mean,
+and a binomial test to quantify asymmetry in the EVPA distribu-
+tion. The rotation amplitude was computed as the difference be-
+tween maximum and minimum EVPA values, with uncertainties
+propagated from the measurement errors. The duration (∆MJD)
+and its uncertainty were derived from the block boundaries, en-
+abling computation of the rotation rate and its uncertainty. Only
+events exceeding the minimum amplitude threshold and pass-
+ing all statistical criteria were accepted as rotations. Finally, the
+pipeline summarizes results across sources (giving the number
+of detected rotation events, per-source distributions, and descrip-
+tive statistics for amplitudes and duration), and produces plots
+for each source.
+3. Results
+3.1. EVP A rotation catalog and summary statistics
+The full catalog of EVPA rotation events detected by our
+pipeline is provided in Appendix A (Table A). The cat-
+alog comprisesN=48 detected rotations from 25
+Article number, page 2
+
+Anastasia Glykopoulou , Ioannis Liodakis , Dmitry Blinov : Automating the detection of polarization angle rotations in blazars
+56460 56480 56500 56520 56540 56560 56580 56600
+300
+200
+100
+0
+100
+Segment 0
+Maxima
+Minima
+Bayesian Blocks
+Adjusted EVPA
+56860 56880 56900 56920 56940 56960 56980
+400
+390
+380
+370
+360
+350
+340
+Segment 1
+57200 57220 57240 57260 57280 57300 57320 57340
+700
+600
+500
+400
+300
+Segment 2
+57600 57610 57620 57630
+Modified Julian Date (MJD)
+600
+550
+500
+450
+400
+350
+300
+Segment 3
+Electric Vector Position Angle [°]
+Fig. 1: Bayesian Blocks segmentation of the EVPA time series for CTA 102 (RBPLJ2232+1143). The panels show the accepted
+segments, defined by the criteria of more than four data points and a maximum spacing of 30 days between consecutive observations.
+Within each segment, the Bayesian Blocks step representation is overplotted, and the global minima and maxima are marked with
+triangles.
+Article number, page 3
+
+A&A proofs:manuscript no. aa58360-25
+56500 56515 56530 56545
+200
+150
+100
+50
+0
+50
+100
+pt = 4.5 × 10 4
+pbin = 0.004
+56560 56580 56600
+350
+300
+250
+200
+150
+pt = 1.3 × 10 9
+pbin = 4.9 × 10 4
+57200 57225 57250 57275
+500
+450
+400
+350
+300
+ pt = 6.9 × 10 5
+pbin = 0.062
+57275 57300 57325
+700
+650
+600
+550
+500
+450
+pt = 3.6 × 10 6
+pbin = 0.031
+57590 57600 57610 57620
+580
+560
+540
+520
+500
+480
+460
+440
+ pt = 2.7 × 10 13
+pbin = 0.002
+57624 57632 57640
+500
+475
+450
+425
+400
+375
+350
+325
+300
+pt = 6.5 × 10 8
+pbin = 0.008
+Electric Vector Position Angle [ ]
+Modified Julian Date (MJD)
+Fig. 2: Detected EVPA rotation events for CTA 102 (RBPLJ2232+1143). Each panel corresponds to an individual rotation interval
+and shows the EVPA evolution as a function of MJD together with the Bayesian Blocks trend (red line) and the observed data points
+with uncertainties.The middle panel in the bottom row illustrates a case that is included by our method because the extrema pair
+satisfies the amplitude and statistical thresholds, even though the rotation was interrupted at the second point of the third Bayesian
+Block. Under previous smoothness-based criteria, this interruption would result in two distinct rotations, neither of which satisfies
+the 90◦ criterion.
+unique RoboPol sources; several objects show multiple events
+(e.g., RBPLJ2232+1143: 6 events;RBPLJ1751+0939, RB-
+PLJ1800+7828, RBPLJ2253+1608: 4 events each). The rota-
+tion amplitude distribution has a mean of⟨∆θ⟩=159.7 ◦ (me-
+dian=153.8 ◦, andσ=66.5 ◦); the largest recorded amplitude
+is 359.7 ◦ (RBPLJ1751+0939) and the smallest is 90.8 ◦ (RB-
+PLJ1635+3808). Event durations span 7.0–111.3 days (mean
+=44.4 days, median=42.4 days,σ=23.8 days). The mean
+rotation rate is 5.0◦/day (median=3.9 ◦/day).
+3.2. Comparison with previous RoboPol results
+We cross-matched EVPA rotations reported by Blinov et al.
+(2015, 2016a,b, 2018) with those identified using our Bayesian
+Blocks approach. For each overlapping event, we quantified the
+discrepancy in units of the Bayesian uncertainty by computing
+the difference in sigma
+∆ = |x−y|
+σx
+(1)
+wherexis the Bayesian Blocks measurement,ythe catalog
+value, andσ x the Bayesian uncertainty of each parameter. In
+this definition,∆(Eq. 1) expresses how many standard deviations
+separate the two measurements. Differences below 3σwere con-
+sidered consistent, and importantly, more than half of the over-
+lapping rotation events fall within this threshold, confirming that
+the majority of Bayesian Blocks detections are statistically com-
+patible with the RoboPol catalog values.
+Fig. 3 presents scatter plots comparing amplitude, rotation
+period, and angular velocity between the two methods. Each
+point corresponds to an overlapping rotation event. The red
+dashed line marks the identity relationy=x.
+A systematic offset is evident in the rotation period panel:
+durations tend to be longer in the Bayesian Blocks catalog than
+in the RoboPol catalog. The slower angular velocities reflect this
+difference in duration. Amplitudes, by contrast, do not show a
+strong systematic offset between the two methods.
+Fig. 4 shows the corresponding distributions of differences in
+sigma. Amplitude differences (panel a) are broadly distributed
+with a main peak near zero, indicating overall consistency be-
+tween the two methods, though a secondary peak at large∆val-
+ues (>10σ) reflects a minority of strongly discrepant events.
+Period differences (panel b) and angular velocity differences
+(panel c) are both positively skewed, with the majority of events
+clustered within 4σand a few outliers at higher∆. These dis-
+tributions confirm that the discrepancies follow a non-Gaussian,
+systematic pattern rather than purely random noise.
+Overall, Bayesian Blocks rotations are on average∼10%
+larger in amplitude,∼2×longer in duration, and∼2/3 slower
+in angular velocity compared to the RoboPol catalog. While cor-
+relation coefficients remain moderate to strong, the sigma differ-
+ences highlight methodological biases introduced by block seg-
+mentation. Specifically, the block-based approach extends rota-
+tion intervals until the next significant EVPA variation, which
+can inflate durations and suppress angular velocities. Despite
+Article number, page 4
+
+Anastasia Glykopoulou , Ioannis Liodakis , Dmitry Blinov : Automating the detection of polarization angle rotations in blazars
+100 200 300
+∆θRoboPolcat.  (deg)
+100
+150
+200
+250
+300
+350
+∆θBB (deg)
+y = x
+25 50 75 100
+TRoboPolcat.  (days)
+20
+40
+60
+80
+100
+120
+TBB (days)
+5 10 15 20
+˙θRoboPolcat.  (deg d−1)
+2.5
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+20.0
+˙θBB (deg d−1)
+Fig. 3: Scatter comparison of EVPA rotation parameters between the RoboPol catalogs of Blinov et al. (2015, 2016a,b, 2018) (x-
+axis, catalogue values) and the Bayesian Blocks results (y-axis). Panels show amplitude (∆θmax), rotation period (Trot), and angular
+velocity (˙θ). Each point represents an overlapping rotation event. The red dashed line marks the identity relationy=x. A systematic
+offset is evident in the rotation period panel, with durations tending to be larger in the Bayesian Blocks catalog. The slower angular
+velocities reflect this difference in duration, while amplitudes show no strong systematic offset.
+0 5 10 15 20
+|∆θBB − ∆θcat|/ σBB
+0
+1
+2
+3
+4
+5
+6Number of events
+±1σ
+±2σ
+±3σ
+0 5 10
+|TBB − Tcat|/ σBB
+0
+2
+4
+6
+8
+10
+Number of events
+0 5 10
+|˙θBB − ˙θcat|/ σBB
+0
+1
+2
+3
+4
+5
+6
+7Number of events
+Fig. 4: Distributions of differences in sigma for overlapping EVPA rotation events. Panels show (a) amplitude, (b) rotation period,
+and (c) angular velocity. Histograms display normalized events of∆ =|x−y|/σ x for each parameter. Vertical red lines indicate
+±1σ(dashed ),±2σ(dashed dotted), and±3σ( dotted) thresholds. Amplitude differences (panel a) are broadly distributed with a
+main peak near zero and a secondary peak at large∆values; period differences (panel b) are skewed positive; and angular velocity
+differences (panel c) differences are primarily clustered within 4σwith minor outliers at higher∆.
+these differences, the detection of rotations remains robust, and
+the discrepancies reflect definitional choices rather than statisti-
+cal inconsistencies.
+3.3. Additional unreported rotations
+Our Bayesian Blocks analysis revealed a total of 27 EVPA rota-
+tions that were not included in the Blinov et al. catalog. These
+comprise two categories:
+– Earlier seasons (2013–2016).Within the monitoring inter-
+vals already covered by Blinov et al. (2015, 2016a,b, 2018),
+we detect 16 additional rotations that were not reported pre-
+viously. These events occur in the same seasons as the pub-
+lished rotations but were missed by the original procedure.
+Their parameters (amplitude, duration, angular velocity) are
+listed in Table 1, together with uncertainties derived from the
+Bayesian Blocks method.
+– Final season (2016–2017).In addition, our analysis extends
+beyond the Blinov et al. (2015, 2016a,b, 2018) detections to
+the final observin season. Here we detect 11 new rotations
+that expand the temporal coverage of the sample. Together,
+these 27 unreported events demonstrate that the Bayesian
+Blocks method provides a more complete inventory of EVPA
+rotations across the full monitoring period, both by recover-
+ing overlooked events in earlier seasons and by extending the
+catalog into new temporal territory.
+3.4. Correlation withγ–ray activity
+We investigated the correlation between optical EVPA rotations
+andγ–ray activity using all 48 detected rotation events (Ta-
+ble A.1).
+For this purpose, we retrievedγ–ray light curves from the
+Fermi–LAT repository (Abdollahi et al. 2023). The light curves
+were constructed using a standard binning of 7 days, which pro-
+Article number, page 5
+
+A&A proofs:manuscript no. aa58360-25
+Table 1: Summary of 27 unreported EVPA rotations detected with Bayesian Blocks. The sample includes 16 events from seasons
+already covered by Blinov et al. (2015, 2016a,b, 2018) and 11 new events from the final 2016–2017 season. Parameters are reported
+with Bayesian uncertainties, shown as value±error.
+Season Blazar ID Simbad Name Spectral Type Amp [ ◦] Period [days] Ang. vel. [ ◦/day]
+Unreported rotations in 2013–2016 (16 events)
+2015 RBPLJ1505+0326 PMN J1505+0326 ISP 126.7±7.9 87.9±14.0 1.4±0.3
+2015 RBPLJ1512-0905 PKS 1510-089 LSP 93.9±3.4 64.4±11.3 1.5±0.3
+2015 RBPLJ1542+6129 QSO B1542+614 LSP 109.3±4.7 61.9±30.5 1.8±0.9
+2015 RBPLJ1555+1111 PG 1553+113 HSP 142.1±4.7 38.4±7.3 3.7±0.8
+2015 RBPLJ1558+5625 TXS 1557+565 ISP 115.0±5.7 94.4±19.0 1.2±0.3
+2015 RBPLJ1604+5714 7C 1603+5722 ISP 195.9±6.5 48.0±11.9 4.1±1.1
+2015 RBPLJ1725+1152 H 1722+119 HSP 97.3±6.4 21.0±5.3 4.6±1.4
+2015 RBPLJ1751+0939 OT 081 LSP 359.7±2.8 39.4±5.8 9.1±1.4
+2016 RBPLJ1751+0939 OT 081 LSP 134.8±3.1 44.4±11.0 3.0±0.8
+2015 RBPLJ1800+7828 S5 1803+78 LSP 111.1±2.4 81.9±32.2 1.4±0.6
+2016 RBPLJ1838+4802 ATO J279.7048+48.0428 HSP 159.8±5.7 97.4±20.1 1.6±0.4
+2015 RBPLJ2022+7611 S5 2023+76 ISP 136.8±2.3 58.9±5.0 2.3±0.2
+2015 RBPLJ2149+0322 MITG J2149+0323 ISP 94.0±3.3 57.3±8.5 1.6±0.3
+2016 RBPLJ2232+1143 CTA 102 LSP 188.3±3.6 66.4±17.9 2.8±0.8
+2016 RBPLJ1754+3212 ATO J268.5491+32.2064 ISP 165.9±3.8 67.9±11.9 2.4±0.5
+2016 RBPLJ1754+3212 ATO J268.5491+32.2064 ISP 99.5±4.0 50.4±7.6 2.0±0.3
+Unreported rotations in 2016–2017 (11 events)
+2016 RBPLJ1512-0905 PKS 1510-089 LSP 112.4±4.8 14.5±2.4 7.8±1.7
+2016 RBPLJ1635+3808 4C+38.41 LSP 153.5±5.0 24.5±8.2 6.3±2.2
+2016 RBPLJ1635+3808 4C+38.41 LSP 90.8±6.7 7.5±2.3 12.2±4.3
+2016 RBPLJ1754+3212 ATO J268.5491+32.2064 ISP 119.8±10.8 22.0±2.9 5.5±1.0
+2016 RBPLJ1800+7828 S5 1803+78 LSP 194.8±3.9 18.0±7.3 10.8±4.6
+2016 RBPLJ2022+7611 S5 2023+76 ISP 164.7±1.8 13.6±2.1 12.1±2.0
+2016 RBPLJ2202+4216 BL Lacertae LSP 104.3±3.2 14.4±4.4 7.2±2.3
+2016 RBPLJ2202+4216 BL Lacertae LSP 130.7±4.4 18.1±1.5 7.2±0.8
+2016 RBPLJ2232+1143 CTA 102 LSP 121.0±4.5 14.0±3.1 8.6±2.1
+2016 RBPLJ2232+1143 CTA 102 LSP 180.5±2.1 9.5±2.2 19.0±4.5
+2016 RBPLJ2253+1608 3C 454.3 LSP 167.9±4.2 7.0±2.1 23.8±7.6
+vides sufficient temporal resolution while maintaining adequate
+photon statistics. For each source, we extracted the energy flux
+in the 0.1–300 GeV band, reported in units of MeV cm−2 s−1, as
+a function of MJD.
+We then examined whether enhancedγ–ray activity coin-
+cides with the time intervals during which EVPA rotations are
+observed. To quantify this, we calculate the peak-to-meanγ–ray
+energy flux from the 7-day binnedFermi–LAT light curve by
+dividing the maximum flux within the rotation interval by the
+mean flux over the same period interval. We then compare that
+to the amplitude and duration of the rotation using the Spearman
+rank correlation coefficient. This test allows us to assess whether
+stronger or longer rotations are statistically associated with in-
+creasedγ–ray activity.
+The sample comprises all 48 detected rotation events (Ta-
+ble A.1), of which 21 overlap with the Blinov et al. (2015,
+2016a,b, 2018) catalog and 27 are newly reported here. We use
+the Spearman rank coefficients because the test is robust to non-
+linearity and outliers;uncertainties on the rotation parameters are
+shown as horizontal error bars in Fig. 5 but were not propagated
+into the correlation test. To assess the robustness of the correla-
+tion against measurement uncertainties, we performed a Monte
+Carlo analysis withN iter =50 000 realisations. In each realisa-
+tion, every rotation parameter (Trot or∆θ max) was independently
+perturbed by drawing from a Gaussian distribution centred on
+its measured value with standard deviation equal to its measure-
+ment uncertainty. The Spearman rank correlation coefficientρ
+and its associatedp-value were then recomputed for the full per-
+turbed sample of 48 events. This yielded a distribution ofρval-
+ues from which the median and standard deviation were derived;
+the medianρandσ ρ are reported in Fig. 5. We also record the
+fraction of realisations in which thep-value falls below signif-
+icance thresholds of 0.05, 0.01, and 0.001, providing a direct
+measure of how robust the correlation is against parameter un-
+certainties. All 50 000 realisations produced valid Spearman es-
+timates (no failed iterations). Panel (a) of Fig. 5 shows a signif-
+icant positive correlation between rotation period and peak-to-
+meanγ-ray flux (ρ=0.601±0.049,p med =6.4×10 −6,n=48).
+The correlation is highly robust: 100% of MC realisations yield
+p<0.05, confirming that longer rotations tend to coincide with
+strongerγ-ray enhancements regardless of measurement uncer-
+tainties. In contrast, panel (b) shows no significant correlation
+between maximum EVPA amplitude∆θ max and peak-to-mean
+flux (ρ=0.146±0.016,p med =0.322,n=48). None of the
+50 000 MC realisations yieldsp<0.05, confirming that rota-
+tion amplitude alone is not predictive of contemporaneousγ-ray
+brightness.
+4. Conclusions
+We have developed and applied an automated pipeline for the de-
+tection of EVPA rotations in blazars, combining error-weighted
+Article number, page 6
+
+Anastasia Glykopoulou , Ioannis Liodakis , Dmitry Blinov : Automating the detection of polarization angle rotations in blazars
+6 8 10 20 30 40 50 60 80 100
+Trot (days)
+1
+1.25
+1.5
+1.75
+2
+2.5
+3
+Peak-to-Mean Energy Flux Ratio
+(a)= 0.601 ± 0.049
+p = 6.4 × 10 6
+80 100 200 300 400
+ ( )
+(b)= 0.146 ± 0.016
+p = 0.322
+Cross-matched (21)
+New detections (27)
+Fig. 5: Spearman correlations between theFermi–LAT peak-to-meanγ-ray energy flux and rotation parameters for all 48 detected
+rotation events, split into events overlapping with the Blinov et al. (2015, 2016a,b, 2018) catalog (red circles,n=21) and the 27
+newly reported events (black circles,n=27). (a) Rotation periodT rot versus peak-to-mean ratio. (b) Maximum EVPA amplitude
+∆θmax versus peak-to-mean ratio. Each panel reports the Spearman rank coefficientρwith its Monte Carlo uncertainty, the associated
+p-value computed over all 48 events, and the sample sizenas annotated. Axes are in log–log scale; horizontal error bars indicate
+uncertainties on the x-axis parameters.
+angle adjustment, Bayesian Blocks segmentation, and statisti-
+cal validation. Applied to RoboPol monitoring data, the method
+identifiedN=48 rotations across 25 sources, including mul-
+tiple events in RBPLJ2232+1143 (6), RBPLJ1751+0939, RB-
+PLJ1800+7828, and RBPLJ2253+1608 (4 each). The cataloged
+rotations span amplitudes from 90.8 ◦ to 359.7 ◦, with a mean
+of 159.7◦ ±66.5 ◦, durations between 7.0 and 111.3 days (mean
+44.4±23.8 days), and rotation rates averaging 5.01 ◦/day.
+Comparison with previous catalogs Blinov et al. (2015,
+2016a,b, 2018) reveals systematic differences: Bayesian Blocks
+rotations are on average∼10% larger in amplitude,∼2×longer
+in duration, and∼2/3 slower in angular velocity. These off-
+sets reflect methodological biases, with adaptive binning merg-
+ing adjacent swings into longer events, in contrast to the original
+RoboPol segmentation methodology.
+In addition, our analysis uncovered 27 previously unreported
+rotations, including 16 events from seasons already covered by
+Blinov et al. and 11 new events from the final 2016–2017 sea-
+son. These rotations span amplitudes of 90.8◦–359.7◦, durations
+of 7–97 days, and angular velocities of 1.2–23.8 ◦/day, further
+enriching the statistical sample of EVPA variability. A Monte
+Carlo correlation analysis (N iter =50 000) with contemporane-
+ous Fermi–LATγ-ray light curves, carried out over all 48 de-
+tected rotation events, shows that longer rotations tend to co-
+incide with strongerγ-ray enhancements (ρ=0.601±0.049,
+pmed =6.4×10 −6; significant in 100% of MC realisations at
+p<0.05), while rotation amplitude alone is not predictive of
+γ-ray brightness (ρ=0.146±0.016,p med =0.322; significant in
+0% of realisations atp<0.05).
+Beyond the statistical characterization, the detected rotations
+carry important physical implications. The tendency for longer
+EVPA rotations to coincide with enhancedγ-ray activity sug-
+gests that high-energy emission is linked to sustained reconfigu-
+rations of the jet magnetic field, indicating the presence of long-
+lived polarized components in the jet. On the other hand, the
+lack of correlation betweenγ-ray activity and rotation amplitude
+implies the presence of a stochastic component as well. These
+results highlight the role of polarization monitoring as a probe
+of jet dynamics and particle acceleration in blazars.
+Our pipeline minimizes subjective biases, ensures repro-
+ducible identification of EVPA rotations, and provides a statis-
+tically rigorous framework for cataloging polarization variabil-
+ity. Future applications to larger samples and multiwavelength
+datasets (e.g., X-ray polarization angle rotations, Di Gesu et al.
+2023; Maksym et al. 2025), including contemporaneousγ-ray
+activity, will further constrain the physical mechanisms driving
+rotations.
+Data and software availability
+The data supporting the findings of this article are openly avail-
+able in the Harvard Dataverse (Blinov et al. 2020).
+The analysis pipeline developed for this work is openly avail-
+able at https://github.com/glykanastasia/blazar-evpa-rotation-
+detector. It provides all scripts used for EVPA rotation detection,
+Bayesian Blocks segmentation, and figure generation, ensuring
+full reproducibility of the results presented in this paper.
+Acknowledgements.We thank the anonymous referee for their careful reading
+of the manuscript and their constructive comments, which helped improve the
+quality of this work. A.G. and I.L were funded by the European Union ERC-
+2022-STG - BOOTES - 101076343. Views and opinions expressed are however
+those of the author(s) only and do not necessarily reflect those of the European
+Article number, page 7
+
+A&A proofs:manuscript no. aa58360-25
+Union or the European Research Council Executive Agency. Neither the Euro-
+pean Union nor the granting authority can be held responsible for them. D.B.
+acknowledges support from the European Research Council (ERC) under the
+Horizon ERC Grants 2021 programme under grant agreement No. 101040021
+References
+Abdo, A. A., Ackermann, M., Agudo, I., et al. 2010, ApJ, 716, 30
+Abdollahi, S., Ajello, M., Baldini, L., et al. 2023, ApJS, 265, 31
+Angelakis, E., Hovatta, T., Blinov, D., et al. 2016, MNRAS, 463, 3365
+Astropy Collaboration, Price-Whelan, A. M., Lim, P. L., et al. 2022, ApJ, 935,
+167
+Blandford, R., Meier, D., & Readhead, A. 2019, ARA&A, 57, 467
+Blinov, D., Kiehlmann, S., Pavlidou, V ., et al. 2020, MNRAS, 501, 3715
+Blinov, D. & Pavlidou, V . 2019, Galaxies, 7, 46
+Blinov, D., Pavlidou, V ., Papadakis, I., et al. 2016a, MNRAS, 462, 1775–1785
+Blinov, D., Pavlidou, V ., Papadakis, I., et al. 2018, MNRAS, 474, 1296
+Blinov, D. et al. 2015, MNRAS, 453, 1669
+Blinov, D. et al. 2016b, MNRAS, 457, 2252
+Britzen, S., Fendt, C., Witzel, G., et al. 2018, MNRAS, 478, 3199
+Di Gesu, L., Marshall, H. L., Ehlert, S. R., et al. 2023, Nature Astronomy, 7,
+1245
+Hovatta, T. & Lindfors, E. 2019, New A Rev., 87, 101541
+Kiehlmann, S., Blinov, D., Pearson, T. J., & Liodakis, I. 2017, MNRAS, 472,
+3589
+King, O. G., Blinov, D., Ramaprakash, A. N., et al. 2014, MNRAS, 442, 1706
+Maksym, W. P., Liodakis, I., Saade, M. L., et al. 2025, ApJ, 986, 230
+Marscher, A. P. 2014, ApJ, 780, 87
+Marscher, A. P., Jorstad, S. G., Larionov, V . M., et al. 2008, Nature, 452, 966
+Otero-Santos, J., Acosta-Pulido, J. A., Becerra González, J., et al. 2023, MN-
+RAS, 523, 4504
+Panopoulou, G., Tassis, K., Blinov, D., et al. 2015, MNRAS, 452, 715
+Pavlidou, V ., Angelakis, E., Myserlis, I., et al. 2014, MNRAS, 442, 1693
+Raiteri, C. M., Villata, M., Acosta-Pulido, J. A., et al. 2017, Nature, 552, 374
+Savchenko, S. S., Morozova, D. A., Jorstad, S. G., et al. 2024, Astrophysical
+Bulletin, 79, 186–202
+Scargle, J. D., Norris, J. P., Jackson, B., & Chiang, J. 2013, ApJ, 764, 167
+Article number, page 8
+
+Anastasia Glykopoulou , Ioannis Liodakis , Dmitry Blinov : Automating the detection of polarization angle rotations in blazars
+Article number, page 9
+
+A&A proofs:manuscript no. aa58360-25
+Appendix A: Catalog of detected EVP A rotations
+Table A.1: EVPA rotation events detected in the RoboPol 2013–2017 dataset. The table lists Simbad identifiers,Fermi-LAT coun-
+terparts, and spectral classifications. All events have amplitudes∆θ≥90 ◦ and satisfy the adopted statistical significance criteria
+(p<0.05 for t-test,p<0.065 for binomial test).
+Source Simbad NameF ermi-LA T Name Spectral Type Amplitude (°) Start (MJD) End (MJD)∆MJD (days) p-value (t-test) p-value (binomial) Rate (°/day)
+RBPLJ0045+2127 GB6 J0045+2127 4FGL J0045.3+2128 HSP 243.1±4.4 57253.6 57349.8 96.2±14.8 1.4×10 −2 6.3×10−3 2.5±0.4
+RBPLJ0136+4751 OC 457 4FGL J0137.0+4751 LSP 116.9±9.3 56561.1 56600.4 39.4±11.8 2.9×10 −3 3.1×10−2 3.0±1.0
+RBPLJ0136+4751 OC 457 4FGL J0137.0+4751 LSP 115.0±2.4 57264.0 57311.5 47.4±6.8 1.7×10 −3 3.1×10−2 2.4±0.4
+RBPLJ0136+4751 OC 457 4FGL J0137.0+4751 LSP 137.4±2.5 57311.5 57349.8 38.4±7.4 1.6×10 −8 2.0×10−3 3.6±0.7
+RBPLJ0259+0747 PKS 0256+075 4FGL J0259.4+0746 LSP 203.3±2.1 56543.6 56609.9 66.3±3.7 2.8×10 −4 7.8×10−3 3.1±0.2
+RBPLJ0854+2006 OJ 287 4FGL J0854.8+2006 LSP 172.5±1.6 56556.1 56599.1 43.0±7.0 4.5×10 −9 4.9×10−4 4.0±0.7
+RBPLJ1037+5711 87GB 103431.3+572750 4FGL J1037.7+5711 ISP 209.5±9.4 56776.9 56829.8 52.9±8.4 6.4×10 −5 1.6×10−2 4.0±0.8
+RBPLJ1048+7143 S5 1044+71 4FGL J1048.4+7143 LSP 144.9±2.2 56594.6 56607.1 12.4±0.8 1.5×10 −9 9.8×10−4 11.7±0.9
+RBPLJ1505+0326 PMN J1505+0326 4FGL J1505.0+0326 ISP 126.7±7.9 56773.9 56861.8 87.9±14.0 1.1×10 −4 6.3×10−2 1.4±0.3
+RBPLJ1512-0905 PKS 1510-089 4FGL J1512.8-0906 LSP 93.9±3.4 56802.4 56866.8 64.4±11.3 1.8×10 −2 6.3×10−2 1.5±0.3
+RBPLJ1512-0905 PKS 1510-089 4FGL J1512.8-0906 LSP 112.4±4.8 57604.8 57619.3 14.5±2.4 2.4×10 −5 1.6×10−2 7.8±1.7
+RBPLJ1542+6129 QSO B1542+614 4FGL J1543.0+6130 LSP 109.3±4.7 56797.0 56858.8 61.9±30.5 1.4×10 −6 7.8×10−3 1.8±0.9
+RBPLJ1555+1111 PG 1553+113 4FGL J1555.7+1111 HSP 133.5±8.0 56499.3 56545.8 46.5±20.6 1.1×10 −8 9.8×10−4 2.9±1.4
+RBPLJ1555+1111 PG 1553+113 4FGL J1555.7+1111 HSP 142.1±4.7 56776.5 56814.9 38.4±7.3 4.8×10 −7 4.9×10−4 3.7±0.8
+RBPLJ1558+5625 TXS 1557+565 4FGL J1558.8+5625 ISP 115.0±5.7 57168.4 57262.8 94.4±19.0 1.1×10 −10 3.9×10−3 1.2±0.3
+RBPLJ1604+5714 7C 1603+5722 4FGL J1604.6+5714 ISP 195.9±6.5 57187.9 57235.8 48.0±11.9 1.7×10 −2 6.3×10−2 4.1±1.1
+RBPLJ1635+3808 4C+38.41 4FGL J1635.2+3808 LSP 153.5±5.0 57587.9 57612.4 24.5±8.2 7.5×10 −6 3.1×10−5 6.3±2.2
+RBPLJ1635+3808 4C+38.41 4FGL J1635.2+3808 LSP 90.8±6.7 57625.9 57633.3 7.5±2.3 4.4×10 −4 6.3×10−2 12.2±4.3
+RBPLJ1725+1152 H 1722+119 4FGL J1725.0+1152 HSP 97.3±6.4 56523.8 56544.8 21.0±5.3 3.8×10 −4 3.1×10−2 4.6±1.4
+RBPLJ1748+7005 S5 1749+70 4FGL J1748.6+7005 LSP 125.0±2.4 56854.9 56897.3 42.4±5.8 1.2×10 −12 1.2×10−4 3.0±0.4
+RBPLJ1751+0939 OT 081 4FGL J1751.5+0938 LSP 182.4±2.4 56524.3 56538.8 14.5±4.1 5.6×10 −3 6.3×10−2 12.6±3.7
+RBPLJ1751+0939 OT 081 4FGL J1751.5+0938 LSP 359.7±2.8 56860.9 56900.3 39.4±5.8 1.8×10 −8 4.9×10−4 9.1±1.4
+RBPLJ1751+0939 OT 081 4FGL J1751.5+0938 LSP 134.8±3.1 56901.9 56946.2 44.4±11.0 2.4×10 −5 6.3×10−2 3.0±0.8
+RBPLJ1751+0939 OT 081 4FGL J1751.5+0938 LSP 220.1±1.9 57206.9 57245.3 38.4±12.8 4.4×10 −7 1.6×10−2 5.7±2.0
+RBPLJ1754+3212 ATO J268.5491+32.2064 4FGL J1754.2+3212 ISP 165.9±3.8 57152.0 57219.9 67.9±11.9 2.6×10 −4 3.1×10−2 2.4±0.5
+RBPLJ1754+3212 ATO J268.5491+32.2064 4FGL J1754.2+3212 ISP 99.5±4.0 57235.4 57285.8 50.4±7.6 2.9×10 −6 3.1×10−2 2.0±0.3
+RBPLJ1754+3212 ATO J268.5491+32.2064 4FGL J1754.2+3212 ISP 119.8±10.8 57599.9 57621.9 22.0±2.9 1.0×10 −12 6.1×10−5 5.5±1.0
+RBPLJ1800+7828 S5 1803+78 4FGL J1800.6+7828 LSP 111.1±2.4 56513.9 56595.7 81.9±32.2 5.2×10 −4 9.8×10−4 1.4±0.6
+RBPLJ1800+7828 S5 1803+78 4FGL J1800.6+7828 LSP 198.5±1.7 56861.4 56898.8 37.4±6.5 2.1×10 −5 7.8×10−3 5.3±1.0
+RBPLJ1800+7828 S5 1803+78 4FGL J1800.6+7828 LSP 156.8±3.4 57225.5 57292.3 66.9±8.5 1.5×10 −4 1.6×10−2 2.4±0.3
+RBPLJ1800+7828 S5 1803+78 4FGL J1800.6+7828 LSP 194.8±3.9 57602.3 57620.3 18.0±7.3 2.5×10 −6 2.4×10−4 10.8±4.6
+RBPLJ1806+6949 S4 1807+69 4FGL J1806.8+6949 ISP 174.0±4.5 56789.6 56900.9 111.3±30.9 4.0×10 −8 9.8×10−4 1.6±0.5
+RBPLJ1838+4802 ATO J279.7048+48.0428 4FGL J1838.8+4802 HSP 159.8±5.7 57177.5 57274.9 97.4±20.1 4.7×10 −5 9.8×10−4 1.6±0.4
+RBPLJ2022+7611 S5 2023+76 4FGL J2022.5+7612 ISP 136.8±2.3 56892.9 56951.8 58.9±5.0 1.5×10 −3 6.3×10−2 2.3±0.2
+RBPLJ2149+0322 MITG J2149+0323 4FGL J2149.6+0323 ISP 94.0±3.3 56535.0 56592.3 57.3±8.5 5.0×10 −4 6.3×10−2 1.6±0.3
+RBPLJ2202+4216 BL Lacertae 4FGL J2202.7+4216 LSP 104.3±3.2 57590.5 57604.9 14.4±4.4 1.8×10 −6 3.9×10−3 7.2±2.3
+RBPLJ2202+4216 BL Lacertae 4FGL J2202.7+4216 LSP 130.7±4.4 57619.0 57637.0 18.1±1.5 1.1×10 −11 6.1×10−5 7.2±0.8
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 314.9±12.2 56500.1 56540.0 40.0±13.0 4.5×10 −4 3.9×10−3 7.9±2.8
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 211.2±4.8 56563.9 56609.8 45.8±10.0 1.3×10 −9 4.9×10−4 4.6±1.1
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 188.3±3.6 57205.6 57272.0 66.4±17.9 6.9×10 −5 6.3×10−2 2.8±0.8
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 225.6±5.5 57272.0 57336.3 64.4±13.5 3.6×10 −6 3.1×10−2 3.5±0.8
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 121.0±4.5 57598.5 57612.5 14.0±3.1 2.7×10 −13 2.0×10−3 8.6±2.1
+RBPLJ2232+1143 CTA 102 4FGL J2232.6+1143 LSP 180.5±2.1 57627.5 57637.0 9.5±2.2 6.5×10 −8 7.8×10−3 19.0±4.5
+RBPLJ2253+1608 3C 454.3 4FGL J2253.9+1609 LSP 178.8±5.3 56494.6 56540.1 45.5±15.2 6.3×10 −10 2.4×10−4 3.9±1.4
+RBPLJ2253+1608 3C 454.3 4FGL J2253.9+1609 LSP 180.3±2.3 56864.1 56885.5 21.5±2.4 5.8×10 −9 9.8×10−4 8.4±1.0
+RBPLJ2253+1608 3C 454.3 4FGL J2253.9+1609 LSP 136.9±2.9 57274.0 57311.4 37.5±7.6 2.4×10 −2 6.3×10−2 3.7±0.8
+RBPLJ2253+1608 3C 454.3 4FGL J2253.9+1609 LSP 167.9±4.2 57605.5 57612.6 7.0±2.1 1.5×10 −2 3.1×10−2 23.9±7.6
+Article number, page 10

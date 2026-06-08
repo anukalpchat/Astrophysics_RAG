@@ -1,0 +1,1000 @@
+Title: Velocityformer: Broken-Symmetry-Matched Equivariant Graph Transformers for Cosmological Velocity Reconstruction
+Authors: Tilman Tröster, David Mirkovic, Veronika Oehl, Arne Thomsen
+Published: 2026-05-20
+Categories: astro-ph.CO, cs.LG
+
+VELOCITYFORMER: Broken-Symmetry-Matched
+Equivariant Graph Transformers for Cosmological
+Velocity Reconstruction
+Tilman Tröster∗ David Mirkovic Veronika Oehl Arne Thomsen
+Department of Physics
+ETH Zürich
+Abstract
+Precise measurement of the kinematic Sunyaev-Zel’dovich (kSZ) effect – a probe
+of the large-scale distribution of baryonic matter, a key observable for cosmological
+inference – requires accurate reconstruction of galaxy velocities from spectroscopic
+surveys. The signal-to-noise ratio (SNR) of kSZ measurements scales directly with
+the correlation coefficientrbetween reconstructed and true velocities.
+We introduce VELOCITYFORMER, an equivariant graph transformer architecture
+designed to match the specific symmetry of the observational data. While the under-
+lying physics is equivariant with respect to translations and rotations, observational
+effects break this symmetry due to the preferred line-of-sight direction. Matching
+the model’s inductive bias to the data’s broken symmetry consistently improves
+performance across all model sizes and training volumes, with VELOCITYFORMER
+improving r by 35% over the standard linear theory baseline and outperforming
+ML baselines at every data volume.
+By matching the model’s inductive bias to the data and conditioning on the physics-
+based long-wavelength solution, VELOCITYFORMERis highly data-efficient, train-
+ing to high accuracy on as few as 4 low-fidelity simulations, and generalises
+zero-shot across input geometry, cosmological parameters, and galaxy sample. On
+high-fidelity simulated galaxy catalogues, this yields a 30% improvement in r over
+the physical baseline, directly translating to the same SNR gain on observational
+data.
+1 Introduction
+Contemporary and upcoming cosmological analyses are hampered not by our understanding of dark
+matter but by our limited knowledge of the distribution of ordinary, baryonic matter (Chisari et al.,
+2019). The kinematic Sunyaev-Zel’dovich (kSZ) effect (Sunyaev and Zeldovich, 1980) – a secondary
+cosmic microwave background (CMB) anisotropy caused by inverse Compton scattering due to bulk
+velocity of free electrons – provides a clean probe of the distribution of gas around galaxies and
+clusters, and is therefore a key observable for baryonic matter science. Measuring the kSZ effect
+around galaxies requires knowledge about their intrinsic, or peculiar, velocities (Shao et al., 2011).
+While spectroscopic galaxy surveys, such as BOSS (Dawson et al., 2013) and DESI (DESI Collabora-
+tion et al., 2016), map out the three-dimensional distribution of galaxies, they provide a static view of
+the large-scale structure of the Universe and cannot measure the velocity field directly. Reconstructing
+velocities from the observed galaxy positions can be framed as a point cloud regression problem:
+given galaxy 3D positions as input, predict the 3D velocity vector per point. Inferring velocities from
+∗tilmant@phys.ethz.ch
+Preprint.
+arXiv:2605.21483v1  [astro-ph.CO]  20 May 2026
+
+the galaxy distribution is a challenging inverse problem however, due to the non-linear growth of
+structure and confounding observational effects. Spectroscopic surveys measure galaxy spectra and
+their redshifts, from which their distance can be inferred given a model of the cosmic expansion
+history. Peculiar velocities along the line of sight (LOS) induce a Doppler shift of the galaxy spectra
+that are indistinguishable from the cosmic redshift however, causing a displacement of the inferred
+positions: the so-called redshift-space distortions (RSD).
+Current approaches rely on the linearised continuity equation to estimate the velocity field from
+the observed galaxy density. This linear estimate is accurate on large scales but fails to capture
+small-scale non-linear dynamics. This reliance on linear velocity reconstruction directly affects the
+detection significance of the kSZ effect: the signal-to-noise ratio (SNR) of kSZ measurements is
+proportional to the correlation coefficient between the true and inferred velocities along the LOS
+(Ried Guachalla et al., 2024). Any improvement in the velocity reconstruction thus directly translates
+into an increase in the detection significance of the kSZ effect. As the kSZ has a much lower SNR than
+the primary CMB and most of its secondary anisotropies, such as the thermal Sunyaev-Zel’dovich
+effect, improving velocity reconstruction is key to enabling downstream kSZ science.
+We introduce VELOCITYFORMER, an equivariant graph transformer based on Equiformer V2 (Liao
+et al., 2024). While the underlying gravitational physics is equivariant under the Euclidean groupE(3)
+of translations and rotations, the observed data is not: the aforementioned RSDs induce a preferred
+direction along the LOS. Furthermore, our observations lie on the light-cone: galaxies further away
+were observed at an earlier cosmic time. The LOS direction thus encodes both spatial and temporal
+information. We account for this broken symmetry in VELOCITYFORMERby embedding the LOS
+coordinate as a scalar feature, and find that this consistently improves performance across all model
+sizes and training-data volumes, confirming earlier findings that matching the symmetry of the model
+to that of the data improves performance and data efficiency (e.g. Fuchs et al., 2020).
+We factorise the velocity reconstruction problem into large and small scales by first solving for
+the long-wavelength velocity field using the standard linear-theory approach and then conditioning
+VELOCITYFORMERon this linear velocity estimate while training on small sub-volumes of size
+∼70h −1Mpc. This increases the number of training samples by a factor ofO(103), enabling training
+on as few as four simulation boxes. VELOCITYFORMERachieves a 35 % improvement in r over
+the linear theory baseline with 38 training boxes and outperforms all ML baselines. The model
+generalises zero-shot to unseen input geometries, cosmological parameters, and galaxy samples with
+≳30 % improvements throughout. Achieving an equivalent gain in kSZ SNR by enlarging the galaxy
+survey would require approximately70–80 %more galaxies.
+Contributions
+• We introduce VELOCITYFORMER, an equivariant graph transformer matched to the broken E(3)
+symmetry of spectroscopic survey data, adapted from Equiformer V2 (Liao et al., 2024).
+• We factorise the velocity reconstruction problem into large and small scales by conditioning
+on the linear velocity estimate and training on small sub-volumes, increasing the number of
+training samples byO(10 3)and enabling training on as few as four simulation boxes.
+• VELOCITYFORMERoutperforms all baselines at every data volume and model size, and gener-
+alises zero-shot across input geometries, cosmological parameters, and galaxy samples.
+2 Related work
+ML-based velocity reconstructionClassical peculiar velocity reconstruction relies on linearised
+solutions to the continuity equation relating the density and velocity fields (Nusser et al., 1991; Zaroubi
+et al., 1995). Deep learning approaches have recently surpassed these linear baselines by learning the
+non-linear density-velocity mapping directly from simulations. Most of these works adopt CNN or
+U-Net (Ronneberger et al., 2015) architectures operating on voxelised density grids (Tanimura et al.,
+2022; Ganeshaiah Veena et al., 2023; Wu et al., 2023; Wang and Yang, 2024; Xiao et al., 2025), while
+Chen et al. (2024) demonstrate competitive performance with a simpler MLP. Maragliano et al. (2026)
+address the related task of real-space density reconstruction rather than velocity, while Tanimura
+et al. (2024) replace the grid with a GNN acting on sparse galaxy catalogues. The COSMOBENCH
+(Huang et al., 2025) dataset also provides a GNN baseline for the velocity reconstruction task. Our
+2
+
+work differs from all of the above by both operating directly on halo point clouds and building in the
+physical symmetries of the problem by construction.
+Equivariant neural networksEquivariant networks encode the requirement that outputs transform
+according to the symmetry group of the data. Cohen and Welling (2016) introduced group-equivariant
+CNNs, followed by a general theoretical treatment in Kondor and Trivedi (2018). Continuous SE(3)
+equivariance for 3D point clouds was realised by tensor field networks (Thomas et al., 2018) and
+later SE(3)-Transformers (Fuchs et al., 2020), while SEGNNs (Brandstetter et al., 2022) generalise
+message passing to steerable node and edge features. Equiformer (Liao and Smidt, 2023; Liao et al.,
+2024) scales these ideas with transformer-style attention. These architectures have found strong
+adoption in molecular dynamics and particle physics, where Euclidean symmetries are exact.
+Equivariant neural networks in astrophysicsMuch existing work on symmetry-aware learning
+in astrophysics has targeted signals on the sphere, such as spherical CNNs (Perraudin et al., 2019;
+Defferrard et al., 2020) and wavelet-based scattering transforms (McEwen et al., 2022). For 3D
+catalogue data, Thiele et al. (2022) apply rotationally equivariant DeepSets (Zaheer et al., 2017) to
+predict the thermal Sunyaev-Zel’dovich field from dark matter particle sets. Dai and Seljak (2022)
+enforce translation and rotation equivariance in a normalizing flow for field-level cosmological
+inference. More recently, Jagvaral et al. (2025) use geometric deep learning on halo graphs to model
+galaxy intrinsic alignments. We build on this tradition but target vector-valued outputs that are
+required to be SE(3)-equivariant, rather than merely invariant, and address the fact that observational
+effects break theE(3)symmetry.
+3 Method
+3.1 Task definition
+The velocity reconstruction task can be cast as a point cloud regression problem, where the 3D galaxy
+positions serve as inputs and the targets are the per-galaxy 3D velocity vectors. We refine this task
+by conditioning the regression on the long-wavelength velocity field obtained from linear theory, as
+detailed in Sects. 4.1 and A.2. In practice this is done by including the per-galaxy linear velocity
+estimate as a feature vector for each input point. That is, we wish to find f:R 3×ngal ×R 3×ngal →
+R3×ngal that predicts velocities for alln gal galaxies in a sample:
+f
+ 
+{xi,v lin
+i }ngal
+i=1
+
+→ {v pred
+i }ngal
+i=1 ,(1)
+where xi, vlin
+i , and vpred
+i are the 3D galaxy positions, linear velocity estimates, and predicted
+velocities for each galaxy, respectively.
+The optimisation proceeds by minimising the mean-squared-error (MSE) loss between vpred and
+the true velocities vtrue, see Eq. 2. Each training sample is given in the form of a collection of ngal
+galaxiesD i ={x i,v lin
+i ,v true
+i },i= 1, . . . , n gal, wheren gal can vary from sample to sample.
+For the graph-based models, the point cloud is transformed into a graph with node features xi and
+vlin, and edge features comprised of the relative positions xi −x j and distance |xi −x j|. Graph
+connectivity is defined by aknearest neighbours (k-NN) search, as described in Sect. 4.3.
+3.2 VELOCITYFORMER
+VELOCITYFORMERis an equivariant graph Transformer architecture, closely following that of
+Equiformer V2 (Liao et al., 2024). It inherits Equiformer V2’s features, such as efficient eSCN
+(Passaro and Zitnick, 2023) convolutions that reduce the SO(3) tensor products to SO(2) linear
+operations. We refer the reader to Liao et al. (2024) for architectural details about Equiformer V2 and
+limit ourselves here to changes relevant for VELOCITYFORMER.
+The input linear velocity estimates vlin
+i are embedded as spherical harmonics up to degree Lmax,
+scaled by the norm of the velocity vectors. The output vpred are taken as the final vector ( L=1)
+irreducible representations (irreps). In order to break the E(3) equivariance, we embed the LOS
+coordinate as a scalar, i.e. L=0 irrep. This procedure is similar to how SE(3)-Transformer+z (Fuchs
+et al., 2020) accounts for the preferred direction induced by gravity in real-world object classification.
+3
+
+In addition to the broken-E(3) VELOCITYFORMER, which is our fiducial model, we also consider a
+variant with full E(3) equivariance, as well as a non-equivariant version. For the latter Lmax=0 and
+velocity in- and outputs are treated as independent scalar channels.
+As a production model for non-linear velocity reconstruction will likely use application-specific
+training data different from ours (cf. Sect. 4.1), we are here primarily interested in exploring the
+performance of VELOCITYFORMERacross different data regimes and model sizes, rather than
+producing a single ‘best’ model. To this end we consider a wide range of model sizes, ranging from
+approximately 50k to 200M parameters. The hyperparameters, model configuration, and training
+details are described in Appendix D.1.
+3.3 Baselines
+We consider four baselines to compare against our proposed VELOCITYFORMERarchitecture: the
+standard linear-theory velocity reconstruction, as described in Appendix A.2; a U-Net architecture, to
+benchmark against previous ML approaches to velocity reconstruction; the GNN baseline introduced
+with the COSMOBENCH(Huang et al., 2025) dataset; and a standard Transformer architecture,
+as an architecture with no geometric inductive bias. We also investigated the Geometric Algebra
+Transformer (Brehmer et al., 2023) as an alternative equivariant architecture but found training to be
+unstable and it failing to outperform the simpler baselines.
+Architectural details and training hyperparameters are described in Appendix D.
+3.3.1 Physical baseline: linear theory
+The physical baseline is given by the linear-theory velocity reconstruction described in Appendix A.2,
+the current de facto standard tool in kSZ analyses. It therefore serves as a key benchmark for our
+proposed method, as the main motivation for this work is to improve upon the linear estimator and
+thus increase the SNR of kSZ measurements. As the ML-based models are given the linear velocity
+estimate as an input, this baseline also serves as a floor for the ML model performance, since learning
+the identity mapping recovers the linear estimate.
+3.3.2 U-Net baseline
+Much of prior work (e.g. Ganeshaiah Veena et al., 2023; Wu et al., 2023; Wang and Yang, 2024;
+Xiao et al., 2025) on ML-based velocity reconstruction has focused on convolutional neural network
+architectures, in particular U-Nets (Ronneberger et al., 2015). To compare to these previous works,
+we implement a similar U-Net baseline. Unfortunately, there is no established benchmark dataset,
+public implementation, or even agreed-upon metric among these prior works. While we find similar
+results with our U-Net implementation and training regime, making a direct comparison remains
+difficult.
+The input point cloud (galaxy catalogue) is first converted to a voxelised density field on a regular grid
+using a cloud-in-cell mass-assignment scheme, which is fed into the U-Net. The predicted velocity
+grid is then linearly interpolated at the galaxy positions to obtain per-galaxy velocity estimates.
+3.3.3 GNN baseline
+COSMOBENCH(Huang et al., 2025) introduced a benchmark dataset based on, among others, the
+same QUIJOTEsimulations we use in this work (see Sect. 4.1), and proposed a GNN architecture
+for the velocity reconstruction task. While the dataset definition differs from ours (e.g. they only
+consider the 5000 most massive haloes in each box), the GNN architecture serves as a useful point
+of comparison for our proposed VELOCITYFORMER, as it operates on the same graph structure as
+our model, but without the inductive bias of equivariance. We slightly adapt their architecture to our
+problem setup, in particular by conditioning the model on the linear velocity estimate.
+3.3.4 Transformer baseline
+While the other baselines include some form of inductive bias (translational equivariance due to the
+convolutional structure of the U-Net, locality due to the k-NN graph of the GNN), the Transformer
+architecture operates on all galaxies in the sub-boxes (see Sect. 4.1) as a set, with no built-in
+assumptions about the underlying symmetries or structure of the data.
+4
+
+The self-attention layers do not use positional encodings, leaving the model to learn the geometric
+structure from the galaxy positions. The fiducial Transformer baseline attends to all galaxies in the
+input but we test using the graph adjacency matrix as an attention mask to emulate the behaviour of
+the graph-based models in Appendix E.1.
+4 Experimental setup
+4.1 Data
+The training and evaluation data for our experiments are based on the QUIJOTE(Villaescusa-Navarro
+et al., 2020) N-body simulation suite. While the resolution of the QUIJOTEsimulations is relatively
+low compared to state-of-the-art cosmological simulations, the very large number of realisations
+makes them an ideal test bed for ML applications.
+We use the ‘fiducial’ set, which has a fixed cosmology but varies in the initial conditions. The
+simulation snapshots are in the form of cubic boxes with side-length of 1h −1Gpc and periodic
+boundary conditions. To produce the mock galaxy samples used for training, validation, and testing,
+we start with the halo catalogues from the simulation snapshots at redshift z=0.5. The haloes are
+populated with galaxies with a halo-occupation distribution (HOD) model, following Zheng et al.
+(2007) and using the implementation provided by pyHOD.2 Velocities of central galaxies are set to
+the velocity of their host halo, while satellite galaxies are assigned a random velocity component
+drawn from a Gaussian distribution with variance given by the virial velocity of the host halo. The
+use of random satellite velocities makes the reconstruction task arguably more challenging than on
+observational data, as it adds a stochastic component to the velocity field that is not derived from
+gravitational dynamics. Finally, the galaxy catalogues are converted to redshift-space by applying the
+line-of-sight displacement Eq. 3. The resulting mock galaxy catalogues emulate the BOSS CMASS
+sample, with a number density ofn≈3.5×10 −4 h3Mpc−3 and a linear bias ofb≈2.
+Linear velocity estimates are then obtained for each full 1h −3Gpc3 simulation box using a standard
+FFT-based estimator for Eq. 6, with a grid size of2563 and a Gaussian smoothing kernel with a width
+of10h −1Mpc.
+Each galaxy catalogue constitutes a point cloud: an unordered set of 3D positions with associated
+feature vectors, the linear velocity estimates, and per-point true velocities as regression targets.
+Sample galaxy point clouds are visualised in Fig. 2.
+In this work we consider three data regimes:
+• Low-data: 4 simulation boxes for training, corresponding to ∼10 4 sub-boxes, i.e. training sam-
+ples. This regime is a realistic scenario for training on high-fidelity hydrodynamic simulations,
+for example FLAMINGO (Schaye et al., 2023; Kugel et al., 2023; Helly et al., 2026), which are
+computationally expensive and thus limited in number, especially for cosmology-sized boxes.
+• Mid-data: 38 simulation boxes for training, corresponding to ∼10 5 sub-boxes. This data
+volume is consistent with high-resolutionN-body simulation suites, such as the Aemulus Project
+(DeRose et al., 2019).
+• High-data: 3800 simulation boxes for training, corresponding to ∼10 7 sub-boxes. While
+this data volume is not available for high-fidelity simulations we would use for production
+training runs, it allows us to explore the large-data regime and confirm that the equivariant model
+continues to outperform baselines even when data is abundant.
+Unless noted otherwise, results are reported on a held-out test set of 50 simulation boxes, correspond-
+ing to∼1.3×10 5 sub-boxes. The uncertainty estimation procedure is described in Appendix C.
+4.2 Factorisation into large and small scales
+As the long-wavelength velocity field is captured by the linear estimator, we factorise the problem
+into large and small scales by subdividing the 1h −3Gpc3 simulation boxes into n3
+split sub-boxes.
+The models are then trained to predict the non-linear velocity field on the sub-boxes, conditioned
+2https://gitlab.com/jcallesh/hod
+5
+
+on the linear velocity estimated from the full box. We find that nsplit=14 provides a good balance
+between capturing non-linear scales and having enough training samples, resulting in sub-boxes of
+size71.4h −1Mpc. In Appendix E.2 the effect of the choice ofn split is investigated in detail.
+This factorisation brings three main benefits:
+• It grounds the model in the large-scale velocity field, which is based on well-understood physics
+and is accurately captured by the linear estimator.
+• The sub-boxes contain O(100) galaxies, making the use of graph-based models, which would
+struggle with O(105) nodes and O(106) edges contained in the full box, computationally
+feasible.
+• It allows us to increase the number of training samples by a factor of O(103), thus enabling
+robust training even in data-scarce scenarios withO(1)simulations.
+4.3 Graph construction
+Both our proposed VELOCITYFORMERarchitecture and the GNN baseline operate on graphs. We thus
+interpret the galaxy catalogues as graphs, with node features being given by the three-dimensional
+galaxy positions and linear velocity predictions. Edges are defined using a k-nearest neighbour
+(k-NN) graph built from the redshift-space positions of the galaxies in each sub-box. We choose
+k-NN graphs over radius graphs, as they ensure connectivity of the graph even in low-density regions,
+avoiding disconnected clusters of nodes.
+We find that using a graph structure withk=10 nearest neighbours strikes a good balance between
+capturing local interactions and keeping the computational cost manageable. Imposing such a graph
+structure is an arbitrary choice, without physical motivation, as gravity is a long-range force that
+induces interactions between all galaxies, regardless of their distance. Indeed, we find that increasing
+the connectivity of the graph does improve model performance, but at increasingly prohibitive
+computational cost, even for small models. Details on the effect of varying the connectivity of the
+graph on model performance are given in Appendix E.1.
+4.4 Evaluation metrics
+We consider two main metrics to evaluate model performance: the mean-squared error (MSE) l of
+the predicted three-dimensional velocities and their ground truths; and the correlation coefficient r
+between the predicted and true velocities along the LOS. For predicted velocitiesvpred
+ij , i= 1, . . . , N ,
+j= 1,2,3, and true velocitiesv true
+ij ,
+l= 1
+3N
+NX
+i=1
+3X
+j=1
+(vpred
+ij −v true
+ij )2 , r= 1
+σvpred σvtrue
+1
+N
+NX
+i=1
+vpred
+i,∥ vtrue
+i,∥ ,(2)
+where σvpred/true are the standard deviations of the predicted and true LOS velocities, respectively,
+and vi,∥ is the LOS velocity of galaxy i. In our case, the LOS is aligned with the z-axis of the
+simulation box, sov i,∥ =v i,3.
+The MSE l captures the overall accuracy of the velocity predictions, and serves as the training loss for
+all models, while the LOS correlation coefficientr is directly related to the SNR of kSZ measurements
+and thus serves as a key metric for our main scientific application. We furthermore quote ∆r, the
+relative improvement in r over the physical baseline, as an estimate of the improvement in kSZ SNR
+that our method would enable.
+5 Results
+Our main results for the cases of 4 and 38 simulation boxes are shown in Table 1. The quoted numbers
+are for the model size with the best MSE; see Table 3 in Appendix B for the results at each model
+size. The VELOCITYFORMERarchitecture consistently outperforms all baselines across all model
+sizes and training-data volumes, confirming the importance of matching the symmetry of the model
+to that of the data. It reaches a 30% improvement over the physical baseline with just 4 training
+boxes, and 35% on 38 boxes, offering significant gains in the SNR of kSZ measurements. Achieving
+6
+
+a comparable gain in SNR through increasing the number of galaxies the kSZ effect is measured on
+would require a 70–80% larger galaxy catalogue.
+In the regimes with limited training data, increasing model size for the broken-symmetry VELOC-
+ITYFORMERhas a limited effect, with performance staying within few per cents over model size
+increases by three orders of magnitude. In contrast, the full-E(3) variant benefits from larger model
+capacity, particularly in the data-sparse 4-boxes regime, suggesting that an improper inductive bias
+can be compensated with more model capacity and more data.
+Table 1: Velocity MSE l, LOS velocity correlation coefficient r (see Eq. 2), and improvement over
+the physical (linear theory) baseline ∆r for each model architecture and two data regimes: low-data
+(4 simulation boxes) and mid-data (38 simulation boxes). For each model the parameter count that
+yields the lowest validation loss is selected. Uncertainties are <1% for l and r and are not shown
+here for brevity, see Appendix C for details. The uncertainties in ∆r are somewhat larger due to
+being a ratio of two noisy quantities.
+Model Low-data Mid-data
+↓l↑r↑∆r[%]↓l↑r↑∆r[%]
+Physical baseline 0.825 0.571 – 0.825 0.571 –
+Transformer 0.651 0.72125.7±1.30.614 0.75331.3±1.3
+GNN 0.671 0.71825.6±0.20.639 0.73828.8±0.2
+U-Net 0.677 0.70820.8±0.20.652 0.73425.5±0.2
+VelocityformerL max=00.733 0.64312.4±0.40.677 0.68821.2±0.5
+VelocityformerE(3)0.652 0.72826.8±0.30.600 0.76535.1±0.3
+Velocityformer broken-E(3)0.627 0.74129.9±0.40.596 0.77935.9±0.4
+5.1 Data efficiency
+An inductive bias that better matches the structure of the data generally improves data efficiency, both
+in terms of number of epochs required for convergence and in terms of the number of training samples
+required to reach a given performance level. This is illustrated in the right panel of Fig. 1, which lists
+the number of epochs required for each model to reach convergence. VELOCITYFORMERconverges
+in 10–100 times fewer epochs than the Transformer and GNN baselines while achieving a lower loss.
+The U-Net baseline requires a similar number of epochs for convergence as VELOCITYFORMER,
+potentially due to its partially equivariant nature, but does not achieve the same low loss.
+The left panel of Fig. 1 shows the validation loss curves for VELOCITYFORMERand the baselines for
+the data-abundant case of 3800 training boxes. VELOCITYFORMERreaches any given performance
+level with a factor of 10–100 less training data than the baselines, again demonstrating its data
+efficiency.
+Heuristically, VELOCITYFORMERexhibits a steeper exponent compared to the baselines when fitting
+a power law with finite offset of the form L(d) =L min + A
+dα to the loss-vs-data curve, as in Kaplan
+et al. (2020), Hoffmann et al. (2022), ATLAS Collaboration (2026), and Vigl et al. (2026). We found
+the power law fit to be highly sensitive to initialisation and fitting range, however, and thus refrain
+from making quantitative statements here but encourage further work in this direction.
+5.2 Zero-shot generalisation
+The training data used in our experiments is based on a single cosmology and HOD prescription.
+This is a somewhat unrealistic scenario, as any production model would be trained on a more diverse
+set of data, both in terms of cosmological parameters and galaxy sample. Nonetheless, we investigate
+the zero-shot generalisation of VELOCITYFORMERas a stress test of the model’s capability to bridge
+the sim-to-real gap.
+We consider three test cases, with an increasing distribution drift from the training data: using a
+different nsplit at test time compared to training; an unseen simulation with a different cosmology
+from the nwLH latin hypercube set of the QUIJOTEsuite (Villaescusa-Navarro et al., 2020); and a
+high-fidelity galaxy catalogue from the FLAMINGO simulation suite (Schaye et al., 2023; Kugel
+7
+
+104 105 106 107
+Training samples seen
+0.60
+0.65
+0.70
+0.75
+0.80
+Validation loss
+0.8M
+3M
+12M
+48M
+Physical baseline
+Transformer
+U-Net
+GNN
+Velocityformer broken-E(3)
+0.60 0.62 0.64 0.66 0.68
+Validation loss
+101
+102
+103
+Epochs
+Low-data
+Transformer
+GNN
+U-Net
+Velocityformer broken-E(3)
+105 106 107 108
+Number of parameters
+101
+102
+103
+Epochs
+Mid-data
+Figure 1:Left: validation loss curves over a single epoch of for the high-data regime (3800 simulation
+boxes). VELOCITYFORMER(blue lines) learns faster than the baselines, reaching a fixed loss with
+10–100 times fewer training samples.Right: number of epochs required for convergence for different
+model sizes. The top panel shows training on 4 simulation boxes (low-data), while the case for 38
+simulation boxes (mid-data) is shown on the bottom panel. VELOCITYFORMER(triangle symbols)
+converges faster and to a lower loss than the baselines.
+et al., 2023; Helly et al., 2026). The first test probes the model’s ability to generalise to different
+input geometries, a key capability for real-world applications where the data will not fit neatly into
+sub-boxes of a fixed size. The second test assesses the model’s robustness to changes in cosmological
+parameters, as the true cosmology of the Universe is unknown. Indeed, the present work is largely in
+service to ultimately enabling better inference of cosmological parameters. The third test evaluates
+the model’s capacity to generalise from the crude HOD-based galaxy catalogues used for training
+to a more realistic galaxy catalogue that is based on a full hydrodynamical simulation and galaxy
+formation model. Details of these different datasets are described in Appendix E.3.
+Table 2: Zero-shot generalisation of VELOCITYFORMERacross different sub-box sizes, cosmologies,
+and galaxy sample. Uncertainties are estimated from the scatter between five simulation boxes from
+the test set; FLAMINGO uncertainties are scaled by 1.7 to account for the smaller box size.
+Sub-box size Cosmology FLAMINGO
+83.3h −1Mpc 50h −1MpcA B
+rlin 0.582±0.013 0.584±0.013 0.565±0.013 0.607±0.013 0.549±0.022
+r0.754±0.005 0.763±0.005 0.765±0.005 0.783±0.005 0.722±0.009
+∆r[%]30.0±2.1 32.1±2.1 36.4±2.1 29.7±2.1 32.6±3.6
+These zero-shot generalisation results are presented in Table 2, showing that a 0.8M parameter
+VELOCITYFORMERtrained on 38 simulation boxes is able to maintain a significant performance
+improvement over the physical baseline even in the face of substantial distribution shifts. This
+robustness makes VELOCITYFORMERa strong contender for application on real observational data.
+We would like to emphasise that a production model would be trained on a more diverse set of data,
+capturing both variations in cosmological parameters and the galaxy sample, and thus would be
+expected to generalise even better than the zero-shot results presented here. These more realistic
+training scenarios are being investigated in forthcoming work.
+8
+
+6 Discussion & conclusion
+The main limitation that prevents application of VELOCITYFORMERat a production level is the
+simplified setup of the training data. For application to observational data, the following upgrades
+should be implemented on the training data to address the sim-to-real gap:
+• Redshift coverage, light-cone data, and survey geometryAs observed galaxy samples cover
+a wide range of redshifts (the various DESI samples cover redshifts from z=0.1 to z=3.5
+for quasars; DESI Collaboration et al. 2026), the training data should reflect this diversity.
+Furthermore, the model should be confirmed to generalise to light-cone data on irregular survey
+geometries, rather than the regular boxes at fixed redshift used here.
+• Cosmology and galaxy sampleThe true cosmological parameters of the Universe are not
+precisely known and reproducing realistic galaxies in simulation is still a very challenging task.
+The training data should reflect these uncertainties in our knowledge of cosmological parameters
+and galaxy formation.
+• Regression targetFor kSZ measurements, the true quantity of interest is the bulk velocity of
+the gas surrounding the galaxies. Here we use the galaxy velocities as the regression target, a
+proxy for gas bulk velocity. This can be refined to regressing on the velocities of the haloes that
+host the galaxies, which correlates better with the gas velocity (Ried Guachalla et al., 2024), or
+regressing directly on the gas velocity using high-fidelity hydrodynamical simulations.
+The design choices and data efficiency of VELOCITYFORMERmake it feasible to address these
+limitations. The factorisation into large and small scales employed by VELOCITYFORMERis an
+important asset, as light-cone effects are negligible on the scale of the small sub-boxes. By operating
+on small point clouds, rather than fixed regular grids, such as the U-Net approach, VELOCITYFORMER
+can also easily adapt to irregular survey geometries, as the sub-box point clouds are generally smaller
+than features in the survey geometry.
+The data efficiency – being able to improve over the physical baseline by 30% with only 4 simulation
+boxes – would in principle allow VELOCITYFORMERto be trained directly on light-cone data from
+high-fidelity hydrodynamical simulations. A more promising approach might be to pre-train on the
+large data volumes provided by the QUIJOTEsimulation suite, including both variations in cosmology
+and HOD prescription. The pre-trained model can then be fine-tuned on scarce high-fidelity data. We
+leave the investigation of such transfer-learning approaches for future work.
+Training and inference time per sample is significantly higher on the equivariant models, especially
+compared to highly-optimised self-attention implementations of the Transformer. To a large degree
+this reflects engineering investments, rather than computational complexity, however. Ongoing efforts
+to optimise equivariant operations, such asCUEQUIVARIANCE, 3 will likely shrink this gap in the
+future.
+ConclusionsWe introduce VELOCITYFORMER, an equivariant graph transformer architecture that
+supports the specific brokenE(3) symmetry of spectroscopic galaxy survey data. VELOCITYFORMER
+outperforms the baselines at all data volumes and model sizes, reaching a 35% improvement in
+the LOS velocity correlation coefficient r over the physical linear theory baseline, which is the
+current standard tool employed for velocity reconstruction. This gain in r directly translates into
+a proportional gain in the SNR of kSZ measurements, improving the detection significance of this
+crucial probe of diffuse gas in the Universe.
+The performance advantage persists over three orders of magnitude in data volumes, ranging from 4
+to 3800 simulation boxes, corresponding to 104–107 training samples, as well as model sizes, ranging
+from 50k to 200M parameters. VELOCITYFORMERis highly data efficient, training robustly on
+as few as 4 simulation boxes, and generalises well to input geometries, cosmologies, and galaxy
+samples, still achieving ≳30% improvements over the physical baseline on these unseen examples.
+This strong generalisation capability allows VELOCITYFORMERto bridge the sim-to-real gap, with
+refinements on the training regime to further increase robustness to distribution shift being the subject
+of forthcoming work. This will allow VELOCITYFORMERto be confidently applied to observational
+data, boosting the detection significance of kSZ measurements by over 30%.
+3https://github.com/NVIDIA/cuEquivariance
+9
+
+Acknowledgments and Disclosure of Funding
+TT and VO acknowledge funding from the Swiss National Science Foundation under the Ambizione
+project PZ00P2_193352.
+We acknowledge the Virgo Consortium for making their simulation data available. The FLAMINGO
+simulations were performed using the Durham Memory Intensive system managed by the Institute
+for Computational Cosmology on behalf of the STFC DiRAC facility (www.dirac.ac.uk).
+References
+Abdul Karim, M. et al. (Oct. 2025). “DESI DR2 results. II. Measurements of baryon acoustic
+oscillations and cosmological constraints”. In: Phys. Rev. D 112.8, 083515, p. 083515. eprint:
+2503.14738.
+Adame, A. G. et al. (July 2025). “DESI 2024 VII: cosmological constraints from the full-shape
+modeling of clustering measurements”. In: JCAP 2025.7, 028, p. 028. eprint:2411.12022.
+ATLAS Collaboration (2026).Carpe Datum: Scaling behavior of transformers for heavy
+hadron flavor identification. Tech. rep. All figures including auxiliary figures are available
+at https://atlas.web.cern.ch/Atlas/GROUPS/PHYSICS/PUBNOTES/ATL-SOFT-PUB-2026-002.
+Geneva: CERN.
+Brandstetter, J. et al. (2022). “Geometric and Physical Quantities improve E(3) Equivariant Message
+Passing”. In:International Conference on Learning Representations. eprint:2110.02905.
+Brehmer, J. et al. (2023). “Geometric Algebra Transformer”. In:Advances in Neural Information
+Processing Systems. Ed. by A. Oh et al. V ol. 36. Curran Associates, Inc., pp. 35472–35496. eprint:
+2305.18415.
+Chen, H. et al. (Aug. 2024). “Estimation of line-of-sight velocities of individual galaxies using
+neural networks - I. Modelling redshift-space distortions at large scales”. In: MNRAS 532.4,
+pp. 3947–3960. eprint:2312.03469.
+Chisari, N. E. et al. (2019). “Modelling baryonic feedback for survey cosmology”. In:The Open
+Journal of Astrophysics2.1, 4, p. 4. eprint:1905.06082.
+Cohen, T. and M. Welling (2016). “Group Equivariant Convolutional Networks”. In:Proceedings
+of The 33rd International Conference on Machine Learning. Ed. by M. F. Balcan and K. Q.
+Weinberger. V ol. 48. Proceedings of Machine Learning Research. New York, New York, USA:
+PMLR, pp. 2990–2999. eprint:1602.07576.
+Dai, B. and U. Seljak (Oct. 2022). “Translation and rotation equivariant normalizing flow (TRENF)
+for optimal cosmological analysis”. In: MNRAS 516.2, pp. 2363–2373. eprint:2202.05282.
+Dawson, K. S. et al. (Jan. 2013). “The Baryon Oscillation Spectroscopic Survey of SDSS-III”. In: AJ
+145.1, 10, p. 10. eprint:1208.0022.
+Defferrard, M. et al. (2020). “DeepSphere: a graph-based spherical CNN”. In:International Confer-
+ence on Learning Representations. eprint:2012.15000.
+Dekel, A. et al. (July 1993). “IRAS Galaxies versus POTENT Mass: Density Fields, Biasing, and
+Omega”. In: ApJ 412, p. 1.
+DeRose, J. et al. (2019). “The AEMULUS Project. I. Numerical Simulations for Precision Cosmol-
+ogy”. In: ApJ 875.1, 69, p. 69. eprint:1804.05865.
+DESI Collaboration et al. (Oct. 2016). “The DESI Experiment Part I: Science,Targeting, and Survey
+Design”. In:arXiv e-prints, arXiv:1611.00036. eprint:1611.00036.
+DESI Collaboration et al. (May 2026). “Data Release 1 of the Dark Energy Spectroscopic Instrument”.
+In: AJ 171.5, 285, p. 285. eprint:2503.14745.
+Fuchs, F. et al. (2020). “SE(3)-Transformers: 3D Roto-Translation Equivariant Attention Networks”.
+In:Advances in Neural Information Processing Systems. Ed. by H. Larochelle et al. V ol. 33. Curran
+Associates, Inc., pp. 1970–1981. eprint:2006.10503.
+10
+
+Ganeshaiah Veena, P. et al. (July 2023). “Large-scale density and velocity field reconstructions with
+neural networks”. In: MNRAS 522.4, pp. 5291–5307. eprint:2212.06439.
+Helly, J. C. et al. (Apr. 2026). “The FLAMINGO simulations data release”. In:arXiv e-prints. eprint:
+2604.24324.
+Hoffmann, J. et al. (2022). “Training compute-optimal large language models”. In:Proceedings of
+the 36th International Conference on Neural Information Processing Systems. NIPS ’22. New
+Orleans, LA, USA: Curran Associates Inc. eprint:2203.15556.
+Huang, N. T. et al. (2025). “CosmoBench: A Multiscale, Multiview, Multitask Cosmology Benchmark
+for Geometric Deep Learning”. In:The Thirty-ninth Annual Conference on Neural Information
+Processing Systems Datasets and Benchmarks Track. eprint:2507.03707.
+Jackson, J. C. (Jan. 1972). “A critique of Rees’s theory of primordial gravitational radiation”. In:
+MNRAS 156, 1P. eprint:0810.3908.
+Jagvaral, Y . et al. (Sept. 2025). “Geometric deep learning for galaxy-halo connection: a case study
+for galaxy intrinsic alignments”. In:Monthly Notices of the Royal Astronomical Society542.3,
+pp. 2560–2571. eprint:2409.18761.
+Kaiser, N. (July 1987). “Clustering in real space and in redshift space”. In: MNRAS 227, pp. 1–21.
+Kaplan, J. et al. (Jan. 2020). “Scaling Laws for Neural Language Models”. In:arXiv e-prints,
+arXiv:2001.08361, arXiv:2001.08361. eprint:2001.08361.
+Kitaura, F.-S. et al. (Oct. 2012). “Estimating cosmic velocity fields from density fields and tidal
+tensors”. In: MNRAS 425.4, pp. 2422–2435. eprint:1111.6629.
+Kondor, R. and S. Trivedi (2018). “On the Generalization of Equivariance and Convolution in Neural
+Networks to the Action of Compact Groups”. In:Proceedings of the 35th International Conference
+on Machine Learning. Ed. by J. Dy and A. Krause. V ol. 80. Proceedings of Machine Learning
+Research. PMLR, pp. 2747–2755. eprint:1802.03690.
+Kugel, R. et al. (Dec. 2023). “FLAMINGO: calibrating large cosmological hydrodynamical simula-
+tions with machine learning”. In: MNRAS 526.4, pp. 6103–6127. eprint:2306.05492.
+Liao, Y .-L. and T. Smidt (2023). “Equiformer: Equivariant Graph Attention Transformer for 3D
+Atomistic Graphs”. In:International Conference on Learning Representations (ICLR). eprint:
+2206.11990.
+Liao, Y .-L. et al. (2024). “EquiformerV2: Improved Equivariant Transformer for Scaling to Higher-
+Degree Representations”. In:The Twelfth International Conference on Learning Representations.
+eprint:2306.12059.
+Loshchilov, I. and F. Hutter (2019). “Decoupled Weight Decay Regularization”. In:International
+Conference on Learning Representations. eprint:1711.05101.
+Maragliano, E. et al. (Feb. 2026). “From redshift to real space: Combining linear theory with neural
+networks”. In: A&A 706, A45, A45. eprint:2507.11462.
+McEwen, J. et al. (2022). “Scattering Networks on the Sphere for Scalable and Rotationally Equivari-
+ant Spherical CNNs”. In:International Conference on Learning Representations. eprint: 2102.
+02828.
+Nusser, A. and M. Davis (Jan. 1994). “On the Prediction of Velocity Fields from Redshift Space
+Galaxy Samples”. In: ApJ 421, p. L1. eprint:astro-ph/9309009.
+Nusser, A. et al. (Sept. 1991). “Cosmological Velocity-Density Relation in the Quasi-linear Regime”.
+In: ApJ 379, p. 6.
+Passaro, S. and C. L. Zitnick (2023). “Reducing SO(3) convolutions to SO(2) for efficient equivariant
+GNNs”. In:Proceedings of the 40th International Conference on Machine Learning. ICML’23.
+Honolulu, Hawaii, USA: JMLR.org. eprint:2302.03655.
+Perraudin, N. et al. (2019). “DeepSphere: Efficient spherical convolutional neural network with
+HEALPix sampling for cosmological applications”. In:Astronomy and Computing27, pp. 130
+–146. eprint:1810.12186.
+11
+
+Planck Collaboration et al. (Feb. 2016). “Planck intermediate results. XXXVII. Evidence of unbound
+gas from the kinetic Sunyaev-Zeldovich effect”. In: A&A 586, A140, A140. eprint: 1504.03339.
+Ried Guachalla, B. et al. (May 2024). “Velocity reconstruction in the era of DESI and Rubin/LSST.
+I. Exploring spectroscopic, photometric, and hybrid samples”. In: Phys. Rev. D 109.10, 103533,
+p. 103533. eprint:2312.12435.
+Ronneberger, O. et al. (2015). “U-net: Convolutional networks for biomedical image segmentation”.
+In:International Conference on Medical image computing and computer-assisted intervention.
+Springer, pp. 234–241. eprint:1505.04597.
+Schaye, J. et al. (Dec. 2023). “The FLAMINGO project: cosmological hydrodynamical simulations
+for large-scale structure and galaxy cluster surveys”. In: MNRAS 526.4, pp. 4978–5020. eprint:
+2306.04024.
+Shao, J. et al. (May 2011). “Kinetic Sunyaev-Zel’dovich tomography with spectroscopic redshift
+surveys”. In: MNRAS 413.1, pp. 628–642. eprint:1004.1301.
+Sunyaev, R. A. and Y . B. Zeldovich (Feb. 1980). “The velocity of clusters of galaxies relative to the
+microwave background - The possibility of its measurement.” In: MNRAS 190, pp. 413–420.
+Tanimura, H. et al. (June 2022). “Convolutional neural network-reconstructed velocity for kinetic SZ
+detection”. In: A&A 662, A48, A48. eprint:2201.01643.
+Tanimura, H. et al. (Feb. 2024). “Velocity recostruction with graph neural networks”. In:arXiv
+e-prints. eprint:2402.14239.
+Thiele, L. et al. (Sept. 2022). “Predicting the thermal Sunyaev-Zel’dovich field using modular
+and equivariant set-based neural networks”. In:Machine Learning: Science and Technology3.3,
+035002, p. 035002. eprint:2203.00026.
+Thomas, N. et al. (Feb. 2018). “Tensor field networks: Rotation- and translation-equivariant neural
+networks for 3D point clouds”. In: eprint:1802.08219.
+Vigl, M. et al. (Feb. 2026). “Neural Scaling Laws for Boosted Jet Tagging”. In:arXiv e-prints,
+arXiv:2602.15781, arXiv:2602.15781. eprint:2602.15781.
+Villaescusa-Navarro, F. et al. (Sept. 2020). “The Quijote Simulations”. In: ApJS 250.1, 2, p. 2. eprint:
+1909.05273.
+Wang, Y . and X. Yang (July 2024). “Peculiar Velocity Reconstruction from Simulations and Observa-
+tions Using Deep Learning Algorithms”. In: ApJ 969.2, 76, p. 76. eprint:2406.14101.
+Wu, Z. et al. (July 2023). “AI-assisted reconstruction of cosmic velocity field from redshift-space
+spatial distribution of haloes”. In: MNRAS 522.3, pp. 4748–4765. eprint:2301.04586.
+Xiao, X. et al. (Dec. 2025). “AI-powered Reconstruction of Dark Matter Velocity Fields from
+Redshift-space Halo Distribution”. In: ApJ 994.2, 204, p. 204. eprint:2411.11280.
+Yahil, A. et al. (May 1991). “A Redshift Survey of IRAS Galaxies. II. Methods for Determining
+Self-consistent Velocity and Density Fields”. In: ApJ 372, p. 380.
+Zaheer, M. et al. (2017). “Deep Sets”. In:Advances in Neural Information Processing Systems. Ed. by
+I. Guyon et al. V ol. 30. Curran Associates, Inc. eprint:1703.06114.
+Zaroubi, S. et al. (Aug. 1995). “Wiener Reconstruction of the Large-Scale Structure”. In: ApJ 449,
+p. 446. eprint:astro-ph/9410080.
+Zheng, Z. et al. (Oct. 2007). “Galaxy Evolution from Halo Occupation Distribution Modeling of
+DEEP2 and SDSS Galaxy Clustering”. In: ApJ 667.2, pp. 760–779. eprint:astro-ph/0703457.
+A Scientific background
+A.1 Spectroscopic galaxy surveys, redshift-space distortions, and symmetries
+The standard model of cosmology rests on thecosmological principle: the Universe is statistically ho-
+mogeneous and isotropic on large scales. Ignoring relativistic corrections, homogeneity and isotropy
+12
+
+together imply equivariance under the Euclidean group E(3) of translations and rotations. This
+symmetry is the physical motivation for equivariant architectures in large-scale structure modelling.
+Spectroscopic galaxy surveys such as BOSS (Dawson et al., 2013) and DESI (DESI Collaboration
+et al., 2016) measure the angular positions of galaxies on the sky and their redshifts, from which
+comoving distances are inferred given a model of the cosmic expansion history. Peculiar velocities
+along the line of sight (LOS) induce a Doppler shift indistinguishable from the cosmological redshift,
+displacing the inferred position of each galaxy along the LOS by
+s=x+ v· ˆn
+aH ˆn,(3)
+where x and s are the real- and redshift-space positions, v· ˆn is the LOS peculiar velocity, a is
+the scale factor, and H is the Hubble parameter. On large scales, coherent infall of galaxies into
+overdensities compresses structures along the LOS – theKaiser effect(Kaiser, 1987). On small
+scales, the virial motions of galaxies within clusters stretch structures into elongated filaments along
+the LOS – the so-calledfingers of God(Jackson, 1972).
+The displacement in Eq. 3 singles out the LOS as a preferred direction, breaking the E(3) symmetry
+of the underlying physics. A second, independent source of symmetry breaking arises from the
+light-cone geometry of our observations: galaxies at greater distances were observed at earlier cosmic
+times, the LOS direction therefore encodes temporal as well as spatial information. Together, these
+observational effects reduce the effective symmetry of the data from E(3) to a residual E(2) in the
+plane of the sky, and motivate the broken-E(3)design of VELOCITYFORMER(Sect. 3).
+A.2 Linear velocity reconstruction
+To first order, galaxy velocities v can be obtained from the linearised continuity equation. The
+continuity equation in the cosmology context is given by
+∇ ·v=−aHf δg
+b ,(4)
+where a is again the scale factor, H the Hubble parameter, f= d lnD
+d lna the linear growth rate with
+D the growth factor, and b denotes the linear bias connecting the matter density contrast δm to the
+galaxy density contrast δg =bδ m. Adding the effect of RSDs introduces an extra term to Eq. 4
+(Nusser et al., 1991; Yahil et al., 1991; Nusser and Davis, 1994):
+∇ ·v+ f
+b ∇ ·[(v· ˆn)ˆn] =−aHf δg
+b ,(5)
+where ˆn is the LOS direction. Inverting Eq. 5 is not possible without specification of boundary
+conditions. Long-range modes can be recovered by linearising the equation however (Nusser et al.,
+1991; Dekel et al., 1993; Nusser and Davis, 1994). In Fourier space, the linearised continuity equation
+can be solved as (Ried Guachalla et al., 2024)
+v(k) =−iaHf k
+k2
+δg(k)
+(b+f µ 2) W(k, r smooth).(6)
+Here, k=|k| , and µ is the cosine of the LOS angle with respect to the mode k, µ= ˆn·k/k and
+W(k, r smooth)is a Gaussian smoothing filter to suppress small-scale noise.
+Several higher-order correction methods to improve upon the linear reconstruction exist (see Kitaura
+et al., 2012, for an overview) but they tend to not lead to an improvement in the correlation coefficient
+ron realistic mock catalogues (Planck Collaboration et al., 2016).
+B Additional Results
+In Table 3 we present the results for all model sizes and data volumes, showing the velocity MSE
+l, LOS velocity correlation coefficient r, and improvement over the physical baseline ∆r. Larger
+models do not necessarily perform better, suggesting a bias-variance trade-off, with no clear evidence
+for double descent.
+13
+
+Table 3: Velocity MSE l, LOS velocity correlation coefficient r (see Eq. 2), and improvement over
+the physical (linear theory) baseline ∆r for each model architecture for two data regimes: low-data (4
+simulation boxes) and mid-data (38 simulation boxes). For each model the best results are highlighted
+in bold. Uncertainties are <1% for l and r and are not shown here for brevity, see Appendix C for
+details. The uncertainties in∆rare somewhat larger due to being a ratio of two noisy quantities.
+Model Size Low-data Mid-data
+↓l↑r↑∆r[%]↓l↑r↑∆r[%]
+Physical baseline 0.825 0.571 – 0.825 0.571 –
+Transformer
+0.05M 0.660 0.71023.8±1.30.619 0.74930.7±1.3
+0.2M0.651 0.72125.7±1.30.614 0.75331.3±1.3
+0.8M 0.672 0.69621.3±1.30.619 0.74930.6±1.3
+3M 0.669 0.69922.1±1.30.620 0.74830.5±1.3
+12M 0.681 0.68419.6±1.30.624 0.74530.1±1.3
+48M 0.687 0.67918.8±1.30.626 0.74430.1±1.3
+200M 0.686 0.67918.7±1.30.626 0.74430.1±1.3
+GNN
+0.05M 0.674 0.71424.4±0.20.641 0.73728.5±0.2
+0.2M 0.671 0.71624.9±0.20.6390.73828.8±0.2
+0.8M 0.673 0.71625.0±0.20.640 0.73828.9±0.2
+3M0.671 0.71825.6±0.20.6400.73829.1±0.2
+12M 0.675 0.71625.6±0.20.642 0.73729.4±0.2
+48M 0.693 0.70523.6±0.20.656 0.73228.3±0.2
+U-Net
+0.8M 0.698 0.66416.7±0.20.672 0.69321.8±0.2
+3M 0.686 0.67519.0±0.20.661 0.70223.7±0.2
+12M0.677 0.70820.8±0.20.652 0.73425.5±0.2
+48M 0.678 0.68620.6±0.20.653 0.71225.2±0.2
+VelocityformerL max=0
+0.05M 0.739 0.63511.1±0.40.719 0.65614.7±0.5
+0.2M 0.735 0.63911.8±0.40.698 0.67317.8±0.5
+0.8M 0.738 0.63811.5±0.40.682 0.68820.3±0.5
+3M0.733 0.64312.4±0.40.682 0.68820.3±0.5
+12M 0.738 0.63711.5±0.40.6770.69020.9±0.5
+48M 0.734 0.64012.6±0.50.6770.68821.2±0.5
+VelocityformerE(3)
+0.05M 0.765 0.5994.7±0.20.669 0.70423.1±0.3
+0.2M 0.699 0.66917.0±0.30.612 0.75532.2±0.3
+0.8M 0.698 0.67017.8±0.30.606 0.76033.6±0.3
+3M 0.688 0.68920.6±0.30.610 0.75632.4±0.3
+12M 0.681 0.69121.5±0.30.610 0.75632.9±0.3
+48M 0.657 0.71526.1±0.30.6000.76535.1±0.3
+200M0.652 0.72826.8±0.30.6000.77435.1±0.3
+Velocityformer broken-E(3)
+0.05M 0.655 0.71424.9±0.40.620 0.75031.3±0.4
+0.2M0.6270.74129.9±0.40.602 0.76433.9±0.4
+0.8M 0.628 0.74130.2±0.40.600 0.76534.6±0.4
+3M 0.635 0.73729.1±0.40.602 0.76433.9±0.4
+12M 0.635 0.73629.4±0.40.602 0.76334.3±0.4
+48M 0.632 0.74030.5±0.40.598 0.76735.4±0.4
+200M 0.6300.75030.7±0.40.596 0.77935.9±0.4
+C Statistical significance and uncertainties
+The effect of varying the pseudo-random number generator seed was tested on the low-data, 4
+simulation boxes setup, for model sizes ranging from 0.8 to 3 million parameters, for 3 distinct
+random seeds. The largest variance among the 3 seeds across model sizes was used as a conservative
+estimate of the per-model type random seed variance. This procedure was chosen as limitations in
+available compute meant that running the training on multiple seeds for all experimental setups was
+infeasible.
+Variance inherent to the test set was estimated by computing the reported metrics on 5 test sets of
+10 simulation boxes each, and computing the standard error on the mean. The final uncertainty was
+14
+
+calculated by adding the seed variance and test set variance in quadrature. The absolute and relative
+uncertainties for the 4 simulation boxes, 0.8M model category are listed in Table 4. Except for∆r
+the relative uncertainties are ≲1% . The ∆r uncertainties are somewhat larger due to ∆r being a
+ratio of two noisy quantities.
+Table 4: Estimates of the absolute and relative uncertainties (standard deviations) of the evaluation
+metrics.
+Absolute Relative [%]
+Modelσ l σr σ∆r σl/l σ r/r σ ∆r/∆r
+Transformer 0.0059 0.0074 1.29 0.88 1.07 6.07
+GNN 0.0018 0.0010 0.19 0.27 0.14 0.76
+U-Net 0.0011 0.0014 0.22 0.15 0.22 1.34
+VelocityformerL max=00.0025 0.0026 0.45 0.34 0.41 3.92
+VelocityformerE(3)0.0014 0.0015 0.26 0.20 0.22 1.45
+Velocityformer broken-E(3)0.0019 0.0023 0.42 0.30 0.31 1.38
+D Training details and hyperparameters
+All models were trained with constant learning rate, the AdamW (Loshchilov and Hutter, 2019)
+optimiser, and 0.01 weight decay. Removing weight decay, adding learning rate warm-up, and using a
+cosine learning rate schedule were tested but found to have only negligible effects on our experiments,
+particularly for VELOCITYFORMER.
+For the four and 38 simulation boxes training regimes early stopping was employed. For the 3800
+simulation boxes case training was done for a single epoch. The constant learning rate makes the
+loss comparable across different stages of the single-epoch training, facilitating arguing about scaling
+behaviour.
+Model-specific training details and hyperparameters are described in the following subsections.
+The overall compute required for the experiments presented here was about 2000 GPU hours, split
+between NVIDIA A100 and RTX 4090 GPUs.
+D.1 VELOCITYFORMER
+VELOCITYFORMERlargely follows the setup of (Liao et al., 2024), with modifications to support
+the broken E(3) symmetry of the galaxy survey data. The hyperparameters for the broken- E(3)
+VELOCITYFORMERare listed in Table 5 and use the Equiformer V2 defaults otherwise. For multi-
+epoch training on four and 38 simulation boxes, we apply a dropout rate of 0.1 and stochastic depth
+of 0.05.
+The embedding of the LOS direction is done by applying the radial embedding to the LOS coordinate,
+followed by a linear layer that maps tosphere_channelschannels.
+We found VELOCITYFORMERto be remarkably robust to changes in the learning rate, tolerating
+learning rates up to 0.1 without destabilising training.
+D.2 Transformer baseline
+The Transformer baseline uses the Transformer implementation from Brehmer et al. (2023), adapted
+to accept velocity inputs and to predict velocities. The hyperparameters are listed in Table 6. By
+default, the model can attend to all galaxies in the input, but it can also work in graph mode by using
+the graph adjacency matrix as an attention mask.
+D.3 GNN baseline
+The GNN baseline uses the implementation from Huang et al. (2025). While that implementation
+already supports the velocity reconstruction task, we adapt it to accept the linear velocity estimate as
+input feature. The hyperparameters are listed in Table 7.
+15
+
+Table 5: Hyperparameters of the broken-E(3)VELOCITYFORMER.
+0.05M 0.2M 0.8M 3M 12M 48M 200M
+Parameters 61.8K 228K 790K 2.94M 11.5M 44.5M 203M
+batch_size256 128 64 128 64 24 10
+learning_rate3·10 −3 3·10−3 3·10−3 3·10−3 10−3 10−3 3·10−4
+num_layers3 4 4 4 4 6 7
+lmax_list1 2 2 4 4 6 6
+mmax_list1 2 2 4 4 4 4
+sphere_channels16 16 32 32 64 64 128
+attn_hidden_channels8 16 32 32 64 64 128
+num_heads4 4 4 6 6 8 8
+attn_alpha_channels8 16 32 32 64 64 128
+attn_value_channels8 8 16 16 32 32 64
+ffn_hidden_channels8 16 32 32 64 64 128
+edge_channels8 16 32 32 64 64 128
+num_distance_basis512 512 512 512 512 512 512
+Table 6: Hyperparameters of the Transformer baseline.
+0.05M 0.2M 0.8M 3M 12M 48M 200M
+Parameters 50.8K 200K 793K 2.96M 11.8M 47.2M 189M
+batch_size2048 2048 2048 1024 512 256 448
+learning_rate3·10 −4 3·10−4 3·10−4 3·10−4 3·10−4 10−4 10−4
+hidden_channels32 64 128 192 384 768 1536
+num_blocks6 6 6 10 10 10 10
+num_heads8 8 8 8 8 8 8
+The GNN was found to be unstable at large model sizes and with fully connected graphs. We
+therefore do not report results for the 200M parameter model and note that the fully connected graph
+variant (see Appendix E.1) likely underperforms due to training instability rather than a fundamental
+limitation of the architecture.
+D.4 U-Net baseline
+Following previous work (e.g. Ganeshaiah Veena et al., 2023; Wu et al., 2023; Wang and Yang, 2024;
+Xiao et al., 2025), we include a grid-based U-Net (Ronneberger et al., 2015) as a baseline. Results
+are reported in the main text; this appendix describes the implementation.
+The input point cloud, consisting of a varying number of galaxy positions and associated linear
+velocity estimates, is painted onto a 643 grid using cloud-in-cell (CIC) assignment, producing a
+four-channel grid (one density channel and three velocity channels). The grid resolution is fixed
+at 643; although the galaxy fields are sparse ( O(100) galaxies per 71.4h −1Mpc box), we found
+that reducing the resolution to 323 degraded performance, while increasing it to 1283 did not yield
+significant improvements while greatly increasing computational cost.
+Table 7: Hyperparameters of the GNN baseline.
+0.05M 0.2M 0.8M 3M 12M 48M 200M
+Parameters 64.0K 189K 747K 2.97M 12.3M 49.2M 168M
+batch_size2048 1024 640 320 96 120 88
+learning_rate10 −3 10−3 10−3 10−3 3·10−4 3·10−4 10−4
+d_hidden64 96 192 384 640 1280 2048
+message_passing_steps3 4 4 4 6 6 8
+16
+
+Table 8: Hyperparameters of the U-Net baseline.
+0.8M 3M 12M 48M
+Parameters 790K 3.15M 12.6M 50.4M
+batch_size64 32 8 12
+learning_rate3·10 −4 3·10−4 3·10−4 3·10−4
+grid_size64 3 643 643 643
+encoder_features[12,24,48,96] [24,48,96,192] [48,96,192,384] [96,192,384,768]
+The architecture is a standard 3D U-Net with double convolution blocks using 3×3×3 kernels,
+max-pool downsampling, transposed convolution upsampling, and skip connections between the
+symmetric encoder and decoder. Being fully convolutional, it is translationally equivariant but not
+rotationally equivariant. After the U-Net, the predicted velocity field is sampled back to particle
+positions via CIC interpolation. The network includes an additional residual connection at the particle
+level: the linear velocity estimates are added directly to the interpolated output, bypassing the grid
+representation entirely. This differs from the internal U-Net skip connections, which operate on
+grid features, and outperformed using the velocity estimates only at the input. We train four model
+variants with hyperparameters listed in Table 8.
+E Data details
+E.1 Graph construction
+As the graph structure is an arbitrary choice informed by implementation limitations rather than
+physical principles, we test the effect of varying the number of nearest neighbours k used to construct
+the graph. The test was performed for the mid-data, 38 simulation boxes setup, for the 0.8M
+parameter variants of the Transformer, GNN, and the broken-E(3) VELOCITYFORMER. To limit the
+connectivity for the Transformer we use the graph adjacency matrix as an attention mask.
+The MSE l, correlation coefficient r, and improvement ∆r for different connectivities are listed in
+Table 9. Increasing the connectivity generally improves performance, with the fully connected graph
+performing best for the Transformer and VELOCITYFORMER. We hypothesise that the same would
+be true for the GNN if it were not for unstable training dynamics. This increased performance comes
+at prohibitive computational cost however, especially for VELOCITYFORMER, such that we do not
+further explore fully connected graphs in this work.
+Three sample galaxy point clouds with the imposed graph structures are visualised in Fig. 2.
+Table 9: Velocity MSE l, correlation coefficient r, and improvement ∆r for different graph connec-
+tivity (k-NN vs. fully connected) at fixed model size. The best value per metric is boldfaced within
+each model group.
+Model Connectivity↓l↑r↑∆r[%]
+Transformer
+k=100.670 0.707 24.3
+k=200.657 0.718 26.2
+Fully connected0.629 0.740 29.1
+GNN
+k=100.646 0.733 28.2
+k=200.641 0.739 29.6
+Fully connected 0.656 0.734 29.5
+Velocityformer broken-E(3)
+k=100.602 0.763 34.2
+k=200.594 0.770 35.5
+Fully connected0.590 0.774 37.0
+E.2 Varyingn split
+The factorisation of the velocity reconstruction task into large and small scales assumes that the linear
+velocity estimate captures the velocity field on scales larger than the sub-box size, while the galaxy
+17
+
+0 10 20 30 40 50 60
+x [Mpc/h] 0
+20
+40
+60
+y [Mpc/h]
+0
+20
+40
+60
+z [Mpc/h]
+Galaxies (nodes) Edges Velocities (linear theory) Velocities (ground truth)
+20
+40
+60x [Mpc/h] 0
+20
+40
+60
+y [Mpc/h]
+0
+20
+40
+60
+z [Mpc/h]
+0
+20
+40
+60x [Mpc/h] 0
+20
+40
+60
+y [Mpc/h]
+0
+20
+40
+60
+z [Mpc/h]
+Figure 2: Sample galaxy point clouds from the validation set with the imposed graph structure, input
+linear theory velocities, and true velocities.
+positions within the sub-box are sufficient to reconstruct the velocity field on smaller scales. Choosing
+the sub-boxes to be too large defeats the efficiency gains of the factorisation, while choosing them to
+be too small may lead to insufficient information within the sub-box to reconstruct the small-scale
+velocity field.
+We test the effect of varying the sub-box partition sizensplit for the broken-E(3) VELOCITYFORMER
+at 0.8M parameters, for both the 4 and 38 simulation boxes setups. The results are listed in Table 10.
+The performance is relatively stable across the range of nsplit tested, with a slight preference for
+larger sub-boxes. We chose nsplit=14 for the main results as it is the smallest sub-box size that does
+not show a clear performance degradation, thus maximising the number of training samples we can
+construct from one simulation box.
+Table 10: Effect of sub-box partition size (nsplit) on velocity MSE l, correlation coefficient r, and
+improvement∆r. Results are for VELOCITYFORMERbroken-E(3)at0.8 Mparameters.
+nsplit Low-data Mid-data
+↓l↑r↑∆r[%]↓l↑r↑∆r[%]
+8 0.653 0.716 25.2 0.599 0.767 34.1
+10 0.638 0.731 28.0 0.599 0.767 34.2
+12 0.630 0.739 29.7 0.599 0.767 34.6
+14 0.631 0.738 29.7 0.603 0.763 34.2
+16 0.631 0.737 30.0 0.606 0.759 34.0
+E.3 Zero-shot data
+Here we briefly describe the datasets used for testing the generalisation performance. Key properties
+of the galaxy samples, the galaxy number density and linear galaxy bias, are listed in Table 11.
+Table 11: Number density and linear galaxy bias for the different simulation sets considered for
+zero-shot generalisation.
+Fiducial A B FLAMINGO
+Number density [104 h3Mpc−3] 3.55 3.59 3.07 3.5
+Linear bias 2.08 2.06 1.92 2.00
+CosmologyWe select two cosmologies ( i= 1789 , ‘A’ andi= 816 , ‘B’) from the QUIJOTE nwLH
+latin hypercube set. The parameters are listed in Table 12. The shift of the two cosmologies with
+18
+
+respect to the fiducial set that was used for training is roughly consistent with the uncertainty on
+cosmology from DESI (Adame et al., 2025; Abdul Karim et al., 2025). VELOCITYFORMERcan thus
+generalise across our uncertainty on the true cosmological parameters of the Universe.
+Table 12: Cosmological parameters for the QUIJOTEsimulation sets.
+Ωm Ωb h n s σ8 mν [eV]w
+Fiducial 0.3175 0.049 0.6711 0.9624 0.834 0.0 -1.0
+A 0.3283 0.03661 0.5989 0.9681 0.8465 0.0686575 -1.01515
+B 0.2893 0.05521 0.5697 0.9105 0.8617 0.0607375 -1.02625
+FLAMINGO 0.316 0.0494 0.673 0.966 0.812 0.06 -1.0
+FLAMINGO galaxy catalogueThe FLAMINGO sample is built from the L1_m9 simulation,
+Planck variant, and exclusive_sphere_300kpc halo catalogue for thez=0.5 snapshot. For details
+on these data product, see Helly et al. (2026) and https://flamingo.strw.leidenuniv.nl/.
+We perform a simple cut on stellar mass to reduce the number density to 3.5×10 −4 h3Mpc−3.
+Positions and velocities are those of the stellar centre of mass.
+19

@@ -1,0 +1,1310 @@
+Title: Modeling Gamma-Ray Burst Spectra with Convolutional Neural Networks: Fast-Cooling Synchrotron Emission in a Decaying Magnetic Field
+Authors: Jia-Ming Chen, Ke-Rui Zhu, Shan Chang, Zhao-Yang Peng, Yong-Gang Zheng, Li Zhang
+Published: 2026-06-04
+Categories: astro-ph.HE
+
+Draft version June 5, 2026
+Typeset using LATEXdefaultstyle in AASTeX7.0.1
+Modeling Gamma-Ray Burst Spectra with Convolutional Neural Networks: F ast-Cooling
+Synchrotron Emission in a Decaying Magnetic Field
+Jia-Ming Chen
+ ,1 Ke-Rui Zhu
+ ,1 Shan Chang
+ ,1 Zhao-Yang Peng
+ ,2 Yong-Gang Zheng
+ ,3 and Li Zhang
+ 1
+1Department of Astronomy, School of Physics and Astronomy, Key Laboratory of Astroparticle Physics of Yunnan Province, Yunnan
+University, Kunming 650091, People’s Republic of China
+2College of Physics and Electronics information, Yunnan Normal University, Kunming 650500, People’s Republic of China
+3Department of Physics, Yunnan Normal University, Kunming 650500, People’s Republic of China
+ABSTRACT
+The radiation mechanism of gamma-ray burst (GRB) prompt emission remains uncertain. Although
+the fast-cooling synchrotron model in a decaying magnetic field can account for the characteristic
+nonthermal spectral shape, its computational cost has limited its use in systematic observational fitting
+and statistical model comparison. We develop a convolutional neural network (CNN)-based spectral
+emulator for this physical model and train it on a large synthetic data set generated over a physically
+motivated parameter space. The trained network reproduces the numerical spectra with high fidelity
+while reducing the cost of spectral evaluation to the millisecond level. We then incorporate the emulator
+into a Bayesian spectral-analysis framework and apply it to the time-resolved spectra of GRB 231020A
+observed by Fermi/GBM. In most time intervals, the decaying-field fast-cooling synchrotron model
+provides better fits and smaller Bayesian information criterion values than the standard fast-cooling
+synchrotron model. These results suggest that a radially decaying magnetic field provides a plausible
+and more physically motivated interpretation of the prompt-emission spectrum of this burst, while also
+indicating that the emulator offers a practical route for large-sample Bayesian inference and systematic
+comparisons of GRB prompt-emission models.
+1.INTRODUCTION
+Although studies of the prompt-emission phase of gamma-ray bursts (GRBs) have continued for decades, several key
+problems remain open (B. Zhang 2011; P. Kumar & B. Zhang 2015; B. Zhang 2018). These include the jet composition,
+the energy-dissipation and particle-acceleration mechanisms, and the radiation mechanism itself. A reliable physical
+interpretation of the observed spectra is therefore central to progress on GRB prompt emission.
+A typical GRB spectrum is often described by the empirical Band function (D. Band et al. 1993). The low- and
+high-energy photon indices are usually aroundα∼ −1 andβ∼ −2.2 (R. D. Preece et al. 2000; Y. Kaneko et al. 2006;
+S. Poolakkil et al. 2021). Although the Band function reproduces the observed spectral shape well (A. A. Abdo et al.
+2009; M. S. Briggs et al. 1999), its parameters are not directly tied to the underlying radiation physics. In general,
+prompt emission is discussed within two broad pictures. One is photospheric emission (P. M´ esz´ aros & M. J. Rees
+2000; A. M. Beloborodov 2010; A. Pe’Er & F. Ryde 2017), in which photons escape once the outflow becomes optically
+thin. Purely photospheric models, however, tend to produce thermal or quasi-thermal spectra and therefore cannot
+easily explain the strongly nonthermal spectra observed in most GRBs unless additional dissipation and reprocessing
+are involved (D. Lazzati & M. C. Begelman 2010; A. Pe’er & F. Ryde 2011; C. Lundman et al. 2013).
+Another mainstream picture is that dissipation occurs within the outflow, for example through internal shocks
+(M. J. Rees & P. Meszaros 1994; F. Daigne & R. Mochkovitch 1998) or magnetic reconnection (B. Zhang & H. Yan
+2011), which accelerate nonthermal particles. These particles may then radiate through synchrotron emission (M. V.
+Medvedev 2000) or inverse Compton scattering (A. Panaitescu & P. M´ esz´ aros 2000; P. Kumar & E. McMahon 2008;
+Corresponding author: Li Zhang
+lizhang@ynu.edu.cn
+Email: chenjiaming5821@163.com
+arXiv:2606.05910v1  [astro-ph.HE]  4 Jun 2026
+
+2
+R. Barniol Duran et al. 2012; Y. Zhang et al. 2019). Synchrotron radiation has a natural advantage in producing
+nonthermal spectra (G. Ghisellini et al. 2000; J. M. Burgess et al. 2014, 2020; B. Zhang 2020). However, the standard
+fast-cooling synchrotron model with a constant magnetic field often predicts a low-energy slope softer than the typical
+observed value ofα∼ −1 (R. D. Preece et al. 2000; L. Nava et al. 2011). A physically motivated modification is to
+allow the magnetic field in the emitting region to decay with radius (Z. L. Uhm & B. Zhang 2014; X. Zhao et al. 2014).
+If the emission comes from relativistic electrons accelerated at large radii, for example in a Poynting-flux-dominated
+jet powered by magnetic dissipation (M. Lyutikov & R. Blandford 2003; B. Zhang & H. Yan 2011), the emitting region
+expands outward and the magnetic-field strength decreases with radius. Under this condition, the decaying-field fast-
+cooling synchrotron model can naturally produce Band-like spectra and has shown promising performance in GRB
+spectral fitting (J.-J. Geng et al. 2018).
+Despite its physical appeal, this model is computationally expensive. Previous applications have therefore been
+largely limited to case studies. B.-B. Zhang et al. (2016) first applied the decaying-field synchrotron model to
+time-resolved spectra of GRB 130606B. J. Yang et al. (2023) used the same model to study the extremely bright
+GRB 221009A and found that its prompt spectra are consistent with synchrotron emission from relativistic electrons
+accelerated at large radii. Z.-Y. Yan et al. (2024) later applied a similar framework to self-consistently model the spec-
+tra of eight single-pulse GRBs. Direct numerical evaluation, however, remains impractical for systematic time-resolved
+fitting, broad parameter-space exploration, and large-sample statistical tests.
+In recent years, machine-learning methods have been widely used in astronomy and in GRB studies (D. B´ egu´ e et al.
+2024; N. Sahakyan et al. 2024; J.-M. Chen et al. 2024a, 2025b). Here we use a convolutional neural network (CNN) to
+emulate the spectral calculation and remove the main computational bottleneck. Once trained, the network evaluates
+the spectrum for a given set of physical parameters in about∼1 ms, making repeated forward folding and likelihood
+evaluation feasible in routine Bayesian fitting. Building the synthetic training set is computationally expensive at
+the outset, but the trained emulator provides an efficient surrogate for direct comparisons between complex physical
+models and observational data.
+This paper is organized as follows. Section 2 presents the physical model and the synthetic data set. Section 3
+describes the CNN emulator, its training procedure, and its validation. Section 4 applies the model to the time-
+resolved spectra of GRB 231020A. Section 5 summarizes the main results and discusses the limitations of the present
+framework. We adopt a standard ΛCDM cosmology withH 0 = 67.4 km s −1 Mpc−1, ΩM = 0.315, and Ω Λ = 0.685 (
+Planck Collaboration et al. 2020).
+2.PHYSICAL MODEL AND SYNTHETIC DATA SET
+2.1.The Synchrotron Model
+We consider a relativistic thin shell ejected from the central engine with velocityβc, and describe its evolution in
+the comoving timet ′. The shell radius is
+R(t′)≃R 0 +βcΓt ′,(1)
+whereR 0 is the characteristic radius when radiation starts (or when electron injection starts), and Γ is the bulk Lorentz
+factor of the shell. For a magnetically dominated jet, or for magnetic dissipation at large radii, the emitting region
+expands and the comoving magnetic field decays; we adopt a power-law form for the magnetic-field evolution (H. C.
+Spruit et al. 2001; Z. L. Uhm & B. Zhang 2014),
+B′(R) =B ′
+0
+ R
+R0
+−a
+,(2)
+whereB ′
+0 is the magnetic-field strength atR 0, andais the decay index.
+The magnetic field inside the spherical shell is carried along with the matter, and electrons can be accelerated into a
+power-law distribution through mechanisms such as magnetic dissipation (B. Zhang & H. Yan 2011). After injection,
+electrons mainly cool by synchrotron cooling and adiabatic cooling. The electron evolution follows the continuity
+equation (M. S. Longair 2011; Z. L. Uhm & B. Zhang 2014; X. Zhao et al. 2014; J.-J. Geng et al. 2018),
+∂N(γ, t ′)
+∂t′ + ∂
+∂γ [ ˙γ(γ, t′)N(γ, t ′)] =Q(γ, t ′),(3)
+
+3
+whereQ(γ, t ′) is the electron injection rate in the comoving frame and we assume
+Q(γ, t′) =
+
+
+
+Q0 γ−p, γ inj < γ < γ max,
+0,otherwise,
+(4)
+withQ 0 the injection rate; hereγ inj andγ max are the minimum and maximum Lorentz factors of injected electrons.
+The total cooling rate ˙γincludes synchrotron and adiabatic terms,
+˙γ= ˙γsyn + ˙γe,adi =− σT B′2
+6πmec γ2 − 2
+3
+βcΓ
+R γ,(5)
+whereσ T is the Thomson cross section andm e is the electron mass.
+This synchrotron model has been implemented in our previous work. In this paper, we treat it as a numerical “black
+box”: the input is a set of physical parameters and the output is the predicted photon spectrum in the observer frame.
+We summarize the mapping as
+N(Eobs) =N(E obs; ˆt, B0, a,Γ, γinj, p, R0, Q0, z),(6)
+where ˆtis the observer-frame time since the onset of an injection episode (in seconds),B 0 is the magnetic-field strength
+atR 0,ais the decay index, Γ is the bulk Lorentz factor,γ inj is the minimum injected Lorentz factor,pis the injection
+index,R 0 is the characteristic radius,Q 0 is injection rate, andzis the redshift. The goal of the CNN is to learn this
+mapping with high accuracy and then generate spectra consistent with the numerical model at millisecond speed.
+2.2.Construction of the Synthetic Spectral Data Set
+Figure 1 presents the complete modeling procedure adopted in this work. In this section, we construct a syn-
+thetic spectral data set to train the CNN emulator by sampling physical parameters within reasonable ranges, calling
+the numerical synchrotron model to generate theoretical photon spectra, and organizing the results into supervised
+“parameter–spectrum” pairs.
+Latin Hypercube
+Sampling
+2 × 105
+Parameter Sets
+Physical
+Model
+2 × 105
+Photon Spectra
+N (Eobs) = N (Eobs; ˆt, B 0, a, Γ , γ inj, p, R 0, Q 0, z )
+Test SetTraining Set Validation Set
+CNN
+Model
+80% 10% 10%
+Theoretical
+Photon Spectra
+Response
+Matrix
+threeML
+Observed Photon
+Count Spectra
+Best-fit
+Parameters
+Data Generation
+Training Process
+Fitting Process
+Figure 1.This work proposes a workflow for GRB spectral modeling.
+The parameter vector is defined asθ= ( ˆt, a, Q 0,Γ, R 0, γ inj, B 0, p, z), with the ranges ˆt∈[0.1,10] s,a∈[0.1,2.0],
+Q0 ∈[10 54,10 58], Γ∈[100,500],R 0 ∈[10 14,10 16] cm,γ inj ∈[10 4,10 6],B 0 ∈[10,1000] G,p∈[2.0,5.0], and
+
+4
+z∈[0.1,10.0]. These intervals cover common parameter scales in GRB prompt emission while balancing physical
+coverage and numerical stability.
+Latin hypercube sampling (LHS) is adopted to improve coverage in the high-dimensional space by first drawing
+Nsamp = 105 points i in the unit hypercube and then mapping them to the physical parameter space; for parameters
+spanning multiple orders of magnitude (e.g.,Q 0,R 0, andγ inj), sampling is performed uniformly in log space, log10 θ=
+log10 θmin +u(log 10 θmax −log 10 θmin), whereas for the remaining parameters a linear mapping is used,θ=θ min +
+u(θ max −θ min). This strategy provides a more balanced coverage at a fixed sample size, especially for parameters that
+strongly affect the spectral shape.
+The output spectra are defined on fixed energy grids and, to match the twoFermi/GBM detector types, spectra are
+computed on two logarithmically uniform energy axes: for NaI,E∈[8,10 3] keV, and for BGO,E∈[200,4×10 4] keV.
+Each band usesN E = 128 energy bins, and for each parameter setθ j the photon spectrumy j is evaluated on both
+the NaI and BGO grids, giving a total of 2N samp = 2×10 5 samples. We also assign each spectrum a detector
+label(inst id= 0 for NaI andinst id= 1 for BGO), allowing the network to distinguish between the two energy
+ranges.
+The main computational cost arises from solving the electron evolution equation and performing the radiation
+integration, so multi-processing is used to generate spectra in batches. For data-quality control, defensive processing
+is applied to the outputs: if a model call fails or returns a spectrum with an incorrect length, it is replaced with a tiny
+positive spectrum; a lower floor is imposed on all spectral values (e.g.,≥10 −30) to avoid numerical issues in later log
+transforms or normalization; samples containing NaN/Inf values are removed; and the total flux is required to satisfyP
+i yi >10 −28 to exclude near-zero spectra. The final data set is stored in.h5format, containing the parameter array
+(float64), the detector label (int64), and the spectral array (float32), together with the two energy grids and the
+parameter names for reproducibility and data provenance.
+3.CONVOLUTIONAL NEURAL NETWORK MODEL AND TRAINING PROCEDURE
+3.1.Data Preprocessing
+The physical parameters span very different scales, and the photon spectra vary across several orders of magnitude,
+so direct regression in the raw parameter space can lead to slower and less stable optimization; therefore, before
+training, we apply consistent and reproducible preprocessing and normalization to both inputs and outputs. We use
+the parameter vectorθ= ( ˆt, a, Q 0,Γ, R 0, γ inj, B 0, p, z), whereQ 0,R 0, andγ inj are strictly positive and span many
+decades; we first check positivity and remove invalid samples, and then transform these parameters to log space,
+Q0 →log 10 Q0,R 0 →log 10 R0, andγ inj →log 10 γinj, while all other parameters remain in linear scale. To reduce
+optimization bias caused by different units and ranges, the transformed 9D vector is standardized to zero mean and
+unit variance, with the mean and variance computed from the training set and reused in inference.
+To enable a single network to model both the NaI and BGO bands, we encode the detector type as a one-hot vector
+einst ∈R 2; the final input feature isX= [θ std,e inst]∈R 11, so the input dimension is fixed to 11.
+Output preprocessing is also important: to suppress the large dynamic range and to avoid non-numerical values
+caused by zeros, we first apply a lower floor to the spectrum,s∼max(s,10 −30), and then take a log transform,
+ylog = log10 s; on this basis,y log is standardized in each energy-bin dimension, yielding the training targety∈R 128.
+This “log + standardization” scheme makes the network learn local slopes and curvature more effectively and improves
+gradient-scale consistency during training. The output standardizer is stored for inverse transforms in inference,
+ˆylog = ˆy⊙σ s +µ s, ˆs= 10 ˆylog.
+The data are randomly split into training, validation, and test sets with a fixed random seed, using a ratio of
+80%/10%/10%; the validation set is used for early stopping and model selection, while the test set is reserved for an
+independent evaluation after training. For reproducibility, a fixed seed is also used for batch shuffling in the training
+set, and all preprocessing is implemented with theScikit-learnpackage inPython.
+3.2.CNN Architecture
+We adopt a CNN-based regression model that maps an 11-dimensional input vector to a 128-dimensional output
+spectrum. As shown in Figure 2, the model first embeds the low-dimensional parameter vector into a latent sequence
+representation of length 128 via a fully connected layer. It then applies one-dimensional convolutions along the
+“energy-bin axis” to extract locally correlated structures, and finally uses a fully connected regression head to output
+the standardized log-spectrum.
+
+5
+CNN Architecture
+T raining Process
+Input X
+R11
+FC1
+128
+Unsq.
+C1
+32
+C2
+64
+C3
+128
+Pool
+/2
+Flat.
+FC2
+256
+FC3
+128
+Pred ˆy
+R128
+L1
+Loss
+Optimizer
+Adam + LR Sched
+T argety
+R128
+Val Loss
+Better?
+Save
+Model
+Early
+Stop
+Gradient
+Y esNo (>20)
+W eight Update
+Figure 2.Schematic of the CNN spectral emulator and the training workflow.
+Specifically, the inputX∈R 11 is projected to 128 dimensions through a linear layer followed by a ReLU activation
+(A. Krizhevsky et al. 2012), yieldingh 0 ∈R 128. We reshapeh 0 into a one-dimensional signal of shape (batch,1,128)
+and stack three 1D convolutional layers (kernel size 3; padding = 1 to preserve the sequence length), with channel
+widths 1→32→64→128. Each convolution is followed by a ReLU activation to introduce nonlinearity. Given the
+multiscale nature of spectral smoothness and local features along the energy axis, we append a single max-pooling
+operation, MaxPool1d(2), after the convolutional block to downsample the sequence length from 128 to 64. This
+operation improves robustness and computational efficiency while preserving the dominant spectral morphology. The
+pooled feature tensor is flattened and passed through a 256-dimensional fully connected layer with ReLU activation,
+and the network outputs a 128-dimensional regression vector as ˆy.
+The design is motivated by the fact that, although the inputs are global physical parameters, the output photon
+spectrum exhibits strong local correlations along the energy axis (e.g., local slopes, curvature, and morphological
+changes near breaks or turnovers). One-dimensional convolutions can capture such local patterns efficiently with
+relatively few parameters. In addition, by augmenting the input with one-hot detector information, the network can
+treat the distinct energy-band coverage of NaI and BGO within a unified architecture, thereby simplifying both training
+and inference.
+
+6
+3.3.Training and Optimization
+We implement the network inPyTorch 4 and train it on an NVIDIA GeForce RTX 4090 GPU; since this project
+targets large-sample fitting and statistical analyses, we emphasize reproducibility by fixing the random seeds for
+Python,NumPy, andPyTorch, and by enabling a deterministic computation path as much as possible.
+For the loss function, the standardized log-spectrum is regressed with anℓ 1 loss (P. J. Huber 1992; H. Zhao et al.
+2017),L=| ˆy−y| 1, which is more robust to local outliers than MSE, reduces the influence of a small number of
+extreme spectral shapes, and stabilizes the fit to the overall spectral form.
+We use the Adam optimizer (D. P. Kingma & J. Ba 2017) with an initial learning rate of 10−3 and adopt a step-wise
+learning-rate decay (StepLR) to realize a “fast convergence then fine tuning” schedule; every 50 epochs the learning
+rate is multiplied by 0.1. The maximum number of epochs is set to 2500, while the effective training length is
+determined by early stopping based on the validation loss: if no significant improvement is found for 20 consecutive
+epochs (improvement<10 −4), training is terminated and the model weights are restored to those at the epoch with
+the best validation loss, so that the final network is selected by generalization performance rather than by a fixed
+epoch number.
+3.4.Training Results
+We train the CNN model following the strategy described above, and Figure 3 shows the evolution of theL 1 loss
+on the training and validation sets as a function of epoch. The loss drops rapidly in the first few epochs, indicating
+that the network quickly learns the dominant spectral features controlled by the physical parameters and reduces the
+overall prediction error efficiently. As training proceeds, the decrease of the loss slows down and the curves enter a
+plateau; the training and validation losses remain close and follow the same trend, with only small random fluctuations
+at early epochs, suggesting a stable optimization process without obvious overfitting. We also note a clear step-like
+decrease of the loss around epoch∼50, consistent with the step-wise learning-rate decay (StepLR); after the learning
+rate is reduced, the model further refines the fit based on the learned representation and converges at a lower loss
+level.
+0 20 40 60 80 100 120
+Epoch
+0.01
+0.02
+0.03
+0.04
+0.05L1 Loss
+Train
+Val
+Figure 3.Training and validationℓ 1 loss as a function of epoch for the CNN spectral emulator. Both curves decrease rapidly
+during the initial epochs and then gradually converge, indicating stable optimization and good generalization with no evidence
+for overfitting.
+We further evaluate the prediction errors on an independent test set. Figure 4(a) shows the histogram of log-
+residuals, with a mean close to zero (µ≃ −1.0×10 −4 dex), implying little systematic bias, and a standard deviation
+4 https://pytorch.org/
+
+7
+ofσ≃2.18×10 −2 dex, corresponding to a typical scatter of∼5.0% in linear space and indicating that the target
+spectra are reproduced with high accuracy. Figure 4(b) summarizes the relative error statistics: the mean relative
+error is≃3.88%, the median is≃2.73%, and the 95th-percentile error is≃11.22%; the distribution is right-skewed
+with a long tail, meaning that most spectra are reconstructed within a few percent while a small fraction of difficult
+samples contributes to the tail, usually associated with weak-flux energy bins or strong spectral curvature.
+0.075
+ 0.050
+ 0.025
+ 0.000 0.025 0.050 0.075
+pred_log - true_log (dex)
+0
+5
+10
+15
+20
+25Density
+(a) =-0.0001, =0.0218
+0 5 10 15 20 25
+|pred-true|/true (%)
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30Density
+(b) Median=2.73%
+Figure 4.Validation statistics of the CNN spectral emulator on the independent test set. Left: distribution of logarithmic
+residuals, defined as log10(FCNN/Fnum), showing negligible systematic bias and a narrow scatter around zero. Right: distribution
+of relative errors, with a median of∼2.73% and a 95th-percentile value of∼11.22%.
+Overall, the training converges fast and remains stable, with consistent performance between the training and
+validation sets, while the test set shows near-zero bias and small scatter, supporting good generalization. Figure 5
+compares spectra from the numerical physical model and from the CNN emulator, showing good agreement across
+the full energy band; the CNN reproduces both spectral slopes and curvature features, and provides millisecond-level
+inference that yields spectra consistent with the numerical synchrotron model. This greatly reduces the computing
+time for large-scale parameter scans and spectral fitting, and provides a reliable basis for subsequent large-sample
+fitting, parameter-space exploration, and statistical analyses.
+4.TIME-RESOLVED SPECTRAL CONSTRAINTS ON GRB 231020A
+4.1.Data selection and spectral fitting
+To demonstrate the efficiency and practical utility of our CNN-based spectral emulator in real data fitting, we
+perform a time-resolved spectral analysis of a GRB observed byFermi. For seamless use in an observational fitting
+pipeline, we package the trained CNN emulator as a custom spectral model through the user-defined model interface
+provided bythreeML(3ML, G. Vianello et al. (2015)). ThethreeMLframework is widely used forFermi/GBM GRB
+spectral analyses, and all spectral analyses in this work are carried out within 3ML (H.-F. Yu et al. 2019; J.-M. Chen
+et al. 2022, 2024b).
+GRB 231020A (Trigger 719521023/231020790) triggered theFermiGamma-ray Burst Monitor (GBM) and was
+localized at 2023 October 20 18:56:58.30 UT ( Fermi GBM Team 2023). According to theFermiteam report, the
+light curve is dominated by a bright main pulse with a duration ofT 90 ≈9.3 s in the 50–300 keV band. For the time-
+integrated spectrum fromT 0 −0.5 s toT 0 + 21 s, the best-fit model is a cutoff power law (CPL), with a low-energy
+indexα=−1.34±0.01 and a cutoff energyE c = 145±3 keV. The relatively soft low-energy slope and the pronounced
+non-thermal spectral shape suggest a synchrotron origin, making this burst a suitable test case for our fast-cooling
+synchrotron model in a decaying magnetic field and its CNN emulator.
+Based on detector viewing angles and count-rate significance, we select three NaI detectors (n2, n9, na) and one
+BGO detector (b1) for the spectral analysis. For background estimation, we use the photon counts of the brightest
+NaI detector as the reference and choose two off-source intervals, one before and one after the burst. We fit the
+background with polynomials of order 0–4, determine the optimal order using a likelihood-ratio test, and extrapolate
+
+8
+10 4
+10 3
+10 2
+10 1
+100
+N(E) [ph s 1 cm 2 keV 1]
+NaI Detector
+t=1.0s
+t=3.0s
+t=5.0s
+101
+102
+103
+Energy [keV]
+0.2
+0.1
+0.0
+0.1
+0.2
+Residual [dex]
+10 8
+10 7
+10 6
+10 5
+10 4
+10 3
+N(E) [ph s 1 cm 2 keV 1]
+BGO Detector
+t=1.0s
+t=3.0s
+t=5.0s
+103
+104
+Energy [keV]
+0.2
+0.1
+0.0
+0.1
+0.2
+Residual [dex]
+Figure 5.Comparison between the CNN-emulated photon spectra and the corresponding numerical-model spectra on the fixed
+Fermi/GBM energy grids. The left and right columns show the NaI and BGO bands, respectively, for three representative
+epochs (t= 1.0,3.0,and 5.0 s; colors). The upper panels presentN(E) as a function of energy, while the lower panels show
+the logarithmic residuals (in dex) between the emulator prediction and the numerical reference. Solid curves and open circles
+denote the numerical-model spectra and the CNN-emulated photon spectra, respectively.
+the selected background model into the source interval. We then subtract the background from the counts in all 128
+energy channels.
+Time-resolved spectroscopy requires a sufficiently fine partition of the light curve to track spectral evolution. We
+therefore apply the Bayesian blocks method to the TTE light curve of the brightest NaI detector, adopting a false-
+alarm probability ofp= 0.01 (J. D. Scargle et al. 2013). As shown in Figure 6, this adaptive segmentation yields a
+total of 18 time bins, which are used for the subsequent time-resolved spectral fitting.
+After defining the time-resolved bins, we perform Bayesian spectral fitting for each time interval in 3ML using
+the packaged CNN synchrotron model, denoted asME FCSYN CNN. To ensure that the inference remains within the
+training coverage of the CNN, we set the parameter priors to be consistent with the ranges used in the synthetic
+data set. For parameters that span multiple orders of magnitude, we adopt a logarithmic parametrization to improve
+sampling efficiency. Specifically, we use ˆt∼ U(0.1,10.0),a∼ N(1.0,0.5) truncated to [0.1,2.0], log 10 γinj ∼ U(4,6),
+log10 Γ∼ U(2,2.7), log 10 Q0 ∼ U(54,58), log 10 B0 ∼ U(1,3), log 10 R0 ∼ U(14,16), andp∼ N(2.8,1) truncated to
+[2.2,5.0]. Here ˆt,a, andpare sampled in linear space, whileQ 0,R 0,γ inj, Γ, andB 0 are sampled in log space. Since
+no redshift measurement is available for GRB 231020A, we fix the redshift toz= 1.
+We then construct aBayesianAnalysisobject in 3ML and useMultiNestas the sampler. Given the relatively high
+parameter dimension and potential parameter correlations, the number of live points is set ton live = 1000 to improve
+the stability of posterior sampling and the accuracy of the evidence estimate.
+For comparison with a physical baseline, we also fit each time bin with a standard fast-cooling synchrotron model,
+denoted asFCSYN. The model form and implementation follow the treatments in J. M. Burgess et al. (2014) and J.-M.
+Chen et al. (2025a). For the standardFCSYNmodel, we fixγ inj = 105 andγ cool = 102 to maintain the fast-cooling
+regime (J. M. Burgess et al. 2020). We note that when bothBandγ inj are allowed to vary freely, the two parameters
+
+9
+0 5 10 15 20
+Time since trigger (s)
+0
+2000
+4000
+6000
+8000
+10000
+12000Rate(cnts/64ms)
+a b c d efg h i j k l m n o p q
+Background
+n9: 8-900keV
+Figure 6.Light curve of GRB 231020A. The green dashed vertical lines mark the Bayesian Blocks change points, defining the
+time intervals used for the time-resolved spectral analysis.
+become strongly degenerate because the synchrotron peak energy is mainly controlled by their combination. Therefore,
+the FCSYN magnetic-field parameter should be regarded as an effective constant-field value and should not be directly
+identified withB 0 in the decaying-field model. TheFCSYNmodel is used here only as a simple standard fast-cooling
+synchrotron comparison model. We adopt the Bayesian Information Criterion (BIC) and the Residual Sum of Squares
+(RSS) as quantitative metrics for model selection and goodness of fit.
+We apply bothME FCSYN CNNandFCSYNto the time-resolved spectra of GRB 231020A. The fitting results for all bins
+are summarized in Table 1. As an example, Figure 7 shows the fitted count spectrum and the posterior distributions of
+the model parameters for one representative time bin. From the residual behavior and the RSS values,ME FCSYN CNN
+provides acceptable fits to the data across the GBM energy range.
+
+10
+T able 1. Time-resolved spectral-fitting results for GRB 231020A.
+Time[s] Model ˆt[s]b/αlogQ 0[s−1] log Γ logR 0[cm] logB 0/B[G]p/β E p[keV] RSS/dof BIC
+0.00∼1.82 FCSYN – – – – – 17697.36 +2867.68
+−3139.23 2.31+0.86
+−0.24 – 431.03/473 3087.18
+ME FCSYN CNN 9.89 +1.04
+−6.23 1.31+0.12
+−0.38 57.32+0.17
+−1.49 2.65+0.07
+−0.49 14.33+0.72
+−0.12 2.46+0.43
+−1.26 2.65+0.05
+−0.20 – 415.58/468 3064.82
+Band –−0.69 +0.11
+−0.14 – – – –−2.10 +0.01
+−0.61 251.77+72.57
+−22.87 412.65/472 3066.70
+CPL –−0.76 +0.12
+−0.11 – – – – – 306.48 +61.31
+−40.34 417.26/473 3065.50
+1.82∼3.74 FCSYN – – – – – 10.00 +0.91
+−0.08 2.72+0.15
+−0.01 – 422.16/473 3191.93
+ME FCSYN CNN 7.08 +0.56
+−1.01 1.11+0.11
+−0.59 57.32+0.68
+−2.72 2.39+0.09
+−0.28 14.56+1.25
+−0.20 1.72+0.83
+−0.35 2.76+0.02
+−0.34 – 405.79/468 3163.36
+Band –−1.12 +0.24
+−0.23 – – – –−2.00 +0.01
+−0.09 52.75+18.98
+−7.23 404.55/472 3170.77
+CPL –−1.61 +0.04
+−0.08 – – – – – 155.79 +67.59
+−18.79 416.37/473 3177.45
+3.74∼5.50 FCSYN – – – – – 10.00 +0.13
+−0.01 2.84+0.00
+−0.03 – 785.15/473 3439.03
+ME FCSYN CNN 0.45 +0.65
+−0.27 1.19+0.10
+−0.51 55.62+0.03
+−1.26 2.05+0.34
+−0.02 15.13+0.63
+−0.36 1.08+1.15
+−0.18 2.44+0.12
+−0.10 – 435.68/468 3063.58
+Band –−1.14 +0.29
+−0.12 – – – –−2.13 +0.03
+−0.03 19.92+1.54
+−1.55 431.09/472 3085.14
+CPL –−1.97 +0.03
+−0.01 – – – – – 22.63 +25.93
+−1.14 450.29/473 3101.94
+5.50∼5.91 FCSYN – – – – – 10.01 +0.32
+−0.03 2.82+0.00
+−0.05 – 407.40/473 1381.24
+ME FCSYN CNN 0.85 +0.32
+−0.16 1.05+0.20
+−0.45 55.72+0.82
+−0.83 2.17+0.33
+−0.06 15.74+0.03
+−1.07 1.14+1.47
+−0.39 2.52+0.26
+−0.07 – 303.06/468 1208.03
+Band –−1.42 +0.38
+−0.00 – – – –−2.21 +0.05
+−0.07 24.75+3.65
+−3.84 302.55/472 1228.63
+CPL –−1.88 +0.09
+−0.04 – – – – – 35.30 +13.58
+−4.71 314.03/473 1225.22
+5.91∼6.35 FCSYN – – – – – 10.00 +0.19
+−0.01 2.77+0.00
+−0.03 – 440.93/473 1569.22
+ME FCSYN CNN 8.98 +0.66
+−6.65 1.15+0.10
+−0.63 57.62+0.23
+−2.20 2.10+0.39
+−0.01 15.64+0.16
+−0.81 2.96+0.20
+−0.92 2.94+0.01
+−0.41 – 325.60/468 1387.74
+Band –−1.50 +0.26
+−0.02 – – – –−2.22 +0.11
+−0.08 47.67+3.80
+−14.40 324.01/472 1409.21
+CPL –−1.76 +0.06
+−0.05 – – – – – 73.23 +10.54
+−6.83 330.28/473 1396.02
+6.35∼6.52 FCSYN – – – – – 10.00 +0.72
+−0.07 2.73+0.01
+−0.09 – 307.64/473 650.91
+ME FCSYN CNN 5.68 +2.51
+−2.23 0.98+0.24
+−0.45 57.75+0.04
+−1.55 2.44+0.14
+−0.28 15.46+0.34
+−0.55 1.75+0.96
+−0.04 2.91+0.05
+−0.30 – 313.80/468 608.31
+Band –−1.50 +0.10
+−0.01 – – – –−2.71 +0.32
+−0.37 121.37+8.45
+−19.42 318.92/472 623.88
+CPL –−1.53 +0.07
+−0.06 – – – – – 131.28 +20.92
+−14.11 320.77/473 616.22
+6.52∼6.78 FCSYN – – – – – 10.01 +1.50
+−0.19 2.63+0.08
+−0.02 – 337.85/473 1118.97
+ME FCSYN CNN 1.31 +6.79
+−0.64 1.06+0.19
+−0.44 57.69+0.15
+−0.69 2.67+0.04
+−0.41 15.62+0.13
+−0.97 1.96+0.52
+−0.29 2.99+0.07
+−0.27 – 336.16/468 1084.99
+Band –−1.43 +0.03
+−0.04 – – – –−2.96 +0.28
+−0.33 177.21+17.43
+−13.50 338.54/472 1102.70
+CPL –−1.44 +0.04
+−0.04 – – – – – 181.76 +17.03
+−13.25 339.67/473 1089.74
+T able 1continued on next page
+
+11
+T able 1(continued)
+Time[s] Model ˆt[s]b/αlogQ 0[s−1] log Γ logR 0[cm] logB 0/B[G]p/β E p[keV] RSS/dof BIC
+6.78∼7.63 FCSYN – – – – – 24.32 +1.52
+−1.52 2.75+0.00
+−0.05 – 875.58/473 3016.53
+ME FCSYN CNN 0.11 +0.08
+−0.00 0.92+0.23
+−0.09 57.99+0.01
+−0.20 2.69+0.00
+−0.05 14.01+1.18
+−0.04 2.47+0.03
+−0.90 3.02+0.02
+−0.07 – 577.23/468 2652.64
+Band –−1.19 +0.02
+−0.02 – – – –−3.50 +0.20
+−0.33 219.60+8.12
+−7.41 516.47/472 2614.96
+CPL –−1.19 +0.02
+−0.02 – – – – – 221.65 +8.09
+−6.94 513.46/473 2582.55
+7.63∼8.11 FCSYN – – – – – 27.55 +2.32
+−2.83 2.76+0.01
+−0.10 – 742.83/473 2213.59
+ME FCSYN CNN 0.10 +0.10
+−0.01 0.77+0.05
+−0.06 57.99+0.01
+−0.16 2.70+0.01
+−0.05 14.55+0.02
+−0.29 1.65+0.11
+−0.01 2.99+0.02
+−0.06 – 446.80/468 1859.24
+Band –−0.95 +0.04
+−0.03 – – – –−3.04 +0.15
+−0.32 173.16+8.68
+−6.28 410.69/472 1819.24
+CPL –−0.97 +0.03
+−0.03 – – – – – 181.11 +7.48
+−6.72 419.46/473 1806.51
+8.11∼8.90 FCSYN – – – – – 29.34 +1.92
+−2.77 2.79+0.01
+−0.07 – 1205.14/473 3177.50
+ME FCSYN CNN 0.14 +9.77
+−0.08 0.69+0.03
+−0.09 57.91+0.08
+−0.02 2.66+0.04
+−0.00 14.17+0.04
+−0.10 1.67+0.04
+−0.19 2.94+0.02
+−0.11 – 615.46/468 2536.44
+Band –−0.69 +0.03
+−0.05 – – – –−3.03 +0.14
+−0.24 147.00+5.88
+−4.34 426.86/472 2341.93
+CPL –−0.75 +0.03
+−0.04 – – – – – 156.86 +4.91
+−3.87 444.34/473 2333.41
+8.90∼9.39 FCSYN – – – – – 13.84 +1.37
+−1.21 2.76+0.01
+−0.09 – 692.95/473 1999.52
+ME FCSYN CNN 9.98 +0.19
+−2.31 0.59+0.16
+−0.04 58.00+0.02
+−0.15 2.68+0.01
+−0.05 14.21+0.12
+−0.16 1.58+0.35
+−0.07 2.92+0.01
+−0.05 – 479.30/468 1751.31
+Band –−0.62 +0.06
+−0.06 – – – –−3.22 +0.15
+−0.31 109.19+4.15
+−3.51 347.77/472 1615.93
+CPL –−0.67 +0.06
+−0.05 – – – – – 114.34 +3.91
+−3.57 358.28/473 1595.26
+9.39∼10.21 FCSYN – – – – – 10.01 +0.45
+−0.04 2.77+0.00
+−0.04 – 710.72/473 2529.78
+ME FCSYN CNN 9.89 +0.42
+−0.65 0.60+0.24
+−0.05 57.99+0.01
+−0.14 2.67+0.02
+−0.06 14.18+0.82
+−0.08 1.42+0.19
+−0.06 2.91+0.07
+−0.02 – 538.72/468 2328.93
+Band –−0.67 +0.06
+−0.07 – – – –−2.98 +0.10
+−0.23 86.30+3.56
+−2.45 392.80/472 2192.64
+CPL –−0.76 +0.06
+−0.05 – – – – – 93.11 +2.71
+−2.64 411.44/473 2187.17
+10.21∼11.05 FCSYN – – – – – 10.00 +0.16
+−0.01 2.79+0.00
+−0.02 – 602.18/473 2383.21
+ME FCSYN CNN 6.49 +1.94
+−4.38 0.67+0.66
+−0.05 57.96+0.01
+−0.23 2.70+0.01
+−0.16 15.23+0.61
+−0.36 1.34+0.25
+−0.00 3.06+0.00
+−0.08 – 439.95/468 2164.87
+Band –−0.91 +0.10
+−0.06 – – – –−3.06 +0.16
+−0.26 65.84+2.35
+−3.22 394.46/472 2125.72
+CPL –−0.99 +0.08
+−0.06 – – – – – 69.52 +2.53
+−2.06 404.68/473 2109.59
+11.05∼11.95 FCSYN – – – – – 10.00 +0.19
+−0.01 2.83+0.00
+−0.03 – 550.29/473 2363.69
+ME FCSYN CNN 1.83 +6.51
+−0.56 0.81+0.31
+−0.22 57.97+0.04
+−0.51 2.69+0.02
+−0.26 15.75+0.06
+−0.82 1.46+0.64
+−0.02 3.21+0.06
+−0.20 – 382.57/468 2133.65
+Band –−1.17 +0.13
+−0.08 – – – –−3.18 +0.25
+−0.31 53.88+2.21
+−3.58 371.78/472 2133.07
+CPL –−1.19 +0.10
+−0.08 – – – – – 54.84 +2.75
+−2.20 374.74/473 2113.19
+11.95∼12.68 FCSYN – – – – – 10.01 +0.31
+−0.02 2.86+0.00
+−0.05 – 496.81/473 1971.97
+ME FCSYN CNN 4.57 +3.43
+−2.53 0.93+0.15
+−0.48 57.88+0.03
+−0.86 2.69+0.06
+−0.47 15.99+0.17
+−1.07 1.71+0.88
+−0.04 3.26+0.04
+−0.28 – 377.22/468 1803.52
+T able 1continued on next page
+
+12T able 1(continued)
+Time[s] Model ˆt[s]b/αlogQ 0[s−1] log Γ logR 0[cm] logB 0/B[G]p/β E p[keV] RSS/dof BIC
+Band –−1.22 +0.19
+−0.11 – – – –−3.02 +0.24
+−0.29 44.52+2.63
+−3.97 371.88/472 1810.83
+CPL –−1.25 +0.13
+−0.12 – – – – – 46.07 +3.20
+−2.81 374.87/473 1796.45
+12.68∼13.83 FCSYN – – – – – 10.01 +0.28
+−0.02 2.89+0.00
+−0.05 – 537.13/473 2560.26
+ME FCSYN CNN 1.68 +5.98
+−0.02 0.29+0.75
+−0.05 57.91+0.00
+−0.63 2.23+0.40
+−0.03 15.93+0.05
+−0.92 1.01+1.56
+−0.50 3.11+0.19
+−0.06 – 367.21/468 2355.79
+Band –−0.97 +0.28
+−0.09 – – – –−3.06 +0.18
+−0.31 36.63+2.19
+−2.31 352.25/472 2351.83
+CPL –−1.02 +0.19
+−0.12 – – – – – 38.65 +2.02
+−2.24 354.96/473 2336.87
+13.83∼15.00 FCSYN – – – – – 10.00 +0.49
+−0.05 2.93+0.00
+−0.09 – 509.01/473 2488.23
+ME FCSYN CNN 3.11 +5.17
+−0.74 0.83+0.36
+−0.36 58.00+0.16
+−1.17 2.68+0.06
+−0.47 14.69+1.12
+−0.10 2.95+0.24
+−1.20 3.45+0.12
+−0.43 – 386.88/468 2332.18
+Band –−0.83 +0.36
+−0.11 – – – –−3.05 +0.19
+−0.30 30.24+2.25
+−2.33 371.04/472 2338.29
+CPL –−0.93 +0.32
+−0.15 – – – – – 32.12 +2.33
+−2.53 373.19/473 2322.62
+15.00∼17.00 FCSYN – – – – – 10.01 +0.96
+−0.07 2.62+0.35
+−0.20 – 521.06/473 3156.38
+ME FCSYN CNN 8.78 +0.54
+−2.12 0.97+0.32
+−0.40 57.79+0.09
+−1.58 2.62+0.05
+−0.49 15.76+0.01
+−1.07 2.68+0.04
+−1.03 3.47+0.19
+−0.55 – 431.43/468 3073.13
+Band –−0.95 +0.36
+−0.14 – – – –−2.93 +0.20
+−0.31 23.88+3.29
+−2.32 425.95/472 3085.81
+CPL –−1.07 +0.44
+−0.09 – – – – – 25.41 +3.61
+−1.95 426.02/473 3073.66
+Note—For the FCSYN model,γ inj = 105 andγ cool = 102 are fixed. The magnetic-field parameter of FCSYN is an effective
+constant-field parameter and is not constrained by the CNN training range of ME FCSYN CNN.
+
+13
+0.8
+1.2
+1.6
+a
+54.4
+55.2
+56.0
+56.8
+57.6
+log(Q0)
+2.10
+2.25
+2.40
+2.55
+log( )
+14.4
+14.8
+15.2
+15.6
+log(R0)
+5.25
+5.40
+5.55
+5.70
+5.85
+log( inj)
+1.2
+1.6
+2.0
+2.4
+2.8
+log(B0)
+2 4 6 8
+t
+2.40
+2.55
+2.70
+2.85
+p
+0.8 1.2 1.6
+a
+54.4 55.2 56.0 56.8 57.6
+log(Q0)
+2.10 2.25 2.40 2.55
+log( )
+14.4 14.8 15.2 15.6
+log(R0)
+5.25 5.40 5.55 5.70 5.85
+log( inj)
+1.2 1.6 2.0 2.4 2.8
+log(B0)
+2.40 2.55 2.70 2.85
+p
+Figure 7.GRB 231020A: representative fitting result for one time bin. Left: corner plot of the posterior distributions for the
+ME FCSYN CNNmodel parameters from the Bayesian fit. Right: best-fit forward-folded GBM count spectra and residuals for the
+same interval.
+The comparison with the standard fast-cooling synchrotron model yields a consistent trend across all time bins.
+Table 1 shows that the BIC values ofME FCSYN CNNare smaller than those ofFCSYNin every time bin. This indicates
+that, even after penalizing model complexity, the fast-cooling synchrotron model in a decaying magnetic field is
+statistically preferred over the standard fast-cooling synchrotron model with a non-decaying magnetic field. This
+result suggests that allowing the magnetic field to decay with radius leads to a more self-consistent description of the
+prompt spectral evolution of this burst.
+
+14
+In terms of computational efficiency, the CNN emulator greatly reduces the fitting cost. On a 16-thread workstation,
+a full sampling run for a single time bin typically takes only∼400 s. In contrast, B.-B. Zhang et al. (2016) reported that
+fitting a single time bin by directly calling the numerical synchrotron model requires∼160 CPU hours. Therefore,
+ME FCSYN CNNreduces the computational overhead of time-resolved spectral fitting by several orders of magnitude
+while retaining consistency with the underlying physical model. This makes systematic studies with larger samples
+and broader parameter-space exploration practically feasible.
+4.2.Comparison with empirical spectral functions
+We fit the same time-resolved spectra with the Band and CPL functions (D. L. Band 1997). These empirical models
+are widely used in GRB prompt-emission studies because they flexibly describe the observed spectral curvature,
+although their parameters are not directly tied to a unique radiation mechanism (D. Gruber et al. 2014; H.-F. Yu et al.
+2019; J.-M. Chen et al. 2021).
+2
+1
+0
+1
+Band
+CPL
+101
+102
+103
+Ep (keV)
+5
+ 0 5 10 15 20 25
+Time\ (s)
+1000
+2000
+3000
+4000
+BIC
+ME_FCSYN_CNN Band CPL
+Figure 8.Comparison between the empirical Band/CPL functions and theME FCSYN CNNmodel. The top panel shows the
+temporal evolution of the low-energy photon indexαobtained from the Band and CPL fits. The red dashed and blue dotted
+lines denoteα=−2/3 andα=−3/2, respectively. The middle panel shows the evolution of the spectral peak energyE p.
+The bottom panel shows the BIC values of theME FCSYN CNN, Band, and CPL models. The gray curve in each panel shows the
+prompt-emission light curve for reference.
+Figure 8 shows the temporal evolution of the empirical spectral parameters and the BIC values of the three models.
+The Band and CPL fits show clear spectral evolution during the prompt-emission episode. Around the flux peak,
+the low-energy photon index becomes relatively hard and approaches the synchrotron slow-cooling limit,α=−2/3,
+
+15
+whereas several off-peak intervals show softer values closer to or below the standard fast-cooling value,α=−3/2. The
+peak energyE p broadly tracks the flux evolution, indicating significant spectral evolution during the main pulse.
+The BIC comparison shows thatME FCSYN CNNis statistically competitive with the empirical Band and CPL functions
+in many time bins. However, the empirical functions can still provide a better description in some bright intervals. This
+is not unexpected, because Band and CPL are flexible phenomenological descriptions of spectral curvature, whereas
+ME FCSYN CNNis constrained by the electron cooling history in a decaying magnetic field. Similar comparisons have
+shown that a fast-cooling synchrotron model with magnetic-field decay can reproduce Band-like GRB spectra with a
+fit quality comparable to that of the empirical Band function (B.-B. Zhang et al. 2016).
+The relatively hardαvalues around the flux peak also place stronger pressure on a synchrotron-only interpretation.
+This does not necessarily rule out a decaying-field synchrotron origin, but it suggests that the current synchrotron-plus-
+adiabatic implementation may be incomplete during the brightest phase. As discussed below, the fitted parameters
+suggest that the emitting region is generally particle dominated or weakly magnetized in most time bins. In such
+a regime, additional cooling processes, especially synchrotron self-Compton cooling and Klein–Nishina effects, may
+become important.
+4.3.Constraints on the prompt-emission jet properties from the fitted parameters
+Having verified thatME FCSYN CNNprovides a statistically competitive description of the time-resolved spectra, we
+next use the fitted physical parameters to constrain the properties of the GRB 231020A jet at the prompt-emission
+radius. Following previous synchrotron regime studies, we estimate the approximate isotropic-equivalent powers carried
+by accelerated electrons, magnetic fields, and associated baryons (P. Kumar & E. McMahon 2008; P. Beniamini & T.
+Piran 2013, 2014; P. Kumar & P. Crumley 2015). These quantities are used as local diagnostics of the emitting region,
+rather than as precise measurements of the initial or global jet composition. In particular, they allow us to examine
+whether the prompt-emission region is magnetically dominated, moderately magnetized, or particle dominated.
+In our model, the electron injection function is written asQ(γ ′) =Q 0γ′−p, whereγ inj < γ ′ < γ max. The co-
+moving injection rate of accelerated electrons isN ′
+inj =
+R γmax
+γinj
+Q0γ′−pdγ′ =Q 0(p−1) −1(γ1−p
+inj −γ 1−p
+max), wherep >1.
+We estimate the isotropic-equivalent power carried by the accelerated electrons asL e ≃N ′
+injmec2γ′
+injΓ2 (P. Ku-
+mar & P. Crumley 2015; J.-J. Geng et al. 2018). The magnetic power at the emission radius is estimated as
+LB ≃4πR 2
+0Γ2c(B′2
+0 /8π) =R 2
+0Γ2cB′2
+0 /2, whereB ′
+0 is the comoving magnetic-field strength atR 0. Since the baryon
+loading is not directly constrained by the prompt spectrum, we introduce a proton-to-accelerated-electron number
+ratioξ p and estimate the associated proton kinetic power asL p ≃ξ pN ′
+injmpc2Γ2 (ˇZ. Boˇ snjak et al. 2009; F. Daigne
+et al. 2011; P. Beniamini & T. Piran 2013; J.-J. Geng et al. 2018). The total matter power carried by the radiating
+electrons and associated cold protons is then defined asL k =L e +L p. We define the local effective magnetization
+parameter of the prompt-emission region asσ eff =L B/Lk =L B/(Le +L p) (B. Zhang & H. Yan 2011). In addition to
+σeff, we also useL e/LB andL B/Lp as auxiliary diagnostics to show whether the fitted emission region is closer to an
+electron-dominated, baryon-dominated, or magnetically dominated regime. These ratios should be interpreted as local
+diagnostics of the prompt-emission region rather than as direct measurements of the initial or global jet magnetization.
+The jet physical parameters derived from the spectral fits for each time bin are summarized in Table 2. The
+inferred ratios indicate that most time bins are not strongly Poynting-flux dominated at the emission radius. Instead,
+the fitted parameters favor a particle-dominated or weakly magnetized radiating region during most intervals, while
+several late-time bins show enhanced magnetic importance. This does not contradict the decaying-field synchrotron
+interpretation, because the key requirement of the model is a decreasing comoving magnetic field during electron
+cooling, not necessarilyL B > L e +L p in every time bin.
+A low local magnetic to particle power ratio may indicate that the observed spectra are produced in a post-dissipation
+or matter-kinetic-dominated stage, where a substantial fraction of the initial magnetic energy has already been con-
+verted into particle energy or bulk kinetic energy before or during the prompt-emission episode (P. Beniamini & T.
+Piran 2014). Such an interpretation is also qualitatively consistent with magnetic-dissipation models, in which the
+magnetization can decrease as magnetic energy is released during the prompt-emission phase (B. Zhang & A. Pe’er
+2009; B. Zhang & H. Yan 2011).
+Moreover, a decaying magnetic field is not exclusive to a strongly Poynting-flux-dominated outflow. In the internal-
+shock framework, A. Pe’er & B. Zhang (2006) proposed that the magnetic field generated by shocks may decay on
+a length scale much shorter than the comoving width of the shocked plasma, thereby alleviating the standard fast-
+cooling problem of synchrotron radiation. X. Zhao et al. (2014) further showed that fast-cooling electrons undergoing
+
+16
+T able 2.Constraints on the prompt-emission jet properties inferred from the fittedME FCSYN CNNparameters.
+Time bin logN ′
+inj logL e logL B logL p(ξp = 1)σ eff(ξp = 1)σ eff(ξp = 10)σ eff(ξp = 100) log(L e/LB)
+0.00–1.82 47.43 52.49 49.06 49.91 3.67e-04 3.58e-04 2.91e-04 3.43
+1.82–3.74 48.08 51.89 47.51 50.03 4.15e-05 3.70e-05 1.77e-05 4.38
+3.74–5.50 49.08 51.54 46.70 50.36 1.36e-05 8.71e-06 1.91e-06 4.84
+5.50–5.91 48.70 51.45 48.26 50.21 6.19e-04 4.13e-04 9.53e-05 3.18
+5.91–6.35 49.33 51.55 51.57 50.69 0.91 0.44 0.07 -0.02
+6.35–6.52 48.17 51.84 49.50 50.23 4.45e-03 3.65e-03 1.31e-03 2.34
+6.52–6.78 48.14 52.04 50.66 50.65 0.04 0.03 8.27e-03 1.38
+6.78–7.63 48.29 52.24 48.52 50.85 1.83e-04 1.35e-04 3.77e-05 3.72
+7.63–8.11 48.34 52.34 47.97 50.91 4.13e-05 3.13e-05 9.12e-06 4.37
+8.11–8.90 48.31 52.34 47.16 50.80 6.41e-06 5.12e-06 1.71e-06 5.18
+8.90–9.39 47.65 52.18 47.13 50.19 8.76e-06 8.02e-06 4.35e-06 5.05
+9.39–10.21 47.79 52.24 46.71 50.30 2.95e-06 2.68e-06 1.39e-06 5.52
+10.21–11.05 47.56 51.77 48.70 50.14 8.43e-04 6.99e-04 2.59e-04 3.06
+11.05–11.95 47.55 51.40 49.96 50.10 0.035 0.025 6.11e-03 1.43
+11.95–12.68 47.36 51.17 50.96 49.93 0.58 0.39 0.092 0.21
+12.68–13.83 47.98 50.91 48.52 49.62 3.86e-03 2.68e-03 6.62e-04 2.39
+13.83–15.00 47.33 50.82 50.82 49.88 0.9 0.47 0.08 -0.00
+14.50–17.00 47.38 50.57 52.28 49.79 44 19 2.9 -1.71
+Note—All powers are isotropic-equivalent and are in units of erg s −1.N ′
+inj is in units of s −1. Logarithms are base 10
+forN ′
+inj,L e,L B, andL p. The effective magnetization parameter is defined asσ eff =L B/(Le +L p). The values of
+σeff andL e/LB are reported in linear form.
+synchrotron and inverse-Compton cooling in a decaying downstream magnetic field can produce harder low-energy
+spectra than in the homogeneous-field case. Similarly, K. Wang & Z.-G. Dai (2021) found that the magnetic field
+generated in internal shocks can evolve from an approximately constant phase to a decaying phase,B ′ ∝t −1, which
+modifies the electron cooling history and hardens the low-energy spectrum. These studies provide a useful interpretation
+for our low magnetic-to-particle power ratios: even if the emission region is particle dominated, a decreasing magnetic
+field can still shape the cooling history of fast-cooling electrons and produce harder low-energy spectra. Similar
+decaying-field effects have also been discussed in large-radius synchrotron models of GRB prompt emission (Z. L. Uhm
+& B. Zhang 2014; J.-J. Geng et al. 2018).
+The particle dominated nature inferred for most time bins also points to an important limitation of the present
+implementation. In such a low-magnetization regime, the photon energy density may become comparable to or larger
+than the magnetic energy density, and synchrotron self-Compton cooling can affect the electron distribution and
+the resulting low-energy spectrum. This is particularly relevant because previous numerical studies have shown that
+different cooling channels, including synchrotron, SSC, and adiabatic cooling, can lead to different low-energy spectral
+shapes, and that SSC cooling can harden the low-energy spectra under appropriate conditions (F. Daigne et al. 2011;
+R. Barniol Duran et al. 2012; X. Zhao et al. 2014; J.-J. Geng et al. 2018). Our current CNN emulator includes
+synchrotron and adiabatic cooling, but does not self-consistently include SSC cooling or Klein–Nishina effects. We
+therefore regard this diagnostic result as motivation for extending the emulator to include SSC cooling in future work.
+5.SUMMARY AND DISCUSSION
+This work is motivated by a practical bottleneck in comparing physical radiation models with large observational
+samples. Although the fast-cooling synchrotron model in a decaying magnetic field provides a physically motivated
+description of GRB prompt emission, its high numerical cost has limited systematic fitting and statistical testing
+withFermi/GBM data. To address this issue, we developed a convolutional neural network (CNN)–based spectral
+emulator for the decaying field fast-cooling synchrotron model. The emulator reduces the wall-clock time for a single
+
+17
+spectral calculation from the numerical integration scale to the millisecond level, making Bayesian fitting with physical
+prompt-emission models computationally feasible.
+On the methodological side, we trained the CNN to learn the mapping from the physical parameter vector to the
+observer-frame photon spectrum. The synthetic training set was generated over a physically motivated parameter
+space using Latin hypercube sampling, and the model spectra were computed on fixed energy grids appropriate for
+the NaI and BGO detectors ofFermi/GBM. To stabilize the learning problem over broad parameter and flux ranges,
+we adopted a standardized preprocessing pipeline, including logarithmic transforms for selected physical parameters
+and a “logarithmization + energy-bin-wise standardization” treatment of the output spectra. The detector type was
+encoded by a one-hot vector, allowing a single network to emulate both NaI and BGO spectral grids.
+The independent test-set validation shows that the CNN emulator is nearly unbiased on average, with the mean of
+the log-spectral residuals close to zero. The typical mean relative error is∼3.88%, indicating that the network can
+reproduce the main spectral features of the numerical model, including slopes, curvature, and peak evolution. We
+further implemented the trained emulator as a user-defined spectral model in thethreeMLframework. SincethreeML
+folds the model photon spectrum through the detector response matrix in count space, the CNN emulator can be
+directly used in standard Bayesian spectral fitting while retaining the computational speed required for time-resolved
+GRB analysis.
+We applied theME FCSYN CNNmodel to the time-resolved spectral analysis of GRB 231020A. The light curve was
+segmented using Bayesian Blocks, and posterior distributions of the model parameters were obtained through Bayesian
+inference. The model comparison shows thatME FCSYN CNNprovides systematically better fits than the standard
+constant-field fast-cooling synchrotron model in terms of BIC and residual behavior. Comparisons with the empirical
+Band and CPL functions further show that the decaying-field synchrotron model can reproduce the observed spectral
+shapes with a statistical quality comparable to commonly used empirical functions, while retaining a direct physical
+interpretation of the fitted parameters. This result supports the use of the decaying-field synchrotron model as a
+physically interpretable alternative to purely empirical prompt-emission descriptions.
+The fitted parameters also provide constraints on the local properties of the emitting region. Using the inferred
+electron injection rate, bulk Lorentz factor, emission radius, and magnetic field strength, we estimated the electron,
+magnetic, and proton power components of the jet. These estimates suggest that, although the model is naturally con-
+nected to a magnetized dissipation scenario, the local prompt-emission region inferred for GRB 231020A is not strongly
+magnetically dominated. Instead, the derived energetic ratios are more consistent with a particle-dominated regime in
+the emission region. This may indicate that a magnetized outflow has already undergone substantial magnetic-energy
+dissipation by the time the observed prompt radiation is produced. We note, however, that this conclusion depends
+on the assumed baryon loading and on the simplified radiative treatment. In particular, inverse-Compton cooling and
+SSC-related effects are not explicitly included in the present calculation and should be considered in future extensions.
+The present framework still has several limitations. First, the intrinsic uncertainty of the CNN emulator is not
+explicitly propagated into the likelihood calculation in the presentthreeMLimplementation. The CNN is treated as
+a deterministic surrogate of the original numerical synchrotron model, while the likelihood accounts for the statistical
+uncertainties of the observed counts and the background model. To assess the possible impact of this approximation,
+we performed two additional checks. As the first check, we compared the CNN-emulated spectra with the original
+numerical spectra at the fitted parameter values of selected GRB 231020A time bins. An example for the high-flux
+peak interval 6.35–6.52 s is shown in Appendix A. In this interval, the median and 95th-percentile relative differences
+between the CNN and numerical spectra are only 0.89% and 1.80%, respectively, and the residuals remain at the
+level of|∆ log 10 F|≲0.01 over most of the energy range. This indicates that the emulator error is small in the
+high-flux spectral region that dominates the likelihood for this interval. As the second check, we examined the origin
+of the high-relative-error tail in the test-set validation. The top 5% error points are preferentially located in low-flux
+spectral-tail regions, where small absolute discrepancies can be amplified into relatively large fractional errors. They
+are also more common in spectral-tail regions and in some parts of parameter space associated with steeper spectra.
+Therefore, the quoted 95th-percentile relative error should be interpreted as a conservative global statistic over all
+valid energy bins and parameter-space regions, rather than as the typical emulator error near the high-flux spectral
+peak. Nevertheless, because this emulator uncertainty is not explicitly included in the current likelihood, the posterior
+widths reported in this work should be interpreted as conditional on the trained emulator and may underestimate
+the full uncertainty budget in some high signal-to-noise intervals. A more complete treatment would propagate the
+
+18
+emulator uncertainty into the count-space likelihood, for example through an energy-dependent covariance term, a
+nuisance systematic component, or an ensemble of independently trained emulators (P. Reiser et al. 2025).
+Another limitation is that the reliability of the emulator is restricted to the parameter space covered by the synthetic
+training set. Extrapolation outside this domain is not guaranteed, and future applications to broader GRB samples
+will require either an expanded training set or an adaptive retraining strategy in poorly sampled regions of parameter
+space. The current physical model is also confined to a specific decaying-field fast-cooling synchrotron scenario. Several
+additional physical ingredients may further modify the low-energy spectral index and the inferred energetic partition.
+For example, under certain conditions, transitions among synchrotron cooling, SSC cooling, and adiabatic cooling can
+harden the low-energy spectral index (J.-J. Geng et al. 2018). A more complete treatment of inverse-Compton and SSC
+cooling may also affect the inferred electron cooling history and the local energy budget. In addition, non-stationary
+particle injection histories can alter the pile-up behavior of fast-cooling electrons and thereby produce harder low-
+energy spectra (K. Wang & Z.-G. Dai 2021; K. Liu et al. 2020). Geometric effects, such as variations in viewing
+angle, Doppler-factor evolution, and equal-arrival-time-surface weighting, may further broaden or soften the observed
+low-energy spectral-index distribution at the sample level (J. Yang et al. 2023; Z.-Y. Yan et al. 2024; H.-X. Gao et al.
+2025). Incorporating these effects into the present framework would enable a more comprehensive statistical test of
+GRB prompt-emission models.
+In summary, we have established an efficient computational framework for GRB prompt-emission spectral studies.
+By enabling millisecond-level spectral emulation of the decaying-field fast-cooling synchrotron numerical model with a
+CNN, the framework makes it practical to apply a physical synchrotron model inFermi/GBM time-resolved spectral
+fitting. For GRB 231020A, the CNN emulated decaying-field synchrotron model provides a statistically competitive
+and physically interpretable description of the observed prompt spectra. The fitted parameters further suggest that
+the local emitting region is closer to a particle-dominated regime, possibly reflecting substantial magnetic-energy
+dissipation before or during the prompt-emission phase. This framework lays the computational and methodological
+foundation for future large-sample tests of magnetic-field decay signatures, distributions of physical jet parameters,
+and their correlations with empirical GRB observables.
+ACKNOWLEDGMENTS
+This work is supported by the National Natural Science Foundation of China (NSFC 12233006). Dr. Shan Chang
+acknowledges support from the National Natural Science Foundation of China 12103046 and the Xingdian Talent
+Support Plan - Youth Project. We acknowledge the use of the public data from the Fermi data archives.
+Software:Matplotlib (J. D. Hunter 2007), Numpy (C. R. Harris et al. 2020), Scipy (P. Virtanen et al. 2020),
+Scikit-learn (F. Pedregosa et al. 2011), PyTorch (A. Paszke et al. 2019), 3ML (G. Vianello et al. 2015).
+APPENDIX
+A.EMULATOR UNCERTAINTY AT FITTED PARAMETER POINTS
+As a supplementary check, we compare the CNN-emulated spectra with the original numerical spectra at the fitted
+parameter values of selected GRB 231020A time bins. This test is distinct from the independent test-set validation in
+Section 3, because it directly probes the parameter region used in the observational inference.
+Figure A1 shows the comparison for the high-flux peak interval 6.35–6.52 s. The median and 95th-percentile relative
+differences between the CNN and numerical spectra are 0.89% and 1.80%, respectively. The logarithmic residuals
+remain at the level of|∆ log 10 F|≲0.01 over most of the energy range. This indicates that the emulator error is small
+in the high-flux spectral region that dominates the likelihood for this interval.
+REFERENCES
+Abdo, A. A., Ackermann, M., Arimoto, M., et al. 2009,
+Science, 323, 1688, doi: 10.1126/science.1169101
+Band, D., Matteson, J., Ford, L., et al. 1993, ApJ, 413, 281,
+doi: 10.1086/172995
+
+19
+10 3
+10 2
+10 1
+100
+N(E) (ph s 1 cm 2 keV 1)
+Bin 5: 6.35--6.52 s, median=0.89%, p95=1.80%  
+Numerical MD_FCSYN
+CNN emulator
+101
+102
+103
+Energy [keV]
+0.00
+0.01log10 F
+Figure A1.Comparison between the CNN-emulated spectrum and the original numerical spectrum at the fitted parameters of
+the high-flux peak interval 6.35–6.52 s. The upper panel shows the two spectra, and the lower panel shows the logarithmic residual
+∆ log10 F= log 10 FCNN −log 10 Fnum. The median and 95th-percentile relative differences are 0.89% and 1.80%, respectively.
+Band, D. L. 1997, ApJ, 486, 928, doi: 10.1086/304566
+Barniol Duran, R., Boˇ snjak,ˇZ., & Kumar, P. 2012,
+MNRAS, 424, 3192,
+doi: 10.1111/j.1365-2966.2012.21533.x
+B´ egu´ e, D., Sahakyan, N., Dereli-B´ egu´ e, H., et al. 2024,
+ApJ, 963, 71, doi: 10.3847/1538-4357/ad19cf
+Beloborodov, A. M. 2010, MNRAS, 407, 1033,
+doi: 10.1111/j.1365-2966.2010.16770.x
+Beniamini, P., & Piran, T. 2013, ApJ, 769, 69,
+doi: 10.1088/0004-637X/769/1/69
+Beniamini, P., & Piran, T. 2014, MNRAS, 445, 3892,
+doi: 10.1093/mnras/stu2032
+Boˇ snjak,ˇZ., Daigne, F., & Dubus, G. 2009, A&A, 498, 677,
+doi: 10.1051/0004-6361/200811375
+Briggs, M. S., Band, D. L., Kippen, R. M., et al. 1999, ApJ,
+524, 82, doi: 10.1086/307808
+Burgess, J. M., B´ egu´ e, D., Greiner, J., et al. 2020, Nature
+Astronomy, 4, 174, doi: 10.1038/s41550-019-0911-z
+Burgess, J. M., Preece, R. D., Connaughton, V., et al. 2014,
+ApJ, 784, 17, doi: 10.1088/0004-637X/784/1/17
+Chen, J.-M., Peng, Z.-Y., Du, T.-T., & Yin, Y. 2022, ApJ,
+932, 25, doi: 10.3847/1538-4357/ac6c2a
+Chen, J.-M., Peng, Z.-Y., Du, T.-T., Yin, Y., & Wu, H.
+2021, ApJ, 920, 53, doi: 10.3847/1538-4357/ac14b8
+Chen, J.-M., Zhu, K.-R., Chang, X.-Z., Peng, Z.-Y., &
+Zhang, L. 2025a, ApJ, 993, 147,
+doi: 10.3847/1538-4357/ae0938
+Chen, J.-M., Zhu, K.-R., Peng, Z.-Y., & Zhang, L. 2024a,
+MNRAS, 527, 4272, doi: 10.1093/mnras/stad3407
+Chen, J.-M., Zhu, K.-R., Peng, Z.-Y., & Zhang, L. 2024b,
+ApJ, 972, 132, doi: 10.3847/1538-4357/ad5f93
+Chen, J.-M., Zhu, K.-R., Peng, Z.-Y., & Zhang, L. 2025b,
+ApJS, 276, 62, doi: 10.3847/1538-4365/ada0b0
+Daigne, F., Boˇ snjak,ˇZ., & Dubus, G. 2011, A&A, 526,
+A110, doi: 10.1051/0004-6361/201015457
+Daigne, F., & Mochkovitch, R. 1998, MNRAS, 296, 275,
+doi: 10.1046/j.1365-8711.1998.01305.x
+Fermi GBM Team. 2023, GRB Coordinates Network,
+34856, 1
+Gao, H.-X., Geng, J.-J., Liang, Y.-F., et al. 2025, ApJ, 986,
+106, doi: 10.3847/1538-4357/adceb1
+Geng, J.-J., Huang, Y.-F., Wu, X.-F., Zhang, B., & Zong,
+H.-S. 2018, ApJS, 234, 3, doi: 10.3847/1538-4365/aa9e84
+Ghisellini, G., Celotti, A., & Lazzati, D. 2000, MNRAS,
+313, L1, doi: 10.1046/j.1365-8711.2000.03354.x
+
+20
+Gruber, D., Goldstein, A., Weller von Ahlefeld, V., et al.
+2014, ApJS, 211, 12, doi: 10.1088/0067-0049/211/1/12
+Harris, C. R., Millman, K. J., van der Walt, S. J., et al.
+2020, Nature, 585, 357, doi: 10.1038/s41586-020-2649-2
+Huber, P. J. 1992, Robust Estimation of a Location
+Parameter, ed. S. Kotz & N. L. Johnson (New York, NY:
+Springer New York), 492–518,
+doi: 10.1007/978-1-4612-4380-9 35
+Hunter, J. D. 2007, Computing in Science and Engineering,
+9, 90, doi: 10.1109/MCSE.2007.55
+Kaneko, Y., Preece, R. D., Briggs, M. S., et al. 2006, ApJS,
+166, 298, doi: 10.1086/505911
+Kingma, D. P., & Ba, J. 2017, Adam: A Method for
+Stochastic Optimization,
+https://arxiv.org/abs/1412.6980
+Krizhevsky, A., Sutskever, I., & Hinton, G. E. 2012, in
+Advances in Neural Information Processing Systems, ed.
+F. Pereira, C. Burges, L. Bottou, & K. Weinberger,
+Vol. 25 (Curran Associates, Inc.).
+https://proceedings.neurips.cc/paper files/paper/2012/
+file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf
+Kumar, P., & Crumley, P. 2015, MNRAS, 453, 1820,
+doi: 10.1093/mnras/stv1696
+Kumar, P., & McMahon, E. 2008, MNRAS, 384, 33,
+doi: 10.1111/j.1365-2966.2007.12621.x
+Kumar, P., & Zhang, B. 2015, PhR, 561, 1,
+doi: 10.1016/j.physrep.2014.09.008
+Lazzati, D., & Begelman, M. C. 2010, ApJ, 725, 1137,
+doi: 10.1088/0004-637X/725/1/1137
+Liu, K., Lin, D.-B., Wang, K., et al. 2020, ApJL, 893, L14,
+doi: 10.3847/2041-8213/ab838e
+Longair, M. S. 2011, High Energy Astrophysics, 3rd edn.
+(Cambridge: Cambridge University Press)
+Lundman, C., Pe’er, A., & Ryde, F. 2013, MNRAS, 428,
+2430, doi: 10.1093/mnras/sts219
+Lyutikov, M., & Blandford, R. 2003, arXiv e-prints, astro,
+doi: 10.48550/arXiv.astro-ph/0312347
+Medvedev, M. V. 2000, ApJ, 540, 704, doi: 10.1086/309374
+M´ esz´ aros, P., & Rees, M. J. 2000, ApJ, 530, 292,
+doi: 10.1086/308371
+Nava, L., Ghirlanda, G., Ghisellini, G., & Celotti, A. 2011,
+A&A, 530, A21, doi: 10.1051/0004-6361/201016270
+Panaitescu, A., & M´ esz´ aros, P. 2000, ApJL, 544, L17,
+doi: 10.1086/317301
+Paszke, A., Gross, S., Massa, F., et al. 2019, in Advances in
+Neural Information Processing Systems, ed. H. Wallach,
+H. Larochelle, A. Beygelzimer, F. d'Alch´ e-Buc, E. Fox, &
+R. Garnett, Vol. 32 (Curran Associates, Inc.).
+https://proceedings.neurips.cc/paper files/paper/2019/
+file/bdbca288fee7f92f2bfa9f7012727740-Paper.pdf
+Pedregosa, F., Varoquaux, G., Gramfort, A., et al. 2011,
+Journal of Machine Learning Research, 12, 2825
+Pe’er, A., & Ryde, F. 2011, ApJ, 732, 49,
+doi: 10.1088/0004-637X/732/1/49
+Pe’Er, A., & Ryde, F. 2017, International Journal of
+Modern Physics D, 26, 1730018,
+doi: 10.1142/S021827181730018X
+Pe’er, A., & Zhang, B. 2006, ApJ, 653, 454,
+doi: 10.1086/508681
+Planck Collaboration, Aghanim, N., Akrami, Y., et al.
+2020, A&A, 641, A6, doi: 10.1051/0004-6361/201833910
+Poolakkil, S., Preece, R., Fletcher, C., et al. 2021, ApJ, 913,
+60, doi: 10.3847/1538-4357/abf24d
+Preece, R. D., Briggs, M. S., Mallozzi, R. S., et al. 2000,
+ApJS, 126, 19, doi: 10.1086/313289
+Rees, M. J., & Meszaros, P. 1994, ApJL, 430, L93,
+doi: 10.1086/187446
+Reiser, P., Aguilar, J. E., Guthke, A., & B¨ urkner, P.-C.
+2025, Statistics and computing, 35, 66
+Sahakyan, N., B´ egu´ e, D., Casotto, A., et al. 2024, ApJ, 971,
+70, doi: 10.3847/1538-4357/ad5351
+Scargle, J. D., Norris, J. P., Jackson, B., & Chiang, J. 2013,
+ApJ, 764, 167, doi: 10.1088/0004-637X/764/2/167
+Spruit, H. C., Daigne, F., & Drenkhahn, G. 2001, A&A,
+369, 694, doi: 10.1051/0004-6361:20010131
+Uhm, Z. L., & Zhang, B. 2014, Nature Physics, 10, 351,
+doi: 10.1038/nphys2932
+Vianello, G., Lauer, R. J., Younk, P., et al. 2015, arXiv
+e-prints, arXiv:1507.08343,
+doi: 10.48550/arXiv.1507.08343
+Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020,
+Nature Methods, 17, 261, doi: 10.1038/s41592-019-0686-2
+Wang, K., & Dai, Z.-G. 2021, Galaxies, 9, 68,
+doi: 10.3390/galaxies9030068
+Yan, Z.-Y., Yang, J., Zhao, X.-H., Meng, Y.-Z., & Zhang,
+B.-B. 2024, ApJ, 962, 85, doi: 10.3847/1538-4357/ad14fb
+Yang, J., Zhao, X.-H., Yan, Z., et al. 2023, ApJL, 947, L11,
+doi: 10.3847/2041-8213/acc84b
+Yu, H.-F., Dereli-B´ egu´ e, H., & Ryde, F. 2019, ApJ, 886, 20,
+doi: 10.3847/1538-4357/ab488a
+Zhang, B. 2011, Comptes Rendus Physique, 12, 206,
+doi: 10.1016/j.crhy.2011.03.004
+Zhang, B. 2018, The Physics of Gamma-Ray Bursts
+(Cambridge: Cambridge University Press),
+doi: 10.1017/9781139226530
+Zhang, B. 2020, Nature Astronomy, 4, 210,
+doi: 10.1038/s41550-020-1041-3
+Zhang, B., & Pe’er, A. 2009, ApJL, 700, L65,
+doi: 10.1088/0004-637X/700/2/L65
+
+21
+Zhang, B., & Yan, H. 2011, ApJ, 726, 90,
+doi: 10.1088/0004-637X/726/2/90
+Zhang, B.-B., Uhm, Z. L., Connaughton, V., Briggs, M. S.,
+& Zhang, B. 2016, ApJ, 816, 72,
+doi: 10.3847/0004-637X/816/2/72
+Zhang, Y., Geng, J.-J., & Huang, Y.-F. 2019, ApJ, 877, 89,
+doi: 10.3847/1538-4357/ab1b10
+Zhao, H., Gallo, O., Frosio, I., & Kautz, J. 2017, IEEE
+Transactions on Computational Imaging, 3, 47,
+doi: 10.1109/TCI.2016.2644865
+Zhao, X., Li, Z., Liu, X., et al. 2014, ApJ, 780, 12,
+doi: 10.1088/0004-637X/780/1/12

@@ -1,0 +1,1264 @@
+Title: Precision constraints on stellar physics from main sequence detached eclipsing binaries
+Authors: Mitchell T. Dennis, Harry Desmond, Jeremy Sakstein
+Published: 2026-06-01
+Categories: astro-ph.SR, astro-ph.IM
+
+MNRAS000, 1–13 (2026) Preprint 3 June 2026 Compiled using MNRAS L ATEX style file v3.3
+Precision constraints on stellar physics from main sequence detached
+eclipsing binaries
+Mitchell T. Dennis,1∗Harry Desmond2, and Jeremy Sakstein3
+1Institute for Astronomy, University of Hawaii at M¯anoa, 2680 Woodlawn Drive, Honolulu, HI 96822, USA
+2Institute of Cosmology and Gravitation, University of Portsmouth, Dennis Sciama Building, Portsmouth PO1 3FX, United Kingdom
+3Department of Physics & Astronomy, University of Hawaii at M¯anoa, Watanabe Hall 2505 Correa Road, Honolulu, HI 96822 USA
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+We present a Bayesian framework to constrain mass (𝑀), metallicity (𝑍), stellar age (𝜏), and the convective mixing length
+parameter (𝛼MLT) in main-sequence (MS) detached eclipsing binaries (DEBs). These systems provide precise values of stellar
+mass and radius, offering stringent tests of stellar evolution models. We combine these with broadband magnitudes in the𝐵and
+𝑉bands and Gaussian priors on spectroscopic mass and metallicity, and perform Markov Chain Monte Carlo inference using a
+fastmachine-learningsurrogateforone-dimensionalstellarevolutionmodelscomputedwithModulesforExperimentsinStellar
+Astrophysics. To make this approach computationally feasible, we implement an active learning strategy that adaptively selects
+new stellar models to evaluate, concentrating training data in regions of parameter space where the surrogate is most uncertain.
+Applyingthisframeworkto38starsinDEBsystems,werecoveragesmoreprecisethanpreviousisochrone-baseddeterminations
+andobtainboundson𝛼 MLTforasubsetoflower-massstars(𝑀≲1.5𝑀 ⊙),whereconvectiveenvelopesprovidesensitivitytothe
+mixing length parameter. For several stars, the inferred𝛼MLT values lie below the Solar-calibrated value, supporting previous
+indications that a universal mixing length parameter may not adequately describe convection across the main sequence. The
+active learning methods developed here provide a scalable route to Bayesian inference with stellar evolution models, with clear
+applications to additional stellar physics parameters and other precisely characterized stellar systems.
+Key words:convection – binaries: eclipsing – stars: fundamental parameters – methods: statistical
+1 INTRODUCTION
+Stellar ages and stellar evolution models underpin much of astro-
+physics,fromdatingstarclustersandcalibratingthecosmicdistance
+laddertointerpretingstellarpopulationsingalaxies.Centraltothese
+models is the treatment of convection, which in one-dimensional
+stellarevolutioncodesistypicallydescribedbymixinglengththeory
+(Böhm-Vitense 1958) with a free parameter,𝛼MLT, calibrated to re-
+producethepresent-daySun.𝛼 𝑀 𝐿𝑇 representstheefficiencyofstel-
+lar convection, with higher values yielding higher𝑇eff, smaller radii,
+and lower luminosity in stellar models. Despite its widespread use,
+there is no fundamental reason to expect this Solar-calibrated value
+toapplyuniversallyacrossdifferentstellarmasses,metallicities,and
+evolutionary states. Indeed, both theoretical and observational stud-
+ies have suggested that𝛼MLT may vary with stellar properties such
+as effective temperature or surface gravity (Magic et al. 2015; Tayar
+et al. 2017; Song et al. 2020). If𝛼MLT varies systematically, this
+would directly affect inferred stellar ages, radii, and luminosities,
+with consequences for a broad range of astrophysical applications.
+Testing the assumption of a universal mixing length parameter, and
+quantifying possible deviations, therefore represents a key step to-
+ward improving the physical fidelity of stellar evolution models.
+∗E-mail: mtde226@hawaii.edu
+An important opportunity to test mixing length parameter uni-
+versality is provided by main-sequence detached eclipsing binaries
+(MS DEBs). These systems consist of two hydrogen-burning stars
+thataresufficientlyseparatedtoavoidmasstransferwhileremaining
+alignedsuchthattheyeclipseoneanother.Observationsoftheirlight
+curvesandradialvelocitiesyieldprecise,largelymodel-independent
+measurements of stellar masses and radii, along with broadband
+magnitudes (Paczynski & Sasselov 1997; Stassun et al. 2009). Such
+measurements provide strong constraints on stellar structure models
+and therefore offer a powerful way to infer otherwise poorly deter-
+mined parameters such as stellar age and𝛼MLT. In this work we
+develop a Bayesian framework to leverage these measurements and
+constrain both stellar age and𝛼MLT in MS DEB stars.
+Historically, attempts to constrain the age and mixing length pa-
+rameter used isochrone fitting, which uses𝜒-squared minimization
+to find the best fit of the stellar tracks overlaid on a color–magnitude
+diagram. However,𝜒-squared analyses rely on Gaussian error prop-
+agation which fails when the likelihood is asymmetric or otherwise
+non-Gaussian, struggles to capture complex relationships between
+parameters, and typically does not incorporate prior information.
+Conversely, Bayesian inference through Markov Chain Monte Carlo
+(MCMC) sampling fully explores parameter space and can capture
+non-Gaussian uncertainties and non-linear correlations between pa-
+©2026 The Authors
+arXiv:2606.02732v1  [astro-ph.SR]  1 Jun 2026
+
+2Mitchell T. Dennis et al.
+Free Parameter Prior Description
+𝑀N (𝜇 𝑀,𝑖 , 𝜎 𝑀,𝑖 )Initial Mass
+𝑍N (𝜇 𝑍 ,𝑖, 𝜎 𝑍 ,𝑖)Initial Metallicity
+𝛼MLT U (0.01,3.0)Mixing Length Parameter
+𝜏U (0,∼14×10 9 )Stellar Age
+Table 1.Inferred parameters in our study. For𝑀and𝑍,𝑖indexes the star (a
+row in Table 2). The values reported for𝑀and𝑍in Table 2 are𝜇and their
+errors are𝜎used in theN (𝜇, 𝜎)function.
+rameters without assuming they are independent, and accounts for
+covariances and any prior knowledge.
+EfficientMCMCrequiresthestellarmodelstoberuninsecondsor
+less,butmain-sequencesimulationstakeminutestohourstoproduce
+convergedmodelswithsuitableageresolution.TomaketheBayesian
+inferencecomputationallyfeasible,wetrainamachinelearning(ML)
+surrogate for stellar structure code models as in Dennis & Sakstein
+(2025b,a); Franz et al. (2023) and similar to Yang et al. (2026);
+Gricheneretal.(2025);Vermariënetal.(2025);Tahseenetal.(2025);
+Scogginsetal.(2025);Conceiçãoetal.(2024);Doeseretal.(2024);
+Spurio Mancini et al. (2022) and other works which have created
+and applied ML surrogates to other areas of astronomy (see Ting
+(2025)’s section 3.2 for a review on simulation based inference with
+deep learning). To improve the efficiency of training grid creation,
+we use an active learning (AL) strategy that selectively evaluates
+newmodelswherethesurrogateuncertaintyislargest.Applyingour
+methodto38starsinMSDEBsystems,weobtaininferencesoftheir
+initial mass (𝑀), initial metallicity (𝑍), convective mixing length
+parameter (𝛼MLT), and stellar age (𝜏).
+This paper is organized as follows. We discuss MS DEBs and the
+data we use in §2.1, our technique for emulating the main sequence
+in §2.2, the details of our MCMC analysis in §2.4, and present our
+results in §3. We discuss our results in §4 and draw conclusions in
+§5.
+2 METHODOLOGY
+Thissectionissplitintothefollowingsubsections:§2.1containsthe
+necessaryempiricaldataandresultsthatweusedforthiswork;§2.2
+describestheprocessofemulatingthestellarstructurecodeincluding
+fixed input physics and the specifics of selecting new models; and
+§2.3 presents our final evaluation of our ML surrogate.
+2.1 Observational Data Selection
+The data we need to infer are𝑀,𝑍,𝛼 MLT and𝜏with a Bayesian
+model from flux measurements in the𝑀𝐵 and𝑀 𝑉 band passes and
+spectroscopic measurements from each system. From these sets of
+measurementsofbinarysystemswecanobtainDopplershiftstocal-
+culateorbitalvelocitiesandorbitalperiodstoinferindividualmasses,
+utilizeradialvelocitiesandorbitalseparationtoinferindividualradii,
+and use elemental emission line ratios to infer metallicity fractions.
+Because of the unique precision of binary systems, these𝑀,𝑍, and
+𝑅values provide extra information in the priors and likelihood of
+our MCMC. A table of our free parameters and the priors we utilize
+for each are provided in Table 1. A directed acyclic graph depicting
+how these parameters and observables are connected is provided as
+Figure 1.
+Figure 1.A directed acyclic graph showing the connection between the
+parameters and the observables. This graph forms the probabilistic model
+used to forward model the MS DEB magnitudes and radii.
+We utilize𝑀,𝑍, and𝑅data from Eker et al. (2018)1, and photo-
+metric𝑀 𝑉 and𝑀 𝐵 data from Bakıs, & Eker (2022). These data are
+collated in Table 2 and the corner plot in Figure 2 summarizes this
+data. This table also includeslog(𝑔)and𝑇eff values that we refer to
+later in §4. We use the 38 stars from Table 2, specifically their esti-
+matesin𝑀and𝑍,theestimateoftheirradii,andtheirmeasurements
+in𝑀 𝑉, and𝑀 𝐵 directly in our model as shown in Figure 1.
+2.2 Emulating the Main Sequence
+As noted above, to enable efficient exploration of parameter space
+with MCMC, we replace direct stellar evolution calculations with a
+machine learning emulator. The emulator predicts stellar radius (𝑅)
+andmagnitudes𝑀 𝑉 and𝑀 𝐵 (whichareproducedbythebolometric
+corrections built into the stellar structure code) as functions of the
+stellarparameters𝑀,𝑍,𝛼 MLT,and𝜏.Theemulatoristrainedonaset
+of stellar evolution models generated with the stellar structure code
+Modules for Experiments in Stellar Astrophysics (MESA) version
+12778 (Paxton et al. 2011, 2013, 2015, 2018, 2019; Jermyn et al.
+2023). In the following subsections we describe the construction of
+the training set and the active learning strategy used to efficiently
+sample the relevant regions of parameter space.
+Informationonourchoiceofinputphysicsandthestellarsimulator
+we used can be found in §2.2.1, the procedure for selecting new
+training models are in §2.2.2, and our evaluation of the machine
+learning surrogates’ performance can be found in §2.3.
+2.2.1 Input Physics
+Weevolveourmodelsfromthepre-main-sequencethroughthemain
+sequence, and terminate them at the turn off of core hydrogen burn-
+ing, which we defined as the point where the total central pp chain
+burning had decayed to less than 50% of its maximum. We vary the
+inputparameters𝑀,𝑍,and𝛼 MLTandholdallotherparametersfixed.
+The maximum timestep is fixed to107 years after the star reaches
+the zero age main sequence (ZAMS), defined as the time when the
+differencebetweenthesurfaceandhydrogenburningluminositybe-
+comes less than 0.0001. This forces MESA to output at roughly107
+1 Downloaded from https://vizier.cds.unistra.fr/viz-bin/VizieR?-
+source=J/MNRAS/479/5491
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics3
+Star𝑀(𝑀 ⊙)𝑍 𝑅(𝑅 ⊙)log(𝑔)𝑇 eff 𝑀𝑉 𝑀𝐵
+V421 Peg p1.594±0.029 0.012±0.002 1.584±0.028 4.241±0.017 7250±80 2.770±0.042 3.096±0.042
+V421 Peg s1.356±0.029 0.012±0.003 1.328±0.029 4.324±0.021 6980±120 3.310±0.042 3.673±0.042
+YZ Cas s1.325±0.007 0.016±0.004 1.331±0.006 4.312±0.005 6880±240 3.453±0.044 3.754±0.049
+V570 Per p1.425±0.006 0.016±0.002 1.494±0.110 4.243±0.064 6842±25 3.079±0.045 3.466±0.051
+V570 Per s1.328±0.006 0.016±0.002 1.354±0.110 4.298±0.071 6580±70 3.463±0.045 3.890±0.051
+V1130 Tau p1.306±0.008 0.009±0.002 1.490±0.010 4.208±0.006 6650±70 3.368±0.041 3.726±0.041
+V1130 Tau s1.392±0.008 0.009±0.002 1.784±0.011 4.079±0.006 6625±70 2.994±0.041 3.355±0.041
+CD Tau p1.441±0.016 0.018±0.006 1.798±0.017 4.087±0.010 6200±50 3.036±0.042 3.526±0.042
+CD Tau s1.366±0.016 0.018±0.006 1.584±0.020 4.174±0.012 6200±50 3.311±0.042 3.801±0.042
+V501 Mon p1.645±0.004 0.016±0.002 1.888±0.029 4.103±0.013 7510±100 2.252±0.059 2.472±0.066
+V501 Mon s1.459±0.003 0.016±0.002 1.592±0.028 4.198±0.015 7000±90 2.907±0.059 3.195±0.066
+GX Gem p1.488±0.011 0.012±0.003 2.334±0.012 3.875±0.006 6194±100 2.752±0.053 3.331±0.054
+GX Gem s1.467±0.010 0.012±0.003 2.244±0.012 3.903±0.006 6166±100 2.858±0.053 3.443±0.054
+VZ Hya p1.271±0.009 0.010±0.003 1.315±0.005 4.305±0.005 6645±150 3.546±0.049 3.969±0.060
+VZ Hya s1.146±0.006 0.010±0.003 1.113±0.007 4.405±0.006 6290±150 4.155±0.049 4.637±0.060
+RS Cha p1.823±0.012 0.022±0.002 2.150±0.060 4.034±0.024 7638±76 1.814±0.041 1.999±0.041
+RS Cha s1.764±0.012 0.022±0.002 2.360±0.060 3.939±0.022 7228±72 1.830±0.041 2.067±0.041
+ZZ Boo p1.616±0.010 0.012±0.002 2.164±0.070 3.976±0.028 6860±20 2.429±0.042 2.794±0.042
+ZZ Boo s1.568±0.010 0.014±0.003 2.164±0.070 3.963±0.028 6930±20 2.386±0.042 2.741±0.042
+V636 Cen p1.052±0.005 0.010±0.002 1.024±0.004 4.440±0.004 5900±85 4.583±0.042 5.143±0.042
+V636 Cen s0.854±0.003 0.010±0.002 0.835±0.004 4.526±0.004 5000±100 5.901±0.042 6.677±0.042
+AD Boo p1.414±0.009 0.019±0.006 1.614±0.014 4.173±0.008 6575±120 3.120±0.050 3.523±0.052
+WZ Oph p1.227±0.007 0.008±0.002 1.401±0.012 4.234±0.008 6165±100 3.796±0.047 4.300±0.056
+WZ Oph s1.220±0.006 0.008±0.002 1.419±0.012 4.221±0.008 6115±100 3.807±0.047 4.320±0.056
+V2653 Oph p1.537±0.021 0.012±0.002 2.215±0.055 3.934±0.022 6950±480 2.237±0.047 2.557±0.047
+V2653 Oph s1.273±0.019 0.018±0.004 2.000±0.056 3.941±0.025 6350±650 2.855±0.047 3.270±0.047
+KIC 9851944 p1.760±0.070 0.013±0.002 2.270±0.030 3.972±0.021 7026±100 2.312±0.111 2.689±0.111
+KIC 9851944 s1.790±0.070 0.014±0.002 3.190±0.040 3.684±0.020 6902±100 1.648±0.111 2.043±0.111
+OO Peg p1.820±0.020 0.012±0.001 2.210±0.010 4.010±0.006 7850±350 1.827±0.043 2.035±0.042
+OO Peg s1.770±0.020 0.017±0.002 1.960±0.010 4.102±0.007 7600±450 2.212±0.043 2.449±0.042
+V375 Cep p1.288±0.017 0.018±0.002 1.623±0.006 4.128±0.007 6230±50 3.546±0.154 3.998±0.154
+V375 Cep s0.871±0.008 0.018±0.002 0.897±0.003 4.473±0.005 5151±50 5.800±0.154 6.490±0.154
+BW Aqr p1.479±0.020 0.013±0.003 2.057±0.040 3.982±0.018 6350±100 2.845±0.049 3.342±0.053
+BW Aqr s1.377±0.020 0.013±0.003 1.788±0.040 4.073±0.020 6450±100 3.078±0.049 3.558±0.053
+EF Aqr p1.244±0.008 0.015±0.004 1.338±0.012 4.280±0.008 6150±65 3.858±0.046 4.403±0.046
+EF Aqr s0.946±0.006 0.015±0.004 0.956±0.012 4.453±0.011 5185±110 5.458±0.046 6.217±0.046
+BK Peg p1.414±0.007 0.012±0.002 1.985±0.008 3.993±0.004 6265±85 2.888±0.043 3.400±0.058
+BK Peg s1.257±0.005 0.012±0.002 1.472±0.017 4.202±0.010 6320±30 3.497±0.043 3.999±0.058
+Table 2.A list of the inputs to our analysis.𝑀and𝑍are used as priors in the MCMC and𝑅,𝑀𝑉, and𝑀 𝐵 are treated as observables in the likelihood. The
+values for𝑀,𝑅,log(𝑔)and𝑇 eff were pulled from Table 1 of Eker et al. (2018) and the𝑍from their Table 2 downloaded viaVizier1, and the𝑀𝑉 and𝑀 𝐵
+values are from Table 3 of Bakıs, & Eker (2022).
+MNRAS000, 1–13 (2026)
+
+4Mitchell T. Dennis et al.
+0.010
+0.015
+0.020
+0.025Z
+1
+2
+3Radius (R )
+2
+3
+4
+5
+6MV
+1.0 1.5
+M (M )
+2
+4
+6MB
+0.01 0.02
+Z
+1 2 3
+Radius (R )
+2 4 6
+MV
+2 4 6
+MB
+Figure 2.Corner plot of the stellar data used in this study (Table 2) with scatter plots on the off-diagonal and kernel density estimates of the 1D distributions
+along the diagonal. The latter adopt a bandwidth equal to the uncertainty in each case.The error bars show 68% credible intervals (which may be terminated by
+a prior boundary), and intersect at the median posterior values.
+year intervals contributing many models for a single set of input
+parameters.
+Our models adopt the following input physics:
+Abundances:GS98 Solar composition (Grevesse & Sauval 1998).
+Opacities:MESAdefaultOPALopacities(Iglesias&Rogers1996,
+1993) with type 2 opacities from (Cassisi et al. 2007).
+Nuclear reaction rates:JINA REACLIB (Cyburt et al. 2010).
+Equation of state:OPAL 2005 (Rogers & Nayfonov 2002).
+Convective mixing:Cox mixing length formulation (Cox & Giuli
+1968).
+A template of MESA inlists used to generate the models is provided
+in the accompanying reproduction package.
+2.2.2 Grid Generation
+As noted above, to maximize computational efficiency we adapt an
+active learning scheme to choose which models to evaluate. We use
+thefollowingprescription,similartoRochaetal.(2022),asouractive
+learning procedure.
+(i)Initial seeding
+(ii)Train ML on models
+(iii)Generate new samples to improve error
+(a)Repeated sampling with MCMC on an acquisition func-
+tion
+(b)First sample on classification task, rerun MESA, retrain
+ML and repeat until the error threshold is met.
+(c)Nextsampleonregressiontask,rerunMESA,retrainML
+and repeat until the error threshold is met.
+The first phase is a Latin Hyper-Cube (LHC) sample (McKay et al.
+1979) initialization to select the first 1000 models. We draw LHC
+samples in mass from0.6−2.2M ⊙, in Z from0.0001−0.04, and
+𝛼MLTfrom0.01−3.0.Weremindthereaderthattheagesarerecorded
+in time-steps of no greater than107 years post-ZAMS.
+Usingtheseinitialseedmodels,wetrainaneuralnetworkclassifier
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics5
+Figure 3.A flowchart depicting the entire active learning procedure. The upper half of the diagram outlines the data selection and generation procedure used to
+curate the set of models which trained the ML surrogate. The lower half outlines the procedure used once the ML training was completed and the final MCMC
+— the one used to constrain parameters — is run to generate posteriors across the input parameters. The procedure begins with a Latin-Hyper-Cube-sampled
+set of models and then iteratively trains using a parallel tempering markov chain monte carlo (PTMCMC) sampling simulation to select new training data until
+a threshold accuracy is reached.
+andaneuralnetworkregressorforouractivelearningprocedure.For
+all of our ML algorithms, we divide our MESA data into training,
+validation, and testing subsets with an 80%/10%/10% split.
+We choose neural networks for the AL procedure because they
+provide a number of advantages over other ML techniques. Primar-
+ily, to successfully perform AL, we must be able to provide some
+reasonable estimate of the error in the ML algorithm on unlabeled
+data (i.e., input parameters for which we do not have MESA model
+outputs). For classification tasks this is fairly straightforward (see
+Eq.(1)),butforregressionprovidinganestimateoftheerrorismore
+complicated. While the typical approach would be to fit a Gaussian
+process (GP) instead of a neural network, GPs do not scale well to
+large datasets anda prioriwe have no guarantee our dataset will not
+reach a size prohibitive to their use. Conversely, neural networks do
+scalewelltolargedataandcanbeapproximatedtoGPs,allowingus
+to estimate their errors (Gal & Ghahramani 2015).
+All our machine learning models take𝑀,𝑍,𝛼MLT, andlog10 (𝜏)
+as inputs. Because the inference explores the full parameter space,
+some proposed combinations correspond to stellar models that are
+notonthemain-sequence.Toavoidevaluatingtheregressionemula-
+toroutsideitsdomainofvalidity,wefirsttrainaclassificationmodel
+that identifies whether a given set of input parameters corresponds
+to a main-sequence star. We incorporate this classifier into the ac-
+tive learning procedure to ensure that training samples and MCMC
+proposals remain within the main-sequence region.
+To select which sets of new input parameters to simulate, we use
+a scheme that attempts to maximize the improvement of the net-
+work with each additional MESA model run. We do this by using a
+MCMCalgorithmthatusesuniformpriorsacrossallparametersand
+substitutesthelikelihoodfunctionoftheMCMCwithanacquisition
+function designed to find the parameters where the neural networks
+produce the most error or have the least confidence. Because we ex-
+pect the posteriors for the acquisition functions to be multi-modal,
+we use parallel tempering Markov-Chain Monte Carlo (PTMCMC)
+throughoutouractivelearningprocedure,usingasimilarimplemen-
+tation to Rocha et al. (2022).
+The acquisition function we use for the classification task is iden-
+tical to the one used by Rocha et al. (2022), defined as
+𝐴(𝜃)=1−max(ML(𝜃)),(1)
+where𝜃is a set of𝑀,𝑍,𝛼 MLT, andlog 10 (𝜏), and ML(𝜃)is the
+outputoftheneuralnetworkclassifier’ssoftmaxoutputlayer,i.e.the
+probability of the input data belonging to a specific class.
+By using Equation (1) as our likelihood in the MCMC function,
+the walkers of the AL stage MCMC prefer areas of parameter space
+where the surrogate model’s classifier is most uncertain about its
+classification. We expect this to yield a multi-modal solution with
+thecentersofthemodesneartheboundariesbetweenthethreeclasses
+(onthemainsequence,notonthemainsequence,toooldfortheage
+of the universe). Using this function, we avoid regions of parameter
+spacewheretheclassifierishighlyconfidentanddoesnotneedmore
+training data in favor of areas of greater uncertainty. One notable
+drawbackofthismethodisthattheneuralnetworksurrogatemaystill
+be making large errors, but with high confidence so the acquisition
+function does not explore that part of parameter space. However, we
+do not expect this to impact our results because the priors we apply
+laterin§2.4areveryrestrictive,andasweshowinFigure4,wefully
+explore the relevant parameter space within our training data.
+MNRAS000, 1–13 (2026)
+
+6Mitchell T. Dennis et al.
+Figure 4.Histogramsshowingthedistributionsacrossindividualparameters
+space at the completion of the AL procedure. The neural network emulator
+is only valid across parts of parameter space represented in these plots. They
+also show where the AL procedure determined where the most models were
+needed (i.e. at the lower end of our𝑀range and the upper end of our𝑍
+range). Not shown is the distribution in𝛼MLT, which is uniform.
+Once the surrogate model’s classifier has reached a sufficiently
+high accuracy (97%), we then switch priorities to the regressor. We
+remindthereaderthatevenifnewMESAmodelselectionprioritizes
+eitherthesurrogateregressororclassifier,thedatafromtheevaluated
+models can be used to train both. We also note that because the
+surrogate’sregressoronlyneedstobeaccurateonmodelsthatareon
+theMS,weapplytheclassificationofthesurrogatemodel’sclassifier
+as a prior for the MCMC used at this stage.
+We again use𝑀,𝑍,𝛼 MLT, andlog 10 (𝜏)as inputs and output
+𝑀𝑉 , 𝑀𝐵, and𝑅. The acquisition function we used to select new
+MESA models for the regressor is the expected improvement (EI)
+from Bayesian optimization and is calculated with,
+𝐴(𝜃)= Σ 𝑖 (𝜇 𝑖 −𝜃 𝑖 −𝜉 𝐸 𝐼) × 1
+2
+©­­
+«
+1+erf
+©­­
+«
+
+𝜇𝑖 −𝜃 𝑖 −𝜉 𝐸 𝐼
+𝜎𝑖
+
+√
+2
+ª®®
+¬
+ª®®
+¬
++
+𝜎𝑖 × N
+
+0,
+ (𝜇 𝑖 −𝜃 𝑖 −𝜉 𝐸 𝐼)
+𝜎𝑖
+
+,(2)
+which is the equation for the EI of a GP (see Leclercq (2018) and
+Brochu et al. (2010) for the derivation) summed over each output𝑖
+(𝑀𝑉 , 𝑀𝐵,and𝑅)forsomepredictedvalueof𝜃whichwasevaluated
+over a single set of parameters. In this equation,𝜇𝑖 is the average
+of our deep neural network outputs over repeated use of the same
+inputs and𝜎𝑖 is the standard deviation of those outputs, and𝜉𝐸 𝐼 is
+a cooling factor described by Brochu et al. (2010) which we set to
+zerothroughoutourprocedure.Toacquirethemean𝜇 𝑖 andstandard
+deviation𝜎 𝑖 used in (2), we evaluate the neural network over the
+sameparameterswhichoutput𝜃,butinsteadofevaluatingtheneural
+network in inference mode (which was used for𝜃), we evaluate it
+in training mode. Because random dropout (Srivastava et al. 2014)
+layers were used to construct the neural network, when evaluated
+in training mode many times (in this case 100), the neural network
+will produce 100 different outputs whose mean and standard devi-
+ation can be approximated to the mean and standard deviation of a
+gaussian process (Gal & Ghahramani 2015). By using this function,
+it is possible to trade off between exploration and exploitation by
+adjustingthe𝜉 𝐸 𝐼 parameterandhenceoptimizeourselectionofnew
+MESA models. By default we set𝜉𝐸 𝐼 =0.0. While we do not vary
+it,𝜉canbeadjustedateachiterationoftheactivelearningprocedure
+if desired. During this step, we also parameterize the error of the
+machine learning by training a random forest to output the residuals
+of the neural network regressor (i.e., the difference between the true
+MESAoutputvaluesanditspredictions).ByusingtheMCMCinthis
+way,wedeterminewhichregionsofparameterspacearemorelikely
+to yield larger improvements in our machine learning surrogate.
+When the MCMC is finished for either the classification step or
+the regression step, we discard burn-in and take a subsample of the
+posteriorswhichhavebeenproducedwitheither(1)or(2).Thissub-
+sample is then passed to MESA and the results added to a master
+dataset of MESA simulation results. However, for the regressor, the
+parameters of this subsample are first passed to the random forests
+that we trained to parameterize its error and plotted as corner plots.
+This allows us to visually inspect the error in the active learning re-
+gressorintheareaswheretheacquisitionfunctionismaximizingfor
+improvement, i.e., in the places we expect the error to be the highest
+across parameter space. We can use this to evaluate the expected
+regressionerrorusingtheparameterizederrormodels.Iftheerroris
+subdominant to our observational errors (e.g. an order of magnitude
+smaller than the average observational error.), we terminate the AL
+procedure,andifnotwepullsamplesfromthechaintoruninMESA.
+This procedure is iterated until first the desired classification and
+then the desired regression accuracy are reached.
+2.3 Training and Evaluating the Final ML Surrogate
+WhileitwasnecessarytouseneuralnetworksfortheALprocedure,
+we used a random forest for our final MESA emulator because these
+tend to perform better on tabular format data and have been shown
+to be more accurate than neural networks on MESA data (Dennis &
+Sakstein 2025b).
+To quantify the uncertainty of the machine learning surrogate, we
+trained an additional random forest to model the residuals between
+theemulatorpredictionsandtheMESAoutputs.Theresidualmodel
+was trained on the validation dataset that was held out from the
+originaltrainingset,anditsperformancewasevaluatedonthetesting
+dataset. Because machine-learning models typically perform better
+when trained to predict a single target variable, we trained separate
+emulators for each stellar observable,𝑅,𝑀 𝑉, and𝑀 𝐵, and their
+residual errors. This amounts to six random forests in total.
+Ourfinalparameterlistcomprises20,000setsof𝑀,𝑍,and𝛼 MLT.
+Of these, a small number failed to converge or did not reach the end
+of the MS within 12 hours. We implemented this 12 hour cutoff to
+maintain computational efficiency as the average runtime for mod-
+els is of order minutes or less. Our final dataset is over one million
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics7
+data points when the evolutionary time-steps are included. The ran-
+dom forest classifier achieves an accuracy of 99.8%. The regression
+random forests have root-mean-square errors (RMSE) of 0.00257
+for the radius, 0.00263 for the𝑉-band magnitude, and 0.00297 for
+the𝐵-band magnitude. These errors are quoted in normalized units,
+since the models were trained on data scaled to the interval [0,1].
+When converted to physical units, the corresponding residuals can
+be directly compared with the observational uncertainties.
+For each surrogate regressor we compare the distribution of its
+residuals with the observational uncertainties. The residuals of the
+machine learning surrogate are significantly smaller than the ob-
+servational errors for all three observables (𝑅,𝑀𝑉, and𝑀 𝐵), in-
+dicating that the emulator error is subdominant. Specifically, the
+16th–84th percentile range of the surrogate residuals is≲10−3 for
+allobservables,whereastheobservationaluncertaintiesaretypically
+∼10−2–10−1. We note that these residuals are evaluated over the
+full parameter space spanned by the training set, whereas the final
+MCMCchainswillexploreonlyarestrictedregionofthisspace.The
+machine learning uncertainty is therefore conservatively estimated
+and is explicitly included in the likelihood (see §2.4.2).
+2.4 Constraining Parameters
+In this section we attempt to constrain the values of𝛼MLT and𝜏for
+eachofthestarsinourstudy.WedothisbyevaluatingMCMCusing
+our trained random forest surrogate described in §2.3 in place of
+MESA.Weusepriorsonourparametersfromthe𝑀and𝑍columns
+in Table 2 (described in §2.4.1) and use the𝑅,𝑀𝑉, and𝑀 𝐵 from
+Table 2 in our likelihood (described in §2.4.2).
+2.4.1 Priors
+Our priors are as follows. For𝑀and𝑍we apply gaussian priors
+with mean and standard deviation which are reported as the value
+anderrorsinTable2.Weuseuniformpriorsfor𝛼 MLTand𝜏sinceno
+prior knowledge about their values are available.2 Additionally, we
+treattherandomforestsurrogate’sclassifierasaprior.Theclassifier,
+which distinguishes between pre-MS models, MS models, and post-
+MS models assigns a prior of zero for models that do not fall on
+the MS. This is a necessary step because the MCMC may choose
+parameters that do not lie on the main sequence, and has the added
+benefit of helping ensure the MCMC does not stray into regions
+of parameter space upon which our regression algorithm was not
+trained.
+2.4.2 Likelihood
+In the inference stage, the trained surrogate model replaces MESA
+when evaluating the likelihood. For a given set of parameters𝜃, the
+emulator predicts the observables (𝑅,𝑀 𝑉,𝑀 𝐵), which are com-
+pared with the measured values. We adopt the following Gaussian
+likelihood,
+−2 ln(L)=
+∑︁
+i=outputs
+ 
+(ML(𝜃) 𝑖 −𝑦 𝑖)2
+(𝜎2
+𝑦,𝑖 +𝜎 2
+ML,𝑖 )
+!
++ln(2𝜋(𝜎 2
+𝑦,𝑖 +𝜎 2
+ML,𝑖 )),(3)
+2 Although previous studies have inferred𝛼MLT for particular stellar popu-
+lations (e.g. Magic et al. 2015; Song et al. 2020; Desmond et al. 2021), we
+adopt a uniform prior so that the DEB data alone determine the constraints.
+whereML(𝜃) 𝑖 isoneoftheoutputvalues𝑖oftheMLregressorfora
+particularsetofinputs(i.e.,𝑖is𝑅oroneofourmagnitudes),𝑦 𝑖 isthe
+observedvalueforoutputcolumn𝑖,𝜎 𝑦,𝑖 istheobservationalerrorfor
+output column𝑖, and𝜎ML,𝑖 is the machine learning error for output
+𝑖. To determine the value for𝜎ML,𝑖 we fed the inputs to the random
+forestparameterizationoftheerrorfrom§2.3above.Weutilizedthe
+python MCMC package emcee Foreman-Mackey et al. (2013) and
+for each model we ran 32 walkers simultaneously, calculating the
+autocorrelation time between the walkers every 5,000 samples.
+We determined the chains had converged when the average inte-
+grated autocorrelation time (i.e., the number of steps a chain in the
+MCMC needs to “forget" where it started) was less than 0.1% of the
+total chain length and had changed less than 1% over the previous
+5,000samplesForeman-Mackeyetal.(2013).Oncetheconvergence
+condition was met, we terminated the MCMC. We discard twice the
+maximumvalueofthefinalautocorellationtimeasburn-inForeman-
+Mackey et al. (2013).
+3 RESULTS
+Weevaluatedall38starsusingseparateMCMCsandfoundaspread
+of constrained values for𝛼 MLT and𝜏spanning nearly the entire
+parameter range with all 38 successfully reaching convergence. A
+representative sample of some of these results are given in Figures
+5, 6, and 7. The lower 68% and 95% limits from the posteriors of
+the𝑀,𝑍,𝛼 MLT, andlog10 (𝜏)parameters given by the MCMC have
+been collated in Table 3 as either a constraint(±)or a single bound
+(represented as an inequality).
+We constrain𝑀and𝑍in all systems. The majority of these are
+within1𝜎of the values in Table 2, and all are within∼2𝜎. We
+find both upper and lower bounds on𝛼MLT for 5 stars in 4 different
+systems,andonlyoneboundforanother14stars.Allbutoneofthese
+19 stars have masses𝑀 <1.5𝑀 ⊙. This is the range where mean-
+ingful inferences are expected because the convective-to-radiative
+atmosphere transition for stars with masses𝑀 >1.5𝑀⊙ minimizes
+the effect of the mixing length parameter on the surface of the star,
+removingmostoftheconstrainingpoweronit.Weobtainbothupper
+and lower bounds on the age of all the stars in our dataset.
+Themajorityofourageconstraintsagreewellwithestimatesfound
+by previous studies but, because many do not report error bounds, it
+is not possible to determine the precise level of agreement. A small
+numberofourinferredagesaresignificantlydifferentfromprevious
+measurements. In particular, ZZ Boo s has a discrepancy of roughly
+0.17dex,thestarsoftheGXGeminisystembothhavediscrepancies
+of roughly0.13dex, and V2653 Oph is between0.5and1.1dex.
+V2653 Oph has a pulsating component, which may affect our
+inference because the observed brightness varies over the pulsation
+cycle. This system is also noteworthy because it has been discussed
+as a likely member of the open cluster Collinder 357 (Zejda et al.
+2012; Çakırlı & Ibanoglu 2016). Under the assumption of coeval
+cluster formation, its age would then be expected to be comparable
+to the cluster age,∼60 Myr(Çakırlı & Ibanoglu 2016), whereas
+our inferred age is∼1.5 Gyr. We therefore regard this system as a
+cautionary example where unmodeled astrophysical effects, such as
+pulsation, may bias the inferred parameters.
+3.1 Select examples
+Turning to some individual examples, the results for V501 Mono-
+ceros’s primary star is shown in Figure 5. We find good agreement
+with the𝑀and𝑍priors and a near-Gaussian bound on the age in
+MNRAS000, 1–13 (2026)
+
+8Mitchell T. Dennis et al.
+Star𝑀(𝑀 ⊙)𝑍 𝛼 MLT68%[95%]log 10(𝜏)68%[95%] Literature Age
+V421 Peg p1.532 +0.023
+−0.016 0.018+0.002
+−0.002 —8.765 +0.134
+−0.154[8.352, 8.980] —
+V421 Peg s1.349 +0.019
+−0.017 0.012+0.002
+−0.002 —8.274 +0.356
+−0.348[7.717, 8.910] —
+YZ Cas s1.326 +0.006
+−0.006 0.012+0.002
+−0.001 —8.240 +0.431
+−0.350[7.706, 8.982] 8.5 [Pavlovski et al. (2014)]
+V570 Per p1.425 +0.006
+−0.006 0.016+0.001
+−0.001 —8.470 +0.332
+−0.372[7.793, 9.025] 8.78-9 [Marrese et al. (2004)]
+V570 Per s1.328 +0.005
+−0.005 0.016+0.001
+−0.001 —8.418 +0.320
+−0.334[7.849, 8.974] 8.78-9 [Marrese et al. (2004)]
+V1130 Tau p1.302 +0.007
+−0.008 0.013+0.001
+−0.001 <1.368[2.051]9.166 +0.034
+−0.034[9.101, 9.282] 9.26-9.32 or 9.40-9.45 [Clausen et al. (2010a)]
+V1130 Tau s1.386 +0.006
+−0.007 0.013+0.001
+−0.001 —9.289 +0.036
+−0.026[9.248, 9.351] 9.26-9.32 or 9.40-9.45 [Clausen et al. (2010a)]
+CD Tau p1.441 +0.015
+−0.015 0.023+0.003
+−0.003 —9.219 +0.075
+−0.063[9.113, 9.366] 9.42 [Ribas et al. (1999)]
+CD Tau s1.369 +0.014
+−0.016 0.022+0.003
+−0.003 —9.132 +0.150
+−0.126[8.908, 9.416] 9.42 [Ribas et al. (1999)]
+V501 Mon p1.645 +0.004
+−0.004 0.015+0.002
+−0.001 —8.991 +0.018
+−0.018[8.951, 9.024] 9.04 [Torres et al. (2015)]
+V501 Mon s1.459 +0.002
+−0.002 0.016+0.001
+−0.001 —8.998 +0.053
+−0.052[8.893, 9.095] 9.04 [Torres et al. (2015)]
+GX Gem p1.491 +0.009
+−0.012 0.018+0.001
+−0.001 <0.505[0.875]9.312 +0.017
+−0.014[9.288, 9.338] 9.45 [Lacy et al. (2008)]
+GX Gem s1.464 +0.009
+−0.007 0.018+0.001
+−0.001 <0.636[1.048]9.322 +0.008
+−0.008[9.303, 9.339] 9.45 [Lacy et al. (2008)]
+VZ Hya p1.274 +0.008
+−0.008 0.011+0.001
+−0.001 <1.400[2.201]8.470 +0.324
+−0.359[7.827, 9.045] 8.8-9.1 [Clausen et al. (2008)]
+VZ Hya s1.145 +0.007
+−0.006 0.011+0.002
+−0.002 2.084+0.331
+−0.285[1.588, 2.713]8.441 +0.515
+−0.505[7.697,9.217] 8.8-9.1 [Clausen et al. (2008)]
+RS Cha p1.835 +0.012
+−0.013 0.019+0.001
+−0.001 —8.904 +0.025
+−0.026[8.846, 8.949]8.96±0.01[Kovaleva (2001)]
+RS Cha s1.781 +0.010
+−0.010 0.016+0.001
+−0.001 —9.009 +0.015
+−0.016[8.977, 9.038]8.96±0.01[Kovaleva (2001)]
+ZZ Boo p1.609 +0.011
+−0.010 0.018+0.001
+−0.001 —9.144 +0.026
+−0.026[9.090, 9.190] 9 [Cester et al. (1978)]
+ZZ Boo s1.569 +0.008
+−0.009 0.014+0.001
+−0.001 —9.175 +0.020
+−0.021[9.131, 9.210] 9 [Cester et al. (1978)]
+V636 Cen p1.052 +0.005
+−0.004 0.010+0.001
+−0.001 1.859+0.199
+−0.205[1.500, 2.217]8.782 +0.297
+−0.387[7.663, 9.258] 9.13 [Clausen et al. (2009)]
+V636 Cen s0.856 +0.002
+−0.002 0.011+0.002
+−0.001 1.193+0.123
+−0.104[1.025, 1.475]8.696 +0.566
+−0.597[7.733, 9.587] 9.13 [Clausen et al. (2009)]
+AD Boo p1.416 +0.008
+−0.008 0.021+0.002
+−0.002 —9.094 +0.099
+−0.083[8.959, 9.267] 9.16-9.24 [Clausen et al. (2008)]
+WZ Oph p1.219 +0.005
+−0.005 0.012+0.001
+−0.001 <0.643[1.036]9.049 +0.070
+−0.075[8.847, 9.171] —
+WZ Oph s1.215 +0.005
+−0.006 0.013+0.001
+−0.001 <0.657[1.013]9.107 +0.058
+−0.061[8.979, 9.213] —
+V2653 Oph p1.567 +0.017
+−0.017 0.010+0.001
+−0.001 —9.178 +0.015
+−0.017[9.140, 9.218] 8.3-8.6(300±100Myr)[Çakırlı & Ibanoglu (2016)]
+V2653 Oph s1.327 +0.019
+−0.020 0.008+0.001
+−0.001 <0.925[1.463]9.384 +0.014
+−0.020[9.346, 9.426] 8.3-8.6(300±100Myr)[Çakırlı & Ibanoglu (2016)]
+KIC 9851944 p1.624 +0.023
+−0.027 0.015+0.002
+−0.002 —9.149 +0.026
+−0.025[9.092, 9.202] —
+KIC 9851944 s1.998 +0.004
+−0.004 0.020+0.001
+−0.001 <0.918[2.011]8.958 +0.004
+−0.003[8.953, 8.967] —
+OO Peg p1.790 +0.014
+−0.018 0.014+0.001
+−0.001 —8.970 +0.015
+−0.013[8.945, 8.997] 8.84-9.11(1±0.3Gyr)[Southworth (2024)]
+OO Peg s1.727 +0.008
+−0.008 0.019+0.001
+−0.001 —8.919 +0.019
+−0.015[8.889, 8.959] 8.84-9.11(1±0.3Gyr)[Southworth (2024)]
+V375 Cep p1.290 +0.015
+−0.015 0.019+0.002
+−0.002 <1.300[2.078]9.336 +0.095
+−0.073[9.218, 9.503] 9.53-9.59(3.6±0.25Gyr)[Sandquist et al. (2013)]
+V375 Cep s0.873 +0.009
+−0.008 0.018+0.002
+−0.002 1.330+0.178
+−0.170[1.004, 1.684]9.747 +0.167
+−0.146[9.103, 10.027] 9.53-9.59(3.6±0.25Gyr)[Sandquist et al. (2013)]
+BW Aqr p1.464 +0.019
+−0.017 0.018+0.002
+−0.002 <1.456[2.189]9.280 +0.027
+−0.028[9.224, 9.329] 9.3 [Khaliullin & Kozureva (1986)]
+BW Aqr s1.372 +0.019
+−0.020 0.016+0.002
+−0.002 <1.775[2.591]9.313 +0.054
+−0.052[9.215, 9.409] 9.3 [Khaliullin & Kozureva (1986)]
+EF Aqr p1.243 +0.008
+−0.008 0.015+0.002
+−0.002 <1.150[1.514]8.332 +0.385
+−0.314[7.838, 9.063] 8.95-9.32(1.5±0.6Gyr)[Vos et al. (2012)]
+EF Aqr s0.947 +0.005
+−0.006 0.015+0.002
+−0.002 1.104+0.111
+−0.110[0.915, 1.401]8.719 +0.543
+−0.605[7.712, 9.604] 8.95-9.32(1.5±0.6Gyr)[Vos et al. (2012)]
+BK Peg p1.413 +0.006
+−0.007 0.014+0.001
+−0.001 <1.317[1.892]9.316 +0.013
+−0.012[9.294, 9.350] 9.4-9.43 [Clausen et al. (2010b)]
+BK Peg s1.258 +0.006
+−0.005 0.014+0.001
+−0.001 <1.321[2.210]9.236 +0.071
+−0.069[9.114, 9.425] 9.4-9.43 [Clausen et al. (2010b)]
+Table 3.The results of our analysis. A blank entry (—) indicates a posterior essentially unbounded across our parameter space. The ages found by previous
+works were all done using isochrone fitting. In cases where error bars in previous works were provided, we provide these in their original linear form and an
+accompanying[68%]widthinlogspace.The“LiteratureAge"columnreportsvaluesaseitherasinglevalueinlogspace(withanerrorinlogspaceifprovided),
+a range in log space if the reference provided a range of best fits but without reporting it as an error bar, or, if the original age was reported in linear space with
+an error bar, a 68% range in log space with the original age and its error reported in parentheses. Clausen et al. (2010a) report two potential ranges for the age
+of V1130 Tau and we therefore provide both.
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics9
+1.635 1.650
+M(M )
+8.8
+8.9
+9.0
+9.1
+log10 ( )
+1
+2MLT
+0.01
+0.02
+Z
+0.01 0.02
+Z
+1 2
+MLT
+8.74 8.99 9.23
+log10 ( )
+Priors
+Posteriors
+Previous Age
+Figure 5.CornerplotshowingtheresultsoftheMCMCforV501Monoceros
+primary. We see that the mass is prior-dominated while our likelihood im-
+provesuponthepriorinferenceofmetallicity.Ourinferredageisinagreement
+withtheisochronefitof9.04fromTorresetal.(2015).𝛼 MLTisunconstrained
+in this case.
+0.85 0.86
+M(M )
+8.0
+8.5
+9.0
+9.5
+log10 ( )
+1
+2MLT
+0.005
+0.010
+0.015
+Z
+0.006 0.014
+Z
+1 2
+MLT
+7.54 8.64 9.74
+log10 ( )
+Priors
+Posteriors
+Previous Age
+Figure 6.Same as Figure 5 but for V636 Centaurus secondary. We infer
+a higher metallicity than the prior, but our posterior is consistent with it at
+∼2𝜎.Inthiscaseweinfervaluesforboth𝛼 MLTand𝜏.Notably,thevaluefor
+the mixing length parameter for the secondary component entirely excludes
+the Solar-calibrated value (∼1.8−2.0, Magic et al. (2015); Cinquegrana
+& Joyce (2022)). Interestingly, the primary component agrees with the Solar
+value.
+log space. The inferred age agrees with previous isochrone fitted
+estimates.Wedonotfindaboundon𝛼 MLTwhoseposteriorisessen-
+tiallyuniformacrossparameterspace—inlinewithourexpectation
+above that the radiative nature of stars heavier than1.5M⊙ will not
+facilitate such bounds (this star has𝑀≈1.65𝑀⊙).
+OurresultsforV636CentaurussecondarystarareshowninFigure
+6. We infer the mixing length parameter to be𝛼MLT =1.193 +0.123
+−0.104,
+significantly smaller than the Solar-calibrated value. Comparing the
+surfacegravityandeffectivetemperaturestoSolarvalues,V636Cen-
+taurus secondary has a higher surface gravity and a lower effective
+1.22 1.24
+M(M )
+8.8
+9.0
+9.2
+log10 ( )
+1
+2MLT
+0.006
+0.010
+0.014
+Z
+0.007 0.013
+Z
+1 2
+MLT
+8.59 8.99 9.39
+log10 ( )
+Priors
+Posteriors
+Previous Age
+Figure 7.Same as Figure 5 but for WZ Ophiuchus primary. As for V636
+Centaurussecondary,theinferredmetallicityishigherthanitsprioralthough
+instatisticalagreement.Inthiscasewefindonlyanupperlimitonthemixing
+length parameter. Previous studies using isochrone fitting e.g., Clausen et al.
+(2008) did not find a conclusive fit for𝜏, but our work constrains it to∼1
+Gyr±400Myr.
+temperature(4.53vs4.44(Pršaetal.2016)forlog(𝑔)and(5000𝐾vs
+5772𝐾for𝑇 eff (Prša et al. 2016)). However these results contradict
+thetrendfoundbyMagicetal.(2015)whichfindsassurfacegravity
+decreases and effective temperature increases, the mixing length pa-
+rameter decreases. It is worth noting that the values of𝛼MLT Magic
+et al. (2015) use do not extend significantly below Solar values. We
+find a broad posterior for𝜏that encompasses the previously fitted
+age.Themetallicitywerecoveriswithin∼2𝜎fromthemeasurement
+provided in Table 2.
+Finally, our results for WZ Ophiuchus’s primary star are shown
+in Figure 7. This is an interesting case where we have obtained
+constraints on all of the parameters, but the constraint for𝛼MLT is
+an upper bound. The rapid decay of the posterior at𝛼MLT =1.036
+clearly limits values of𝛼MLT, but without providing a lower bound.
+Once again, the central value of𝑍does not match our prior, but the
+2𝜎bounds overlap significantly. We were unable to find a previous
+isochronefitforthisstar,butweinferitsagetobe∼1Gyr± ∼200Myr
+using our method.
+All three stars in Figures 5, 6, and 7 give tighter constraints on
+the metallicity than their priors. This occurs for roughly 50% of our
+targets.Whilesomeoftheseimprovementsaresubstantial(33-50%),
+thereisnotauniformimprovementacrossthedataset.However,our
+posteriors for all of our𝑀and𝑍constraints are within∼2𝜎of the
+corresponding values in Table 2.
+The complete set of corner plots for the 38 stars which converged
+inoursamplecanbefound,alongwiththeMESAmodeloutputs,the
+random forest surrogates, and MESA inlists at the linked repository
+(Dennis et al. 2026).
+Lastly, to investigate potential trends between𝛼MLT and the other
+parameters, we created a corner plot (Figure 8) that compiles our
+results similar to Figure 2. From Figure 8 we can see that our ability
+toobtaintwosidedboundsisdeterminedprimarilyby𝑀and𝑅with
+a clear separation between our double-bounded and upper-bounded
+results near𝑀=1.2𝑀 ⊙.
+MNRAS000, 1–13 (2026)
+
+10Mitchell T. Dennis et al.
+0.00
+0.02Z
+0
+1
+2MLT
+8.5
+9.0
+9.5
+1
+2
+3R (R )
+2
+4
+6MV
+1 2
+M (M )
+2
+4
+6MB
+0.01 0.02 0.03
+Z
+0.2 1.0 1.8 2.6
+MLT
+8.2 8.6 9.0 9.4 9.8
+ 1 2 3
+R (R )
+2 4 6
+MV
+2.5 5.0 7.5
+MB
+Double bounds
+Upper bounds
+Figure 8.Corner plot of the results from our MCMC for𝑀,𝑍,𝛼MLT,𝜏combined with the𝑅,𝑀 𝑉,𝑀 𝐵 used as input data (Table 2) with scatter plots on the
+off-diagonal and kernel density estimates of the 1D distributions along the diagonal. The kernel width is set to the uncertainty size in each case, as in Figure 2.
+We see a clear separation between our double sided bounds on𝛼MLT and the upper bounded values, around around𝑀∼1.2𝑀⊙ and𝑅∼1.1𝑅 ⊙.
+4 DISCUSSION
+Here we discuss our results, first considering the implications of
+our age and mixing length results and how they compare to previ-
+ous determinations before turning to limitations of our analysis and
+directions for future work.
+4.1 Implications of results
+Ourinferredagesareconsistentwithpreviousisochrone-baseddeter-
+minationswhileprovidingageconstraintsmadewithafullyBayesian
+frameworkthatalsofullyquantifiestheiruncertainties.TheBayesian
+frameworknaturallycapturescorrelationsbetweenage,mass,metal-
+licity,and𝛼 MLT,andpropagatesasymmetric,non-Gaussian,ormul-
+timodal posterior structure into the inferred age uncertainties. Said
+uncertainties are small,∼4%in some cases, which are the result of
+the tight constraints on𝑀and𝑅provided by MS DEB stars. The
+precisioninageappearstobeanti-correlatedwiththeageitself,with
+errorsaslargeas∼60%inV570Perpwithaconstrainedageof10 8.5
+years and as low as∼3.8%in RS Cha s with a constrained age of
+109 years.Ourmostpreciseageestimatesarecomparablewithother
+eclipsingbinarystarerrorestimateswhichproducerelativeageswith
+errorsofroughly∼5%(Stassunetal.2009).However,Stassunetal.
+(2009) imposed coevality by requiring both stars in each binary to
+shareacommonage,whereasweinfertheageofeachcomponentin-
+dependently.Wealsodonotassumeacommonmetallicity,although
+we do use the same spectroscopic metallicity prior for both compo-
+nents of a binary. This sacrifices some constraining power in favor
+ofamoregeneralmodel,allowingcoevalitytobetestedaposteriori.
+We find that the inferred component ages agree within∼1𝜎for
+all but two systems, and within∼2𝜎for the remaining two, thus
+providing independent support for the coevality assumption. Other
+works have found more significant discrepancies depending on the
+stellar age and mass (Stassun et al. 2014; Valle et al. 2016; Simon
+&Toraskar2017),typicallyfindingarelativeagreementbetweenin-
+dependent fits to roughly 20-50%. Our results on average fall within
+30% (e.g. CD tau(∼20), but some of our results find much better
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics11
+agreement (e.g. GX Gem∼2.3%or V501 Mon∼1.6%), in line
+with the generally high precision of our inference.
+We obtain constraints on𝛼MLT for 19 of the 38 main-sequence
+stars in our sample. In these systems, we infer either two-sided or
+one-sided limits on𝛼MLT, and in a majority of cases, the posterior
+distributionsfavorvaluesbelowtheSolarcalibration(𝛼 MLT ≈1.8–2.0
+in commonly used prescriptions). While the statistical significance
+varies from star to star, the overall pattern is consistent with previ-
+ousstudiesthathavesuggestednon-universalityinthemixinglength
+parameter. Previous attempts to infer the mixing length parame-
+ter for individual stars have primarily relied on isochrone fitting or
+asteroseismology (Noels et al. 1991; Edmonds et al. 1992; Guen-
+ther & Demarque 2000; Joyce & Chaboyer 2018b; Nsamba et al.
+2018). In many cases, uncertainties on the inferred𝛼MLT values are
+not reported, although Bayesian isochrone techniques can in prin-
+ciple provide such uncertainties (e.g., Valls-Gabaud 2014).Joyce &
+Chaboyer (2018a) calibrated mixing length parameters for six stars,
+andJoyce&Chaboyer(2018b)fitmixinglengthparametersandcor-
+responding uncertainties for both𝛼Centauri A and B. Of the stars
+constrained by Joyce & Chaboyer (2018a), four are main-sequence
+stars with inferred values in the range𝛼MLT ≃0.7–1.95. Our find-
+ings are consistent with these results and provide independent evi-
+dence, from detached eclipsing binaries, that a single universal mix-
+inglengthparameterdoesnotdescribeallmain-sequencestars.Inan-
+otherMCMC-basedanalysis,Desmondetal.(2021)studiedCepheid
+stars in DEBs in the Large Magellanic Cloud.Assuming a common
+mixing length parameter across their five-star sample, they inferred
+𝛼MLT =0.90 +0.36
+−0.26. Their individual-star fits yielded central values
+spanning𝛼 MLT ∈ [0.82,1.80], although with broad uncertainties,
+indicating that the data preferred generally sub-Solar values but did
+not tightly resolve system-to-system variation.
+Allowing𝛼 MLT to vary has direct implications for age determina-
+tion. In traditional isochrone fitting, the mixing length parameter is
+fixedandageisinferredconditionalonthatassumption.Ouranalysis
+demonstrates that age and𝛼MLT can be partially degenerate on the
+main sequence, but that the combination of precise radii and pho-
+tometric constraints can nonetheless restrict the allowed parameter
+space. For most systems, the inferred ages are consistent within un-
+certaintieswithpreviousdeterminations,suggestingthatfixing𝛼 MLT
+does not generally induce catastrophic biases in these cases.
+Modernobservationshaveenabledempiricalestimatesofthemix-
+ing length parameter in other systems such as dwarf and red giant
+branchstars(Bonacaetal.2012;Tayaretal.2017;Joyce&Chaboyer
+2018a). Despite this progress, these studies do not yet agree on ei-
+ther a universal value or a simple scaling relation for𝛼MLT across
+stellar parameters (Joyce & Tayar 2023). The results presented here
+therefore provide additional empirical support for the growing evi-
+dence that the mixing length parameter may not be universal, using
+main-sequencedetachedeclipsingbinariesasanindependentprobe.
+Regarding𝑀and𝑍, our work does not yield significant improve-
+mentsuponpreviousstudies.Theseparametershavetightpriorsfrom
+othermeasurementsandourMCMCforthemostpartrecoversthose.
+Notablyhowever,inthecaseofV2653Ophs,thewidthofconstraint
+in𝑍is roughly 40% the original (down to roughly±0.001from
+±0.004), and there are several other stars for which the constraint
+on metallicity is considerably narrower than the prior. Importantly
+in both𝑀and𝑍, despite some values being more precisely or less
+precisely constrained there are no cases of significant disagreement
+(≳2𝜎) between the values in Tables 2 and 3.
+Beyond the astrophysical interpretation, our work also expands
+the field of techniques (Jørgensen & Lindegren 2005; Barnes 2007;
+Maxted et al. 2015; Lebreton & Reese 2020) which have been de-
+veloped to replace visual isochrone fitting. Even these approaches
+have typically relied upon fitting interpolated grids, whereas ours
+improves upon them by developing a method that allows for a more
+efficientsamplingofparameterspacewhilesimultaneouslyavoiding
+thelimitationsoftraditionalinterpolationbyusingmachinelearning.
+Our results demonstrate the feasibility of combining active learning
+with machine learning emulation to perform fully Bayesian infer-
+ence with detailed stellar evolution models. Direct MCMC analyses
+calling MESA at each likelihood evaluation are computationally ex-
+pensive, particularly when exploring multi-dimensional parameter
+spaces. By concentrating training models in regions where the sur-
+rogateisuncertain,theactivelearningapproachreducesthenumber
+of required stellar evolution runs while maintaining accuracy at the
+level of observational errors. The framework is also highly scalable:
+additional input parameters (e.g., overshooting, diffusion efficien-
+cies, or alternative abundance prescriptions) could be incorporated
+in future work, and larger stellar samples may readily be accommo-
+dated. As stellar datasets continue to expand in size and precision,
+such approaches will be increasingly important for systematically
+confronting stellar evolution theory with data.
+4.2 Limitations
+Toourknowledge,thisisthefirststudytocombinemachine-learning,
+active-learning, and MCMC to constrain stellar physics using MS
+DEBs,sotherearenecessarilylimitations.Themostimportantisthat
+weonlyvary𝑀,𝑍,and𝛼 MLT.Ideally,otherparameters,particularly
+𝑌, opacity, differences in composition, and nuclear reaction rates
+whichcanaffecttheeffectivetemperatureandstellarlifetimeshould
+alsobevaried.Additionally,weonlyemployasinglestellarstructure
+code, which may introduce systematic differences relative to other
+codes.Lastly,oursampleonlycontains38starsinaspecificphaseof
+evolution. This is hardly a conclusive sample and does not account
+for changes to the mixing length that may occur for different stellar
+types and phases of stellar evolution.
+4.3 Future Work
+Future studies can address these limitations by extending the in-
+ference to additional stellar physics parameters that are fixed in
+the present work. This is particularly important for systems with
+𝑀≳1.5𝑀 ⊙, where the envelopes are predominantly radiative and
+𝛼MLT has little effect on the observables considered here. Such sys-
+tems may instead provide stronger constraints on other aspects of
+the stellar models. However, as we already have no bounds on for a
+large number of systems, it may not be possible to constrain addi-
+tional parameters. This motivates follow-up studies with additional
+bandssuchasthe𝑈or𝐼bandswhichmayprovidemoreinformation,
+particularly at the edges of our mass range. Additionally, we could
+use our machine learning emulator in a Bayesian hierarchical model
+to determine whether𝛼MLT systematically varies with other stellar
+parameters.
+Further, there are other areas where the need to run large training
+gridscanbeovercomewiththeactivelearningtechniquedevelopedin
+thiswork.Theuseofmachinelearningsurrogatesasreplacementsfor
+expensive modeling codes is becoming commonplace in astronomy
+and astrophysics (e.g., Conceição et al. 2024; Maltsev et al. 2024;
+Hirashima et al. 2025; Tahseen et al. 2025; Vermariën et al. 2025).
+However, these rely on large numbers of precomputed model grids,
+which are computationally prohibitive. The active learning method
+developed here demonstrates the effectiveness of creating a targeted
+MNRAS000, 1–13 (2026)
+
+12Mitchell T. Dennis et al.
+training set where the ML surrogate does not need to predict all of
+parameter space accurately, only the relevant areas.
+Finally,wetreateachbinarycomponentindependentlyanddonot
+enforce co-evolution (i.e. a shared age and metallicity). This makes
+our approach conservative but discards a well-motivated physical
+prior.Sinceourresultssupportcoevolution,ourconstraintscanlikely
+be safely tightened by enforcing it.
+5 CONCLUSIONS
+WehavepresentedaBayesianframeworkforinferringthemass(𝑀),
+metallicity(𝑍),mixinglengthparameter(𝛼 MLT),andage(𝜏)ofmain-
+sequence detached eclipsing binary stars (MS DEBs). The method
+combinesGaussianpriorsonthemeasuredmassesandspectroscopic
+metallicities with likelihoods for the observed radii and broadband
+magnitudes, and uses MCMC sampling to propagate degeneracies
+betweenparametersandobtainstatisticallyrigorousuncertainties.To
+make this inference computationally feasible, we trained machine-
+learning surrogates for MESA stellar evolution models using an ac-
+tive learning procedure that adaptively selected new models in the
+regions of parameter space most relevant for improving emulator
+accuracy. Our final training set contains∼20,000stellar models,
+correspondingtomorethanonemillionpointsalongtheirevolution-
+ary tracks.
+Applying this framework to 38 stars in MS DEBs, we obtain
+age constraints for every star in the sample and bounds on𝛼MLT
+for a subset of systems. The age constraints are broadly consistent
+with previous isochrone-based determinations while providing full
+posterioruncertaintiesandparametercorrelationswithinaBayesian
+framework.
+Forthemixinglengthparameter,wefinddouble-sidedconstraints
+for 5 extra-Solar main-sequence stars and one-sided bounds for an
+additional14,usingonlyobservationsof𝑀,𝑍,𝑅,𝑀 𝑉,and𝑀 𝐵.The
+constraints occur primarily in lower-mass stars, where convective
+envelopes make the observables sensitive to𝛼MLT, while hotter and
+moreradiativestarsgenerallyprovidelittleconstrainingpoweronthis
+parameter.Thispatternprovidesausefulphysicalconsistencycheck
+on the inference. Several of the inferred mixing length parameter
+values differ from the commonly adopted Solar-calibrated value of
+𝛼MLT ≃1.8–2.0,supportingpreviousfindingsthatauniversalmixing
+length parameter may not adequately describe convection across the
+main sequence.
+Only the parameters above were varied, with all other stellar in-
+puts held fixed. Future studies can extend the framework by varying
+additional parameters, such as helium abundance, diffusion, over-
+shooting, and atmosphere/boundary conditions, thereby quantifying
+the associated systematics.
+As precise stellar measurements become more abundant, frame-
+works such as ours provide a scalable way to connect those data
+to detailed stellar evolution models. By combining active learning
+emulators with Bayesian inference, this approach can be extended
+to additional stellar physics parameters and applied to other well-
+characterized stellar systems, enabling both improved stellar param-
+eter estimates and tests of the physical assumptions entering stellar
+evolution models.
+ACKNOWLEDGMENTS
+We are grateful for conversations with Peter Sadowski and David
+Rubin. We are especially thankful to David Schanzenbach for his
+assistancewithusingtheUniversityofHawai ‘iKOAsupercomputer.
+HDandJSthankBhuvneshJainandTheUniversityofPennsylvania
+fortheirhospitalitywhilepartofthisworkwascompleted.JSthanks
+ICG Portsmouth for hospitality and acknowledges an IPPP DIVA
+fellowship to support the visit.
+MD is partially supported by the University of Hawai‘i at M¯anoa
+Graduate Student Organization Award: 26-1-01.
+HD is supported by a Royal Society University Research Fellow-
+ship (grant no. 211046).
+The technical support and advanced computing resources from
+University of Hawaii Information Technology Services - Research
+Cyberinfrastructure,fundedinpartbytheNationalScienceFounda-
+tion CC* awards #2201428 and #2232862 are gratefully acknowl-
+edged.
+DATA A V AILABILITY
+All of our data can be found at the Zenodo repository linked here
+(Dennis et al. 2026).
+REFERENCES
+Bakıs, V., Eker Z., 2022, Acta Astron., 72, 195
+Barnes S. A., 2007, ApJ, 669, 1167
+Böhm-Vitense E., 1958, Z. Astrophys., 46, 108
+Bonaca A., et al., 2012, ApJ, 755, L12
+BrochuE.,CoraV.M.,deFreitasN.,2010,ATutorialonBayesianOptimiza-
+tionofExpensiveCostFunctions,withApplicationtoActiveUserMod-
+eling and Hierarchical Reinforcement Learning (arXiv:1012.2599),
+https://arxiv.org/abs/1012.2599
+CassisiS.,PotekhinA.Y.,PietrinferniA.,CatelanM.,SalarisM.,2007,ApJ,
+661, 1094
+Cester B., Giuricin G., Mardirossian F., Mezzetti M., 1978, A&AS, 32, 347
+Cinquegrana G. C., Joyce M., 2022, Research Notes of the American Astro-
+nomical Society, 6, 77
+ClausenJ.V.,TorresG.,BrunttH.,AndersenJ.,NordströmB.,StefanikR.P.,
+Latham D. W., Southworth J., 2008, A&A, 487, 1095
+Clausen J. V., Bruntt H., Claret A., Larsen A., Andersen J., Nordström B.,
+Giménez A., 2009, A&A, 502, 253
+Clausen J. V., Olsen E. H., Helt B. E., Claret A., 2010a, A&A, 510, A91
+Clausen J. V., Frandsen S., Bruntt H., Olsen E. H., Helt B. E., Gregersen K.,
+Juncher D., Krogstrup P., 2010b, A&A, 516, A42
+Conceição M., Krone-Martins A., da Silva A., Moliné Á., 2024, A&A, 681,
+A123
+Cox J. P., Giuli R. T., 1968, Principles of stellar structure
+Cyburt R. H., et al., 2010, ApJS, 189, 240
+Dennis M. T., Sakstein J., 2025a, Physics of the Dark Universe, 50, 102168
+Dennis M. T., Sakstein J., 2025b, Phys. Rev. D, 112, 063051
+Dennis M., Desmond H., Sakstein J., 2026, Precision constraints
+on stellar physics from main sequence detached eclipsing bi-
+naries, doi:10.5281/zenodo.20435308,https://doi.org/10.5281/
+zenodo.20435308
+Desmond H., Sakstein J., Jain B., 2021, Phys. Rev. D, 103, 024028
+Doeser L., Jamieson D., Stopyra S., Lavaux G., Leclercq F., Jasche J., 2024,
+MNRAS, 535, 1258
+Edmonds P., Cram L., Demarque P., Guenther D. B., Pinsonneault M. H.,
+1992, ApJ, 394, 313
+Eker Z., et al., 2018, MNRAS, 479, 5491
+Foreman-Mackey D., Hogg D. W., Lang D., Goodman J., 2013, Publications
+of the Astronomical Society of the Pacific, 125, 306–312
+Franz N., Dennis M., Sakstein J., 2023, arXiv e-prints, p. arXiv:2307.13050
+Gal Y., Ghahramani Z., 2015, arXiv e-prints, p. arXiv:1506.02142
+Grevesse N., Sauval A. J., 1998, Space Sci. Rev., 85, 161
+Grichener A., et al., 2025, ApJS, 279, 49
+MNRAS000, 1–13 (2026)
+
+Precision constraints on stellar physics13
+Guenther D. B., Demarque P., 2000, ApJ, 531, 503
+Hirashima K., Moriwaki K., Fujii M. S., Hirai Y., Saitoh T. R., Makino J.,
+Steinwandel U. P., Ho S., 2025, ApJ, 987, 86
+Iglesias C. A., Rogers F. J., 1993, ApJ, 412, 752
+Iglesias C. A., Rogers F. J., 1996, ApJ, 464, 943
+Jermyn A. S., et al., 2023, ApJS, 265, 15
+Jørgensen B. R., Lindegren L., 2005, A&A, 436, 127
+Joyce M., Chaboyer B., 2018a, ApJ, 856, 10
+Joyce M., Chaboyer B., 2018b, ApJ, 864, 99
+Joyce M., Tayar J., 2023, Galaxies, 11, 75
+Khaliullin K. F., Kozureva V. S., 1986, Ap&SS, 120, 9
+Kovaleva D. A., 2001, Astronomy Reports, 45, 972
+Lacy C. H. S., Torres G., Claret A., 2008, AJ, 135, 1757
+Lebreton Y., Reese D. R., 2020, A&A, 642, A88
+Leclercq F., 2018, Phys. Rev. D, 98, 063511
+Magic Z., Weiss A., Asplund M., 2015, A&A, 573, A89
+Maltsev K., Schneider F. R. N., Röpke F. K., Jordan A. I., Qadir G. A.,
+Kerzendorf W. E., Riedmiller K., van der Smagt P., 2024, A&A, 681,
+A86
+Marrese P. M., Munari U., Sordo R., Dallaporta S., Siviero A., Zwitter T.,
+2004, arXiv e-prints, pp astro–ph/0411723
+Maxted P. F. L., Serenelli A. M., Southworth J., 2015, A&A, 575, A36
+McKay M. D., Beckman R. J., Conover W. J., 1979, Technometrics, 21, 239
+NoelsA.,GrevesseN.,MagainP.,NeuforgeC.,BaglinA.,LebretonY.,1991,
+A&A, 247, 247
+Nsamba B., Monteiro M. J. P. F. G., Campante T. L., Cunha M. S., Sousa
+S. G., 2018, MNRAS, 479, L55
+Paczynski B., Sasselov D., 1997, in Ferlet R., Maillard J.-P., Raban B., eds,
+Variables Stars and the Astrophysical Returns of the Microlensing Sur-
+veys. p. 309 (arXiv:astro-ph/9608094), doi:10.48550/arXiv.astro-
+ph/9608094
+PavlovskiK.,SouthworthJ.,KolbasV.,SmalleyB.,2014,MNRAS,438,590
+Paxton B., Bildsten L., Dotter A., Herwig F., Lesaffre P., Timmes F., 2011,
+ApJS, 192, 3
+Paxton B., et al., 2013, ApJS, 208, 4
+Paxton B., et al., 2015, ApJS, 220, 15
+Paxton B., et al., 2018, ApJS, 234, 34
+Paxton B., et al., 2019, ApJS, 243, 10
+Prša A., et al., 2016, AJ, 152, 41
+Ribas I., Jordi C., Torra J., 1999, MNRAS, 309, 199
+Rocha K. A., et al., 2022, ApJ, 938, 64
+Rogers F. J., Nayfonov A., 2002, ApJ, 576, 1064
+Sandquist E. L., Shetrone M., Serio A. W., Orosz J., 2013, AJ, 146, 40
+Scoggins M. T., Ho M., Villaescusa-Navarro F., Jamieson D., Doeser L.,
+Bryan G. L., 2025, arXiv e-prints, p. arXiv:2502.13242
+Simon M., Toraskar J., 2017, ApJ, 841, 95
+Song N., Alexeeva S., Sitnova T., Wang L., Grupp F., Zhao G., 2020, A&A,
+635, A176
+Southworth J., 2024, The Observatory, 144, 133
+Spurio Mancini A., Piras D., Alsing J., Joachimi B., Hobson M. P., 2022,
+MNRAS, 511, 1771
+Srivastava N., Hinton G., Krizhevsky A., Sutskever I., Salakhutdinov R.,
+2014, Journal of Machine Learning Research, 15, 1929
+StassunK.G.,HebbL.,López-MoralesM.,PršaA.,2009,inMamajekE.E.,
+Soderblom D. R., Wyse R. F. G., eds, IAU Symposium Vol. 258, The
+Ages of Stars. pp 161–170, doi:10.1017/S1743921309031810
+Stassun K. G., Feiden G. A., Torres G., 2014, New Astron. Rev., 60, 1
+Tahseen T. P. A., Simões L. F., Yip K. H., Nikolaou N., Mendonça J. M.,
+Waldmann I. P., 2025, RAS Techniques and Instruments, 4, rzaf050
+Tayar J., et al., 2017, ApJ, 840, 17
+Ting Y.-S., 2025, arXiv e-prints, p. arXiv:2510.10713
+Torres G., Sandberg Lacy C. H., Pavlovski K., Fekel F. C., Muterspaugh
+M. W., 2015, AJ, 150, 154
+Valle G., Dell’Omodarme M., Prada Moroni P. G., Degl’Innocenti S., 2016,
+A&A, 587, A31
+Valls-Gabaud D., 2014, in Lebreton Y., Valls-Gabaud D., Charbonnel C.,
+eds, EAS Publications Series Vol. 65, EAS Publications Series. EDP, pp
+225–265 (arXiv:1607.03000), doi:10.1051/eas/1465006
+VermariënG.,BisbasT.G.,VitiS.,ZhaoY.,TangX.,RavichandranR.,2025,
+Machine Learning: Science and Technology, 6, 025069
+Vos J., Clausen J. V., Jørgensen U. G., Østensen R. H., Claret A., Hillen M.,
+Exter K., 2012, A&A, 540, A64
+Yang Y., Bird S., Ho M.-F., Qezlou M., 2026, Phys. Rev. D, 113, 043508
+ZejdaM.,PaunzenE.,BaumannB.,MikulášekZ.,LiškaJ.,2012,A&A,548,
+A97
+Çakırlı Ö., Ibanoglu C., 2016, New Astron., 45, 36
+This paper has been typeset from a TEX/LATEX file prepared by the author.
+MNRAS000, 1–13 (2026)

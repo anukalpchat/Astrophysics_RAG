@@ -1,0 +1,2508 @@
+Title: Inferring Asteroseismic Parameters from Short Observations Using Deep Learning: Application to TESS and K2 Red Giants
+Authors: Nipun Ghanghas, Siddharth Dhanpal, Shravan Hanasoge, Praneeth Netrapalli, Karthikeyan Shanmugam
+Published: 2026-05-08
+Categories: astro-ph.SR, stat.ML
+
+Draft version May 11, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX631
+Inferring Asteroseismic Parameters from Short Observations Using Deep Learning: Application to
+TESS and K2 Red Giants
+Nipun Ghanghas
+ ,1 Siddharth Dhanpal
+ ,1 Shravan Hanasoge
+ ,1, 2 Praneeth Netrapalli
+ ,3 and
+Karthikeyan Shanmugam
+ 3
+1Department of Astronomy and Astrophysics, Tata Institute of Fundamental Research, Mumbai, 400005, India
+2Center for Space Science, NYUAD Institute, New York University Abu Dhabi, PO Box 129188, Abu Dhabi, UAE
+3Google Research India, Bengaluru, 560016, India
+ABSTRACT
+Asteroseismology is the study of resonant oscillations of stars to infer their internal structure and
+dynamics. It is also a powerful tool for precisely determining stellar parameters such as mass, radius,
+surface gravity, and age. The ongoing TESS mission, with its nearly complete sky coverage, presents
+a unique opportunity to uniformly probe stellar populations across the Milky Way. TESS is estimated
+to have observed more than 300,000 oscillating red giants, most of which have one to two months
+of observations. Given the scale of this dataset, we need a fast, efficient, and robust way to analyse
+the data. In this work, our objective is to develop a machine learning (ML) based method to infer
+asteroseismic parameters from short-duration observations. Specifically, we focus on two global seismic
+parameters, the large frequency separation (∆ν) and the frequency at maximum power (ν max), from
+one-month-long TESS observations of red giants. Meanwhile, for K2 data, our focus extends to infer-
+ring the period spacings of dipolar gravity modes (∆Π 1), in addition to ∆νandν max. Our findings
+demonstrate that our machine learning algorithm can accurately infer ∆νandν max for approximately
+50% of samples created by taking one-month Kepler and K2 observations. For TESS one sector data
+however, we recover reliable ∆νfor only about 23% of the stars. Additionally, we get reliable ∆Π 1
+inferences for about 200 young red-giants from K2. For these ∆Π 1 inferences, we see a good match
+with the well known ∆ν−∆Π 1 degenerate sequence observed in Kepler red-giants.
+1.INTRODUCTION
+Space-based missions such as CoRoT (Baglin et al.
+2006), Kepler (Borucki et al. 2010), K2 (Howell et al.
+2014) and TESS (Ricker et al. 2015) have provided
+vast datasets of high-precision photometric observa-
+tions. These datasets are expected to increase signifi-
+cantly in size with upcoming missions such as PLATO
+(Rauer et al. 2024). Precise determinations of fun-
+damental stellar parameters such as mass, radius and
+age are made possible using asteroseismology. Red-
+giant asteroseismology is a powerful tool with which to
+probe populations throughout the Milky Way, enabling
+ensemble-scale galactic archaeology (Anders et al. 2017;
+Silva Aguirre et al. 2018; Sharma et al. 2019; Miglio et al.
+2021).
+Red giants exhibit mixed modes, which behave as pres-
+Corresponding author: Nipun Ghanghas
+nipun@tifr.res.in
+sure modes in the envelop and gravity mode in the core.
+These mixed modes probe the stellar core and can place
+strong constraints on stellar evolution (Bedding et al.
+2011; Mosser et al. 2011). These modes also allow us
+to infer period spacings of gravity modes, which are di-
+rectly related to core mass (Montalb´ an et al. 2013).
+Kepler has observed∼21,000 oscillating red giants
+(Hon et al. 2019; Dhanpal et al. 2022) in a 100 square-
+degree field in the northern hemisphere having four years
+of continuous observations. K2 observed∼19,500 oscil-
+lating red giants (Zinn et al. 2022) in 18 Kepler sized
+fields along the ecliptic, each with three months of ob-
+servation. TESS, with its vast coverage, is estimated to
+have observed more than 300,000 oscillating red giants
+(Mackereth et al. 2021) across the whole sky, with most
+of them observed for a duration of one to two months.
+The full sky coverage and an order of magnitude more
+oscillating red-giants provided by TESS makes it possi-
+ble to study populations almost uniformly throughout
+the Milky Way.
+Solar-like oscillations have been detected in subgiants
+arXiv:2605.08051v1  [astro-ph.SR]  8 May 2026
+
+2
+and red giants observed by TESS using 1-2 sectors of
+short-cadence data. Hatt et al. (2023) analyzed both 2-
+minute and 20-second cadence data (Sectors 1 to 46) to
+identify 4,177 solar-like oscillators, reporting estimates
+ofν max and ∆ν. More recently, Zhou et al. (2024) used
+2-minute cadence data (Sectors 1 to 60) and expanded
+the number of detections to 8,651 stars, also providing
+estimates of stellar parameters such as radii, masses and
+surface gravity, in addition to global seismic parameters.
+For long-cadence (∼30-minute) data, Silva Aguirre et al.
+(2020) used 1–2 sectors of TESS observations for bright
+red giants and detected oscillations in all stars in their
+sample. Combining seismic inferences with Gaia DR2
+parallaxes (Gaia Collaboration et al. 2018), they esti-
+mated stellar masses, radii, and ages with typical uncer-
+tainties of∼3%, 5%, and 20%, respectively. While these
+precision levels are comparable to those reported for full-
+length Kepler observations, it’s worth noting that the
+dominant source of uncertainty differs: TESS results are
+largely limited by statistical measurement errors due to
+shorter time series, whereas for Kepler, systematic un-
+certainties (e.g., in stellar models and scaling relations)
+dominate.
+Hon et al. (2022) analyzed bright HD catalog red
+giants with 1–2 years of TESS observations near the
+continuous viewing zones, achieving mass and radius
+precisions of∼8% and∼3%. They also compared aster-
+oseismic radii from scaling relations with interferometric
+measurements for 16 stars, finding a median fractional
+difference of only∼3%. Furthermore, Mackereth et al.
+(2021) used up to 13 sectors of data near the TESS
+continuous viewing zone in the southern hemisphere
+and recovered a median uncertainty of∼8% in mass
+and∼26% in age for a subset of the sample when using
+Gaia-derived luminosities as additional constraints, in
+combination with asteroseismic inferences. They also
+show that these ages are precise enough to identify
+trends in galactic populations. Hon et al. (2021) used
+one sector TESS data and usedν max inferences in com-
+bination with parallaxes, radial velocities and proper
+motions from Gaia EDR3 (Gaia Collaboration et al.
+2021) to obtain a near all-sky Gaia-asteroseismology
+mass map, showing potential for all-sky galactic archae-
+ology with TESS. Stello et al. (2022) analysed Kepler
+stars observed by TESS in one to two sectors and recov-
+eredν max and ∆νwith uncertainties of∼5% and∼3%
+respectively. The short duration makes it challenging
+to infer detailed seismic parameters such as ∆νand
+they were able to reliably recover ∆νin only about 20%
+(14% for one sector and 26% for two sectors) of the
+population.
+Given the vast amount of data from the ongoing TESS
+mission — with even larger volumes expected from the
+upcoming PLATO mission — there is a pressing need
+for fast, efficient, and robust methods to infer seismic
+parameters from photometric observations. Dhanpal
+et al. (2022, 2023) have developed one such machine-
+learning–based algorithm, which they applied to Kepler
+red giants to infer a range of asteroseismic parameters,
+includingν max, ∆ν, ∆Π1, andq, using the full four-year
+Kepler data sets.
+In this work, our goal is to explore the feasibility of
+inferring these parameters from significantly shorter
+time series using similar machine-learning techniques.
+Specifically, we focus on (i) inferring ∆νandν max
+from single-sector (∼27 days) TESS observations, and
+(ii) inferring ∆ν,ν max, and ∆Π 1 from approximately
+three-month K2 observations, where the longer baseline
+provides sufficient resolution to recover mixed-mode
+spacings. Previous work by Davies & Miglio (2016) has
+already demonstrated that ∆Π 1 can be inferred from
+up to 70 days of data (comparable to K2 campaigns
+or multiple TESS sectors), but not from 27-day single-
+sector light curves, based on analyses of varying time
+series lengths for a young Kepler red giant.
+2.DATA
+2.1.TESS data
+We use light-curves detrended using the co-trending
+basis vector (CBV) correction method implemented in
+the TASOC (TESS Asteroseismic Science Operations
+Center) pipeline developed by the coordinated activ-
+ity TESS Data for Asteroseismology (T’DA) within
+the TESS Asteroseismic Science Consortium (TASC)
+(Handberg et al. 2021; Lund et al. 2021). We cross-
+matched the red giants identified by Hon et al. (2021)
+and used light-curves recorded at a cadence of 30 min-
+utes for all the available stars. Instead of raw QLP
+data, which was used by Hon et al. (2021), we use
+the detrended data from TASOC pipeline because it is
+optimized for asteroseismology and preserves the stel-
+lar oscillation signal better that QLP, which is opti-
+mized for planet searches and removes stellar variabil-
+ity over long timescales while performing corrections.
+These detrended lightcurves from TASOC pipeline are
+useful for inferring ∆νfrom one-month TESS observa-
+tions. We perform sigma clipping to reject flux values
+with more than 5-σdiscrepancy. Following a similar
+procedure to Stello et al. (2015), we fill all gaps smaller
+than 1.5 hours in length using linear interpolation to
+minimize the impact of windowing Garc´ ıa et al. (2014).
+Finally, we reject all the stars with greater than 30%
+empty timestamps at this stage. We use the lightkurve
+
+3
+package (Lightkurve Collaboration et al. 2018) to down-
+load light curves hosted at Mikulski Archive for Space
+Telescopes (MAST) and compute Lomb-Scargle peri-
+odograms (Lomb 1976; Scargle 1982; Press & Rybicki
+1989). To make a uniform size sample, we use the same
+frequency range to calculate the power spectral density
+(PSD) for all the stars, which is to be fed into the neu-
+ral network for analysis. In total, we have 30,720 TESS
+red-giants for seismic analysis.
+2.2.K2 data
+We use detrended lightcurves form theK2SFFpipeline
+(Vanderburg & Johnson 2014) which performs correc-
+tions for trends related to spacecraft pointing and other
+systematics. We take the long cadence (∼30 minutes)
+data for red-giant stars listed in K2 GAP DR3 (Zinn
+et al. 2022) and high-pass filter each lightcurve with a
+boxcar filter of width 4 days. Next, we perform sigma
+clipping to reject flux values with more than 5-σdiscrep-
+ancy. Finally, we fill gaps shorter than 1.5 hours using
+linear interpolation similar to TESS data (2.1). Again,
+we use the lightkurve package to download light-curves
+from MAST and compute Lomb-Scargle periodograms
+for all these stars with the same frequency range. In to-
+tal, we have 18,560 K2 red-giants with ∆νin the range
+1−19µHz, out of which 2,176 lie within ∆νrange of
+9−19µHz.
+2.3.Training sets
+2.3.1.For TESS Model
+We combine red giant datasets from the Kepler and
+K2 missions observations to train a model designed for
+application to one-month TESS observations; we here-
+after refer to this as theTESS-model. For K2, we use
+data from K2 GAP DR3 (Zinn et al. 2022), which pro-
+vided asteroseismic measurements of ∆νandν max for
+19,417 red giants. For Kepler, we use observations of
+21,144 red giants, identified by (Dhanpal et al. 2022),
+who have also provided measurements of ∆νandν max
+for these stars. To create training samples comparable
+in resolution to TESS 1-sector data, we divided each
+4-year (in case of Kepler) and 3-month (in case of K2)
+light-curve into multiple, non-overlapping, 27-day seg-
+ments. Due to the stochastic excitation of oscillations,
+each of these shorter-duration lightcurves has a unique
+noise profile. This stochastic behaviour may also lead to
+some of these shorter light-curves not showing solar-like
+oscillations.
+Again, we follow the same procedure as described in 2.1,
+filling gaps smaller than 1.5 hrs in duration using linear
+interpolation and discarding samples having more than
+30% empty data points at the end. Following this, we
+have 822,274 samples in total, 768,267 from Kepler and
+53,980 from K2. We use 70% of these data for training,
+15% for validation and the remaining 15% as a test set.
+The decision to use observations rather than synthetic
+data for training is motivated by the well-established
+links between granulation timescales, oscillation ampli-
+tudes, and the location of oscillation power within the
+PSD (Kallinger & Matthews 2010; Huber et al. 2011;
+Kjeldsen & Bedding 2011; Mathur et al. 2011; Chaplin
+et al. 2011; Yu et al. 2018). This was also emphasized
+by Hon et al. (2018), who leveraged binned 2D images
+of the PSD to detect oscillations and estimateν max. In-
+corporating these empirical relationships can potentially
+help the neural network better identify oscillation signa-
+tures, especially in short-duration datasets like TESS,
+where poor frequency resolution and low signal-to-noise
+ratios pose additional challenges. We also experimented
+with training a model on synthetic data, but it signifi-
+cantly underperformed compared to the model trained
+on observations when evaluated on the Kepler-as-TESS
+test set. This highlights key differences between syn-
+thetic and real data, particularly at low resolution and
+SNR. However, training on observations carries the risk
+of the model internalizing ∆ν–ν max,τ conv–νmax, and
+amplitude-scaling relations that may not hold perfectly
+in the TESS sample. However, as shown by Stello et al.
+(2022), the overall offsets between Kepler and TESS
+measurements ofν max and ∆νare small when aver-
+aged over the population. Nevertheless, there are mild
+evolutionary-state–dependent trends, with TESSν max
+values being typically 2–3% lower for red clump stars
+nearν max ∼40, µHz, and indications of a small positive
+bias at highν max for red-giant–branch stars. However,
+the training set remains broadly representative for our
+purposes, apart from instrument-specific effects such as
+Earthshine and other systematics.
+2.3.2.For K2 Model
+Unlike theTESS Model, theK2 Models—which are in-
+tended for use with three-month K2 observations (see
+Section 3.4)—are trained entirely on synthetic datasets.
+This approach is necessary due to the scarcity of ob-
+served ∆Π1 measurements for red giants, which limits
+the feasibility of training directly on Kepler or TESS
+data. The synthetic spectra are generated using the sim-
+ulator developed by Othman Benomar (Benomar 2023),
+based on the asymptotic theory of stellar oscillations
+(Aerts et al. 2010; Garc´ ıa & Ballot 2019). The theoreti-
+cal framework and detailed methodology for generating
+these synthetic datasets are described in Appendix A.
+We construct two separate datasets to train two distinct
+models (see Section 3.4 for details), each comprising ap-
+
+4
+proximately 10 million synthetic red giant samples. Of
+these, 82.5% are used for training, 15% for validation,
+and 2.5% (approximately 320,000 samples) for testing.
+Both datasets span the same range of parameters, ex-
+cept for differences in ∆νand ∆Π 1. The first dataset
+covers a ∆νrange of 1–19µHz and ∆Π 1 from 40 to 500
+seconds. The second dataset is restricted to ∆νbetween
+9–19µHz and ∆Π 1 between 40–150 seconds.
+To generate these datasets, we uniformly sample the
+respective parameter ranges, except for the inclination
+angleι, which is drawn from an isotropic distribution:
+P(ι)∝sinι. We treat ∆ν, ∆Π 1, andqas independent
+parameters. While this approach may result in combina-
+tions not strictly supported by stellar evolution theory,
+it ensures that the training process remains unbiased.
+Table 1 lists the full parameter ranges used to generate
+the synthetic datasets, and Figure 1 shows an example
+synthetic PSD.
+3.METHODS
+We train deep neural networks to infer seismic pa-
+rameters directly from PSD profiles—using one-month
+TESS observations for theTESS Model, and three-
+month K2 observations forK2 Model-1andModel-2,
+collectively referred to as theK2 Models(see Section
+3.4 for details). Inputs to all the models are 1-D arrays
+of normalized power from the PSDs, without any back-
+ground correction or feature extraction, and outputs are
+probability distributions for each parameter (see section
+3.1). All the relevant features are learned by the neu-
+ral networks on their own from the full PSD. Although
+theTESS ModelandK2 Modelsdiffer in terms of kernel
+sizes and number of output parameters, the overall ar-
+chitecture is the same for all the models (see section 3.2).
+3.1.Converting regression problem to classification
+Identifying parameters corresponding to the PSD of a
+given star constitutes a regression problem. However, in
+our approach, we divided the continuous range of each
+parameter into a fixed number of bins and trained the
+model to classify the correct bin number based on the
+given PSD, effectively recasting the regression task as
+a classification problem. The model then outputs an
+array of probabilities, representing the likelihood that
+each parameter falls into a specific bin.
+There are several scientific and practical reasons for this
+choice. First, classification can improve predictive accu-
+racy, particularly when the relationship between inputs
+and outputs is highly non-linear (Stewart et al. 2022) or
+when the output parameters span many orders of magni-
+tude (as is often the case in asteroseismology). Second,
+classification inherently respects physical constraints —
+for example, it avoids predicting unphysical negative val-
+ues for quantities like ∆νor ∆Π1, which sometimes arise
+in unconstrained regression models. Lastly, but most
+importantly, formulating the inference as a classification
+problem allows us to recover a probabilistic distribution
+over the parameter space, giving us access not just to
+a point prediction but to a meaningful measure of the
+uncertainty and possible multimodality in the inferred
+values.
+As established by Richard & Lippmann (1991), neural
+network classifiers trained with one-hot encoded target
+vectors and a cross-entropy loss function yield outputs
+that estimate Bayesian posterior probabilities. In this
+context, the output probability distribution over the
+bins can be interpreted as a quantized approximation
+to the posterior distribution of the parameter, condi-
+tioned on the observed data and the learned model. To
+validate this capability of the ML models we have shown
+a comparison of output probabilities from these models
+with the posteriors obtained using MCMC for a Kepler
+red giant at K2 resolution (∼88 days observations) in
+section 5.1.
+While ML output represents a Bayesian posterior, it is
+not the same posterior that can be obtained using meth-
+ods such as Markov-Chain Monte Carlo (MCMC). The
+uncertainties derived from the present distribution are
+systematically limited due to the finite sizes of the bins,
+number of training samples used and network complex-
+ity. Consequently, MCMC fits could generally provide
+more accurate values and more precise uncertainties for
+these stars.
+Nonetheless, this method effectively provides an em-
+pirical distribution over the parameter range, from
+which we can extract not only the most probable value
+(the mode) but also meaningful uncertainty estimates
+(which are reasonably well calibrated– as reflected by the
+empirical 1σfractions close to the ideal value of 0.683 in
+subsequent sections). This offers a significant advan-
+tage over standard regression based neural networks,
+which typically do not provide any probability distri-
+bution directly. Although techniques like k-fold cross-
+validation can be employed to estimate uncertainties,
+this approach requires training multiple instances of the
+model, substantially increasing training time. Further-
+more, this approach often fails to fully capture complex
+multi-modal behavior, which presents a significant limi-
+tation in our specific application because the asteroseis-
+mic parameters, especially ∆Π1, can exhibit multimodal
+distributions. Alternatively, mixture density networks
+(Bishop 1994; Hon et al. 2020) can be used to obtain
+probability distributions, but these necessitate a pre-
+defined number of modes and are susceptible to mode
+
+5
+T able 1.Ranges of seismic parameters used to create the synthetics dataset
+Parameter Dataset 1 Dataset 2 Distribution
+∆ν(µHz) 1–19 9–19 Uniform
+νmax/νmax,scaled 0.9–1.1 Same Uniform
+∆Π1 (s) 40–150 (if ∆ν >9) 40–150 Uniform
+40–500 (if ∆ν <9) Uniform
+q0–0.5 Same Uniform
+ϵp 0–1 Same Uniform
+ϵg 0–1 Same Uniform
+βp (≡αl nmax) 0.0–0.1 Same Uniform
+d01 (−0.6 to 0.6)/∆νSame Uniform
+d02/d02,scaled (0.8 to 1.2)/∆νSame Uniform
+d03/d03,scaled (0.8 to 1.2)/∆νSame Uniform
+Core rotation (µHz) 0.005–2.8 Same Uniform
+Envelope rotation (µHz) 0.005–0.4 Same Uniform
+Inclinationι(deg) 0–90 Same Isotropic
+Ag 0.8–1.2 Same Uniform
+Bg −2.2 to−1.8 Same Uniform
+Cg 0–1.0 Same Uniform
+Aτ 0.8–1.2 Same Uniform
+Bτ −1.0 to−0.9 Same Uniform
+Cτ 0–1.0 Same Uniform
+p1.8–2.4 Same Uniform
+N0 0.1–29500 Same Log-Uniform
+Noise Realisations 1–3 Same Random
+Frequency range
+for ML training (µHz) 3.02–277.77 Same 2088 bins
+Observation time (days) 88.0 Same Fixed value
+SNR 10–20 Same Uniform
+Figure 1.Example of a synthetic PSD at K2-like resolution, withν max = 190.34µHz, ∆ν= 14.52µHz, ∆Π 1 = 89.55 s, and
+q= 0.15.
+collapse. Again, a comprehensive comparison of these
+different methods is beyond the scope of the present ef-
+fort.
+3.2.Model architecture
+In our initial tests, we explored a range of neu-
+ral network architectures, including a vanilla CNN
+(Convolutional Neural Network), CNN-LSTM (com-
+bining CNNs with Long Short-Term Memory layers),
+ResNet (Residual Networks), and Vision Transform-
+ers (ViT). These architectures were chosen to represent
+both traditional convolution-based models and more re-
+cent attention-based models, allowing us to assess their
+relative strengths for the task of inferring seismic pa-
+rameters from photometric power spectra.
+Among these, ResNet, which augments CNNs with skip
+(residual) connections between layers, consistently out-
+performed the other architectures in both validation loss
+and stability. We attribute this to ResNet’s ability to
+mitigate vanishing gradient problems and efficiently cap-
+ture both local and global patterns in the PSD, which
+proved particularly useful given the multi-scale features
+
+6
+(a)
+(b)
+Figure 2.ResNet based model used for TESS and K2(a)overall architecture and(b)the architecture of the residual units
+blocks, left for stride of 1 and right for stride of 2. Note :TESS Modelhas only two output parameters,ν max and ∆ν.
+
+7
+present in the seismic signals. Based on this perfor-
+mance, we selected ResNet as the backbone architecture
+for both theTESS Modeland theK2 Models, and fur-
+ther optimized it through hyperparameter tuning (see
+next section).
+The final architecture of the adopted ResNet model is
+shown in Figure 2a.
+3.3.Fine-tuning model hyperparameters
+To further optimize model performance, we tuned key
+hyperparameters such as kernel size, learning rate, num-
+ber of ResNet blocks, and dropout rate.
+Based on the results from a grid search, for theTESS
+Model, we used a smaller kernel size of 21 (compared
+to 51 for theK2 Models) which account for the lower
+frequency resolution in the one-month TESS datasets.
+This choice allows the model to focus on narrower spec-
+tral features without oversmoothing. We also found that
+a higher dropout rate of 0.4 was necessary for theTESS
+Model(compared to 0.1 for theK2 Models) to miti-
+gate overfitting, due to significant limitations on train-
+ing data available for TESS. Additionally, the number
+of ResNet blocks was tuned to balance model complex-
+ity against overfitting risk, leading to the selection of a
+slightly shallower configuration.
+The learning rate and batch size were held constant
+across models (see Section 3.4) after confirming that
+these settings provided stable convergence in all cases.
+Throughout this tuning process, the final hyperparam-
+eter choices were determined by the configuration that
+yielded the lowest validation loss while maintaining con-
+sistent performance across multiple training runs.
+These design and tuning decisions were guided by em-
+pirical performance on the validation set and repeated
+testing, ensuring that the final models are robust, well-
+calibrated, and capable of generalizing effectively to un-
+seen data.
+3.4.Training
+We feed the normalized power from the PSD as in-
+put to the model, along with the corresponding one-hot-
+encoded vectors (bin numbers) for the target output pa-
+rameters (∆νandν max for theTESS Model; ∆ν,ν max,
+∆Π1, andqfor theK2 Models). The models are trained
+as supervised classifiers with the objective of minimiz-
+ing the categorical cross-entropy loss across all output
+parameters.
+For optimization, we use the ADAM optimizer, which
+we selected for its robustness and efficiency in handling
+sparse gradients and adaptive learning rates. To im-
+prove convergence, we apply a cosine decay with restarts
+schedule on the learning rate, which periodically resets
+the learning rate to avoid local minima and encourage
+exploration during training.
+Training is conducted on 2 GPUs, with an effective ini-
+tial learning rate of 1.5×10 −4/2 (scaled by the num-
+ber of GPUs) and a batch size of 64 per GPU, bal-
+ancing memory constraints with stable gradient esti-
+mates. To ensure the model achieves optimal conver-
+gence while mitigating overfitting, we implement early
+stopping based on the validation loss. Training is halted
+if the validation loss fails to improve for five consecu-
+tive epochs (patience = 5), allowing the model sufficient
+opportunity to learn meaningful patterns without over-
+training on noise or spurious correlations. Throughout
+training, the validation loss is continuously monitored,
+and the model state corresponding to the lowest ob-
+served validation loss is saved as a checkpoint. This
+checkpointed model—representing the best generaliza-
+tion performance on unseen data—is then used for in-
+ference on both the test dataset and subsequent appli-
+cation samples.
+3.4.1.TESS Model
+We trained theTESS Modelusing a one-month
+Kepler/K2-as-TESS dataset to predictν max and ∆ν,
+spanning the ranges 8–283µHz and 1–19µHz, respec-
+tively. The bin sizes are set to 2µHz forν max and 0.1
+µHz for ∆ν. Details on the rationale behind these bin
+sizes are provided in Appendix B. During training, both
+parameters are given equal weight in the loss function to
+ensure the model learns to infer them with comparable
+accuracy and equal attention.
+3.4.2.K2 Models
+For K2 data, we trained two separate models, each
+tailored to different parameter ranges, but with identical
+architectures. Both models outputν max, ∆ν, ∆Π 1, and
+q, differing only in the parameter ranges they cover:
+(i)K2 Model-1operates over a ∆νrange of 1−19µHz
+and aν max range of 8−283µHz.
+(ii)K2 Model-2operates over a ∆νrange of 9−19µHz
+and aν max range of 88−283µHz.
+K2 Model-1is primarily optimized to inferν max and
+∆ν, each assigned a weight of 0.4. We also include ∆Π 1
+andqwith smaller weights of 0.1 each. Our exper-
+iments show that including these two parameters im-
+proves model performance by reducing outliers and bet-
+ter matching theν max and ∆νvalues from K2 GAP
+DR3. These parameters likely helps the model better
+distinguish mixed modes and avoid mislabeling.
+K2 Model-2is composed of two sub-models: one fo-
+cused onν max and ∆ν, with weights (0.4, 0.4, 0.1, 0.1)
+assigned respectively toν max, ∆ν, ∆Π 1, andq; and an-
+other focused on ∆Π1 andq, with weights (0.1, 0.1, 0.4,
+
+8
+0.4). For predictions, we use theν max and ∆νoutputs
+from the first sub-model, and the ∆Π 1 andqoutputs
+from the second.
+The bin sizes for all theK2 Modelsmodels are set to
+1µHz forν max, 0.05µHz for ∆ν, 1.25 seconds for ∆Π 1,
+and 0.025 forq. The methodology for determining these
+bin sizes is described in Appendix B.
+The need for different models arises from the difficulty
+of inferring ∆Π1 from just three months of observations.
+While Dhanpal et al. (2023) demonstrated that all four
+parameters can be inferred from a single model using 4-
+year Kepler data, shorter observations pose significant
+challenges. In particular, measuring ∆Π 1 for evolved
+red giants and red-clump stars is complicated by the
+decreasing spacing between successive radial orders and
+increased granulation noise at low frequencies. Addi-
+tionally, as stars evolve, mixed-mode inertia increases,
+reducing mode detectability (Grosjean et al. 2014), and
+mixed mode density decreases with the onset of helium
+burning (Gehan et al. 2018), further complicating pe-
+riod spacing measurements.
+Initially, we attempted to infer ∆Π 1 across the full ∆ν
+range of 1−19µHz, but useful results were obtained
+only for stars with ∆ν >9µHz. This led to training
+a separate model specifically for the 9−19µHz range,
+which proved more effective in inferring ∆Π1 within this
+domain. Therefore, all ∆Π 1 inferences presented here
+are derived exclusively fromK2 Model-2, which targets
+young red giants.
+4.RESULTS
+In this section, we first compare the performance of
+all models on their respective test sets to evaluate and
+validate prediction accuracy. Subsequently, we apply
+the models to the target observational datasets—TESS
+data for theTESS Modeland K2 data for theK2
+Models—and present the results of reliable inferences
+in the form of tables, intended for prospective users.
+For these tests, we report the mode of the output prob-
+ability distributions as the predicted value for each pa-
+rameter. We choose the mode because the predicted
+distributions can be broad and could also exhibit mul-
+timodal behaviour, particularly for ∆Π 1. In such cases,
+the mode — as the most probable class — offers a more
+representative estimate than the mean or median, both
+of which can lie in low-probability regions or fall be-
+tween distinct peaks. Moreover, due to the typically
+peaked nature of the softmax outputs in most cases, the
+mode and median often coincide.
+To quantify uncertainty, we compute the difference be-
+tween the values at the 16th and 84th percentiles rela-
+tive to the 50th percentile (median) of the output dis-
+tribution. The total uncertainty is then defined as the
+absolute sum of these two differences. This approach
+provides both a sharp point prediction (via the mode)
+and a meaningful measure of the spread and asymme-
+try in the predicted distribution (via the percentiles).
+Furthermore, to assess the calibration and reliability of
+the reported uncertainties, we use normalized residual,
+which is defined as:
+Normalized residual =
+
+
+
+ˆy−y√
+σ2
+high+σ2
+ref
+,if ˆy < y
+ˆy−y√
+σ2
+low+σ2
+ref
+, ,if ˆy≥y,
+where ˆyis the predicted value,yis the reference value,
+σlow, σhigh represent the lower and upper uncertainties
+on the prediction andσ ref the uncertainty on reference
+value. This definition assumes that the uncertainties
+in the predictions and reference values are independent,
+which is a reasonable approximation here since they are
+derived from different methods, and the reference un-
+certainties are typically much smaller, being based on
+substantially longer observations. For a well calibrated
+model, the empirical 1σfraction – defined as the frac-
+tion of stars with absolute normalized residuals less than
+1 – should be approximately 0.683, corresponding to
+the 68.3% confidence interval for normally distributed
+errors. Values higher than 0.683 indicate that the re-
+ported uncertainties are too large (the model is under-
+confident), while values lower than 0.683 indicate that
+the uncertainties are underestimated (the model is over-
+confident).
+Since our ML models generate predictions for all pro-
+cessed stars without prior vetting, we apply empiri-
+cally defined uncertainty thresholds to filter and retain
+only the most reliable inferences. These thresholds vary
+across models and are determined based on test set per-
+formance, by evaluating how closely the model predic-
+tions align with reference values. We analyze how this
+agreement degrades with increasing uncertainty and se-
+lect cutoff values—typically between 5% and 20%—that
+preserve predictive accuracy while minimizing the num-
+ber of outliers.
+For example, in the Kepler/K2-as-TESS test set, we find
+that using aν max uncertainty threshold of 20% retains
+approximately 85% of the sample, for which 99.1% of
+predictions have relative errors below 20%. Reducing
+the threshold to 15% lowers the yield to 78%, while im-
+proving accuracy only marginally to 99.4%. Given this
+trade-off, we adopt the 20% threshold in this case.
+Thus, the selected cuts strike a balance between maxi-
+mizing the usable sample size and maintaining high con-
+fidence in the reported parameters.
+
+9
+4.1.For TESS
+4.1.1.Kepler/K2-as-TESS test set
+We first validate the performance of theTESS Model
+using a test set composed of one-month segments from
+Kepler/K2 red-giant observations. This dataset was ex-
+cluded from both training and validation, making it an
+unbiased benchmark. The set constitutes approximately
+15% of the full Kepler/K2-as-TESS dataset, totalling
+112,640 samples. However, we note that, the values re-
+ported by Dhanpal et al. (2022) for Kepler red giants are
+derived using a similar machine learning technique and
+it is desirable to compare the present inferences with
+classical methods. Hence, we make use of the Yu et al.
+(2018) catalogue for Kepler giants, where the authors
+used the SYD pipeline to determineν max and ∆νand
+visually verified the results for approximately 16,000 red
+giant stars. For K2 red giants, we use values from K2
+GAP DR3 (Zinn et al. 2022), which combines results
+from multiple pipelines including A2Z (Mathur et al.
+2010), BAM (Zinn et al. 2019), CAN (Kallinger et al.
+2010), COR (Mosser & Appourchaux 2009) and SYD
+(Huber et al. 2009). Of the 112,640 segment-based sam-
+ples, we find only 84,480 in these two catalogues, which
+makes our final test set for this comparison.
+To identify reliable inferences, we select stars with pre-
+dictedν max uncertainties below 20%, resulting in a fil-
+tered subset of 79,421 stars (about 94% of the total).
+Figure 3a shows a comparison between model predic-
+tions and reference values from classical catalogues men-
+tioned above, derived from time series that are 3 times
+loner for K2 and 48 times for Kepler (which make major-
+ity of the sample). Among the filtered stars, 78.4% agree
+to within uncertainties and 99.6% have relative errors
+inν max below 20% (see fig 3b), demonstrating that the
+TESS Modelcan accurately inferν max from one-month
+Kepler/K2 observations. Furthermore, the empirical 1σ
+fraction is 0.683, indicating that theν max uncertainties
+are perfectly calibrated for this reliable set.
+To validate the ∆νperformance, we apply an additional
+uncertainty threshold: only stars with ∆νuncertainties
+below 10% are retained. This further narrows the subset
+to 67,424 stars, which is roughly 79.8% of the original
+test set. In this subset, 84.5% of stars agree with the
+reference values within uncertainties, and 98.3% exhibit
+relative errors in ∆νbelow 10% (see fig 4b). The empir-
+ical 1σfraction for this set is 0.772, indicating that the
+reported ∆νuncertainties are slightly overestimated on
+average, and therefore conservative. This confirms the
+model’s ability to recover ∆νreliably from one-month
+observations within this more restricted subset and give
+realistic estimates of uncertainty. Figure 4a also dis-
+plays this comparison, with predictions color-coded by
+confidence, defined as the maximum value of the output
+probability distribution for a given parameter and star.
+The increased scatter in fractional residuals for stars
+with ∆ν≲5µHz is expected: small misclassifica-
+tions (e.g., by one or two bins) in this low-frequency
+regime lead to larger relative errors compared to the
+high-frequency regime. This effect is compounded by
+the reduced frequency spacing between radial modes at
+low ∆ν, where peaks lie closer together and convective
+background noise becomes more dominant. These chal-
+lenges are exacerbated by the limited frequency resolu-
+tion of one-month-long light curves. The higher aver-
+age confidence in this low-∆νregime is also explained
+by the stricter filtering imposed by the same 5% un-
+certainty threshold in the low-frequency regime, which
+retains only high-certainty cases in this range. Taken
+together, these two effects may give the visual impres-
+sion that stars with higher prediction confidence have
+larger fractional residuals. However, statistical analysis
+reveals the opposite: the Pearson correlation between
+confidence and absolute fractional residual is -0.263 (p
+<0.0001), and the Spearman correlation is -0.365 (p<
+0.0001), indicating a statistically significant inverse re-
+lationship. However, the correlation is weak to moder-
+ate, suggesting that the relationship between confidence
+and absolute fractional residual might not be strictly
+linear. Nevertheless, it suggests that, on average, model
+predictions with higher confidence have lower absolute
+fractional residual.
+Additionally, in appendix C we show that ∆νvalues
+returned by the model are not simply derived based on
+the ∆ν−ν max relation for solar-like oscillators (Stello
+et al. 2009), which is inherent in the training sample
+made of Kepler and K2 red giants. In fact, the model is
+inferring ∆νwith much higher precision than is expected
+when relying on the ∆ν−ν max scaling. We therefore ar-
+gue that this is achieved using the underlying pattern of
+frequency spacing in the PSD. In order to explicitly test
+and verify that the model can indeed infer ∆νwithout
+νmax inputs, we train a ∆ν-only model. The predictions
+of this ∆ν-only model match with the values returned
+byTESS Model(which has both ∆νandν max), see ap-
+pendix C for comparison.
+4.1.2.TESS red giants
+Now that we have validated the performance of the
+TESS Modelon one-month segments of Kepler/K2 red-
+giant observations, we apply it to a new dataset com-
+prising 30,720 red giants observed by TESS. These stars
+are drawn from the catalog by Hon et al. (2021), with
+data processed using the TASOC pipeline.
+To identify reliable inferences from theTESS Model,
+
+10
+(a)
+(b)
+Figure 3. (a)2D density plot comparingν max values in-
+ferred by theTESS Modelfrom one-month segments with
+reference values obtained from the full 4-year (Kepler) or 3-
+month (K2) time series.(b)Histogram of the corresponding
+fractional residuals from panel (a). The white bar in bottom
+right of (a) shows the typical uncertainty for the correspond-
+ing values on y axis.
+we adopt the same selection criteria used previ-
+ously—uncertainties less than 20% inν max and less than
+10% in ∆ν. To independently assess the robustness of
+ourν max predictions from TESS observations, we com-
+pare them with the values reported by Hon et al. (2021).
+Even without applying any quality cuts, 77.5% of the
+predictions agree within the uncertainty bounds of their
+published values.
+Applying theν max quality cut yields reliable inferences
+for 17,374 stars (approximately 55% of the original set).
+Among these, 90% exhibit relative differences within
+20%, and 86% fall within the combined uncertainty
+range. The empirical 1σfraction for this subset is 0.79,
+indicating that the uncertainties are slightly overesti-
+(a)
+(b)
+Figure 4.Comparison ofTESS Model-inferred ∆νfrom one-
+month segments with ∆νvalues obtained from the full 4-
+year/3-month Kepler/K2 data.Confidencedenotes the max-
+imum value of the model’s output probability distribution for
+each star. In the top panel, the black-dashed line marks the
+1:1 correspondence. In the bottom panel, the black dashed
+line indicates zero fractional residual, while the blue-dashed
+lines highlight±0.35 residuals. The y-axis range in the resid-
+ual plot is limited to [-0.5, 0.5] to enhance visibility.
+mated on average and are therefore conservative and
+safe to use. Furthermore, fewer than only 1% of stars
+show discrepancies greater than 35% when compared to
+the Hon et al. (2021) catalog.
+Figure 5a shows the density plot comparing the two sets
+ofν max values. While most predictions lie along the 1:1
+
+11
+(a)
+(b)
+Figure 5. (a)2D density plot comparingν max values in-
+ferred by theTESS Modelwith those from Hon et al. (2021)
+for 17,374 stars that meet the reliability criteria.(b)Frac-
+tional residuals corresponding to panel (a), shown as a his-
+togram. The white cross in bottom right of (a) shows the
+typical uncertainty for the corresponding values on x and y
+axis.
+diagonal line, a small feature slightly offset from the di-
+agonal due to these∼1% outliers is noticeable. Several
+factors could contribute to this deviation: (i) Hon et al.
+(2021) employ a different machine learning approach
+that operates on binned 128×128 two-dimensional im-
+ages of the power spectrum density (PSD), in contrast to
+our method, which uses the full one-dimensional power
+spectrum as input to a 1D convolutional neural network;
+(ii) the data originate from different pipelines (QLP vs.
+TASOC); and (iii) they rely on raw, uncorrected light
+curves, whereas our analysis uses detrended time series.
+These distinctions can lead to systematic offsets in the
+derived seismic parameters.
+Figure 5b presents the histogram of relative differences
+inν max for the selected 17,374 stars. The majority fall
+below the 20% error threshold, with the long tail corre-
+sponding mostly to stars affected by systematic artifacts
+in the power spectrum. A small number of cases show
+incorrect predictions from our model—where noise fea-
+tures were mistakenly identified asν max—and vice versa
+for the reference values.
+For ∆ν, we apply the same reliability threshold of 10%
+uncertainty, which in our earlier validation tests was
+shown to yield relative errors under 10% for 98.3% of
+the selected stars from one-month-long Kepler/K2 test
+set. This results in a high-confidence subset of 7,001
+stars (∼23% of the original set) for which we report
+confident ∆νestimates from one-sector TESS data.
+The final set of reliableν max and ∆νpredictions is
+listed in Table 2. We additionally flag stars where our
+νmax estimate differs by more than 35% from Hon et al.
+(2021) using a binarymismatchindicator. We cau-
+tion users against relying on these mismatched values,
+as such discrepancies are often associated with spurious
+peaks caused by systematics in the PSD. For instance,
+Sreenivas et al. (2025) report that, in QLP data, faint
+stars often show spurious power excesses at harmonics of
+one cycle per day (11.57µHz), attributed to incomplete
+correction of Earthshine effects (Hey & Aerts 2024).
+Note the significant difference in the yield of reliable
+inferences between the Kepler/K2-as-TESS test set and
+TESS, particularly for ∆ν, 80 % vs 23 %. This lower
+yield for TESS red giants has also been noted in previous
+studies; for example, Stello et al. (2022) reported that
+∆νcould be measured for only about 14% of stars with
+one sector of data, even among bright red giants (lim-
+ited to those with Kepler magnitude<13). One possible
+explanation for this discrepancy is the lower oscillation
+amplitude observed for the same stars in TESS com-
+pared to Kepler, due to TESS’s redder passband. Theo-
+retically, the oscillation amplitude in TESS is expected
+to be about 0.68 times that in Kepler (Lund 2019), a
+prediction recently confirmed by Sreenivas et al. (2025)
+through a direct comparison of TESS and Kepler obser-
+vations. Additionally, the overall photometric quality of
+TESS is lower than that of Kepler, with reduced preci-
+sion and greater susceptibility to crowding effects (Sul-
+livan et al. 2015). Furthermore, spacecraft systematics
+unique to TESS, which are absent in Kepler lightcurves
+and therefore not reflected in the training dataset could
+also increase the mismatch. Additionally, helium-core-
+burning red clump (RC) stars dominate TESS seismic
+detections (Hon et al. 2021; Stello et al. 2022), withνmax
+in the 30-40µHz range. Since extracting ∆νfrom RC
+stars is particularly challenging, this may also contribute
+to the lower yield.
+
+12
+T able 2.Inferences for TESS red giants. We have indicated the stars whereν max estimate differs from Hon et al. (2021) by
+more than 35% throughmismatchas 1.
+index TIC νmax σνmax, low σνmax, high mismatch ∆ν σ∆ν,low σ∆ν,high
+(µHz) (µHz) (µHz) (µHz) (µHz) (µHz)
+1 316787599 29.0 1.16 1.76 0 NaN NaN NaN
+2 154565606 29.0 1.00 1.25 0 3.75 0.12 0.12
+3 121093011 15.0 1.37 1.04 0 NaN NaN NaN
+4 154068647 35.0 1.94 1.73 0 4.15 0.06 0.08
+5 462617902 31.0 1.00 1.00 0 3.95 0.06 0.08
+... ... ... ... ... ... ... ... ...
+17370 231733041 31.0 1.19 3.63 0 3.85 0.09 0.10
+17371 146559499 35.0 1.28 1.82 0 4.25 0.17 0.16
+17372 175316255 41.0 3.74 1.35 0 4.35 0.11 0.12
+17373 103743056 31.0 1.46 1.05 0 NaN NaN NaN
+17374 143211335 37.0 2.49 3.96 0 NaN NaN NaN
+Note—The full table is provided as supplementary material.
+4.2.For K2
+To validate the performance of ourK2 Models, we first
+compare their predictions against published results from
+the literature, as described in the following sections. We
+then apply the models to K2 red giant observations to
+infer reliable ∆Π1 values for young red giants, using the
+same uncertainty thresholds established previously. Ad-
+ditionally, we assess the performance ofK2 Model-1for
+νmax and ∆ν, andK2 Model-2for ∆Π 1, on a synthetic
+test set. These validations follow the same quality cri-
+teria used for the observational data, as detailed in Ap-
+pendix F.
+4.2.1.Comparison with K2 GAP DR3
+To validate the performance ofK2 Model-1, which is
+trained to inferν max and ∆νacross the full ∆νrange
+of 1–19µHz, we compare its predictions against values
+from the K2 GAP DR3 catalog (Zinn et al. 2022). To
+identify reliable inferences, we adopt quality thresholds
+of less than 20% uncertainty inν max and less than 10%
+in ∆ν.
+Out of 18,560 K2 GAP DR3 stars, 17,133 (91%) meet
+the reliability criterion forν max, and 14,809 (80%) ad-
+ditionally satisfy the ∆νthreshold. The empirical 1σ
+fractions are 0.554 forν max and 0.632 for ∆νin their
+respective reliable samples, indicating that the uncer-
+tainties are slightly under-calibrated, particularly for
+νmax. This is reflected in the normalized residuals for
+νmax, which show a median offset of 0.407, i.e a modest
+bias of 0.407σ. However, we would like to point out that
+theν max values in K2 GAP DR3, used as reference here,
+are obtained by combining measurements from multiple
+pipelines, each of which applies a calibration factor to
+match Gaia radii (see Section 4.2 of Zinn et al. (2022)),
+and these factors differ between RGB and RC stars.
+For this comparison, we reversed the calibration using
+the mean scaling factors reported in Zinn et al. (2022)
+(1.017 for RGB and 1.008 for RC) to obtain approxi-
+mate pre-scaledν max values. As this correction is only
+approximate—since the original scaling was pipeline-
+and star-dependent—residual differences can propagate
+into the normalized residuals and may explain the ob-
+served offset. However, the relative-error histograms in
+Figures 6c and 6d do not show a significant systematic
+shift, indicating that the predictive values themselves
+are not strongly biased, and that the effect is primarily
+associated with uncertainty calibration rather than the
+inferredν max values.
+Figures 6a and 6b show the comparisons between the
+model-inferredν max and ∆νvalues and those from K2
+GAP DR3, using the approximately unscaledν max val-
+ues to enable a more direct, like-for-like comparison.
+Despite some scatter, the majority of predictions fall
+within 20% relative error forν max (92%) and 10% for
+∆ν(95%). The remaining off-diagonal scatter is mini-
+mal, with only 5% and 2.5% of stars exceeding a 35%
+relative error inν max and ∆ν, respectively.
+Part of the residual discrepancies may be attributed to
+differences in the data processing pipelines—K2 GAP
+DR3 uses EVEREST light curves, while this work re-
+lies on K2SFF. A noticeable feature is a concentration
+of outliers aroundν max ∼50µHz and ∆ν∼5µHz,
+which aligns with known systematics in K2 data caused
+by spacecraft thruster firings. These firings, occurring
+approximately every 6 hours, introduce spurious peaks
+near harmonics of 47.19µHz in the power spectrum, oc-
+
+13
+casionally leading to incorrect parameter identification
+(see the K2 Data Handbook for details).
+Overall, these results demonstrate thatK2 Model-1can
+reliably inferν max and ∆νfrom three-month-long K2
+light curves, provided appropriate uncertainty-based fil-
+tering is applied.
+4.2.2.Kepler-as-K2
+To validate theK2 Model-2predictions of ∆Π 1 on
+observational data, we use three-month segments of Ke-
+pler light curves for young red giants and compare the
+inferred values with those from stars in common with
+the catalogue of Kuszlewicz et al. (2023).
+As also noted previously, the short observational base-
+line of three months inherently limits the reliability of
+∆Π1 estimates for many stars, since only a small number
+of dipole mixed modes are typically detectable—even for
+targets with relatively high signal-to-noise ratios.
+To isolate reliable predictions, we apply quality cuts
+based on fractional uncertainties: specifically, we retain
+stars with ∆Π 1 uncertainties below 10% andquncer-
+tainties below 0.12. We further exclude predictions in
+the lowest and highest ∆Π 1 bins, as these often reflect
+boundary effects—cases where the model assigns values
+at the edges of the training range, thus being limited by
+the imposed bounds rather than the data. Additionally,
+we discard stars withq <0.05, as predictions in this
+regime are particularly prone to failure.
+This lower threshold onqis motivated by the find-
+ings of Dhanpal et al. (2023), who showed that both
+machine learning and MCMC-based inferences become
+increasingly unreliable whenqis very small. Further-
+more, Ong & Gehan (2023) demonstrated that when
+the spacing between gravity modes exceeds the width of
+the avoided crossing (which shrinks asqdecreases), the
+mixed modes no longer adequately sample the stretch-
+ing function. This results in poor constraints on the
+coupling strength, and might also reduce the reliability
+of ∆Π1 estimates for such stars.
+The uncertainty thresholds were determined empiri-
+cally by testing model performance on a this test set of
+three-month Kepler observations. These cuts were op-
+timized to balance sample size and reliability, ensuring
+that the final set of retained stars exhibits high predic-
+tion accuracy and a low fraction of unidentified outliers.
+This filtering is essential to extract meaningful ∆Π 1 in-
+ferences from three-month datasets with limited reso-
+lution. Full details on determining the ∆Π 1 selection
+threshold are presented in appendix D.
+Out of the 59,904 samples (where multiple PSDs orig-
+inate from different three-month segments of the same
+star), 13,297 have matches in Kuszlewicz et al. (2023).
+These 13,297 samples correspond to 775 unique red-
+giant stars. Selecting at most one PSD per star and
+applying the quality cuts yields a final sample of 191
+stars. Figure 7a shows comparisons of ∆Π 1 for these
+191 stars, with values inferred by theK2 Model-2from
+three-month segments of Kepler observations on the y-
+axis and values reported by Kuszlewicz et al. (2023)
+based on analyses of full four-year long Kepler obser-
+vations on the x-axis. We observe a good agreement
+in the inferred ∆Π 1 values, except for 8 stars, which
+are showing significant discrepancies. Figure 7b shows
+the histogram of relative errors for non-anomalous stars
+in this sample,∼98% of which have relative errors less
+than 2%. Figure 8 illustrates the ∆ν–∆Π 1 distribution
+for these stars, where most follow the well-established
+degenerate sequence (Vrard et al. 2016; Deheuvels et al.
+2022). Furthermore, the empirical 1σfraction is 0.78 for
+this subset, which goes to show that the reported un-
+certainties are, on average, conservative and therefore
+reliable. The mean and median normalized residuals
+for this set are 0.043 and -0.031, respectively, indicating
+that there is no overall bias, and reinforcing the reliabil-
+ity of our ∆Π 1 inferences for this set.
+Nine stars are flagged as anomalous— eight of which are
+the stars that show discrepancies with Kuszlewicz et al.
+(2023). Upon inspecting the ∆Π 1 probability distribu-
+tions for these stars, we observe the presence of multiple
+peaks. Interestingly, in these cases, the model predicts
+a secondary peak, albeit with lower probability, that
+aligns closely with the Kuszlewicz et al. (2023) values.
+Notably, these secondary peaks lie along the ∆ν–∆Π 1
+degenerate sequence, suggesting that the model may be
+identifying both possible solutions but assigning vary-
+ing levels of confidence. We label these stars as anoma-
+lous due to the presence of a lower-probability secondary
+peak along the degenerate sequence. Furthermore, we
+label as anomalous stars with unexpectedly high values
+ofqfor RGs (>0.20), in turn leading to lower-than-
+expected values of ∆Π 1 and stars with unexpectedly
+high values of ∆Π 1 (>105 s). These cases warrant fur-
+ther investigation. Preliminary analysis indicates that
+the inferredqvalues for these stars differ notably from
+those reported by Kuszlewicz et al. (2023), which may
+contribute to the ambiguity observed in their ∆Π 1 esti-
+mates. A more detailed investigation of this discrepancy
+is beyond the scope of the present study and will be ad-
+dressed in future work.
+4.2.3.Results on K2 red-giants
+Having validated the performance ofK2 Model-2on
+three-month Kepler data within a subset satisfying
+
+14
+(a)
+ (b)
+(c)
+ (d)
+Figure 6.Comparison ofK2 Model-1predictions from K2 observations with reference values from K2 GAP DR3 (Zinn et al.
+2022): (a)ν max and (b) ∆ν; (c–d) histograms of relative errors inν max and ∆ν, respectively. Unscaled values from K2 GAP DR3
+are used to avoid introducing bias in the comparison. The magenta cross in the bottom right of panels (a) and (b) represents
+typical uncertainties inxandy, scaled by a factor of 5 for visibility. All other lines and limits are the same as in Fig. 4a.
+stringent quality criteria, we now apply it to 2,176 red
+giants from the K2 GAP DR3 catalog with ∆ν >9µHz.
+Using the same quality thresholds to ensure reliable ∆Π1
+predictions, we obtain a final sample of 217 stars. One
+additional star was excluded due to an inferred ∆Π 1
+value near 140 seconds, which lies at the edge of the
+model’s valid range.
+Figure 9 shows the ∆ν–∆Π1 distribution for these 217
+stars, overplotted on the Kepler red giants from Vrard
+et al. (2016). All but eight stars lie along the ∆ν–∆Π 1
+degenerate sequence. Of these eight, five are flagged as
+anomalous based on the criteria defined in the previous
+section. Examination of their ∆Π 1 probability distri-
+butions confirms that these four stars exhibit multiple
+peaks, with a secondary (lower-probability) peak falling
+along the degenerate sequence and one star with high
+∆Π1. The remaining three stars show no such ambi-
+guity and appear to be reliable predictions that deviate
+from the trend.
+We present our ∆Π 1 inferences for these 217 K2 red
+giants in Table 5, representing a key result of this work:
+the first reliable ensemble-level ∆Π1 measurements for a
+
+15
+(a)
+(b)
+Figure 7. (a)Comparison of ∆Π 1 inferences for 191 com-
+mon stars byK2 Model-2from 3-month Kepler-as-K2 data
+with inferences from the 4-year dataset by Kuszlewicz et al.
+(2023). The black cross in the bottom right corner shows the
+typical uncertainties in the measurements plotted here.(b)
+Histogram of relative errors for non-anomalous stars in (a).
+population of young red giants in K2, derived from only
+three months of data.
+5.DISCUSSION
+5.1.MCMC and ML Comparison
+To validate the capability of our ML models to approx-
+imate Bayesian posterior distributions, we compare the
+network outputs with posteriors obtained using Markov
+Chain Monte Carlo (MCMC) analysis for the Kepler
+red giant KIC 11912315, truncated to K2-like resolution
+(∼88 days of observation). We employ the Metropolis-
+Hastings algorithm (Metropolis et al. 1953; Hastings
+1970) to sample the posterior, assuming a likelihood
+based onχ 2 with 2 degrees of freedom, given the ob-
+served power spectral density (PSD) and a synthetic
+modelM(ν,Θ). This methodology follows the approach
+summarized in Dhanpal et al. (2023), based on the for-
+malism described in Benomar et al. (2009). We refer the
+reader to these works for further details on the MCMC
+implementation. Fig. 10 displays the best-fit MCMC
+model (red) overlaid on the smoothed data (black); the
+PSD obtained from the full 4-year Kepler observation
+is shown in gray for reference. Fig. 11 presents the
+comparison between the MCMC posteriors and theK2
+Modeloutputs forν max, ∆ν, ∆Π 1 andq. To facilitate
+visual comparison, the MCMC posteriors have been nor-
+malized to match the peak probability of the ML out-
+puts. We observe that the ML outputs and MCMC pos-
+teriors overlap and agree well within uncertainties for all
+parameters. Notably, the ML output forν max exhibits a
+bimodal structure with peaks roughly separated by ∆ν.
+This suggests the model detects an ambiguity in the
+νmax inference, identifying two different sets of modes
+for potential Gaussian envelope for the oscillation signal
+separated by one radial order. To better illustrate the
+model’s capability to approximate the underlyingν max
+posteriors, Appendix G presents direct MCMC compar-
+isons for six additional stars.
+Beyond theν max multi-modality, the ML distribu-
+tion for all parameters except ∆νare broader than the
+MCMC posterior. This difference in posterior width is
+not unexpected. The MCMC algorithm uses significant
+computational resources (thousands of steps) to map
+the likelihood surface for a given target, allowing for
+a highly optimized exploration of the parameter space.
+In contrast, the ML model provides an instantaneous,
+generalized inference. The exact difference between the
+posteriors depends on many factors such as bin sizes
+for models, training set size, network complexities, and
+number of steps in MCMC and its convergence criteria.
+Therefore, the systematically broader ML distributions
+are a natural consequence of these methodological differ-
+ences, and the ML uncertainties may be interpreted as
+being more conservative. A detailed comparison disen-
+tangling these effects is beyond the scope of the current
+work.
+5.2.Bin Sizes and Uncertainties
+While the probabilistic outputs of our neural networks
+are interpreted as Bayesian posteriors following Richard
+& Lippmann (1991), we note an important theoretical
+nuance regarding the choice of bin sizes explored during
+our model optimization. Fundamentally, there exists a
+trade-off in bin sizing between strict theoretical correct-
+
+16
+Figure 8.∆ν−∆Π 1 plot for 191 common red-giants from 3-month Kepler-as-K2 data (in blue), plotted over ∆Π 1 inferences
+from the 4-year dataset by Kuszlewicz et al. (2023) (in green).
+Figure 9.∆ν−∆Π 1 plot for K2 red-giants (in blue) plotted over Kepler red giants (in orange) from Vrard et al. (2016).
+Figure 10.Best-fit MCMC model (red) for KIC 11912315 overlaid on the smoothed PSD data (black) at K2-like resolution.
+The PSD obtained from the full 4-year Kepler observation is shown in grey for reference.
+
+17
+Figure 11.Comparison of output probability distribution for KIC 11912315 at K2-resolution derived from theK2 Model(solid
+curves) and MCMC analysis (histograms). The panels display the posterior distributions forν max, ∆ν, ∆Π, and the coupling
+factorq. For visual comparison, the MCMC posteriors have been normalized to match the peak probability density of the ML
+outputs. The horizontal bar on top left of each panel shows the ML bin size.
+
+18
+ness and empirical precision.
+For bin convergence exercises (appendix B), we utilized
+one-hot encoding across all models. While this approach
+is straightforward for models with larger bin sizes, uti-
+lizing one-hot encoding to describe the PSD parameters
+at the finest bin sizes presents a theoretical challenge.
+This issue arises because the intrinsic noise in the PSD
+limits the precision achievable by an ideal theoretical
+sampler, effectively broadening the posterior. Conse-
+quently, the “ideal” theoretical bin size would need to
+vary dynamically from target to target depending on
+the local signal-to-noise ratio (SNR). However, fixing a
+conservatively large bin size globally to accommodate
+the lowest-SNR targets would be counterproductive, as
+it would artificially degrade the predictive resolution for
+the high-SNR targets that are of primary scientific in-
+terest.
+To assess the extent of this theoretical limitation across
+our datasets, we note the approximate intrinsic preci-
+sion limits dictated by the observational baselines. For
+3-month K2 data, these theoretical limits are roughly
+0.68µHz forν max, 0.04µHz for ∆ν, 0.1 seconds for
+∆Π1, and 0.01 forq. For shorter 1-month TESS ob-
+servations, the intrinsic noise floor is naturally higher,
+with precision limits of roughly 1.1µHz forν max and
+0.07µHz for ∆ν. When utilizing bin sizes smaller than
+these thresholds for noise-dominated spectra, represent-
+ing the target with a single one-hot bin strains the strict
+mathematical preconditions required for pure Bayesian
+interpretation.
+To address this, we rely on tested machine learning prac-
+tice and prioritize high-resolution precision. For models
+trained on synthetic data (e.g., theK2 Models), the true
+underlying parameters are known exactly. In such cases,
+while treating the target as a strict one-hotδ-function is
+a formal theoretical approximation, empirical evidence
+across astrophysical machine learning demonstrates that
+prioritizing high-resolution mapping is a proven, effec-
+tive strategy (e.g., Shuntov et al. 2020; Pasquet et al.
+2019; Rothe et al. 2015). Rather than artificially widen-
+ing the bins, the network implicitly learns the posterior
+width dynamically from the variance of the training en-
+semble. During training, the model encounters many
+similar noisy input spectra corresponding to slightly dif-
+ferent exact ground-truth labels. This forces the global
+minimum to naturally distribute the softmax probabil-
+ity mass across multiple adjacent bins.
+The empirical behavior of the network under this ap-
+proximation is demonstrated in our convergence exer-
+cises (Appendix B; Tables 3 and 4), where model per-
+formance metrics (e.g., normalized residuals, median un-
+certainties and 1-sigma fractions) transition smoothly
+without abrupt changes or qualitative degradation, even
+as bin sizes are reduced below the aforementioned in-
+trinsic precision limits dictated by the noise. While
+this empirical robustness does not substitute for formal
+Bayesian correctness at extreme bin sizes sizes, it un-
+derscores the network’s predictive stability when pushed
+beyond its theoretical constraints.
+Crucially, we emphasize that this theoretical limitation
+primarily affects the extreme lower bounds of our con-
+vergence exercises. As shown in Appendix B, the Me-
+dian Squared Error (MdnSE) for all parameters — in
+both theK2andTESSmodels — converges at bin sizes
+that are safelylargerthan these intrinsic precision lim-
+its (see Figures 12 and 13, and Tables 3 and 4). As
+the network achieves optimal performance before reach-
+ing the average noise floor, the final asteroseismic pa-
+rameters reported in this work are derived from models
+utilizing bin sizes that are larger than the intrinsic preci-
+sion limits of the PSDs. Consequently, the outputs from
+our final models are not limited due to this theoretical
+training constraint and remain robustly interpretable as
+Bayesian posterior probabilities.
+Additionally, for models trained directly on observa-
+tional data (e.g., theTESS Model), the “ground truth”
+labels were derived from cataloged central values and
+implemented as one-hot encoded targets, effectively col-
+lapsing the known uncertainties of the reference catalogs
+into single discrete bins. Treating cataloged central val-
+ues as exact training targets is a widely used practice
+in astrophysical machine learning (e.g., Leung & Bovy
+2019; Fabbro et al. 2018). Specifically within astero-
+seismology, deep neural networks have been successfully
+used in regression tasks for continuous parameters by
+utilizing central catalog values as exact ground-truth la-
+bels (e.g., Hon et al. 2018, 2021). Thus, while framing
+this specific task as a discretized classification problem
+introduces an artificial source of symmetric label noise,
+deep neural networks are fundamentally mathematically
+robust to such noise when trained across large ensembles
+(Rolnick et al. 2017).
+Nevertheless, we acknowledge that this discretization
+inherently acts as an artificial source of label noise.
+Consequently, the network may struggle to infer pos-
+terior widths that are narrower than the intrinsic uncer-
+tainties present in the original training catalogs. Our
+training data contains heterogeneous precision; for in-
+stance, the subset from Dhanpal et al. (2022) is inher-
+ently resolution-limited to 0.1µHz in ∆νand 2µHz in
+νmax, whereas the K2 GAP DR3 catalog is not. How-
+ever, as established during our model validation, the net-
+work optimizes its weights using the higher-precision K2
+data to generalize beyond the limits of the coarser sub-
+
+19
+sets. When benchmarked against high-precision test sets
+(Table 3), the model achieves median absolute errors of
+0.04µHz for ∆νand 1.5µHz forν max. These predictive
+errors are significantly smaller than the resolution lim-
+its of the training subset used by Dhanpal et al. (2022),
+confirming that the model successfully internalizes the
+highest available precision and is not bottlenecked by
+heterogeneous label quality.
+Finally, in practical terms, this theoretical constraint
+is negligible for our specific application. Because the
+TESS Modelis applied to short, one-month observations
+but was trained on significantly more precise values de-
+rived from longer-baseline data, the intrinsic observa-
+tional noise of the 1-month TESS spectra naturally dom-
+inates over the variance floor inherited from the training
+labels.
+6.SUMMARY AND CONCLUSIONS
+We have developed deep learning–based methods to
+infer key asteroseismic parameters from short-duration
+photometric observations. These models take normal-
+ized power spectral densities (PSDs) as input and output
+probability distributions for each parameter, learning
+relevant features directly from the data—without requir-
+ing background fitting or mode identification. Specifi-
+cally, we target the inference ofν max and ∆νfrom one-
+sector TESS-like observations, and ∆Π 1, in addition to
+these two, from three-month K2 light curves.
+TheTESS Modelis trained on one-month PSD seg-
+ments derived from Kepler and K2 red giant light curves.
+For theK2 Models, we generate synthetic datasets to
+support training across a wide range of evolutionary
+stages. We validate each model on its respective test
+sets using observations and apply empirically derived
+quality-based selection criteria to isolate reliable predic-
+tions. In addition, we assess the robustness of theK2
+Modelson a separate synthetic test set using the same
+filtering strategy.
+Across the various comparison sets, the empirical 1σ
+fraction typically ranges from 0.63 to 0.80. This sug-
+gests that the reported uncertainties are, in most cases,
+conservatively estimated or reasonably well calibrated.
+Our main results are summarized below:
+•Validation on Kepler/K2 One-Month Segments:
+We validate the performance of theTESS Model
+using one-month segments from Kepler and K2
+red giants, comparing the predictions to reference
+values obtained from full 4-year (Kepler) and 3-
+month (K2) time series.
+–Out of 84,480 stars, 79,42 (∼95%) yield re-
+liableν max predictions (uncertainty<20%),
+of which 99.6% agree with reference values
+within 20% relative error.
+–Applying an additional uncertainty threshold
+of 10% on ∆νresults in 67,424 stars (∼80% of
+the total), with 98.3% having relative errors
+below 5%.
+These results demonstrate the model’s ability to
+robustly inferν max and ∆νfrom one-month data
+with appropriate quality filtering.
+•Application to TESS Red Giants: Applying the
+same reliability thresholds, we inferν max and ∆ν
+for 30,720 TESS red giants.
+–We obtain reliableν max for 17,374 stars
+(∼55%) and reliable ∆νfor 7,001 stars
+(∼23%).
+–Among the reliableν max inferences, 90% are
+within 20% of the predictions from Hon et al.
+(2021), and 86% lie within the combined un-
+certainty limits.
+–Fewer than 1% of stars exhibit discrepancies
+greater than 35% (within the specified rela-
+tive error bounds), underscoring the robust-
+ness of our model even when applied to real
+TESS data.
+•Validation ofK2 Model-1on Observations:
+–We evaluated the performance ofK2
+Model-1, trained to inferν max and ∆ν, us-
+ing K2 GAP DR3 data for 18,560 stars.
+–Of these, 17,139 stars met the uncertainty
+threshold for reliableν max <(20%), and
+14,808 stars met the additional threshold for
+∆ν <( 10%).
+–The model achieved strong agreement with
+the catalogue for this subset: 92% ofν max in-
+ferences and 95% of ∆νinferences fall within
+the specified relative error bounds.
+–This demonstrates thatK2 Model-1can ro-
+bustly infer these parameters from three-
+month K2 light curves with appropriate fil-
+tering.
+–A mild systematic offset is seen in the
+νmax normalized residuals, likely due to the
+evolutionary-state–dependentν max scaling in
+reference values from K2 GAP DR3 rather
+than a model bias.
+•Validation ofK2 Model-2for ∆Π 1 Using Kepler
+Data:
+
+20
+–To assess the reliability of ∆Π 1 inferences
+fromK2 Model-2, we applied the model to
+three-month segments of Kepler data for
+young red giants and compared the results
+with values from Kuszlewicz et al. (2023), de-
+rived using full 4-year Kepler light curves.
+–After applying quality cuts, we obtained re-
+liable predictions for 191 stars out of 775
+unique stars in common.
+–Among these, 183 stars showed good agree-
+ment with the reference values, with 98% of
+this sample showing relative error less than
+2%.
+–For the remaining eight stars, the model’s
+posterior distributions exhibited secondary
+peaks near the literature values, also aligned
+with the expected degenerate sequence, indi-
+cating possible multi-modal solutions.
+•Evaluation on Synthetic Data:
+–We evaluated the performance of bothK2
+Model-1(forν max and ∆ν) andK2 Model-2
+(for ∆Π 1) using independent synthetic test
+sets.
+–Applying the same quality thresholds as used
+for observational test sets, we find excel-
+lent agreement between the predicted and
+true values across all three parameters. This
+demonstrates the models’ reliability and abil-
+ity to generalize well across a wide range of
+stellar properties.
+–The fraction of reliable predictions is 98.5%
+forν max, 92.7% for ∆ν, and 6.7% for ∆Π 1.
+This lower yield for ∆Π 1 reflects the strin-
+gent quality criteria required to ensure robust
+inferences from short-duration observations,
+where accurately constraining the coupling
+strengthqis particularly challenging.
+•Application to K2 Red Giants and Reporting New
+∆Π1 Measurements:
+–We appliedK2 Model-2to 2,048 red giants
+from the K2 GAP DR3 catalogue with ∆ν >
+9µHz and obtained 217 reliable ∆Π 1 infer-
+ences after applying all quality criteria.
+–Of these, 209 stars lie along the well-
+established ∆ν–∆Π 1 degenerate sequence.
+–The remaining eight stars include five marked
+as anomalous and three with clean, confident
+predictions.
+–These ∆Π 1 values are reported in Table 5 in
+Appendix H, constituting a new set of aster-
+oseismic measurements for young red giants
+from short-duration K2 data.
+In future, we plan to extend this analysis to the full
+sample of more than 300,000 TESS red-giants which
+have now been observed in multiple sectors. The ad-
+dition of 1-2 sectors of observations for each star would
+further improve the frequency resolution and the SNR
+of the signal, which should lead to a higher yield for reli-
+ableν max as well as ∆νmeasurements. We also plan to
+infer ∆Π1 for oscillating TESS red giants that have been
+observed for longer than six months. For this analysis,
+we will use systematically detrended TESS light curves,
+which are expected to become available in the near fu-
+ture (private communication, Rafael Garc´ ıa).
+7.ACKNOWLEDGEMENTS
+We thank the anonymous referee for their constructive
+and insightful comments, which have significantly im-
+proved the clarity and rigour of this work and prompted
+us to more thoroughly justify a number of method-
+ological choices. We acknowledge support from the
+Department of Atomic Energy, Government of India,
+under Project Identification No. RTI 4002 and Google
+Research India for providing credits to be used in com-
+putational resources. NG would like to thank Shatanik
+Bhattacharya (TIFR) for all the helpful discussions and
+Meenakshi Gaira (TIFR) for her help with MCMC anal-
+ysis. This paper includes data collected by the Kepler,
+K2 and TESS missions and obtained from the MAST
+data archive at the Space Telescope Science Institute
+(STScI). Funding for the Kepler, K2 and TESS missions
+is provided by the NASA Science Mission Directorate.
+STScI is operated by the Association of Universities
+for Research in Astronomy, Inc., under NASA contract
+NAS 5-26555. This research made use of Lightkurve, a
+Python package for Kepler, K2 and TESS data analysis
+(Lightkurve Collaboration et al. 2018). This research
+was supported in part by a generous donation (from
+the Murty Trust) aimed at enabling advances in astro-
+physics through the use of machine learning. Murty
+Trust, an initiative of the Murty Foundation, is a not-
+for-profit organisation dedicated to the preservation and
+celebration of culture, science, and knowledge systems
+born out of India. The Murty Trust is headed by Mrs.
+Sudha Murty and Mr. Rohan Murty.
+We also acknowledge the use of ChatGPT, developed
+by OpenAI, for assistance in language editing during
+the preparation of this manuscript.
+Software: NumPy (Harris et al. 2020), Lightkurve
+(Lightkurve Collaboration et al. 2018), TensorFlow
+
+21
+Abadi et al. (2015), Pandas (Reback et al. 2022), Chat- GPT OpenAI et al. (2024).
+APPENDIX
+A.GENERATING SYNTHETICS
+The detailed formulation for generating synthetic spectra can be found in Dhanpal et al. (2022), which is implemented
+in the Spectra Simulator code developed by Dr. Othman Benomar Benomar (2023). However, while Dhanpal et al.
+(2022) assumes that all oscillation modes are resolved, we have modified the simulator to account for unresolved
+modes, improving its applicability to our target systems. Additionally, we adopt a different formalism for computing
+the heights and widths of mixed modes, following the approaches outlined in Grosjean et al. (2014) and Mosser et al.
+(2018). Furthermore, we are passing all the small spacing values separately, namelyd 01, d02 &d 03, unlike Dhanpal
+et al. (2022) where these values are calculated internally as some fraction of a single parameterd 0,ℓ. For the sake of
+continuity, we provide below a brief summary of the overall methodology for generating synthetic spectra, while also
+highlighting the key differences introduced in our implementation.
+A.1.Mode frequencies
+The asymptotic theory of oscillations of p modes in red giants may be expressed as (Mosser et al. 2012),
+νnp,l
+∆ν =n p + l
+2 +ϵ p −d 0l(∆ν) + αl
+2
+h
+np − νmax
+∆ν
+i2
+,(A1)
+where ∆νis large separation,ν max is the frequency at maximum power,n p is the p-mode radial order,ℓis the angular
+degree,ϵ p is the phase offset,d 0ℓ is the small frequency separation andα ℓ term accounts for the curvature of p-modes.
+We calculateν max based on ∆νusing the relation for solar-like oscillators given in Stello et al. (2009) as given below
+and add a 10% spread on top (see table 1):
+νmax,scaled = (∆ν/0.263)1/0.77 (A2)
+Forδ 02 &δ 03 we use theδ 0ℓ −∆νrelation for Kepler red giants based on Huber et al. (2010) and add a 20% spread
+on top (see table 1):
+δ02,scaled = 0.121 ∆ν+ 0.047 (A3)
+δ03,scaled = 0.282 ∆ν+ 0.16 (A4)
+Meanwhile forδ 01 we take uniform values from (-0.6 to 0.6) based on the same study. Note that we need to divide
+these values of small spacings by ∆νto account for the difference in the definition ofδ 0ℓ in Huber et al. (2010) and in
+equation A1 (see table 1).
+Mixed-mode frequencies for red giants are given by an implicit equation (Mosser et al. 2015a),
+tanπ ν−ν p
+∆ν =qtan π
+∆Π1
+ 1
+ν − 1
+νg
+
+,(A5)
+whereν g is the asymptotic frequency of puregmodes. For dipole modesν g = 1/(−n g +ϵ g) ∆Π 1, wheren g is the
+radial order andϵ g is the offset parameter forgmodes.
+We solve equation A1 to determine frequencies ofℓ=0, 2 and 3 modes, which are treated as pure pressure modes in
+our synthetics.ℓ=2 and 3 are in principle mixed modes, however, as the coupling between g-mode and p-mode cavity
+for these modes is very weak, only the p-dominated modes are visible. To determine the frequencies of dipole mixed
+modes, we take solutions of the implicit equation A5 in a range of 1.2 times ∆νfor each pureℓ= 1 p mode.
+A.2.Rotational splittings
+Rotation breaks the spherical symmetry of the star and lifts the degeneracy inm, splitting each mode of degreeℓ
+into 2ℓ+ 1 azimuthal components. The frequency of each of these components is given byν n,ℓ,m =ν n,ℓ +δν n,ℓ, where
+
+22
+δνn,ℓ is the rotational splitting. For p-modes in solar-like stars, the dependence of rotational splitting on (n, ℓ) is weak
+within the observed frequency range (Lund et al. 2014). Rotational splittings for p-modes may be approximated as,
+νn,ℓ,m =ν n,ℓ −m δν n,ℓ ,(A6)
+whereδν n,ℓ = Ω/2πis a function only of average internal rotation rate Ω. Furthermore, owing to the large envelopes
+in red giants and the high sensitivity of p-modes rotational kernels to the outer layers of the star, it is common to
+approximate average rotation as Ω≃Ω env and henceδν n,l ≃Ω env/2π(Goupil et al. 2013).
+Mixed modes on the other hand are influenced by both the core and the envelope. Forℓ= 1 mixed modes in red
+giants and early subgiants, a two-zone model of rotation can be used to estimate the rotational splittings as shown by
+Goupil et al. (2013). Moreover, they also demonstrate that the contribution from core and envelope to the rotational
+splitting depends upon the ratioζ(ν) of kinetic energy of the modes in g-cavity and the total kinetic energy of modes
+as,
+δνrot =− 1
+2
+Ωcore
+2π ζ(ν) + Ωenv
+2π (1−ζ(ν)).(A7)
+Additionally,ζ(ν) is well approximated by the properties of pure p and g modes as (Deheuvels et al. 2015; Mosser
+et al. 2015b),
+ζ(ν) =
+
+1 + 1
+q
+ν2∆Π1
+∆ν
+cos2π 1
+∆Π1
+
+1
+ν − 1
+νg
+
+cos2π ν−νp
+∆ν
+
+
+−1
+.(A8)
+However, this first-order description of rotation does not account for near-degeneracy effects (NDE), which arise
+when frequency separation between consecutive mixed modes becomes comparable or lower than the rotational split-
+ting Deheuvels et al. (2017). NDE leads to avoided crossings of each multiplet component at different age, causing
+asymmetries in the rotational splittings. There are two formalisms to account for these effects, one is based on decom-
+posing mixed modes in the basis of pure pressure modes (πmodes) and pure gravity modes (γmodes) (Ong & Basu
+2020) in which the rotational operator is diagonal Ong et al. (2021) and one can solve the eigenvalue problem to get the
+frequencies Ong et al. (2022). Second approach as discussed in Li et al. (2024) applies rotational perturbations to the
+asymptotic frequencies of pure p- and g-modes and then solve equation A5 separately for each multiplet. Furthermore,
+authors argue that this approach is similar to the one proposed by Ong et al. (2022) and adequately accounts for
+NDE. Thus, for stars showing non-negligible NDE the first-order description of rotation is inadequate and could lead
+to potential biases in inferences of period spacings and coupling factor. However, Li et al. (2024) noted that they found
+consistent results for ∆Π1,q, and other parameters using these two approaches, with significant differences appearing
+only in the inference of the envelope rotation rate, which we do not attempt to infer here. We also compared the
+reliable non-anomalous ∆Π 1 inferences from our model for 997 stars in common with Li et al. (2024). We obtain
+consistent results for 99.3% of these stars (see appendix E), which confirms that the first-order rotational formalism
+is generally sufficient to obtain accurate ∆Π 1 inferences, at least for stars within our reliable set (inferences satisfying
+quality thresholds).
+Finally, we found the inclusion of this first-order rotational description to be very effective in comparison to not
+including any rotation at all, as is shown in appendix E.
+A.3.Heights and Widths of modes
+Each oscillation mode is modelled as a Lorentzian centred atν(n, ℓ, m) with heightH(n, ℓ, m) and linewidth
+Γ(n, ℓ, m). To obtain realistic mode heights and widths forℓ= 0,2 and 3pmodes, we adopt the heights and
+linewidths of radial modes derived from templates of red giants and sub-giants observed by Kepler (KIC 10147635,
+KIC 11414712, KIC 12508433, KIC 6144777, KIC 8026226, KIC 11026764, KIC 11771760, KIC 2437976 and KIC
+6370489), rescaling them based onν max and ∆ν, and applying the appropriate geometrical factors for theℓ= 2 & 3
+modes, following a technique similar to Kamiaka et al. (2018) (see also Dhanpal et al. (2022) for an example). For
+the dipole mixed modes, we compute amplitudes and linewidths by scaling the radial modes using the ratio of kinetic
+energy trapped in the g-mode cavity to the total mode kinetic energy,ζ(ν). We use the formalism highlighted in
+Mosser et al. (2018); specifically, Benomar et al. (2014) estimate the width of mixed modes as Γ 1(ν) = Γ 0(1−ζ(ν)),
+and Belkacem et al. (2015) have shown that the amplitude for resolved dipole mixed modes isA2
+1(ν) =A 2
+0(1−ζ(ν)). As
+noted in Mosser et al. (2018), when the geometrical factor is omitted, these amplitudes correspond to similar heights
+
+23
+for resolved dipolar mixed modes sinceA 2 =πΓH/2.
+We treat any two modes with a frequency separation smaller thanδf res as duplicates and retain only one of them in
+the final calculations, whereδf res is the frequency resolution of the PSD, defined as the inverse of the light curve’s
+total observation time. Further, we set a minimum observable linewidth (Γ min = 2δf res
+π ) for all the modes i.e
+Γn = max(Γ n,Γ min). For all unresolved modes, i.e., when Γ n was less Γ min, we also apply a dilution factor to
+the heights (Dupret et al. 2009), which expresses,
+˜Hn = π
+2δf res
+Γn Hn (A9)
+whereH n and ˜Hn is the mode height before and after applying the dilution factor. Such the total power of the mode
+is conserved. Accounting for geometrical and visibility factor, the final heightsH(n, ℓ, m) of modes are determined as
+H(n, ℓ, m) =r 2
+ℓ,m(ι)V(ℓ) ˜Hn,(A10)
+whereV(ℓ) is the mode visibility, ˜Hn is the height for the mode of radial ordern(without geometrical and visibility
+factor) andr 2
+ℓ,m(ι) is the geometrical factor which depends on the inclination angleι, determined according to
+r2
+ℓ,m(ι) = (ℓ− |m|)!
+(ℓ+|m|)! [P |m|
+ℓ (cosι)]2,(A11)
+whereP |m|
+ℓ is the associated Legendre polynomial.
+A.4.Noise Model
+The noise model comprises two components, a Harvey-like profile generated by surface granulation and white noise
+which is frequency independent. At low frequencies, the granulation component dominates and at high frequencies,
+white noise is the primary contributor. We do not consider additional facular signatures in our synthetics.
+The noise model is given by
+B(ν) = Hg
+1 + (τ ν)p +N 0,(A12)
+where the first term is the Harvey-like component which depends on the characteristic granulation amplitudeH g, the
+granulation timescaleτ, and power-law exponentp. The second term,N 0, represents white noise.
+Furthermore, granulation amplitude and timescale have been observed to vary withν max (Kallinger & Matthews 2010;
+Mathur et al. 2011; Chaplin et al. 2011). Hence, the granulation amplitude and timescale are modeled as,
+Hg =A gνBg
+max +C g , τ=A τ νBτ
+max +C τ ,(A13)
+where (A g, Bg, Cg) and (A τ , Bτ , Cτ) are free parameters which control the granulation amplitude and timescale re-
+spectively.
+A.5.Power Spectrum Model
+The power spectrum model comprises two parts, the oscillation signalSand noise profileB. The oscillation signal
+is a sum of Lorentzians centred around the respective mode frequencies, given by,
+S(ν) =
+X
+n
+3X
+ℓ=0
+ℓX
+m=−ℓ
+H(n, ℓ, m)
+1 + 4
+
+ν−νnℓm
+Γ(n,ℓ,m)
+2 .(A14)
+Mode frequenciesν nℓm, heightH(n, ℓ, m) and width Γ(n, ℓ, m) of Lorentzian peaks are determined as explained
+previously.
+For a given set of parameters, the the power spectrum model is calculated by adding signal and noise profile part as,
+M(ν) =S(ν) +B(ν).(A15)
+We then multiply a random realization of chi-squared noise with two degrees of freedom to the resulting model to
+obtain the synthetic PSD profile.
+
+24
+Figure 12.Median squared error as a function of bin size for the two output parameters ofTESS Model. The dashed brown
+curve shows the median squared error from the ∆ν-only model trained specifically for ∆νby awarding it full weightage while
+training. The x-axis is inverted, with coarser bin sizes on the left and progressively finer bins towards the right.
+T able 3.Median squared error and other metrics for various instances of theTESS Modelwith different bin sizes for the output
+parametersν max and ∆ν, tested on a set of 84,840 samples. Theν max / ∆νconfident columns represent the number of stars
+satisfying the respective quality criterion for these parameters (see text for details). Here,MdnSEdenotes the median squared
+error,1σ fracthe empirical 1σfraction,nrthe normalized residual,mdnthe median,stdthe standard deviation, andstd trim
+the standard deviation after excluding the top and bottom 5% of residuals.
+νmax
+bin ∆νbin
+νmax
+MdnSE ∆νMdnSE
+νmax
+confident ∆νconfident
+νmax
+1σfrac ∆ν1σfrac νmax
+nrmean ∆νnrmean
+νmax
+nrstd ∆νnrstd
+νmax
+nrmdn ∆νnrmdn
+νmax
+sigmdn ∆νsigmdn
+νmax
+nrstdtrim ∆νnrstdtrim
+1 32.0001.600 47.817 0.088 14636 7117 0.821 0.831 -0.015 0.002 0.763 0.742 -0.006 0.002 22.275 1.150 0.611 0.583
+2 16.0000.800 19.892 0.047 29028 24278 0.757 0.797 -0.125 0.047 0.912 0.780 -0.109 0.080 11.962 0.645 0.635 0.613
+3 8.000 0.400 5.062 0.014 57484 56253 0.762 0.793 -0.072 -0.058 0.979 0.958 -0.024 -0.071 6.357 0.355 0.653 0.645
+4 4.000 0.200 3.098 0.005 76992 65017 0.719 0.790 -0.054 -0.042 1.160 1.123 -0.028 -0.047 5.307 0.278 0.738 0.642
+5 2.000 0.100 2.372 0.003 79207 65876 0.695 0.775 0.033 -0.083 1.320 1.420 0.085 -0.064 4.465 0.181 0.789 0.645
+6 1.000 0.050 2.250 0.003 80761 66840 0.670 0.709 0.122 0.233 1.470 2.106 0.152 0.170 3.435 0.138 0.835 0.747
+7 0.500 0.025 2.280 0.003 80727 67552 0.659 0.698 0.153 0.144 1.594 2.520 0.176 0.063 3.207 0.120 0.879 0.799
+8 0.250 0.013 2.369 0.003 80589 67119 0.648 0.698 0.197 0.028 1.676 2.517 0.199 0.001 3.074 0.198 0.912 0.791
+9 0.125 0.006 2.395 0.002 81129 68329 0.636 0.675 0.222 -0.128 1.684 2.786 0.237 -0.111 2.926 0.104 0.944 0.859
+B.CHOOSING BIN SIZE
+To determine the optimal bin sizes for our network architectures, we conducted convergence exercises by training
+multiple model instances with progressively finer bins. We compared performance across several diagnostics: Median
+Squared Error (MdnSE), empirical 1σfraction, mean/median and standard deviation of normalized residuals, median
+predicted uncertainty, and the reliable fraction (the number of confident inferences). Together, these metrics capture
+the effects of binning resolution on model accuracy, precision, calibration, and outlier behavior. We utilized MdnSE
+rather than Mean Squared Error because it is significantly more robust to extreme outliers, thereby more accurately
+reflecting the model’s baseline performance across diverse bin configurations.
+While strictly varying one parameter at a time across our entire multi-dimensional grid constitutes an ideal controlled
+experiment. Our convergence exercises primarily utilize a multi-variable sweep to efficiently map the parameter space
+without training approximately 60 separate models, supplemented by targeted single-parameter control models for
+most sensitive parameters (discussed below) to demonstrate empirical robustness of this approach.
+Finally, as detailed in Section 5.2, we note that utilizing strict one-hot encoding at finest bin sizes stretches the
+theoretical preconditions for interpreting model outputs when the bin width falls below the intrinsic noise limit of the
+data. We refer the reader to Section 5.2 for a comprehensive discussion on this trade-off between empirical precision
+and formal mathematical correctness.
+B.1.ForTESS Model
+For determining the optimal bin sizes for ∆νandν max in theTESS Model, we evaluated the series of models detailed
+in Table 3. All models in these models were trained on one-monthKeplerandK2segments and evaluated on a
+held-out test set (section 2.3.1). The same uncertainty-based quality cuts described in section 4.1 were used to define
+reliable inferences, except that for ∆νwe used only its uncertainty cut to avoid any dependencies onν max. All the
+matrices shown in table 3 were evaluated on stars within these reliable subsets among the full set of 84,480 samples.
+
+25
+As bins become finer, theMdnSEdecreases sharply and then plateaus (figure 12), indicating a limit set by the data
+and model. Forν max, theMdnSEfalls from 48.82 at 32µHz to 2.37 at 2µHz, with no significant improvement at
+finer bins. For ∆ν, it decreases from 0.088 to 0.003 at 0.1µHz and then no significant improvements. This identifies
+a natural “knee” near 2µHz and 0.1µHz forν max and ∆ν, respectively. The empirical 1σfraction—representing the
+spread in the posterior—drops from∼0.82 at coarse bins to∼0.63 at 0.125µHz forν max (and from∼0.83 to∼0.67
+for ∆ν), showing that posteriors become sharper and uncertainties smaller as bins refine. Correspondingly, the median
+predicted uncertainty decreases monotonically (e.g., from∼22.3 to∼2.9µHz forν max, and from∼1.15 to∼0.1µHz
+for ∆ν). However, the standard deviations of normalized residuals increase sharply beyond certain bin widths (e.g.,
+from∼1.6 at 2µHz to>2.5 at 1µHz forν max), indicating underestimated uncertainties and more outliers. Trimmed
+standard deviations (after removing the top and bottom 5% residuals) confirm that much of this excess spread arises
+from a few outliers, while the mean and median normalized residuals develop noticeable biases for bins finer than this
+limit.
+Considering all diagnostics, bin widths of 2µHz forν max and 0.1µHz for ∆νrepresent the optimal balance between
+resolution, precision, and calibration. Finer bins do not yield better accuracy (MdnSEalready plateaued) but intro-
+duce systematic biases and a larger fraction of outliers, whereas coarser bins lead to broader, less precise posteriors.
+These adopted bin sizes thus reflect the practical resolution limit achievable for one-monthTESS-like data within
+the framework of our current model. Additionally, to verify that ∆νis optimally trained within the multi-output
+configuration and that its optimal bin size is unaffected by the inclusion ofν max, we trained control models where ∆ν
+is the only output parameter and thus received 100% weightage in training. As illustrated by the dashed brown curve
+in Figure 12, theMdnSEfor the ∆ν-onlyTESS Modelis nearly identical to that of the multi-output model across
+all evaluated bin sizes. This confirms that the training of ∆νis fully optimized within the multi-output framework.
+Furthermore, the optimal bin size derived from this single-output model matches exactly with the multi-output model,
+demonstrating that the determination of the ∆νbin size is not compromised by the presence ofν max as an additional
+training target.
+B.2.ForK2 Model
+To determine the optimal bin sizes for all output parameters ofK2 Model, we used the same approach as for the
+TESS Modeland trained 10 instances of theK2 Model-2with varying bin sizes for the output parameters. The models
+were trained, validated and tested on a set of 5 million synthetics (half of the synthetic dataset used for final model
+training, see section 2.3), with 82.5% used for training, 15% for validation and 2.5% held back for testing. We use the
+same uncertainty-based quality cuts as described in section 4.2.2 to select reliable inferences; however, we apply the
+selection cuts to each parameter separately and based only on the conditions for the corresponding parameter – to
+minimize dependence on other parameters. Table 4 shows various metrics such asMdnSE, normalised residuals etc,
+for 10 models trained with varying bin sizes and figure 13 shows the correspondingMdnSEplots for the four output
+parameters. Again, all the metrics were calculated for stars within the corresponding reliable sets out of a total of
+79,360 synthetics.
+Forν max and ∆ν, we see the similar trend as forTESS Model,MdnSEfirst decreases rapidly with decreasing bin sizes,
+quickly plateauing and becoming relatively constant for successively finer bins. The ”knee” occurs at around 4µHz
+forν max and 0.1µHz for ∆ν, see figure 13. The empirical 1σfraction first decreases from coarser to finer bin sizes -
+signifying the increasing sharpness of the posteriors and then plateaus (around 2µHz forν max and 0.05µHz for ∆ν)
+- signifying the precision limit achievable with this synthetic dataset of three months duration by the model. This is
+also reflected by the similar trend seen in the corresponding median uncertainties forν max and ∆ν. Furthermore, there
+is no prediction bias for any of the models, as reflected by the mean/median normalized residual values. Forν max, we
+select 1µHz as the optimal bin size, as is has the lowestMdnSE, the highest yield as well as low median uncertainty
+and well calibrated uncertainties with a 1σempirical fraction of 0.676 (very close to the ideal value of 0.683). For ∆ν,
+we select the optimal bin size of 0.05µHz, as it has the well calibrated uncertainties with a 1σempirical fraction of
+0.692 (as for any finer bins models become overconfident) as well as the lowest number of outliers compared to the
+model with maximal yield (with normalized residual standard deviation of 1.34 vs 1.44).
+For q, for bins coarser than 0.1, none of the inferences satisfy our quality cuts of absolute error inqless than 0.12 (see
+table 4). Also, even at finer resolutions, we obtain significant normalized residuals mean and median values, ranging
+from -0.3 to 0.3. However, this corresponds roughly to a modest shift by±0.03 inqvalues. Furthermore, theMdnSE
+forqhas already saturated at bin size of 0.05 (see table 4) with a value of∼0.001, implying a median prediction error
+
+26
+Figure 13.Same as figure 12, but forK2 Model-2. The two blue dotted lines correspond to model configurations for which no
+reliable inferences are obtained (i.e., no outputs satisfy the quality criterion). The dashed aqua curve shows the median squared
+error from the ∆Π 1-only model trained specifically for ∆Π 1 by awarding it full weightage while training.
+of only 0.03. We do not observe a similar magnitude of drop inqwhen usingMdnSEwith progressively finer bins as
+seen withν max and ∆νin figure 13, because the highMdnSEvalues expected for the coarsest bins are missing due
+to selection cuts. We choose an optimal bin size of 0.025 for q, which has a high yield and a 1σempirical fraction
+of 0.683- the model with perfectly calibrated uncertainties. The median offset in normalized residuals is -0.22 which,
+corresponds to roughly -0.2σ(or a shift by∼0.02 inqvalues), which is very modest and acceptable.
+For ∆Π1, we again do not observe the magnitude of drop inMdnSEas forν max and ∆ν(see figure 13), for the same
+reason as for q. TheMdnSEfor ∆Π 1 saturates at a minimum value of 1.25 seconds, after which it increases slightly
+with progressively finer bin sizes. The yield for confident inferences also decreases progressively for bins finer than
+1.25 seconds (table 4), which implies a deteriorating model performance for finer bins. Additionally, to test if ∆Π 1 is
+optimally trained in these multi-output models and to confirm that the optimal bin size for ∆Π 1 is not being affected
+by other output parameters, we trained models where ∆Π 1 is accorded a weight of 100% during training. TheMdnSE
+for these models is similar to the multi-output models, as shown by the aqua curve in figure 13, which means a similar
+level of precision is achieved in ∆Π 1 predictions by multi-output models. More specifically, we obtain a median error
+of 0.9 vs 1.1 seconds at bin size of 1.25 seconds. This implies that ∆Π 1 is optimally trained in these multi-output
+models. We also confirmed that the optimal bin size for ∆Π 1 is the same for the ∆Π 1-specific model and is therefore
+unaffected by the presence of additional output parameters in the multi-output model.
+However, the mean squared error for these ∆Π 1-specific models turned out to be higher than multi-output models
+(84 vs 65 seconds 2 at bin size of 1.25 seconds), which, combined with the fact that they have similarMdnSEmeans
+a larger number of outliers. This highlights the importance of having multi-output models, where the model tries to
+constrain all these four parameters simultaneously, leading to fewer outliers in ∆Π 1.
+We choose an optimal bin size of 1.25 seconds for ∆Π1, since it has the lowestMdnSE, the highest yield, and the lowest
+median uncertainty. Additionally, we note that high values of normalized residual standard deviation are caused by a
+few outliers, since the trimmed standard deviations (after removing the top and bottom 5% residuals) are much lower.
+Most of these outliers are unreliable inferences which are tagged anomalous in the final catalogue (see section 4.2.2 for
+details). Furthermore, the higher values of 1σempirical fraction - signifying larger uncertainties - are caused by the
+multi-peaked nature of the ∆Π 1 posterior for many stars.
+ForK2 Model-1, we did not repeat this exercise and retained the same bin sizes for consistency.
+
+27
+T able 4.Performance metrics for 10 instances ofK2 Model-2evaluated with different bin sizes for its four output parameters.
+The notations and abbreviations are the same as in table 3.
+bin vmax vmax MdnSE vmax confident vmax 1σ frac vmax nr mean vmax nr std vmax nr mdn vmax sig mdn
+1 32.000 57.608 43563 0.928 0.058 0.598 0.084 32.000
+2 16.000 24.187 75464 0.849 0.032 0.737 0.033 17.891
+3 8.000 12.546 78276 0.755 0.032 0.906 0.026 11.898
+4 4.000 8.335 78841 0.712 0.020 1.011 0.013 10.317
+5 2.000 7.469 78895 0.686 -0.022 1.081 -0.026 10.000
+6 1.000 6.543 78921 0.676 0.020 1.124 0.008 9.817
+7 0.500 7.557 78892 0.675 0.018 1.106 0.006 9.933
+8 0.250 8.157 78827 0.678 -0.002 1.091 -0.016 9.849
+9 0.125 8.182 78793 0.673 0.010 1.103 -0.000 9.668
+10 0.062 11.014 78704 0.669 0.017 1.071 0.001 9.818
+bin dnu dnu MdnSE dnu confident dnu 1σ frac dnu nr mean dnu nr std dnu nr mdn dnu sig mdn
+1 1.6000 0.1444 22683 0.9839 0.0150 0.5803 0.0125 1.6000
+2 0.8000 0.0400 68205 0.9665 0.0009 0.6355 0.0000 0.8000
+3 0.4000 0.0100 71628 0.9358 -0.0067 0.7471 -0.0000 0.4000
+4 0.2000 0.0036 74797 0.8700 0.0177 0.9021 0.0000 0.2000
+5 0.1000 0.0016 76339 0.7634 0.0024 1.2176 0.0000 0.1368
+6 0.0500 0.0012 76857 0.6921 -0.0232 1.3395 -0.0643 0.1047
+7 0.0250 0.0014 77398 0.6683 -0.0142 1.4425 -0.0335 0.0983
+8 0.0125 0.0013 77379 0.6668 -0.0030 1.3910 0.0357 0.0976
+9 0.0063 0.0011 77540 0.6737 0.0093 1.3310 0.0154 0.0981
+10 0.0031 0.0010 77696 0.6691 -0.0001 1.4959 0.0051 0.0932
+bin q q MdnSE q confident q 1σ frac q nr mean q nr std q nr mdn q sig mdn
+1 0.8000 NaN 0 NaN NaN NaN NaN NaN
+2 0.4000 NaN 0 NaN NaN NaN NaN NaN
+3 0.2000 NaN 0 NaN NaN NaN NaN NaN
+4 0.1000 0.0015 2236 0.6825 0.2875 0.9505 0.3627 0.1077
+5 0.0500 0.0010 6820 0.6613 -0.1240 1.0612 -0.1381 0.0950
+6 0.0250 0.0010 7304 0.6828 -0.2870 1.0098 -0.2289 0.0968
+7 0.0125 0.0009 7965 0.6935 -0.1541 1.0159 -0.1188 0.0972
+8 0.0063 0.0010 7374 0.6863 -0.1974 1.0230 -0.1662 0.0976
+9 0.0031 0.0010 7226 0.6875 -0.1222 1.0235 -0.0761 0.0987
+10 0.0016 0.0010 7524 0.6716 -0.2101 1.0461 -0.1618 0.0986
+bin dpi dpi MdnSE dpi confident dpi 1σ frac dpi nr mean dpi nr std dpi nr mdn dpi sig mdn dpi nr std trim
+1 40.000 NaN 0 NaN NaN NaN NaN NaN NaN
+2 20.000 NaN 0 NaN NaN NaN NaN NaN NaN
+3 10.000 4.752 3339 0.918 0.116 1.293 0.006 10.000 0.555
+4 5.000 2.814 7770 0.863 0.102 1.684 0.028 6.807 0.629
+5 2.500 1.658 8122 0.826 0.075 2.279 -0.004 5.515 0.662
+6 1.250 1.284 8723 0.815 0.094 2.313 0.015 5.061 0.668
+7 0.625 1.569 7625 0.821 0.110 1.902 0.043 5.653 0.664
+8 0.312 1.674 6580 0.825 0.085 1.652 0.000 5.944 0.649
+9 0.156 2.088 6550 0.810 0.076 1.733 0.006 6.180 0.670
+10 0.078 2.676 5909 0.805 0.130 1.537 0.037 6.800 0.681
+
+28
+Figure 14.Comparison of true vs predicted ∆νbyTESS Modelfor reliable inferences on a set of synthetics with ∆ν−ν max
+spread of 20% (see text for details).
+C.LARGE-SPACING INFERENCES FROM TESS MODEL
+Our training sample for theTESS Modelis based on ∆νandν max measurements of red giants observed by Kepler
+and K2, as detailed in section 2.3.1. Hence, this training set codifies the ∆ν−ν max relation for solar-like oscillators
+(Stello et al. 2009) (∆ν∝ν 0.77
+max) enabling determination of ∆νto 10-15% accuracy givenν max. The machine-learning
+model could potentially leverage this and predict ∆νbased solely on this relation instead of identifying the pattern
+associated with the large spacings. To verify this, we create three distinct sets of synthetics with 10, 20 and 30 percent
+spread inν max on top of this relation, keeping other parameters the same as in table 1 (see appendix A for full details
+on generating synthetics). Based on the ∆ν−ν max relation, 10, 20 and 30 percent spread inν max would correspond
+to 7.7, 15.4 and 23.4 percent spread in ∆ν, respectively. Figure 14 shows the density plot for true vs predicted ∆νfor
+reliable inferences on the synthetic set with 20 percent spread inν max and fig 15 shows the histogram of relative errors
+for reliable predictions for all three synthetic sets (using the same quality thresholds as described in section 4.1). The
+shaded regions highlight the ∆νspread expected from simple scaling using the ∆ν−ν max relation. Predictions based
+solely on this scaling relation would result in ∆νvalues being uniformly distributed over the corresponding range.
+However, the relative-error values in figure 15 indicate ∆νto be much more tightly constrained, peaking at zero, for
+all three sets. Based on this, we conclude that theTESS Modelis not simply using the scaling relation to determine
+∆ν- rather, it is predicting ∆νbased on the underlying frequency-separation pattern. However, we note that the
+yield for reliable inferences drops with increasing spread in ∆ν−ν max values. This drop is likely due to increasing
+differences in the of training sets (based on Kepler/K2 one-month segments, where most of the stars have under 10%
+spread in ∆ν−ν max) and synthetic test sets (with 10, 20 and 30% spread). Nonetheless, the accuracy and precision
+for the reliable inferences does not changing appreciably for synthetic sets with higher spreads (fig 15).
+Furthermore, to explicitly verify that the model can learn and predict ∆νwithoutν max in the inputs, we trained
+a model with a single output, ∆ν. Training data for this model were the same as those used for theTESS Model
+and described in section 2.3.1. Figure 16 shows a comparison of predictions from this single output model and those
+obtained using theTESS Model(which also hasν max as an output parameter) for the reliable set of 67,424 stars in
+Kepler/K2-as-TESS test set (see section 4.1.1 for details). Nearly all inferences lie along the 1:1 line, which shows that
+theTESS Modelcan identify the large-spacings pattern and predicts ∆νindependently ofν max.
+D.PERIOD SPACINGS SELECTION CUT
+To determine the optimal selection threshold for reliable ∆Π 1 inferences, we evaluate model performance on the
+Kepler-as-K2 test set for a range of threshold values. Specifically, we vary the threshold—defined as the maximum
+allowed percentage error in the model prediction—from 1–30% in steps of 1%, and assess the resulting model accuracy,
+coverage, and outlier behaviour. No cuts based onqor any other parameters are applied, ensuring that this analysis
+remains independent of other model outputs.
+Here, coverage denotes the fraction of stars from the full test set that satisfy the selection cut; accuracy refers to the
+
+29
+Figure 15.Relative error histograms for reliable ∆νinferences byTESS Modelon three distinct set of synthetics withν max
+spread of 10, 20 and 30%. The shaded regions highlight the corresponding spread expected in ∆νbased on ∆ν−ν max relation
+for these three sets.
+Figure 16.Comparison between ∆νpredictions from the single–output model and those from theTESS Model(which also
+predictsν max), shown for the reliable subset of 67,424 stars.
+fraction of stars within this selected subset whose ∆Π 1 predictions agree with the reference values within 5%; and
+outliers represent those outside this 5% tolerance. We also track the anomalous fraction—the proportion of stars within
+each selected subset flagged as anomalous predictions based on the criteria defined in Section 4.2.2. The difference
+between the outlier and anomalous fractions therefore indicates the number of unidentified outliers that remain within
+the selected subset. The optimal threshold should maximize coverage while maintaining high accuracy and a low
+fraction of unidentified outliers. Figure 17 shows these quantities for the sample of 13,297 Kepler-as-K2 red-giant
+samples, made of 775 unique stars with ∆Π 1 values reported in Kuszlewicz et al. (2023) (see section 4.2.2 for details
+on this test set). Based on this analysis, we adopt a conservative ∆Π 1 percentage-error threshold of 10% to ensure
+reliability in inferred values, beyond which the number of unidentified outlier stars becomes noticeable. Moreover,
+coverage rises steeply up to 5% and plateaus by 10%, while any further gains in coverage beyond this point are offset
+by a corresponding decline in accuracy.
+
+30
+Figure 17.Coverage, accuracy, outlier fraction, and anomalous fraction as functions of the ∆Π 1 percentage-error threshold
+for the Kepler-as-K2 test set, used to select the reliability threshold.
+E.EFFECTIVENESS OF FIRST-ORDER ROTATION FORMALISM
+To verify the effectiveness of our currently implemented first-order rotation formalism (see appendix A), we created a
+synthetic dataset with core and envelope rotation rates set to zero, while keeping all other parameters ranges the same
+as in table 1. We trained an instance of K2 Model, termedK2 Model Norot, on this dataset to compare its performance
+with a model trained on synthetics with rotation included. We use the Kepler-as-K2 test set (see section 4.2.2) to
+access model performance on observations directly. We evaluate model accuracy, coverage, outlier and anomalous
+fraction for this model as is done forK2 Modelin appendix D to have a full comparison of model performance. Figure
+17 shows these values forK2 Model Norotat different ∆Π 1 percentage error thresholds. In comparison toK2 Model,
+fig 17, the accuracy forK2 Model Norotdrops rapidly with increasing percentage error threshold and correspondingly
+the outlier fraction rises with the same rate. Furthermore, the number of unidentified outliers – which is the difference
+between outliers and anomalous fraction – is non-negligible even for stars with very low uncertainties and becomes
+very significant with increasing values of percentage error threshold. All the gains in coverage byK2 Model Norotare
+offset by the steep decline in accuracy.
+The poor performance ofK2 Model Norotcompared toK2 Modelcould be attributed to differences between the
+synthetic dataset with no rotational splittings and observations. Thus, the implementation of a first-order description
+of rotation, even though it does not account for near-degeneracy effects, helps machine learning models more accurately
+infer ∆Π1 values. Lastly, 99.9% of the common reliable non-anomalous inferences by the two models are in agreement.
+This goes to show that for majority of the stars within the reliable set, inclusion of first-order formalism of rotation
+which does not take into account near-degeneracy effects does not change ∆Π 1 inferences.
+In order to validate the reliable non-anomalous inferences fromK2 ModelandK2 Model Norot, we compared the
+inferred ∆Π1 values with those reported by (Li et al. 2024), who employed a rotational formalism that accounts for
+near-degeneracy effects. Figure 19a shows the comparison of ∆Π 1 inferred by theK2 Modelwith (Li et al. 2024) for
+997 stars in common. Of these, 797 stars have measured core rotation rates and are color-coded accordingly, while
+stars without rotation measurements are shown in grey. We find excellent agreement between the two studies, with
+99.3% of the stars exhibiting ∆Π 1 differences below 5%, as illustrated by the relative error histogram in Figure 19b.
+These results demonstrate that, at least for the reliable subset of stars (i.e., inferences satisfying the quality threshold),
+
+31
+Figure 18.Same as Figure 17, but forK2 Model Norot(trained on synthetic data without rotation), illustrating the reduced
+accuracy and increased outlier rate when rotational splittings are not modeled. Note thatK2 Model Norotis used here only for
+comparison and is not the final adopted model.
+a first-order rotation formalism is generally sufficient to accurately infer ∆Π 1.
+We also compared the confident non-anomalous ∆Π 1 inferences from theK2 Model Norotwith those reported by (Li
+et al. 2024) for 1219 stars in common (not shown here for brevity), of which 950 have measured rotation values in their
+catalogue. We again find good agreement, with 98.5% of the sample exhibiting relative errors below 5%. This result
+demonstrates that even a model trained on synthetic spectra without rotation (K2 Model Norot) can accurately infer
+∆Π1 for the majority of observations that include rotational splittings. However, we observe a slightly higher number
+of outliers in this case, which further highlights the importance of incorporating rotation — even at the level of a
+first-order approximation — into the synthetic training set to reduce outliers and obtain more reliable ∆Π 1 estimates.
+F.RESULTS ON SYNTHETICS
+We validate the performance ofK2 Model-1forν max and ∆ν, andK2 Model-2for ∆Π 1, using a distinct set of unseen
+synthetic test stars. For consistency, we apply the same selection criteria as used in the observational benchmarks
+against K2 GAP DR3 and the Kepler-as-K2 dataset.
+ForK2 Model-1, out of 19,584 test synthetics, 19,297 (98.5%) satisfy the reliability criterion forν max (uncertainty
+¡ 20%), and 18,162 (92.7%) meet the reliability threshold for ∆ν(uncertainty ¡ 10%). The normalized residual is less
+than unity for 90% and 93% of the respective samples forν max and ∆ν, which shows that the predicted values lie
+well within the reported uncertainties for the vast majority of cases, indicating that both the model predictions and
+the associated uncertainty estimates are well-calibrated. Figures 20a and 20b compare the predicted and true values,
+while Figures 20c and 20d show the distribution of relative errors. Nearly all reliable predictions fall within 20% for
+νmax and 10% for ∆ν, highlighting the model’s accuracy and robustness on synthetic data.
+ForK2 Model-2, we apply the same quality cuts as in Section 4.2.2. Out of 79,616 synthetic red giants, only 5,354
+(6.7%) meet these stringent criteria, primarily due to the challenge of inferring ∆Π 1 and constrainingqfrom short-
+duration data. Despite the modest yield, the performance on this filtered subset is excellent: all predictions have
+relative errors below 5%, demonstrating the model’s reliability when sufficient information is available to constrain the
+g-mode period spacing. The normalized residual is less than unity for 95% of the samples in this set, which show that
+
+32
+(a)
+(b)
+Figure 19. (a)Comparison of reliable, non-anomalous ∆Π 1 inferences for 997 stars in common with Li et al. (2024). The
+y-axis shows estimates from theK2 Model, obtained using 3-month Kepler data segments, while the x-axis shows values from
+Li et al. (2024), derived from the full 4-year Kepler time series. Of these stars, 797 have measured core rotation rates from Li
+et al. (2024) and are color-coded accordingly; stars without rotation measurements are shown in grey. The black cross in the
+lower-right corner indicates the typical measurement uncertainties (errors from Li et al. (2024) are too small to be visible).(b)
+Relative error histogram for the stars shown in panel (a).
+the reported uncertainties are, in nearly all cases, consistent with the actual deviations from the benchmark values,
+reinforcing the reliability of our ∆Π 1 inferences for this set.
+Note that the performance ofK2 Model-2forν max and ∆νon the synthetic test set is comparable to—if not slightly
+better than—that ofK2 Model-1. Therefore, we do not show those plots here for brevity.
+G.MODEL OUTPUTS AND MCMC POSTERIOR COMPARISON
+To better illustrate the model’s capability to approximate the underlyingν max posteriors, we present comparisons
+for six additional Kepler red giants at K2 resolution. Figure 22 overlays the model outputs with the formal MCMC
+posteriors derived from the same power spectral densities (PSDs). As demonstrated, the neural network successfully
+captures the overall shape and structure of the true posteriors. Furthermore, the widths of the inferred distributions
+closely match the MCMC results, indicating that the model yields robust uncertainty estimates alongside accurate
+
+33
+(a)
+ (b)
+(c)
+ (d)
+Figure 20.Comparison ofK2 Model-1predictions on a set of unseen synthetic stars. Panel (a): Comparison of reliableν max
+values. Panel (b): Comparison of reliable ∆νvalues. Panels (c–d): Histograms of relative errors corresponding to panels (a)
+and (b), respectively. The reference lines and error limits are consistent with those shown in Fig. 4a.
+central values. This strong agreement also highlights the efficacy of our empirically determined optimal bin sizes (Ap-
+pendix B) in allowing discrete classification outputs to successfully approximate continuous probability distributions.
+For reference, the bin size is indicated by a horizontal bar in the top-left corner of each panel.
+
+34
+(a)
+ (b)
+Figure 21. (a)Confusion matrix for reliable ∆Π 1 predictions vs true values from the test set of synthetics.(b)Histogram of
+relative errors/fractional residuals for samples in (a).
+
+35
+Figure 22.Comparison of the inferredν max distributions from the K2 model with formal MCMC posteriors for six additional
+Kepler red giants at K2 resolution. To facilitate visual comparison, MCMC posteriors have been scaled to match the peak
+probability density of the ML outputs. The horizontal bar on top left of each panel shows the ML bin size.
+
+36
+H.PERIOD SPACINGS FOR K2 RED GIANTS
+The table lists the reliable inferences of period spacings fromK2 Model-2for young red-giants using three-month-long
+K2 observations.
+T able 5. Inferences for K2 red giants.
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+1 201092039 170.5 13.975 86.875 1.606 1.571 5.657 5.067 0.071 0.081 0
+2 201162894 163.5 13.875 84.375 1.140 0.941 2.387 8.479 0.042 0.039 0
+3 201184067 195.5 15.625 88.125 1.619 2.337 8.336 5.747 0.034 0.047 0
+4 201188911 134.5 12.275 81.875 2.006 2.556 1.711 3.474 0.053 0.054 0
+5 201211472 234.5 18.225 91.875 1.348 1.409 2.486 2.606 0.036 0.052 0
+6 201260990 212.5 16.725 88.125 0.788 1.032 5.749 11.759 0.041 0.042 0
+7 201420000 186.5 15.225 85.625 0.890 0.997 3.763 2.851 0.051 0.048 0
+8 201494732 185.5 15.375 85.625 1.426 1.305 2.385 2.223 0.052 0.053 0
+9 201500806 198.5 15.575 85.625 0.856 1.010 7.528 4.293 0.044 0.047 0
+10 201535193 200.5 16.025 88.125 1.198 1.208 4.328 9.335 0.041 0.045 0
+11 201571570 140.5 12.375 80.625 2.362 2.957 2.153 2.254 0.082 0.085 0
+12 201583796 175.5 13.625 84.375 0.916 1.096 3.168 2.409 0.043 0.034 0
+13 201584014 198.5 15.225 85.625 1.301 0.931 10.336 3.695 0.048 0.052 0
+14 201615261 147.5 12.325 80.625 1.521 1.472 2.495 2.533 0.049 0.042 0
+15 201626832 141.5 12.725 81.875 1.405 1.465 8.181 4.632 0.050 0.054 0
+16 201668891 185.5 14.475 84.375 0.753 1.050 9.154 4.882 0.044 0.052 0
+17 201696302 181.5 14.675 85.625 1.599 1.312 3.773 7.610 0.052 0.054 0
+18 201705355 183.5 15.075 85.625 0.841 0.786 2.094 2.581 0.073 0.058 0
+19 201717672 169.5 13.475 81.875 1.170 1.199 2.887 2.648 0.049 0.045 0
+20 201722849 204.5 15.925 85.625 1.071 0.808 3.738 5.424 0.041 0.045 0
+21 201764418 190.5 15.675 86.875 0.759 1.101 3.990 9.812 0.043 0.048 0
+22 201785415 198.5 15.375 84.375 1.300 1.533 4.767 5.330 0.056 0.048 0
+23 201843617 175.5 14.375 85.625 0.959 1.183 3.976 2.897 0.045 0.045 0
+24 201853779 162.5 13.725 84.375 1.036 1.293 2.678 2.983 0.043 0.054 0
+25 201920393 217.5 16.825 88.125 0.771 1.078 4.962 7.400 0.052 0.048 0
+26 201928170 183.5 14.225 84.375 1.081 0.796 5.674 2.904 0.038 0.054 0
+27 205994284 168.5 13.675 84.375 1.060 0.940 6.138 4.141 0.044 0.039 0
+28 206015475 156.5 13.175 81.875 1.449 2.324 2.412 6.535 0.043 0.038 0
+29 206023175 187.5 14.975 86.875 1.719 1.977 4.938 3.575 0.058 0.069 0
+30 206049476 199.5 16.725 88.125 0.825 1.118 4.347 9.067 0.067 0.050 0
+31 206062898 196.5 15.425 86.875 0.849 1.161 4.977 2.225 0.047 0.047 0
+32 206075005 188.5 14.625 83.125 1.046 1.308 3.003 4.096 0.048 0.035 0
+33 206088822 176.5 13.825 81.875 1.134 0.718 3.283 4.358 0.053 0.048 0
+34 206100060 217.5 16.975 89.375 1.204 1.121 2.783 4.633 0.042 0.043 0
+35 206107394 236.5 17.275 84.375 1.388 1.901 3.785 2.598 0.044 0.050 0
+T able 5continued
+
+37
+T able 5(continued)
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+36 206136293 188.5 15.975 88.125 0.933 0.905 9.317 5.906 0.041 0.043 0
+37 206139567 218.5 17.075 89.375 1.134 0.889 2.997 2.788 0.040 0.043 0
+38 206141983 232.5 16.825 88.125 1.472 1.672 12.732 5.778 0.055 0.053 0
+39 206166135 193.5 15.225 86.875 0.676 0.682 11.237 2.852 0.051 0.060 0
+40 206187222 198.5 15.475 85.625 1.184 1.109 6.153 5.812 0.055 0.059 0
+41 206188223 183.5 14.275 84.375 1.073 2.113 8.057 4.209 0.060 0.054 0
+42 206206667 148.5 13.175 81.875 1.276 1.441 3.979 4.080 0.049 0.051 0
+43 206211295 230.5 17.675 90.625 0.935 0.684 5.414 4.057 0.048 0.050 0
+44 206223294 150.5 12.075 79.375 2.009 2.955 8.513 2.246 0.034 0.043 0
+45 206283558 150.5 12.625 81.875 1.602 1.572 4.264 2.909 0.053 0.066 0
+46 206348556 145.5 12.375 84.375 2.280 1.775 3.785 2.801 0.047 0.033 0
+47 206351132 150.5 12.725 81.875 1.596 1.557 4.938 2.914 0.050 0.059 0
+48 206375929 164.5 13.575 83.125 1.215 1.513 7.199 3.262 0.070 0.063 0
+49 206434608 176.5 13.475 81.875 1.445 1.047 2.037 1.992 0.038 0.051 0
+50 206452199 229.5 17.825 91.875 1.268 1.365 2.462 2.709 0.046 0.049 0
+51 206469672 183.5 14.575 85.625 1.283 1.213 2.961 3.663 0.053 0.042 0
+52 206476223 166.5 14.025 84.375 1.064 1.159 2.002 2.583 0.053 0.058 0
+53 206515124 184.5 15.625 86.875 0.824 1.082 2.458 6.302 0.047 0.043 0
+54 210435152 144.5 12.475 80.625 1.892 2.332 2.408 2.372 0.048 0.045 0
+55 210436932 168.5 13.075 66.875 1.064 1.151 3.619 3.659 0.046 0.041 0
+56 210516993 154.5 13.625 70.625 1.225 2.613 7.883 4.488 0.035 0.045 1
+57 210548781 174.5 13.625 83.125 1.367 1.207 5.259 2.145 0.041 0.038 0
+58 210562121 217.5 15.875 84.375 1.015 1.247 13.813 2.759 0.039 0.037 0
+59 210563947 149.5 12.325 81.875 1.159 0.879 2.204 2.598 0.047 0.045 0
+60 210568587 171.5 13.875 81.875 1.140 0.949 2.886 4.167 0.034 0.048 0
+61 210573512 133.5 11.375 80.625 1.902 1.694 3.078 7.634 0.037 0.048 0
+62 210634677 166.5 14.075 84.375 1.026 1.320 1.853 2.944 0.032 0.044 0
+63 210653298 175.5 14.425 84.375 0.823 1.102 4.231 4.052 0.039 0.042 0
+64 210665262 136.5 11.475 80.625 2.715 3.225 3.613 2.351 0.052 0.063 0
+65 210683150 183.5 14.925 85.625 1.097 1.367 4.881 4.704 0.049 0.053 0
+66 210733885 165.5 13.925 84.375 0.827 1.056 4.713 3.874 0.050 0.054 0
+67 210749402 142.5 12.475 81.875 1.082 1.051 3.765 4.304 0.052 0.057 0
+68 210790944 144.5 12.475 80.625 1.029 1.151 1.671 10.247 0.055 0.061 0
+69 210791216 190.5 15.225 85.625 0.781 1.040 3.502 2.863 0.054 0.059 0
+70 210845917 236.5 17.225 86.875 1.062 1.252 9.473 4.828 0.056 0.048 0
+71 210858949 177.5 14.125 83.125 1.213 1.282 3.879 3.268 0.093 0.076 0
+72 210870657 198.5 16.725 88.125 1.340 1.402 2.535 5.414 0.068 0.047 0
+73 210873190 168.5 13.225 81.875 1.023 0.690 3.959 6.001 0.045 0.058 0
+74 210968089 158.5 13.475 83.125 1.154 1.052 2.912 7.258 0.045 0.061 0
+75 211404786 193.5 15.675 88.125 1.190 1.331 3.014 7.280 0.036 0.047 0
+T able 5continued
+
+38
+T able 5(continued)
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+76 211417815 198.5 16.425 88.125 0.707 1.007 2.152 2.232 0.048 0.048 0
+77 211505743 199.5 16.425 88.125 1.554 1.344 3.481 9.897 0.059 0.054 0
+78 211513489 200.5 16.525 88.125 1.375 1.583 4.175 8.659 0.073 0.074 0
+79 211528211 171.5 14.475 84.375 0.884 1.016 2.921 9.525 0.049 0.055 0
+80 211540713 168.5 14.025 85.625 1.049 0.985 2.719 3.612 0.053 0.052 0
+81 211568691 195.5 15.625 88.125 1.571 4.135 9.645 4.314 0.061 0.063 0
+82 211609177 198.5 15.625 86.875 0.719 0.625 2.513 1.988 0.047 0.033 0
+83 211614234 189.5 14.225 81.875 0.818 1.110 5.343 3.222 0.047 0.041 0
+84 211614725 174.5 14.375 70.625 0.847 1.299 3.583 10.421 0.041 0.048 1
+85 211654531 206.5 16.075 86.875 0.662 1.000 10.931 2.884 0.051 0.050 0
+86 211678470 163.5 13.225 84.375 0.843 1.184 6.828 4.004 0.046 0.041 0
+87 211692043 229.5 16.475 85.625 1.170 1.238 8.367 3.503 0.031 0.043 0
+88 211698152 153.5 12.225 80.625 1.080 1.593 6.841 4.694 0.039 0.040 0
+89 211704166 181.5 14.325 84.375 1.073 0.743 10.764 2.599 0.054 0.040 0
+90 211704574 195.5 15.725 86.875 1.311 1.895 4.346 3.744 0.048 0.049 0
+91 211706751 153.5 12.125 79.375 2.179 2.481 5.303 5.775 0.032 0.046 0
+92 211707086 218.5 15.675 81.875 1.019 0.918 9.363 2.907 0.048 0.046 0
+93 211732416 223.5 17.475 88.125 1.120 0.943 3.635 10.905 0.046 0.049 0
+94 211732772 190.5 14.725 84.375 1.061 0.793 7.327 4.857 0.045 0.047 0
+95 211739709 212.5 16.725 88.125 1.209 1.246 6.746 8.784 0.049 0.031 0
+96 211741853 221.5 17.475 89.375 0.873 1.080 4.356 3.525 0.030 0.044 0
+97 211764055 225.5 17.725 90.625 1.321 0.930 3.551 3.686 0.046 0.040 0
+98 211779384 204.5 15.475 85.625 0.912 0.910 6.444 5.143 0.039 0.049 0
+99 211793455 169.5 13.975 84.375 1.225 1.018 1.757 1.683 0.051 0.055 0
+100 211796103 165.5 12.975 73.125 0.861 1.069 6.013 3.052 0.044 0.048 0
+101 211806774 152.5 12.975 81.875 1.860 1.528 2.088 6.000 0.040 0.052 0
+102 211830799 160.5 13.625 83.125 1.880 2.232 2.475 4.340 0.054 0.045 0
+103 211833958 148.5 12.225 79.375 1.345 1.374 2.878 5.777 0.043 0.058 0
+104 211897908 181.5 15.325 85.625 0.930 1.050 4.949 8.837 0.056 0.045 0
+105 211906415 162.5 12.875 89.375 1.031 1.061 2.347 2.130 0.033 0.041 0
+106 211906830 183.5 14.825 84.375 0.940 0.821 7.911 8.483 0.045 0.046 0
+107 211929298 171.5 14.375 84.375 1.174 0.713 4.251 4.247 0.044 0.038 0
+108 211947009 163.5 13.875 84.375 1.543 1.031 3.878 4.731 0.055 0.055 0
+109 211954121 170.5 14.175 84.375 1.112 0.776 2.323 2.349 0.055 0.057 0
+110 211962883 213.5 15.575 83.125 0.757 0.811 4.524 3.177 0.062 0.054 0
+111 211974782 212.5 16.375 86.875 2.774 1.548 3.272 4.753 0.044 0.046 0
+112 211977001 193.5 14.925 84.375 0.740 1.086 5.994 4.376 0.046 0.050 0
+113 211977346 183.5 14.675 86.875 1.063 0.747 8.285 2.444 0.043 0.052 0
+114 211982071 198.5 15.625 86.875 0.936 0.688 8.336 5.315 0.053 0.054 0
+115 211987214 154.5 12.625 80.625 1.241 1.277 4.423 4.570 0.045 0.043 0
+T able 5continued
+
+39
+T able 5(continued)
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+116 211993851 238.5 17.275 90.625 1.241 1.096 8.886 4.618 0.046 0.055 0
+117 211994196 191.5 14.925 84.375 0.962 0.768 9.618 5.757 0.045 0.043 0
+118 212010612 187.5 14.875 85.625 0.855 0.936 6.254 3.331 0.037 0.049 0
+119 212023032 156.5 13.425 83.125 1.071 0.827 2.990 9.586 0.038 0.041 0
+120 212073752 203.5 15.325 84.375 1.060 1.201 3.907 7.476 0.060 0.051 0
+121 212106017 179.5 15.075 86.875 0.923 1.141 2.445 3.970 0.042 0.047 0
+122 212136615 154.5 13.125 81.875 0.968 1.614 3.122 6.884 0.047 0.038 0
+123 212161576 171.5 14.375 85.625 1.061 1.082 2.463 2.572 0.048 0.042 0
+124 212177247 204.5 16.125 88.125 0.933 1.128 6.230 10.104 0.057 0.043 0
+125 212178875 236.5 17.175 89.375 1.307 1.340 7.501 6.061 0.051 0.050 0
+126 212207491 198.5 16.375 88.125 1.019 0.968 2.616 2.662 0.062 0.060 0
+127 212207638 219.5 16.775 86.875 1.101 1.280 2.889 2.512 0.049 0.054 0
+128 212297049 213.5 16.975 89.375 1.270 1.170 2.871 2.734 0.039 0.047 0
+129 212329497 152.5 12.975 79.375 1.635 1.677 3.011 7.653 0.042 0.039 0
+130 212366315 181.5 14.375 83.125 0.991 0.670 2.526 1.960 0.033 0.043 0
+131 212392830 169.5 13.625 83.125 1.328 1.320 2.637 5.170 0.058 0.046 0
+132 212426865 183.5 14.225 81.875 0.860 0.975 4.824 4.604 0.033 0.050 0
+133 212452639 152.5 12.825 81.875 1.343 1.414 1.868 1.947 0.052 0.049 0
+134 212452985 178.5 14.625 85.625 2.213 1.868 5.736 2.627 0.041 0.045 0
+135 212457945 169.5 13.525 84.375 1.160 0.829 3.189 2.232 0.049 0.051 0
+136 212470043 195.5 15.275 85.625 0.698 1.015 3.013 3.280 0.056 0.057 0
+137 212481465 210.5 16.425 88.125 1.121 1.243 4.600 4.723 0.048 0.048 0
+138 212502566 163.5 13.775 84.375 1.122 1.674 4.569 2.050 0.052 0.054 0
+139 212557162 123.5 11.575 80.625 2.218 2.979 3.071 7.306 0.051 0.047 0
+140 212559650 154.5 12.725 81.875 5.737 2.200 3.386 3.638 0.042 0.051 0
+141 212562020 179.5 15.125 85.625 0.872 1.072 2.021 2.635 0.048 0.040 0
+142 212585386 166.5 13.225 81.875 0.874 0.662 6.083 2.087 0.051 0.054 0
+143 212610492 197.5 14.625 68.125 1.054 0.755 5.840 2.438 0.052 0.069 1
+144 212633100 142.5 12.875 84.375 2.356 2.222 3.370 5.918 0.044 0.030 0
+145 212642718 187.5 14.925 84.375 0.944 1.098 8.779 3.068 0.065 0.072 0
+146 212653037 150.5 12.575 81.875 1.412 1.621 2.058 2.095 0.061 0.052 0
+147 220224794 169.5 13.375 80.625 0.771 1.065 9.041 3.230 0.037 0.040 0
+148 220318037 177.5 14.725 85.625 1.275 1.578 3.595 7.490 0.035 0.050 0
+149 220327551 204.5 15.425 84.375 1.057 0.817 4.137 3.767 0.043 0.041 0
+150 220379656 163.5 14.225 84.375 1.341 1.344 6.048 5.776 0.039 0.055 0
+151 220417297 175.5 13.675 86.875 1.044 1.129 3.459 2.400 0.037 0.044 0
+152 220452204 189.5 15.875 88.125 1.289 1.296 2.150 13.217 0.052 0.050 0
+153 220489190 152.5 12.475 81.875 2.338 2.008 3.022 7.275 0.051 0.053 0
+154 220547602 127.5 11.725 79.375 3.562 3.647 1.429 7.724 0.058 0.072 0
+155 220635468 175.5 14.425 85.625 1.154 1.053 4.423 4.446 0.037 0.044 0
+T able 5continued
+
+40
+T able 5(continued)
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+156 220648976 168.5 13.625 81.875 0.808 0.999 5.168 4.267 0.045 0.033 0
+157 228788585 178.5 14.475 83.125 1.630 2.145 8.620 3.325 0.087 0.117 0
+158 229039250 163.5 13.925 83.125 1.462 1.526 3.171 2.362 0.051 0.053 0
+159 235058736 159.5 13.325 80.625 1.043 1.120 2.148 3.223 0.053 0.038 0
+160 246009840 162.5 12.825 80.625 1.071 1.220 8.978 2.801 0.044 0.044 0
+161 246050536 183.5 14.225 83.125 1.151 1.080 8.206 4.860 0.041 0.051 0
+162 246075387 169.5 13.525 81.875 1.401 1.387 2.101 2.289 0.051 0.053 0
+163 246079566 200.5 15.625 88.125 1.534 1.842 7.500 4.321 0.045 0.039 0
+164 246112343 158.5 13.725 84.375 1.747 1.684 2.005 2.066 0.064 0.074 0
+165 246139560 184.5 14.375 86.875 1.064 0.870 2.648 3.111 0.037 0.046 0
+166 246233436 202.5 15.875 88.125 0.973 0.854 4.809 6.737 0.043 0.045 0
+167 246233563 219.5 17.225 90.625 1.040 0.865 3.101 2.646 0.038 0.041 0
+168 246238698 193.5 15.625 86.875 0.723 1.044 5.740 6.238 0.048 0.039 0
+169 246299719 151.5 12.325 80.625 1.282 1.341 6.190 2.667 0.057 0.053 0
+170 246347334 154.5 13.075 81.875 1.145 1.295 1.477 1.566 0.056 0.053 0
+171 246416522 226.5 16.375 86.875 0.713 0.834 4.451 2.782 0.047 0.037 0
+172 246964021 175.5 13.675 104.375 1.559 1.806 7.940 4.924 0.054 0.059 1
+173 246967235 217.5 16.125 85.625 1.341 1.300 8.621 5.378 0.037 0.057 0
+174 247136733 184.5 14.625 84.375 0.739 1.033 5.276 3.521 0.046 0.038 0
+175 247141427 217.5 15.875 84.375 0.625 0.625 3.610 2.435 0.038 0.049 0
+176 247278817 156.5 12.175 80.625 1.835 2.616 3.991 2.688 0.037 0.045 0
+177 247279992 198.5 15.225 84.375 0.991 1.341 10.003 2.956 0.042 0.054 0
+178 247298530 199.5 15.675 86.875 0.935 0.956 2.881 2.184 0.041 0.050 0
+179 247361881 164.5 13.475 83.125 1.105 1.042 4.666 5.449 0.049 0.045 0
+180 247364531 154.5 13.325 80.625 1.366 1.385 3.490 9.830 0.047 0.047 0
+181 247376509 151.5 12.725 81.875 1.151 1.076 6.019 4.911 0.050 0.052 0
+182 247387736 159.5 12.975 81.875 1.642 1.856 7.422 4.698 0.041 0.053 0
+183 248484584 161.5 12.775 84.375 1.546 1.318 6.458 3.994 0.054 0.051 0
+184 248599469 196.5 14.825 84.375 0.625 0.625 10.657 3.967 0.056 0.051 0
+185 248620720 219.5 15.875 114.375 1.743 1.954 7.141 3.688 0.034 0.047 1
+186 248628691 187.5 15.325 86.875 1.024 0.696 4.240 10.875 0.042 0.046 0
+187 248645998 156.5 13.625 83.125 1.672 1.428 5.888 5.854 0.048 0.035 0
+188 248657894 155.5 13.375 84.375 1.395 1.425 1.956 1.548 0.045 0.053 0
+189 248760946 181.5 15.425 86.875 0.929 1.294 3.323 7.477 0.040 0.049 0
+190 248769803 168.5 14.125 84.375 1.482 1.485 2.937 2.763 0.047 0.042 0
+191 248798639 159.5 13.675 84.375 1.440 2.058 2.363 2.839 0.049 0.051 0
+192 248824042 240.5 17.425 88.125 1.343 1.785 5.194 5.737 0.059 0.058 0
+193 248867024 186.5 14.625 85.625 1.101 0.922 4.891 4.023 0.041 0.049 0
+194 248879557 178.5 14.875 85.625 1.467 1.517 2.897 3.217 0.038 0.032 0
+195 249251825 204.5 16.025 85.625 1.153 1.125 4.457 3.542 0.045 0.044 0
+T able 5continued
+
+41
+T able 5(continued)
+Index EPICν max ∆ν∆Π 1 σ∆Π,low σ∆Π,high σνmax,low σνmax,high σ∆ν,low σ∆ν,high anomalous
+(µHz) (µHz) (s) (s) (s) (µHz) (µHz) (µHz) (µHz)
+196 249369033 149.5 12.675 81.875 1.250 1.569 2.546 10.877 0.042 0.050 0
+197 249379090 174.5 14.575 86.875 1.541 1.297 5.810 2.331 0.048 0.048 0
+198 249383613 172.5 13.425 81.875 1.084 0.770 6.228 2.980 0.039 0.048 0
+199 249417643 219.5 15.875 84.375 1.061 1.162 5.113 3.242 0.056 0.055 0
+200 249434061 183.5 14.925 86.875 1.899 3.768 2.478 2.519 0.048 0.055 0
+201 249438765 205.5 16.625 88.125 1.116 1.207 2.050 7.105 0.043 0.068 0
+202 249462150 202.5 16.275 89.375 1.746 1.405 7.274 3.970 0.051 0.060 0
+203 249480797 186.5 14.575 81.875 1.166 1.461 7.775 3.133 0.063 0.051 0
+204 249563747 155.5 12.975 80.625 1.823 2.749 2.194 7.053 0.042 0.048 0
+205 249583241 186.5 14.625 76.875 0.625 0.625 8.823 2.859 0.051 0.045 0
+206 249599419 167.5 14.475 85.625 1.350 1.418 2.588 3.028 0.046 0.042 0
+207 249599650 198.5 15.475 86.875 0.625 0.869 10.479 3.745 0.052 0.056 0
+208 249615561 197.5 14.875 83.125 0.861 1.024 5.262 3.954 0.040 0.026 0
+209 249618659 175.5 14.175 83.125 1.002 0.714 5.899 6.725 0.048 0.055 0
+210 249621972 198.5 15.575 83.125 1.043 0.832 5.451 9.368 0.052 0.044 0
+211 249632579 174.5 14.275 85.625 0.964 0.679 4.181 6.977 0.058 0.052 0
+212 249635714 164.5 13.425 81.875 1.142 1.053 4.580 6.543 0.041 0.047 0
+213 249636998 189.5 14.825 86.875 0.712 1.014 7.115 2.169 0.049 0.036 0
+214 249662481 183.5 15.375 86.875 1.343 1.854 4.469 6.971 0.062 0.065 0
+215 249707852 175.5 13.725 85.625 1.247 1.298 1.476 1.510 0.038 0.047 0
+216 249812189 153.5 13.475 84.375 1.395 1.443 2.034 5.081 0.042 0.048 0
+217 249885882 162.5 13.525 84.375 1.183 1.044 2.047 2.073 0.046 0.046 0
+Note—Machine readable table is provided as supplementary material.
+REFERENCES
+Abadi, M., Agarwal, A., Barham, P., et al. 2015.
+https://www.usenix.org/system/files/conference/osdi16/
+osdi16-abadi.pdf
+Aerts, C., Christensen-Dalsgaard, J., & Kurtz, D. W. 2010,
+Asteroseismology, doi: 10.1007/978-1-4020-5803-5
+Anders, F., Chiappini, C., Minchev, I., et al. 2017, A&A,
+600, A70, doi: 10.1051/0004-6361/201629363
+Baglin, A., Auvergne, M., Boisnard, L., et al. 2006, in 36th
+COSPAR Scientific Assembly, Vol. 36, 3749
+Bedding, T. R., Mosser, B., Huber, D., et al. 2011, Nature,
+471, 608, doi: 10.1038/nature09935
+Belkacem, K., Marques, J. P., Goupil, M. J., et al. 2015,
+A&A, 579, A31, doi: 10.1051/0004-6361/201526043
+Benomar, O. 2023, Power Spectrum Simulator for Solar-like
+stars, Siddharth2023, Zenodo,
+doi: 10.5281/zenodo.8296459
+Benomar, O., Appourchaux, T., & Baudin, F. 2009, A&A,
+506, 15, doi: 10.1051/0004-6361/200911657
+Benomar, O., Belkacem, K., Bedding, T. R., et al. 2014,
+ApJL, 781, L29, doi: 10.1088/2041-8205/781/2/L29
+Bishop, C. 1994, Mixture density networks, WorkingPaper
+4288, Aston University
+Borucki, W. J., Koch, D., Basri, G., et al. 2010, Science,
+327, 977, doi: 10.1126/science.1185402
+Chaplin, W. J., Kjeldsen, H., Bedding, T. R., et al. 2011,
+ApJ, 732, 54, doi: 10.1088/0004-637X/732/1/54
+Davies, G. R., & Miglio, A. 2016, Astronomische
+Nachrichten, 337, 774, doi: 10.1002/asna.201612371
+
+42
+Deheuvels, S., Ballot, J., Beck, P. G., et al. 2015, A&A,
+580, A96, doi: 10.1051/0004-6361/201526449
+Deheuvels, S., Ballot, J., Gehan, C., & Mosser, B. 2022,
+Astronomy &amp; Astrophysics, Volume 659, id.A106,
+<NUMPAGES>14</NUMPAGES>pp., 659, A106,
+doi: 10.1051/0004-6361/202142094
+Deheuvels, S., Ouazzani, R. M., & Basu, S. 2017, A&A,
+605, A75, doi: 10.1051/0004-6361/201730786
+Dhanpal, S., Benomar, O., Hanasoge, S., et al. 2022, ApJ,
+928, 188, doi: 10.3847/1538-4357/ac5247
+—. 2023, ApJ, 958, 63, doi: 10.3847/1538-4357/ad0046
+Dupret, M. A., Belkacem, K., Samadi, R., et al. 2009,
+A&A, 506, 57, doi: 10.1051/0004-6361/200911713
+Fabbro, S., Venn, K. A., O’Briain, T., et al. 2018, MNRAS,
+475, 2978, doi: 10.1093/mnras/stx3298
+Gaia Collaboration, Brown, A. G. A., Vallenari, A., et al.
+2018, A&A, 616, A1, doi: 10.1051/0004-6361/201833051
+—. 2021, A&A, 649, A1, doi: 10.1051/0004-6361/202039657
+Garc´ ıa, R. A., & Ballot, J. 2019, Living Reviews in Solar
+Physics, 16, 4, doi: 10.1007/s41116-019-0020-1
+Garc´ ıa, R. A., Mathur, S., Pires, S., et al. 2014, A&A, 568,
+A10, doi: 10.1051/0004-6361/201323326
+Gehan, C., Mosser, B., Michel, E., Samadi, R., & Kallinger,
+T. 2018, A&A, 616, A24,
+doi: 10.1051/0004-6361/201832822
+Goupil, M. J., Mosser, B., Marques, J. P., et al. 2013,
+A&A, 549, A75, doi: 10.1051/0004-6361/201220266
+Grosjean, M., Dupret, M. A., Belkacem, K., et al. 2014,
+A&A, 572, A11, doi: 10.1051/0004-6361/201423827
+Handberg, R., Lund, M. N., White, T. R., et al. 2021, AJ,
+162, 170, doi: 10.3847/1538-3881/ac09f1
+Harris, C. R., Millman, K. J., van der Walt, S. J., et al.
+2020, Nature, 585, 357, doi: 10.1038/s41586-020-2649-2
+Hastings, W. K. 1970, Biometrika, 57, 97,
+doi: 10.1093/biomet/57.1.97
+Hatt, E., Nielsen, M. B., Chaplin, W. J., et al. 2023, A&A,
+669, A67, doi: 10.1051/0004-6361/202244579
+Hey, D., & Aerts, C. 2024, A&A, 688, A93,
+doi: 10.1051/0004-6361/202450489
+Hon, M., Bellinger, E. P., Hekker, S., Stello, D., &
+Kuszlewicz, J. S. 2020, Monthly Notices of the Royal
+Astronomical Society, 499, 2445,
+doi: 10.1093/mnras/staa2853
+Hon, M., Kuszlewicz, J. S., Huber, D., Stello, D., & Reyes,
+C. 2022, AJ, 164, 135, doi: 10.3847/1538-3881/ac8931
+Hon, M., Stello, D., Garc´ ıa, R. A., et al. 2019, MNRAS,
+485, 5616, doi: 10.1093/mnras/stz622
+Hon, M., Stello, D., & Zinn, J. C. 2018, ApJ, 859, 64,
+doi: 10.3847/1538-4357/aabfdb
+Hon, M., Huber, D., Kuszlewicz, J. S., et al. 2021, ApJ,
+919, 131, doi: 10.3847/1538-4357/ac14b1
+Howell, S. B., Sobeck, C., Haas, M., et al. 2014, PASP, 126,
+398, doi: 10.1086/676406
+Huber, D., Stello, D., Bedding, T. R., et al. 2009,
+Communications in Asteroseismology, 160, 74,
+doi: 10.48550/arXiv.0910.2764
+Huber, D., Bedding, T. R., Stello, D., et al. 2010, ApJ, 723,
+1607, doi: 10.1088/0004-637X/723/2/1607
+—. 2011, ApJ, 743, 143, doi: 10.1088/0004-637X/743/2/143
+Kallinger, T., & Matthews, J. M. 2010, ApJL, 711, L35,
+doi: 10.1088/2041-8205/711/1/L35
+Kallinger, T., Mosser, B., Hekker, S., et al. 2010, A&A,
+522, A1, doi: 10.1051/0004-6361/201015263
+Kamiaka, S., Benomar, O., & Suto, Y. 2018, MNRAS, 479,
+391, doi: 10.1093/mnras/sty1358
+Kjeldsen, H., & Bedding, T. R. 2011, A&A, 529, L8,
+doi: 10.1051/0004-6361/201116789
+Kuszlewicz, J. S., Hon, M., & Huber, D. 2023, The
+Astrophysical Journal, 954, 152,
+doi: 10.3847/1538-4357/ace598
+Leung, H. W., & Bovy, J. 2019, MNRAS, 483, 3255,
+doi: 10.1093/mnras/sty3217
+Li, G., Deheuvels, S., & Ballot, J. 2024, A&A, 688, A184,
+doi: 10.1051/0004-6361/202449882
+Lightkurve Collaboration, Cardoso, J. V. d. M., Hedges, C.,
+et al. 2018, Lightkurve: Kepler and TESS time series
+analysis in Python, Astrophysics Source Code Library.
+http://ascl.net/1812.013
+Lomb, N. R. 1976, Ap&SS, 39, 447,
+doi: 10.1007/BF00648343
+Lund, M. N. 2019, MNRAS, 489, 1072,
+doi: 10.1093/mnras/stz2010
+Lund, M. N., Miesch, M. S., & Christensen-Dalsgaard, J.
+2014, ApJ, 790, 121, doi: 10.1088/0004-637X/790/2/121
+Lund, M. N., Handberg, R., Buzasi, D. L., et al. 2021,
+ApJS, 257, 53, doi: 10.3847/1538-4365/ac214a
+Mackereth, J. T., Miglio, A., Elsworth, Y., et al. 2021,
+MNRAS, 502, 1947, doi: 10.1093/mnras/stab098
+Mathur, S., Garc´ ıa, R. A., R´ egulo, C., et al. 2010, A&A,
+511, A46, doi: 10.1051/0004-6361/200913266
+Mathur, S., Hekker, S., Trampedach, R., et al. 2011, ApJ,
+741, 119, doi: 10.1088/0004-637X/741/2/119
+Metropolis, N., Rosenbluth, A. W., Rosenbluth, M. N.,
+Teller, A. H., & Teller, E. 1953, JChPh, 21, 1087,
+doi: 10.1063/1.1699114
+Miglio, A., Chiappini, C., Mackereth, J. T., et al. 2021,
+A&A, 645, A85, doi: 10.1051/0004-6361/202038307
+Montalb´ an, J., Miglio, A., Noels, A., et al. 2013, ApJ, 766,
+118, doi: 10.1088/0004-637X/766/2/118
+
+43
+Mosser, B., & Appourchaux, T. 2009, A&A, 508, 877,
+doi: 10.1051/0004-6361/200912944
+Mosser, B., Gehan, C., Belkacem, K., et al. 2018, A&A,
+618, A109, doi: 10.1051/0004-6361/201832777
+Mosser, B., Vrard, M., Belkacem, K., Deheuvels, S., &
+Goupil, M. J. 2015a, A&A, 584, A50,
+doi: 10.1051/0004-6361/201527075
+—. 2015b, A&A, 584, A50,
+doi: 10.1051/0004-6361/201527075
+Mosser, B., Barban, C., Montalb´ an, J., et al. 2011, A&A,
+532, A86, doi: 10.1051/0004-6361/201116825
+Mosser, B., Goupil, M. J., Belkacem, K., et al. 2012, A&A,
+540, A143, doi: 10.1051/0004-6361/201118519
+Ong, J. M. J., & Basu, S. 2020, ApJ, 898, 127,
+doi: 10.3847/1538-4357/ab9ffb
+Ong, J. M. J., Basu, S., & Roxburgh, I. W. 2021, The
+Astrophysical Journal, 920, 8,
+doi: 10.3847/1538-4357/ac12ca
+Ong, J. M. J., Bugnet, L., & Basu, S. 2022, ApJ, 940, 18,
+doi: 10.3847/1538-4357/ac97e7
+Ong, J. M. J., & Gehan, C. 2023, The Astrophysical
+Journal, 946, 92, doi: 10.3847/1538-4357/acbf2f
+OpenAI, Achiam, J., Adler, S., et al. 2024, GPT-4
+Technical Report. https://arxiv.org/abs/2303.08774
+Pasquet, J., Bertin, E., Treyer, M., Arnouts, S., & Fouchez,
+D. 2019, A&A, 621, A26,
+doi: 10.1051/0004-6361/201833617
+Press, W. H., & Rybicki, G. B. 1989, ApJ, 338, 277,
+doi: 10.1086/167197
+Rauer, H., Aerts, C., Cabrera, J., et al. 2024, arXiv e-prints,
+arXiv:2406.05447, doi: 10.48550/arXiv.2406.05447
+Reback, J., jbrockmendel, McKinney, W., et al. 2022,
+pandas-dev/pandas: Pandas 1.4.3, v1.4.3, Zenodo,
+doi: 10.5281/zenodo.6702671
+Richard, M. D., & Lippmann, R. P. 1991, Neural
+Computation, 3, 461, doi: 10.1162/neco.1991.3.4.461
+Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2015,
+Journal of Astronomical Telescopes, Instruments, and
+Systems, 1, 014003, doi: 10.1117/1.JATIS.1.1.014003
+Rolnick, D., Veit, A., Belongie, S., & Shavit, N. 2017, arXiv
+e-prints, arXiv:1705.10694,
+doi: 10.48550/arXiv.1705.10694
+Rothe, R., Timofte, R., & Van Gool, L. 2015, in 2015 IEEE
+International Conference on Computer Vision Workshop
+(ICCVW), 252–257, doi: 10.1109/ICCVW.2015.41
+Scargle, J. D. 1982, ApJ, 263, 835, doi: 10.1086/160554
+Sharma, S., Stello, D., Bland-Hawthorn, J., et al. 2019,
+MNRAS, 490, 5335, doi: 10.1093/mnras/stz2861
+Shuntov, M., Pasquet, J., Arnouts, S., et al. 2020, A&A,
+636, A90, doi: 10.1051/0004-6361/201937382
+Silva Aguirre, V., Bojsen-Hansen, M., Slumstrup, D., et al.
+2018, MNRAS, 475, 5487, doi: 10.1093/mnras/sty150
+Silva Aguirre, V., Stello, D., Stokholm, A., et al. 2020,
+ApJL, 889, L34, doi: 10.3847/2041-8213/ab6443
+Sreenivas, K. R., Bedding, T. R., Huber, D., et al. 2025,
+Testing the Wavelength Dependence of Oscillations and
+Granulation in Red Giants Using Kepler and TESS,
+arXiv, doi: 10.48550/arXiv.2502.01899
+Stello, D., Chaplin, W. J., Basu, S., Elsworth, Y., &
+Bedding, T. R. 2009, MNRAS, 400, L80,
+doi: 10.1111/j.1745-3933.2009.00767.x
+Stello, D., Huber, D., Sharma, S., et al. 2015, The
+Astrophysical Journal, 809, L3,
+doi: 10.1088/2041-8205/809/1/L3
+Stello, D., Saunders, N., Grunblatt, S., et al. 2022,
+MNRAS, 512, 1677, doi: 10.1093/mnras/stac414
+Stewart, L., Bach, F., Berthet, Q., & Vert, J.-P. 2022,
+arXiv e-prints, arXiv:2211.05641,
+doi: 10.48550/arXiv.2211.05641
+Sullivan, P. W., Winn, J. N., Berta-Thompson, Z. K., et al.
+2015, ApJ, 809, 77, doi: 10.1088/0004-637X/809/1/77
+Vanderburg, A., & Johnson, J. A. 2014, PASP, 126, 948,
+doi: 10.1086/678764
+Vrard, M., Mosser, B., & Samadi, R. 2016, A&A, 588, A87,
+doi: 10.1051/0004-6361/201527259
+Yu, J., Huber, D., Bedding, T. R., et al. 2018, ApJS, 236,
+42, doi: 10.3847/1538-4365/aaaf74
+Zhou, J., Bi, S., Yu, J., et al. 2024, The Astrophysical
+Journal Supplement Series, 271, 17,
+doi: 10.3847/1538-4365/ad18db
+Zinn, J. C., Stello, D., Huber, D., & Sharma, S. 2019, ApJ,
+884, 107, doi: 10.3847/1538-4357/ab43c0
+Zinn, J. C., Stello, D., Elsworth, Y., et al. 2022, ApJ, 926,
+191, doi: 10.3847/1538-4357/ac2c83

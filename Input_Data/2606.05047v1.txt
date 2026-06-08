@@ -1,0 +1,1884 @@
+Title: Full Nonlinear Velocity Reconstruction With Transformer and Ensemble Tree Machine Learning
+Authors: Yulin Gong, Rachel Bean
+Published: 2026-06-03
+Categories: astro-ph.CO
+
+Full Nonlinear Velocity Reconstruction With Transformer and Ensemble Tree Machine Learning
+Yulin Gong1 and Rachel Bean 1
+1Department of Astronomy, Cornell University, Ithaca, NY 14853, USA
+(Dated: June 4, 2026)
+Accurate reconstruction of peculiar velocities from galaxy positions is important for probing the motion and
+evolution of large scale structure. They are sensitive to the cosmological effects of gravity and dark sector matter,
+and complement other velocity inference methods such as the kinematic Sunyaev-Zel’dovich (kSZ) imprinted
+in the CMB. We show that machine learning methods improve velocity reconstruction by capturing nonlinear
+contributions. Specifically, we train both a gradient boosting decision tree (GBDT) and a Transformer using
+multi-scale features to predict the residual between the actual velocity and the estimate from linear theory for
+both the line-of-sight and transverse components. We evaluate our approach in both periodic box and, more
+realistic, lightcone settings using mock galaxy catalogs from the AbacusSummitsimulations tailored to DESI
+spectroscopic surveys of luminous red galaxies (LRGs) and emission line galaxies (ELGs). We also assess the
+impact of redshift uncertainties such as those in Rubin LSST photometry. Both models significantly outperform
+the linear theory with the Transformer achieving the best performance. They more accurately recover the ve-
+locity power spectrum and maintain a higher cross-correlation with the true velocities across a wider range of
+spatial scales. Finally, we demonstrate two applications relevant to kSZ analyses: estimating cluster pairwise
+velocity correlations and stacked cluster density profiles. This machine learning framework for nonlinear veloc-
+ity reconstruction opens up powerful new applications of survey data from DESI, Rubin LSST, Euclid and the
+Roman Space Telescope.
+I. INTRODUCTION
+Just as the perturbations of planetary motions provide pre-
+cise tests of General Relativity and help map the distribu-
+tion of mass in the Solar System, so the peculiar velocities
+of galaxies, the deviations of their motions from the homoge-
+neous “Hubble Flow" resulting from the inhomogeneous clus-
+tering of matter, can give invaluable insights into the nature of
+gravity and the distribution of matter on cosmological scales.
+The growth of large scale structure (LSS) arises because
+of the infall of matter towards local overdensities. The pe-
+culiar velocity field of galaxies [1–3] is a powerful tracer of
+the distribution of mass and its evolution over time [4–7].
+In recent years, the cosmological importance of velocity ob-
+servables has grown substantially, driven in part by advances
+in measurements based on the kinematic Sunyaev-Zel’dovich
+(kSZ) effect and related LSS tracers [8–12]. Peculiar ve-
+locity and momentum field analyses have demonstrated that
+velocity-based observables contain information complemen-
+tary to galaxy clustering alone for constraining the growth of
+structure and testing gravitational dynamics [13–15].
+Reconstruction of velocities from the density distribution,
+using the linear continuity equation, has been shown to be a
+valuable technique in multiple contexts, including BAO re-
+construction (e.g. [16–21]) including in the presence of pho-
+tometric redshifts [22], the characterization spectroscopic red-
+shift space distortions (e.g. [23, 24]) and kinematic Sunyaev
+Zel’dovich effect detection [25].
+Improving the accuracy of cosmological velocity recon-
+struction is timely due to the increasing statistical power of
+current and upcoming LSS surveys [26–28]. This includes
+ground-based instruments, such as the spectroscopic Dark En-
+ergy Spectroscopic Instrument (DESI) [29] and photometric
+Rubin Observatory Legacy Survey of Space and Time (LSST)
+[30], and the Euclid [31] and upcoming Nancy Roman Space
+Telescopes [32] which have both photometry and slitless spec-
+troscopy.
+Recently, a velocity reconstruction pipeline was developed
+and validated for Stage IV surveys using simulated galaxy cat-
+alogs that incorporated observational realism (survey geome-
+try, redshift-space distortions (RSD), and galaxy tracer selec-
+tion) modeled for the DESI survey [33, 34]. The velocity field
+was estimated from the galaxy density distribution using an
+approach similar to baryon acoustic oscillations (BAO) recon-
+struction; it adopts the Zel’dovich approximation at first or-
+der and uses the redshift-space continuity equation to map the
+density field into large-scale velocity estimates [17, 35, 36].
+In this work, we reconstruct the velocities more fully, by
+predicting the nonlinear residuals, the difference between the
+linear reconstructed and the true velocities. Our goal is not
+to replace the standard reconstruction framework, but to aug-
+ment it. We adopt the linear velocity reconstruction method
+of [33, 34] as our baseline estimator, and treat its output as
+a physically motivated first step reconstruction of the pecu-
+liar velocity. The intent is to characterize the nonlinear evolu-
+tion as well as the effects on reconstruction of redshift-space
+distortions, survey geometry, redshift uncertainties, intrinsic
+tracer properties, and the smoothing required by the recon-
+struction itself. These effects induce structure in the residuals
+which are important for downstream analysis and rely not only
+on a strong correlation with the true velocity but also on an ac-
+curate calibration of its amplitude. Specifically, any residual
+bias in the reconstructed velocity can propagate into biased
+inference of cosmological constraints derived from velocity-
+based observables as well as kSZ amplitudes and cluster opti-
+cal depths [37–39].
+Machine learning methods are a natural tool for this task
+because they can learn nonlinear, nonlocal, and environment
+dependent mappings directly from simulations, e.g. [40, 41].
+Recent studies have shown that machine learning can be used
+to predict cosmic velocity fields when trained on dark matter
+halos. U-Net [42] based approaches have been developed that
+arXiv:2606.05047v1  [astro-ph.CO]  3 Jun 2026
+
+2
+map gridded halo distribution or density fields to peculiar ve-
+locity fields in a periodic box setting [43, 44]. We extend on
+these earlier machine learning studies, as well as linear recon-
+struction pipelines, in both methodology and scope. We move
+toward a more realistic observational setting. Rather than fo-
+cusing on dark matter halos in periodic boxes, we study ob-
+servable galaxy tracers in realistic lightcone catalogs that are
+more directly relevant for survey analyses. In addition, instead
+of relying on convolution-based architectures, we investigate
+a Transformer-based model as a more powerful deep learning
+framework [45, 46] for capturing nonlocal and multiscale cor-
+relations. These differences move the problem beyond proof
+of concept halo-level demonstrations and toward a reconstruc-
+tion framework that is more directly applicable to real survey
+data analysis.
+We use machine learning models, trained on simulations, to
+learn the residual between this baseline reconstruction and the
+true peculiar velocity. Conceptually, our method preserves the
+interpretability and robustness of the standard reconstruction
+on large scales, while allowing the machine learning model
+to absorb the nonlinear residuals that the linear theory doesn’t
+recover. By learning the systematic discrepancy between the
+first-order reconstructed velocity and the true velocity, we aim
+to improve both the fidelity of the reconstructed field and also
+its usefulness for downstream applications such as kSZ mea-
+surements and other probes sensitive to peculiar motions [10].
+We employ two machine learning models: a Gradient
+Boosting Decision Tree (GBDT), well suited to capture non-
+linear relationships in tabulated features, and a Transformer
+architecture, designed to learn more complex, nonlocal fea-
+ture interactions. Both models have been widely applied in as-
+tronomy (e.g., [47–54]). The rationale for using these two ma-
+chine learning models is that they represent different levels of
+modeling complexity and computational cost. We employ the
+GBDT as a simple and direct baseline, since this method only
+requires a set of input features and has been shown to perform
+strongly on structured learning tasks [55, 56]. The Trans-
+former architecture [57] serves as a more advanced model.
+In contrast to GBDT, the Transformer offers much greater ex-
+pressive power and flexibility, but it requires additional archi-
+tectural design and is substantially more expensive to train. In
+this sense, GBDT serves as a fast and robust baseline, while
+the Transformer provides a more sophisticated model with the
+potential for additional improvement.
+We assess the performance of the GBDT and Transformer
+models using luminous red galaxy (LRG) and emission line
+galaxy (ELG) samples modeled on DESI but also relevant
+to data expected from LSST, Euclid, and Roman. We test
+whether this method can improve line-of-sight (LOS) peculiar
+velocity reconstruction in both simulated periodic boxes and
+more realistic lightcone scenarios. Their performance is quan-
+tified with metrics in real space and Fourier space, including
+correlation based measures and statistics derived from the ve-
+locity power spectrum. We examine the stability of these im-
+provements over two redshift bins of interest for ongoing and
+upcoming large-scale structure surveys.
+The paper is organized as follows: Section II describes the
+data used in this work. Section III discusses the formalism
+of the baseline velocity reconstruction methods. Section IV
+describes the machine learning algorithms. The main velocity
+reconstruction results are presented in Section V and we dis-
+cuss the applications of the reconstructed velocities in relation
+to kSZ analyses in Section VI. Finally, Section VII provides a
+summary of the key findings and possible avenues for future
+work.
+II. DATA
+We use simulation products from the AbacusSummit suite
+[58], generated with the AbacusN-body code [59, 60]. Aba-
+cusSummit was developed for large-scale structure applica-
+tions, with simulation volume, mass resolution, and numerical
+accuracy sufficient for DESI-era cosmological analyses [29].
+We use two complementary classes of data products: the
+simulation outputs themselves, which provide the true veloc-
+ity field, and mock tracer catalogs of dark matter halos and
+galaxies, constructed from those outputs.
+Specifically we use the AbacusSummit_base_c000_ph002
+realization, which belongs to the base resolution set and
+adopts the fiducial c000 cosmology with phase label ph002.
+This simulation evolves 6912 3 particles in a periodic box of
+side lengthL box =2000,h −1Mpc, corresponding to a particle
+mass ofm p ≃2.1×10 9,h −1M⊙. The fiducial c000 cosmology
+is a flatΛCDM model that follows the Planck 2018 baseline
+cosmology [61]. The corresponding cosmological parameters
+areΩ bh2 =0.022,Ω cdmh2 =0.12,h=0.67,A s =2.08×10 −9,
+andn s =0.97.
+We focus on LRG and ELG tracer samples relevant for
+DESI analysis. We construct DESI-like mock catalogs using
+the AbacusHOD framework [62, 63], an extended halo oc-
+cupation distribution (HOD) model that populates dark mat-
+ter halos with galaxies. The standard HOD model of [64] is
+used with model parameter values determined in [65] using
+the DESI SV3 (Survey Validation 3) data. Since the recon-
+struction is sensitive to the galaxy bias, performing better for
+higher bias samples, we follow [34] and have a higher min-
+imum mass cut for the lower bias ELG sample, relative to
+the higher bias LRG sample, increasing the HOD logarithmic
+mass cut parameter by 0.5 dex. The HOD model populates
+dark matter halos with central and satellite galaxies and in-
+corporates linear velocity biases to the central galaxy relative
+to the halo velocity based on the halo velocity dispersion and
+separate velocity biases for each satellite galaxy relative to the
+velocity of relevant dark matter particle. The model parame-
+ters are obtained by calibration to the correlation function on
+scales below∼30 Mpc/hfrom the DESI Survey Validation 3
+(SV3) data at two pivot redshifts,z=0.5 andz=0.8, for
+the LRG sample and two,z=0.8 andz=1.1, for the ELG
+sample. Following the bias modeling in [34] based on [66],
+we assume ¯bLRG(z)≈2.2 for both the LRG samples centered
+atz=0.5 andz=0.8, and with ¯bELG ≈1.3 and 1.6 for the
+ELG samples centered atz=0.8 and 1.1.
+We consider two complementary realizations of the tracer
+sample: a periodic box catalog and a lightcone catalog. In
+the box case, we focus only on a box snapshot atz=0.5 for
+
+3
+Geometry Tracer Redshift Ngal n(z) ¯b
+Box LRG 0.4<z<0.6 5,063,029 0.63 2.2
+Lightcone
+LRG 0.4<z<0.6 750,121 0.61 2.2
+0.7<z<0.9 1,533,969 0.69 2.2
+ELG 0.7<z<0.9 636,018 0.29 1.3
+1.0<z<1.2 472,278 0.16 1.6
+TABLE I. Summary of the simulated galaxy samples used in
+this work. We list the simulation geometry, tracer type, redshift
+range, number of galaxiesN gal, comoving number densityn(z)
+([10−3h3 Mpc−3]) and assumed mean bias,bfor the mock catalogs.
+the LRG sample. Galaxies are populated with AbacusHOD
+on fixed-redshift periodic snapshots from the AbacusSummit
+simulation. For the lightcone catalogs, we consider two red-
+shift bins of DESI-like LRG samples, 0.4<z<0.6 and
+0.7<z<0.9, centered atz=0.5 andz=0.8, respectively.
+We also study the 0.7<z<0.9 and 1.0<z<1.2 redshift bins
+of DESI-like ELG samples. Unlike the periodic box, galaxies
+are instead populated on the AbacusSummit halo lightcone
+catalogs [67], which were specifically designed for efficient
+mock generation with AbacusHOD. This lightcone realization
+incorporates the redshift evolution of the tracer population to-
+gether with the survey geometry relevant for realistic DESI-
+like observations.
+We summarize the mock galaxy sample characteristics in
+Table I. The comoving number densities are consistent with
+the DESI target densities, withn(z)∼5×10 −4h3/Mpc3 and
+1×10 −3h3/Mpc3 for the Main and Extended LRG samples
+(0.4<z<0.8) andn(z)∼5×10 −4h3/Mpc3 for the ELG
+sample (0.85<z<1.2).
+III. FORMALISM
+A. Velocity Reconstruction
+Following [33, 34], we reconstruct the peculiar velocity
+from the observed galaxy overdensity. At linear order, the
+redshift-space galaxy density contrast is related to the velocity
+field through the continuity equation. Assuming linear galaxy
+bias [68],δ g =bδ m, the redshift-space relation can be written
+as
+∇ ·v+f∇ · (v· ˆn)ˆn =−aH f δg
+b ,(1)
+whereHis the Hubble parameter,a=1/(1+z) is the scale fac-
+tor,f≡dlnD/dlnais the linear growth rate, and ˆndenotes
+the LOS direction. Rather than solving Eq.(1) directly for the
+velocity, it is convenient to first infer the large-scale displace-
+ment field,Ψ, following the approach used for BAO recon-
+struction [17, 36], and then convert the displacement field to
+velocity.
+We begin by assigning galaxies to a three-dimensional
+mesh and smoothing the tracer overdensity with a Gaussian
+kernel,
+WG(k)=exp
+−k2R2
+s
+2
+ ,(2)
+whereR s is the comoving smoothing scale. This smoothing
+suppresses nonlinear and shot noise dominated modes, so that
+the subsequent reconstruction is driven primarily by the linear
+large-scale density field.
+In linear theory, the reconstructed displacement in Fourier
+space can be written as
+Ψ(k)= ik
+k2
+WG(k)
+b+fµ 2 δ s
+g(k), µ≡ ˆk· ˆn.(3)
+This expression corresponds to the inverse gradient solution of
+the linearized continuity equation and provides the large-scale
+Zel’dovich displacement inferred from the observed redshift-
+space galaxy field.
+In practice, we reconstruct the displacement field numer-
+ically using the MultiGrid implementation [23] provided by
+thepyrecon 1 package for both the box and lightcone catalogs.
+For the box catalogs, we assume a periodic cubic volume and
+adopt a fixed LOS direction, ˆz. For the lightcone catalogs, we
+first convert the galaxy catalogs from (RA,DEC,z) to Carte-
+sian comoving coordinates,x=χ ˆn, and then perform the re-
+construction in three dimensional space with a local, position
+dependent LOS direction.
+The reconstructed displacement field is then evaluated at
+the positions of the target objects. The reconstructed peculiar
+velocity is then obtained via,
+vlinear(x)=aH(a)f(a)Ψ(x).(4)
+To extend beyond the linear estimate we model the nonlinear
+velocity by using the machine learning algorithms described
+in Section IV to predict the residual velocities,∆v,
+∆v(x)=v true(x)−v linear(x).(5)
+In many applications, especially kSZ measurements, the LOS
+peculiar velocity component,v ∥, is the main quantity of in-
+terest, although the transverse component,v ⊥, also provides
+valuable information, for example in the moving lens effect
+[69, 70]:
+v∥ =v· ˆn,(6)
+v⊥ =v· ˆe⊥,(7)
+with,
+ˆe⊥ = (ˆnz, ˆnz,− ˆnx − ˆny)q
+2ˆn2
+z +( ˆnx + ˆny)2
+.(8)
+We focus on reconstructing the halo velocities from the
+galaxy samples, rather than reconstructing the galaxy veloci-
+ties themselves [33], as the halo bulk motion governs the kSZ
+signal [71, 72].
+1 https://github.com/cosmodesi/pyrecon
+
+4
+As a characterization of the reconstruction, we consider
+the power spectrum of the LOS momentum field. For a
+galaxy sample, we construct the LOS momentum field from
+the galaxy overdensity and velocity fields as
+q∥(x)=[1+δ g(x)]v ∥(x),(9)
+whereδ g(x) denotes the galaxy overdensity field andv ∥(x)
+is the LOS peculiar velocity field. Its two-point statistics in
+Fourier space define the momentum power spectrum,
+⟨q∥(k)q∥(k′)⟩=(2π) 3Pq∥q∥(k)δ D(k−k ′).(10)
+We useP q∥q∥(k) as an additional diagnostic of the recon-
+struction. Because it depends on both the density weighting
+and the velocity field, it provides a useful way to track the
+scale dependence of the reconstructed signal.
+B. Reconstruction Efficacy Metrics
+To quantify reconstruction performance, we consider both
+object-level and power-spectrum-level metrics.
+For a set of objects with true velocities (v∥ orv ⊥),v true,i and
+reconstructed counterparts,v rec,i, we first compute the Pearson
+correlation coefficient, measuring the strength of the linear as-
+sociation betweenv true andv rec,
+rv ≡
+P
+i
+
+vtrue,i −¯vtrue
+
+vrec,i −¯vrec
+
+qP
+i
+
+vtrue,i −¯vtrue
+2 qP
+i
+
+vrec,i −¯vrec
+2
+,(11)
+where ¯vtrue and ¯vrec are the sample means of the true and re-
+constructedv ∥ orv ⊥ components.
+Sincer v is insensitive to an overall bias in amplitude or
+mean offset, we also use the concordance correlation coeffi-
+cient (CCC), defined as
+ρv ≡ 2cov(v true,v rec)
+σ2
+true +σ 2rec + (¯vtrue −¯vrec)2 ,(12)
+whereσ 2
+true andσ 2
+rec denote the sample variances and
+cov(vtrue,v rec) is the sample covariance. Unlike the Pearson
+correlation coefficient,ρv penalizes not only random scatter
+but also differences in the overall offset and amplitude. There-
+fore, this provides a stricter measure of agreement between the
+reconstructed and true velocities.
+To assess the scale dependence of the reconstruction, we
+further compute the correlation coefficient of the LOS mo-
+mentum power spectrum in Fourier space. Letq true andq rec
+denote the true and reconstructed LOS momentum fields, we
+define their auto- and cross-power spectra through
+⟨qa(k)qb(k′)⟩ ≡(2π) 3Pqaqb(k)δ D(k−k ′),(13)
+witha,b∈ {true,rec}. The corresponding scale dependent
+cross-correlation coefficient is,
+rq(k)≡ Pqtrueqrec(k)
+pPqtrueqtrue(k)P qrecqrec(k)
+.(14)
+withr q(k)<1 indicating a loss of correlation induced by an
+imperfect reconstruction.
+C. Connections to kSZ analyses
+As part of this work, we also consider how the recon-
+structed velocities enhance two common kSZ analyses: kSZ
+pairwise correlations and stacked kSZ profile estimation.
+1. Pairwise Velocity Statistic
+The pairwise velocity is a useful summary statistic of the
+cosmic velocity field, characterizing the average relative in-
+fall of tracer pairs as a function of their comoving separation.
+Following [73], the pairwise velocity estimator in a separation
+bin centered atris,
+V(r)=
+P
+i<j
+
+v∥,i −v ∥,j
+
+ci j
+P
+i<j c 2
+i j
+.(15)
+The sum is over all tracer pairs whose comoving separation,
+r=|r i −r j|, falls within the separation bin andc i j is the geo-
+metric projection factor,
+ci j ≡ ˆri j · ˆni + ˆn j
+2 = (ri −r j)(1+cosα)
+2
+q
+r2
+i +r 2
+j −2r ir j cosα
+,(16)
+where ˆri j is the unit vector along their separation andαis their
+angular separation.
+The kSZ is a secondary anisotropy imprinted on the primary
+CMB due to a Doppler shift due to line of sight peculiar mo-
+tion of baryonic matter it interacts with. For an isolated galaxy
+cluster, for example, one might model the kSZ temperature as
+∆TkS Z,i(θ)
+T0
+=−τ i(θ) v∥,i
+c ,(17)
+whereT 0 =2.726Kis the primary CMB temperature,cis the
+speed of light,τ i is the projected cluster optical depth andθis
+the angular distance from the halo center.
+The pairwise kSZ momentum and velocity pairwise corre-
+lations are related by:
+PkS Z(r)=− T0
+c ¯τe f fV(r) (18)
+where ¯τe f f is an effective mass-averaged optical depth across
+the cluster sample as a whole.
+In previous work [41], we showed how cluster optical depth
+estimates obtained from machine learning modeling could be
+combined with kSZ temperature measurements to obtain un-
+biased estimates of the cluster pairwise velocity correlation.
+Here we consider an alternative application of the kSZ pair-
+wise measurements, in which we combine the pairwise veloc-
+ity correlation,V, obtained from galaxy velocity reconstruc-
+tion with pairwise kSZ momentum measurements to estimate
+an effective average optical depth for a cluster sample,τe f f.
+We create a simulated kSZ map based on the
+AbacusSummithalo catalog and add primary CMB contam-
+ination, beam effects and instrument noise based on Simons
+Observatory survey specifications. Details of the kSZ map
+simulation and pairwise kSZ momentum optical depth fitting
+are respectively provided in Appendices A 1 and A 2.
+
+5
+2. Stacked kSZ profile
+We also consider the application of the reconstructed ve-
+locities to estimate a kSZ-derived halo electron density pro-
+file, a useful probe of the spatial distribution of ionized gas in
+galaxy clusters. This is obtained by stacking the kSZ temper-
+atures centered on cluster halos after weighting by their LOS
+velocities. In our analysis we apply the reconstructed veloci-
+ties to simulated kSZ maps to directly assess their utility for
+accurately estimating the kSZ-derived halo profile.
+We construct a semi-analytic kSZ map using the proce-
+dure described in Appendix A 1, and extract the tempera-
+ture around each halo using the aperture photometry filter de-
+scribed in Appendix A 2. In addition to the AP-filtered tem-
+perature,T AP, we also consider the average disk temperature,
+TDisk, to compare two commonly used choices for measur-
+ing the kSZ signal. We then examine whether the recon-
+structed velocities can recover the stacked kSZ profile defined
+in Eq. (19), using the LRG 0.4<z<0.6 redshift sample.
+To quantify the average kSZ signal recovered by different
+velocities, we construct a stacked kSZ profile using a veloc-
+ity weighted estimator, following [10]. For a given aperture
+radiusθ d, letT i(θd) denote the filtered kSZ temperature mea-
+sured around traceri. In practice,T i(θd) can be taken to be
+either the aperture photometry temperatureT AP,i(θd) or the
+disk averaged temperatureT Disk,i(θd). We then calculate the
+stacked velocity-weighted kSZ signal as [10]
+ˆTkS Z(θd)=− 1
+rcorr
+σ∥
+v
+c
+PNtr
+i=1 Ti(θd)
+
+v∥,i/c
+
+PNtr
+i=1
+
+v∥,i/c
+2 ,(19)
+wherer corr is the correlation coefficient,σ∥
+v is the root-mean-
+squared of the reconstructed velocities, andN tr is the number
+of tracers.
+We compare the performance of the approach using
+Eq. (19) in recovering the halo density profile for tempera-
+tures measured usingT AP andT Disk and different choices for
+the input velocity field: the true halo velocity, the linear veloc-
+ity approximation, and the machine learning derived velocity.
+IV . MACHINE LEARNING
+In Section IV A, we describe the features used in the ma-
+chine learning models. Section IV B outlines the general train-
+ing and validation process for the models. Sections IV C and
+IV D introduce the two principal machine learning models
+used in this work: GBDT and Transformer.
+A. Model Features
+Our machine learning models are designed to improve upon
+the linearly reconstructed LOS velocity by using the veloc-
+ity residual, defined in (5), as the regression target inferred
+from its relationship with a suite of model features as might
+be derived from the 3D position and density maps measured
+in spectroscopic or photometric galaxy surveys.
+The model features include the set of basic global parame-
+ters ( ˆn, z), plus three observable-derived groups: multi-scale
+displacement (location-derived) features, multi-scale environ-
+ment (density-derived) features and cross-scale differences in
+both displacement and environment features.
+Following [33], each of the input features are constructed
+at three smoothing scales,R s =10.5, 12.5, 14.8h −1Mpc. The
+final velocity prediction is obtained by adding the predicted
+residual back to the linear reconstructed baseline, smoothed
+with a scale ofR s =12.5h −1Mpc.
+For any featureqavailable at multiple smoothing scales,
+the cross-scale difference features use theR s =12.5h −1Mpc
+reconstruction as the reference,
+∆q(Rs)=q(R s)−q(12.5h −1Mpc).(20)
+In machine learning modeling, difference features are fre-
+quently grouped or treated separately from the original multi-
+scale features because they encode relationships between vari-
+ables rather than the variables themselves. In that sense, the
+difference features here are not independent of the displace-
+ment or environment features but they carry a different se-
+mantic meaning: they describe scale-dependence rather than
+the absolute value at one scale.
+For each galaxy and for each smoothing scale, we use a core
+set of displacement features that provides the baseline infor-
+mation. These include the reconstructed displacement field
+Ψ(x), its magnitude,|Ψ|, its LOS projection,Ψ ∥ =Ψ· ˆn,and
+the linearly reconstructed velocity,aH(a)f(a)Ψ· ˆn, which di-
+rectly correspond to the standard first-order reconstruction of
+the peculiar velocity from the continuity equation.
+We also consider an extended set of nonlinear and dimen-
+sional displacement features:Ψ ⊥ =
+h
+|Ψ|2 −(Ψ· ˆn)2
+i1/2
+,Ψ 3
+∥,
+Ψ∥|Ψ∥|,Ψ ∥/|Ψ|,|Ψ|/R s, and|Ψ ∥|/Rs.
+The environment features characterize the local and
+anisotropic structure around each tracer, evaluated at the
+galaxy position for each smoothing scale. These density-
+dependent features complement the displacement features by
+providing information about the local structure in which the
+velocity field is embedded. A core set of environment fea-
+tures provide scalar and vector density descriptors that encode
+the local density field and the direction and steepness of local
+density variations: the smoothed overdensity, based on galaxy
+number counts,δ g, and its Laplacian,∇δ g, and their magni-
+tudes. An extended set of environment features include tensor
+descriptors, the Hessian,H i j ≡∂ i∂ jδg,and Laplacian,∇ 2δg,
+and scalar descriptors of the tidal environment derived from
+the traceless tidal tensor
+Ti j ≡∂ i∂ jδg − 1
+3 δi j ∇2δg.(21)
+From this tensor, we define the shear amplitude aspP
+i,j Ti jTi j, its squared amplitude, P
+i,j Ti jTi j, and an
+anisotropy measure, pP
+i,j Ti jTi j/(|δg|+ϵ), whereϵis a small
+positive constant introduced for numerical stability. The tidal
+
+6
+tensors describe the anisotropic curvature and shear, and cos-
+mic web environment. Similar density, tidal, and Hessian-
+based quantities have been widely used in perturbative bias
+modeling, cosmic web classifications, and machine learn-
+ing studies of structure formation, where features beyond the
+scalar density are needed to characterize environment depen-
+dent evolution [68, 74, 75]. Together, these feature categories
+allow the models to combine multiscale reconstruction infor-
+mation while learning scale-dependent corrections to the lin-
+ear LOS velocity estimate.
+The environment features may be noisier than the dis-
+placement features because quantities such as∇δ g,H i j,∇ 2δg,
+and the tidal tensor descriptors, are constructed from spatial
+derivatives of the reconstructed density field, which can am-
+plify the impact of survey geometry, sparse sampling, redshift
+space distortions, and redshift uncertainties in lightcone data.
+We therefore compare the reconstruction performance of
+three feature sets with different levels of complexity. The
+“full"feature set including all displacement and environment
+features is analyzed for both the cubic box and lightcone anal-
+yses. For the lightcone two more conservative subsets are also
+considered: a“displacement-only"set to focus on the features
+principally derived from spectroscopic data and a“core-only"
+set just using the core, principally scale and vector, displace-
+ment and environment features. Each set includes both the
+smoothed and corresponding cross-scale difference features.
+These comparisons allow us to quantify how much improve-
+ment comes from robust displacement information alone, how
+much is retained after adding only the simplest density gradi-
+ent information, and how much additional information is con-
+tributed by the more complex but potentially noisier tensor
+derived environment features.
+B. Train and Test Process
+To train and evaluate the machine learning models, we split
+the full sample into training and testing subsets with a 7/3 ra-
+tio. The training set is used for model fitting and hyperparam-
+eter selection, while the testing set is kept aside and used only
+for the final evaluation of the trained model on unseen data.
+To reduce overfitting and improve the robustness of the
+model, we perform cross validation on the training set. In
+particular, the training sample is divided into five folds, and
+in each iteration the model is trained on four of the folds and
+validated on the remaining fold. The cross validation perfor-
+mance is used to determine the stopping point of the training
+and to monitor the generalization behavior of the model.
+We optimize the model hyperparameters with Optuna2. For
+each trial, a set of hyperparameters is proposed, the model is
+trained on the training folds, and its performance is evaluated
+through cross validation. The hyperparameter set that yields
+the best validation performance is then adopted for the final
+model. For the training objective, we adopt the mean squared
+2 https://optuna.org/
+error (MSE),
+MSE= 1
+N
+NX
+i=1
+ ˆ∆vi −∆v i
+2
+,(22)
+where∆v i is the target residual (LOS or transverse) veloc-
+ity for galaxyi, and ˆ∆vi is the corresponding model predic-
+tion. After the stopping criterion and hyperparameters are de-
+termined, the model is retrained on the full training sample
+and its performance is finally assessed on the independent test
+sample.
+For both the GBDT and Transformer models, the final re-
+constructed LOS or transverse velocity estimate is obtained
+by adding the predicted residual correction to the linear re-
+construction velocity,
+vGBDT/Transformer =v linear + ∆vpred.(23)
+C. GBDT
+For our first machine learning model, we use a gradient
+boosting decision tree (GBDT) regressor implemented with
+LightGBM3. GBDT builds an ensemble of decision trees se-
+quentially, with each new tree trained to reduce the residual
+error of the previous ensemble. This model is well suited to
+tabular data and can naturally capture nonlinear feature inter-
+actions without requiring explicit feature engineering beyond
+the physically motivated variables introduced in Section IV A.
+In our application, the GBDT model takes the concatenated
+multi-scale feature vector as input and predicts the residual
+LOS velocity defined in Eq. (5) with the MSE in Eq. (22) as
+the training objective. The final LOS velocity estimate is then
+obtained using Eq. (23). With its computational efficiency and
+strong performance on structured inputs, GBDT serves as a
+baseline model in our analysis.
+We report the main hyperparameters used for model train-
+ing. For the LightGBM model, L2 regularization coefficients
+were set to 0.01. The learning rate was set to 0.044. The
+model complexity was controlled using 256 leaves, a maxi-
+mum tree depth of 10, and a minimum of 100 samples per
+leaf. We also applied bagging with a bagging fraction of 0.8
+and a bagging frequency of 5 to improve generalization.
+D. Transformer
+Transformer is a neural network architecture originally de-
+veloped for sequence modeling, in which self-attention is used
+to learn how different elements of the input should interact
+with each other. In our application, the Transformer is used
+not to model long sequential structure, but to learn nonlinear
+couplings among reconstruction features derived from differ-
+ent smoothing scales and feature types.
+3 https://lightgbm.readthedocs.io/en/stable/
+
+7
+Global 
+Features
+  
+, 
+z
+Multi-Scale 
+Displacement
+Disp 
+(R 
+= 
+10.5)
+Disp 
+(R 
+= 
+12.5)
+Disp 
+(R 
+= 
+14.8)
+Multi-Scale 
+Environment
+Env 
+(R 
+= 
+10.5)
+Env 
+(R 
+= 
+12.5)
+Env 
+(R 
+= 
+14.8)
+Scale 
+Difference
+?
+Disp 
+(10.5 
+- 
+12.5)
+?
+Disp 
+(14.8 
+- 
+12.5)
+?
+Env 
+(10.5 
+- 
+12.5)
+?
+Env 
+(14.8 
+- 
+12.5)
+Group 
+Embedding
+Global 
+Token 
+x 
+1
+Disp 
+Tokens 
+x 
+3
+Env 
+Tokens 
+x 
+3
+Diff 
+Tokens 
+x 
+4
+Encoder 
+Layer
+CLS 
+Token
+Output 
+Head
+Group 
+Embedding
+Linear
+GELU
+Dropout
+Linear
+Output 
+Head
+LayerNorm
+Add 
+type/scale 
+Embed
+Encoder 
+Layer
+Encoder 
+Layer
+Encoder 
+Layer
+Encoder 
+Layer
+LayerNorm
+Multi-Head 
+Self-Attention
+Residual
+LayerNorm
+Feed 
+Forward
+Residual
+Linear
+GELU
+Dropout
+Linear
+FIG. 1. Illustration of the Transformer architecture used in this work. [Left] The overall workflow of our model. [Right] The detailed
+components of the group embedding, Transformer encoder layer, and output head. The terms used in the figure are discussed in Sec.IV D
+Rather than treating all input variables as a single flattened
+vector, we partition the features as introduced in Section IV A
+in four semantically defined groups: global galaxy properties
+(e.g. directional information and redshift), reconstruction dis-
+placement features at different smoothing scales, environmen-
+tal features at different smoothing scales, and difference fea-
+tures constructed relative to a reference smoothing scale. Each
+feature group is treated as one token, so that the input for each
+galaxy is represented as a sequence,G={g 1,g 2, . . . ,gNG },
+whereg i denotes the feature vector of groupi, andN G is the
+total number of feature groups.
+Each token is first mapped into a latent space of fixed di-
+mension through a learnable group-specific embedding net-
+work. To preserve the semantic identity of each token, we add
+learnable embeddings that encode both the feature type and
+the associated smoothing scale. The initial token representa-
+tion is therefore written as
+h(0)
+i =f i(gi)+e type
+i +e scale
+i ,(24)
+wheref i denotes the embedding network for groupi, while
+etype
+i ande scale
+i are the learnable type and scale embeddings,
+
+8
+FIG. 2. Comparison of the reconstructed and true LOS peculiar velocities in the periodic box for the LRG sample centered at redshift z=0.5.
+[Left] shows the baseline linear reconstruction, while [Right] shows the GBDT residual corrected reconstruction. The dashed diagonal line
+shows perfect reconstruction , and the contours indicate the 1σ, 2σ, and 3σregions. The green background shows a hexagonal-binned density
+map of the distribution, where darker regions correspond to a higher number density of objects per redshift bin.
+respectively. In addition, a learnableclassificationtoken
+([CLS]) is prepended to the input sequence to collect infor-
+mation from all feature groups.
+The resulting token sequence is passed through a stack
+of Transformer encoder layers. Each encoder layer consists
+of a multi-head self-attention block followed by a feed for-
+ward network. Through self-attention, each feature group can
+interact with all others, allowing the model to learn which
+groups are most informative and how information from differ-
+ent smoothing scales and feature types should be combined.
+In this setting, the role of attention is to capture complemen-
+tarity among multi-scale reconstruction features rather than
+long range positional dependence.
+After the final encoder layer, we use the output represen-
+tation of the[CLS]token as a compact summary of the full
+input. This summary vector is then passed to a multilayer per-
+ceptron regression head to predict the residual LOS velocity,
+∆vpred =f head
+
+h(L)
+CLS
+
+,(25)
+whereh (L)
+CLS is the[CLS]representation after the final encoder
+layer andf head denotes the regression head. The architecture
+of the model is summarized in Fig. 1. As shown in the fig-
+ure, theLinearlayers are used to transform the raw feature
+vectors into trainable token representations with a unified di-
+mensionality. TheGaussian Error Linear Unit(GELU) ac-
+tivation layer introduces nonlinearity, enabling the model to
+capture more complex feature interactions beyond simple lin-
+ear mappings. TheDropoutlayer is used to regularize the
+model and reduce overfitting.LayerNormis applied to stabi-
+lize the feature distribution and improve training convergence.
+Themulti-head self-attentionlayer allows each token to model
+global dependencies and interactions among different tokens.
+Residuallayer is introduced to preserve the original infor-
+mation and facilitate gradient propagation in deep networks.
+TheFeed Forwardlayer then performs token-wise nonlinear
+transformation, further enhancing the expressive power of the
+learned representations.
+We also report the main training hyperparameter of the
+Transformer model. The input features are embedded into
+128 dimensional tokens. The Transformer encoder consists of
+4 attention heads, 4 encoder layers, a feed-forward dimension
+of 256, and a dropout rate of 0.1. The model was trained using
+the AdamW optimizer with a learning rate of 1×10 −3, weight
+decay of 1×10 −4, a batch size of 4096, and mean squared
+error loss. AReduceLROnPlateauscheduler was used to re-
+duce the learning rate by a factor of 0.5 if the validation loss
+did not improve for 4 epochs. Gradients were clipped to a
+maximum norm of 1.0 to stabilize training.
+V . RESULTS
+In this section, we present the results of our machine learn-
+ing models for velocity reconstruction in both box and light-
+cone settings. In Section. V A, we first examine LOS velocity
+reconstruction in the cubic box case for the LRG sample at
+redshift z=0.5, using the GBDT model. This provides a sim-
+ple, computationally efficient benchmark for evaluating the
+improvement gained from residual learning. In Section V B,
+we discuss the performance of both the GBDT and Trans-
+former machine learning models in the more realistic light-
+cone setting, considering both LOS and transverse velocity
+reconstruction for LRG and ELG samples in redshift ranges
+0.4<z<0.6, 0.7<z<0.9, and 1.0<z<1.2. We fur-
+ther investigate the impact of redshift uncertainties in Section.
+V C.
+
+9
+FIG. 3. Comparison of the true [blue], linear reconstructed [green],
+and GBDT machine learning corrected [orange] LOS momentum
+fields in the periodic box for the LRG sample 0.4<z<0.6 for the
+momentum power spectrumPqq(k) [top] and the cross-correlation co-
+efficientrq(k) [bottom].
+A. Box Reconstruction
+We begin by evaluating the reconstruction performance in
+the periodic box setting. In this controlled setup, we com-
+pare the baseline linear theory reconstruction with the GBDT
+residual corrected prediction.
+Fig. 2 shows the reconstructed LOS velocities against the
+true values. The machine learning correction leads to a visibly
+tighter relation and better overall agreement with the true ve-
+locities. We find that the linear reconstruction can capture the
+overall trend of the velocity dispersion, but it exhibits a rela-
+tively broad scatter around the one-to-one relation and a vis-
+ible suppression in the reconstructed amplitude. After apply-
+ing the GBDT residual correction, the reconstructed velocities
+become substantially more concentrated around the diagonal,
+with a clear reduction in scatter and a better recovery of the
+true amplitude.
+For the linear reconstruction baseline with smoothing scale
+Rs =12.5h −1Mpc, the Pearson correlation coefficient be-
+tween the reconstructed and true velocities is 0.69, and the
+CCC score is 0.60. With the GBDT machine learning residual
+correction, these values increase to 0.76 and 0.72, correspond-
+ing to improvements of 9.6% and 21.0%, respectively. The
+increase in the Pearson coefficient indicates that the corrected
+reconstruction more closely follows the variations of the true
+velocity field, and the larger improvement in the CCC shows
+that the correction also suppresses systematic bias and better
+recovers the overall velocity amplitude.
+We further quantify the reconstruction in Fourier space in
+Fig. 3. The upper panel shows the momentum power spec-
+trumP qq(k) for the true field, the linear reconstruction, and
+the GBDT-corrected reconstruction. We find that the linear
+reconstruction systematically underestimates the true power
+spectrum at all scales, and the discrepancy becomes increas-
+ingly larger at smaller scales. On the other hand, the machine
+learning corrected reconstruction follows the true power spec-
+trum much more closely, indicating that the machine learning
+model is able to recover information beyond that captured by
+the linear approximation alone. The lower panel shows the
+correlation coefficient defined in Eq. (14) as a function ofk.
+On the largest scales, both reconstructions remain highly cor-
+related with the true field, as expected. However, the linear re-
+construction degrades steadily toward smaller scales, with the
+correlation dropping significantly in the nonlinear regimes.
+The GBDT corrected reconstruction maintains a higher corre-
+lation across the fullkrange, with a slower decline at smaller
+scales. The result indicates that the machine learning correc-
+tion preserves the large-scale information already present in
+the linear reconstruction while extending a better reconstruc-
+tion to smaller scales.
+B. Lightcone Reconstruction
+We now turn to the more realistic lightcone catalogs, where
+the reconstruction is performed in the presence of survey ge-
+ometry, a local line-of-sight definition, and redshift evolution
+across the sample. We evaluate the performance in two DESI-
+like LRG redshift bins centered atz=0.5 andz=0.8. We
+compare the baseline linear reconstruction with two residual
+learning models, GBDT and Transformer. Fig. 4 shows the
+reconstructed LOS velocities against the true values for the
+two lightcone samples. In both redshift bins, the linear re-
+construction captures the overall trend of the velocity field,
+but the scatter around the one-to-one relation remains substan-
+tial and the reconstructed amplitudes are visibly compressed.
+After applying either machine learning correction, the distri-
+bution becomes much more concentrated along the diagonal,
+with both reduced scatter and improved amplitude. The im-
+provement is strongest for the Transformer, whose contours
+are systematically tighter and more closely aligned with the
+one-to-one relation than those of the GBDT model.
+Quantitatively, the two lightcone redshift bins give highly
+comparable results as shown in Table. II. For the 0.4<z<0.6
+sample, the linear reconstruction yields a correlation coeffi-
+cient of 0.63 and a CCC score of 0.55. The GBDT corrected
+reconstruction improves these to 0.89 and 0.88, while the
+Transformer further improves them to 0.91 and 0.90. For the
+0.7<z<0.9 sample, the corresponding values improve from
+0.65 and 0.55 for the linear reconstruction to 0.90 and 0.89
+for GBDT, and to 0.92 and 0.91 for the Transformer. Relative
+to the linear baseline, this corresponds to an improvement of
+41% in correlation and 60% in CCC for GBDT , and 44% and
+64% for the Transformer at 0.4<z<0.6. At 0.7<z<0.9,
+
+10
+Direction Tracer Redshift σz/(1+z) Method Correlation,r v CCC,ρ v
+LOS
+LRG
+0.4<z<0.6
+0.00
+Linear 0.63 0.55
+GBDT 0.89 0.88
+Transformer 0.91 0.90
+Transformer (Disp. only) 0.73 0.69
+Transformer (Core only) 0.90 0.89
+0.01 Linear 0.41 0.30
+Transformer 0.56 0.47
+0.02 Linear 0.27 0.24
+Transformer 0.51 0.42
+0.7<z<0.9 0.00
+Linear 0.65 0.55
+GBDT 0.90 0.89
+Transformer 0.92 0.91
+ELG
+0.7<z<0.9 0.00 Linear 0.57 0.53
+Transformer 0.83 0.82
+1.0<z<1.2 0.00 Linear 0.37 0.36
+Transformer 0.76 0.74
+Transverse LRG 0.4<z<0.6
+0.00 Linear 0.67 0.59
+Transformer 0.85 0.84
+0.01 Linear 0.47 0.43
+Transformer 0.72 0.68
+0.02 Linear 0.45 0.40
+Transformer 0.65 0.59
+TABLE II. A summary of the reconstruction performance in the lightcone setting, quantified by the Pearson correlation coefficient,rv, and the
+concordance correlation coefficient (CCC),ρv. Results are shown for LRG samples in the redshift bins 0.4<z<0.6 and 0.7<z<0.9, and for
+ELG samples in the redshift bins 0.7<z<0.9 and 1.0<z<1.2. We compare the baseline linear reconstruction with GBDT and Transformer
+models. The table also includes results for LOS and transverse velocity components under conditions with perfect redshift information and
+with photometric survey-like redshift uncertainties ofσ z/(1+z)=0.01 and 0.02. All analyses are conducted using the full set of features,
+except for two lower redshift LRG sample which use subsets of the features: one uses just displacement features (Disp. only) and a second
+uses just simple scalar and vector displacement and environment features (Core only) as described in Sec. IV A.
+the GBDT improves 39% and 62%, while the Transformer
+improves 42% and 65%. The final performance is therefore
+comparable at the two redshifts, and in both bins the Trans-
+former gives the best reconstruction.
+Compared with the box reconstruction in Sec. V A, the
+lightcone linear reconstruction yields slightly lower correla-
+tion and CCC values. This is expected as survey geometry,
+local LOS effects, and redshift evolution are included. How-
+ever, after applying the machine learning residual correction,
+the final lightcone performance surpasses the box, with both
+the correlation coefficient and the CCC reaching about 0.9 in
+the two redshift bins. We attribute this improvement to the
+fact that the ML task in the box setup is defined only for the
+velocity component along a single fixed axis (z), whereas the
+lightcone case effectively samples a much broader range of di-
+rectional configurations because the local line of sight varies
+across the survey footprint. Since the underlying velocity field
+is intrinsically three dimensional, this richer directional infor-
+mation makes the residual correction more learnable and im-
+proves the final performance.
+We then test the Fourier-space statistics and the results are
+shown in Fig. 5. In both redshift bins, the linear reconstruc-
+tion underestimates the true momentum power spectrum at all
+scales, with the discrepancy increasing both toward larger and
+smaller scales. The performance on larger scales is purely a
+consequence of the lightcone being a shell over a limited red-
+shift range while at smaller scales it is because of poor charac-
+terization of the nonlinear velocity. By contrast, both machine
+learning reconstructions track the true spectrum much more
+closely, substantially reducing the amplitude mismatch. This
+improvement does not imply that the machine learning models
+reconstruct genuinely new large-scale modes that are absent
+from the linear estimator. Rather, on these scales the linear re-
+construction already captures most of the phase information in
+the velocity field, while the lightcone geometry and the finite
+radial width of the shell primarily introduce a scale-dependent
+response and amplitude mismatch in the reconstructed mo-
+mentum field. Since the machine learning models are trained
+to predict the residual with respect to the linear reconstruc-
+tion, they act as a calibration of this response rather than a re-
+placement of the large scale reconstruction. The input features
+include the local LOS direction, redshift, and multiscale dis-
+placement and density derived quantities, allowing the models
+to learn systematic lightcone and geometry dependent resid-
+ual patterns. As a result, the machine learning corrected fields
+can recover the large scale momentum power more accurately
+while preserving the large scale correlations already present
+in the linear reconstruction. The Transformer is generally
+the closest to the true power spectrum, with GBDT following
+closely behind, while the linear result remains systematically
+
+11
+(a) LRGv ∥ 0.4<z<0.6
+(b) LRGv ∥ 0.7<z<0.9
+FIG. 4. Same as Fig. 2 but for lightcone samples centered atz=0.5 [top] andz=0.8 [bottom]. In each row, the three panels show the baseline
+linear reconstruction [left], the GBDT residual corrected reconstruction [middle], and the Transformer residual corrected reconstruction [right].
+low across the fullkrange. The behavior is very similar at
+0.4<z<0.6 and 0.7<z<0.9, showing that the learned
+corrections can capture residual patterns that remain robust
+across different redshifts. From the lower panels of Fig. 5, we
+find that, on large scales, both machine learning reconstruc-
+tions remain nearly perfectly correlated with the true momen-
+tum field, while the linear reconstruction is noticeably less
+correlated. Toward higherk(>∼0.02h/Mpc), the linear result
+degrades rapidly, the GBDT prediction declines more slowly,
+and the Transformer retains the highest correlation over most
+of the plotted range (∼0.04<k<0.4h/Mpc). Atkwell into
+the nonlinear regime,∼0.3−0.4hMpc −1, the Transformer
+achievesr q ≃0.91 (0.92) for the lower (higher) LRG redshift
+bin, compared with about 0.90 (0.89) for GBDT and about
+0.63 (0.66) for the linear reconstruction. This resilience in the
+reconstruction down to scales of a few Mpc closely mirrors
+what we found in the box case: machine learning residual cor-
+rection preserves the large-scale information already present
+in the linear estimator while extending the reconstruction fi-
+delity further into the nonlinear regime.
+We also test a simplified Transformer model that uses only
+the displacement features. In this setting, the input contains
+only the core features from the reconstructed displacement
+features at the three smoothing scales, while all environment-
+related features discussed in Sec. IV A are excluded. The main
+motivation for this test is robustness in realistic applications.
+Many of the environment related quantities are constructed
+from spatial derivatives of the reconstructed fields. While
+these derivative features can be informative in simulations,
+we are concerned that they may become noisier in real ob-
+servations. This is particularly relevant in lightcone settings,
+where survey geometry, sparse sampling, and observational
+systematics can amplify noise in derivative based quantities.
+It is therefore useful to examine how well the Transformer
+performs when restricted to only the most basic and poten-
+tially more stable reconstruction features. For the LRG sam-
+ple with redshift 0.4<z<0.6, the Transformer model can
+still achieve a correlation coefficient of 0.73 and a CCC score
+of 0.69. These correspond to relative improvements of 15.6%
+and 27.5%, respectively, over the linear reconstruction base-
+line. This indicates that the Transformer gain is not solely
+driven by the additional environment descriptors. Instead, the
+basic multiscale displacement features already contain sub-
+stantial information that can be effectively used by the Trans-
+
+12
+FIG. 5. Same as Fig. 3, but presents the comparison of the true
+[blue], Transformer-corrected [red], GBDT-corrected [orange], and
+linear reconstructed [green] momentum fields in the lightcone sam-
+ples centered atz=0.5.
+former.
+We further test a second reduced feature set that keeps only
+the simplest displacement and environment (density-derived)
+information. This set includes the linear displacement fea-
+tures, the displacement magnitude, the LOS displacement pro-
+jection and its magnitude, together with the scalar density, the
+density gradient, and the density gradient magnitude at the
+three smoothing scales. The corresponding cross scale differ-
+ence features are also included. Compared to the full feature
+set, this test excludes the nonlinear displacement features and
+the more complex tensor based environment features, such as
+the Hessian and tidal tensor quantities. It therefore provides
+an intermediate case between the displacement-only model
+and the full model, allowing us to assess whether the simpler
+density gradient information is robust and informative with-
+out relying on the potentially noisier higher order tensor fea-
+tures. For the LRG sample with redshift 0.4<z<0.6, this
+reduced model achieves a correlation coefficient of 0.90 and
+a CCC score of 0.89 respectively. This performance is very
+close to that of the full feature set, indicating that much of
+the Transformer’s information gain comes from the combina-
+tion of multiscale displacement information with the simplest
+density-derived features.
+Beyond the LRG samples discussed above, we also test the
+reconstruction performance for the ELG tracers in the light-
+cone setting. The results are shown in Table. II for the redshift
+bins 0.7<z<0.9 and 1.0<z<1.2. For the ELG sam-
+ple at 0.7<z<0.9, the Transformer substantially improves
+over the linear reconstruction, as it did for the LRGs in the
+same redshift range, increasing the Pearson correlation coeffi-
+cient from 0.57 to 0.83 and the CCC score from 0.53 to 0.82.
+This demonstrates that the machine learning model can also
+recover a significant amount of nonlinear velocity information
+for the ELGs even while they are a fundamentally different
+tracer of the cosmic density. Compared with the LRG sample
+in the same redshift bin, the LRG reconstruction is slightly
+more accurate than the ELG reconstruction. The lower ELG
+performance is caused by the lower tracer bias, number den-
+sity, and sampling properties of the ELG population [34], but
+the relative gain over the linear baseline remains large.
+In the higher redshift bin, 1.0<z<1.2, the ELG
+linear reconstruction becomes less accurate, with (r v, ρv)=
+(0.37,0.36). Nevertheless, the Transformer model still recov-
+ers a significantly larger fraction of the missing velocity infor-
+mation, improving the performance to (r v, ρv)=(0.76,0.74).
+This corresponds to an even larger relative gain than in the
+lower redshift ELG bin, although the final reconstruction ac-
+curacy remains lower.
+The relatively lower performance of linear reconstruction,
+for ELGs relative to LRGs in the same redshift bin, and for
+the ELGs in the higher vs lower redshift sample, is expected,
+since its effectiveness is closely related to the combination
+¯b2n(z), where ¯bis the mean galaxy bias across the redshift bin
+andn(z) is the number density. For the LRG sample, based on
+the values in Table I,b(z) 2n(z)≈3.0 and 3.4×10 −3 h3/Mpc3
+in the redshift ranges 0.4<z<0.6 and 0.7<z<0.9, re-
+spectively. In contrast, the ELG samples at 0.7<z<0.9 and
+1.0<z<1.2, respectively haveb(z) 2n(z)=0.49 and 0.41
+×10−3 (h/Mpc)3. These differences explain the relative per-
+formance of linear reconstruction discussed above. The LRG
+samples, with substantially larger ¯b(z)2n(z) values, provide a
+better estimate of the displacement field and therefore benefit
+more from the reconstruction procedure. The lower effective
+tracer densities of the ELG samples, on the other hand, lead
+to the reconstructed displacement field being noisier, reducing
+the improvement that can be achieved.
+Our findings demonstrate that the Transformer’s nonlinear
+residual corrections can be successfully implemented to a va-
+riety of tracers while recognizing that the performance is sen-
+sitive to the tracer number density and bias both of which can
+be redshift dependent.
+In addition to the LOS velocity reconstruction, we also
+consider how the Transformer can be applied to accurately
+estimate the perpendicular component. We train a separate
+Transformer model using features constructed specifically for
+that direction. The model uses the same feature set as in
+the LOS case, but all direction dependent quantities are de-
+fined with respect to the perpendicular component rather than
+the LOS component. The corresponding results without red-
+shift errors are shown in Table. II for the LRG sample at
+0.4<z<0.6. The linear reconstruction achieves (r v, ρv)=
+(0.67,0.59). The Transformer correction improves this sub-
+stantially to (r v, ρv)=(0.85,0.84). This demonstrates that
+the residual correction is not limited to the LOS velocity, but
+can also recover a significant fraction of the missing trans-
+verse velocity information. Compared with the LOS result
+
+13
+in the same redshift bin, the Transformer reconstructed per-
+pendicular velocity has a slightly lower Pearson correlation,
+rv =0.85 compared to 0.91 for the LOS component. Never-
+theless, the performance remains high, and the gain over the
+linear baseline is comparable in size. These results support the
+use of Transformer based velocity reconstruction for applica-
+tions that require perpendicular velocities such as the moving
+lens analyses.
+C. Redshift Uncertainties
+We examine how redshift uncertainties impact our velocity
+reconstruction, using the 0.4<z<0.6 LRG sample as the ref-
+erence. We model redshift uncertainties by adding Gaussian
+noise to the true redshifts, and adoptσ z/(1+z)=0.01 and
+0.02, which respectively reflect the stretch and target goals for
+LSST photo-z errors [30]. This also helps us to bound the
+effect of redshift uncertainties from slitless spectroscopy sur-
+veys from Euclid and Roman, expected to beσ z/(1+z)∼
+0.001 [76].
+The reconstruction results for the LOS and perpendicu-
+lar components of the peculiar velocity are summarized in
+Table II. We find that redshift uncertainties degrade the re-
+construction performance in both the LOS and perpendicu-
+lar directions, with a stronger impact on the LOS component.
+Similar results are reported in [34] for the linear reconstruc-
+tion. Forσ z/(1+z)=0.01, the LOS correlation coefficient
+decreases tor=0.56, while the perpendicular component
+remains comparatively better reconstructed, withr=0.72.
+When the redshift uncertainty is increased toσz/(1+z)=0.02,
+the degradation becomes more pronounced, withrfurther de-
+creasing to 0.51 for the LOS component and 0.65 for the per-
+pendicular component. A similar trend is observed for the
+CCC, which decreases from 0.47 to 0.42 for the LOS direc-
+tion and from 0.68 to 0.59 for the perpendicular direction.
+This stronger degradation for reconstruction along the LOS
+is to be expected since the redshift errors smear the galaxy
+distribution, erasing small scale structures and weakening the
+inferred density gradients, used in reconstruction along that
+axis. In contrast, the transverse information is less directly
+affected by redshift inaccuracies, making its reconstruction
+more robust. The degradation from redshift uncertainty af-
+fects both stages of the reconstruction pipeline both the lin-
+ear reconstruction and the nonlinear machine learning resid-
+ual estimation. The ML model is trained on features derived
+from the degraded reconstructed linear field and cannot fully
+recover information that has been erased by photometric red-
+shift error. Nevertheless, the Transformer correction remains
+beneficial relative to the corresponding linear baseline.
+While photometric redshift uncertainties do lead to a loss
+in velocity reconstruction accuracy relative to the idealized
+spectroscopic case, it is conceivable that the higher galaxy
+number density could ameliorate the degradation through en-
+abling more precise gradient estimation. DESI’s multi-object
+fiber spectroscopy [29] provides highly accurate redshift mea-
+surements but their sample sizes/number densities are typ-
+ically much smaller than those available from photometry,
+FIG. 6. Comparison of the true [blue], linear-reconstructed [green]
+and Transformer-corrected [red] pairwise velocity statistic, ˆV, as a
+function of comoving separation,r.
+such as from the Rubin Observatory LSST. The DESI Main
+LRG galaxy sample hasn(z)≈0.17 galaxies per sq. arcmin.
+while LSST is expected to have observe 20-40 galaxies per sq.
+arcmin., roughly two orders of magnitude greater. The signal-
+to-noise ratio (SNR) of kSZ analysis might roughly scale as
+∼r v
+√
+N, for a sample size,Nand the velocity reconstruction
+correlation coefficient,rv. These results indicate that machine
+learning reconstruction of both LOS and transverse velocity
+components could be viable in the presence of redshift uncer-
+tainties as the reduction inr v could be countered by a com-
+mensurate increase in sample size.
+VI. KINEMATIC SZ APPLICATIONS
+In this section, we discuss results of applications of the re-
+constructed velocities to two common kSZ analyses. We as-
+sess the recovery of the pairwise velocity statistic in Section.
+VI A and examine the stacked kSZ profile in Section VI B.
+A. Pairwise Velocity Reconstruction
+We apply the reconstructed velocities to determine the pair-
+wise velocity statistic described in Section VI A which probes
+the relative infall pattern of galaxy pairs across a wide range
+of comoving separations. It provides a useful study of how
+errors in the reconstruction might propagate into a practical
+large-scale structure observable.
+kSZ analyses do not require perfect recovery of individual
+galaxy velocity, but rather an accurate reconstruction of the
+pairwise statistic averaged over the galaxy sample within the
+spatial separate bin.
+The results are shown in Fig. 6, where we compare the pair-
+wise signal measured from the true halo peculiar velocities,
+the linear reconstruction, and the Transformer-corrected re-
+
+14
+construction for the 0.4<z<0.6 LRG sample. The linear
+reconstruction is able to capture the overall scale dependence
+of the pairwise statistic, but it systematically underestimates
+the amplitude over the full separation range by roughly 45%.
+By contrast, the Transformer model can recover the true pair-
+wise velocity much more closely. Over most of the range, the
+Transformer successfully recovers the nonlinear information
+that is relevant for pairwise motions on scales withr>45 Mpc
+to within 2.5% of the true signal. Our results show that the ma-
+chine learning correction improves not only the object-level
+velocity prediction but also the pairwise signal.
+We consider a specific way in which these pairwise veloc-
+ities can be used, to perform an optical depth reconstruction
+test with kSZ measurements, based on Eq. (17). To estimate
+the kSZ temperatures,∆T kS Z,i(θ), and to mirror real observa-
+tional analysess, we perform kSZ aperture photometry mea-
+surements on a simulated kSZ map, centered on the LRG sam-
+ple, assumed to serve as proxies to the centrs of galaxies clus-
+ters and groups.
+Using the pairwise velocity estimates for the linear
+and Transformer-derived velocities, we find best-fit mass-
+averaged optical depths, 104 ¯τ=0.34±0.07 and 0.67±0.09,
+respectively, in comparison to that obtained from the true pair-
+wise velocity of 0.66±0.08. The true and machine learning
+velocity estimates give consistent optical depths, while the lin-
+ear reconstructed velocity leads to a significantly lower and
+biased inferred optical depth.
+B. Stacked kSZ Profile
+We examine the application of the reconstructed velocities
+to recover the stacked kSZ profile as defined in Eq. (19) for
+the mock LRG sample in 0.4<z<0.6. The correlation coef-
+ficient is estimated from the simulations, as is also done in the
+analysis of real data [77]. The correlation function is found to
+be robust, changing only by 0.5% (fromrcorr =0.626 to 0.623
+when calculated using only 30% of the data rather than the full
+sample). In forecasting by the Simons collaboration for joint
+analyses with the full DESI data ([78]), they assumed 2.9M
+LRGs measured in an overlapping area of 10,000 sq. deg.
+Our analysis here, focused on∼750kgalaxies, is therefore a
+conservative one.
+The results are shown in Fig. 7. We compare stacked kSZ
+profiles constructed using the true halo peculiar velocities, the
+linear reconstruction, and the Transformer-based reconstruc-
+tion. We consider two commonly used methods to measure
+the kSZ signal (e.g. [79]), the aperture photometryT AP and
+the mean temperature inside a disk,T Disk. We calculated the
+profile at four apertures: 1.1′, 1.6′, 2.1′, and 2.6′. We find that
+the linear reconstruction result systematically overestimates
+the amplitude at all apertures. The Transformer-corrected re-
+construction accurately recovers the true stacked kSZ profiles.
+The agreement is more pronounced at the intermediate aper-
+tures for the aperture photometry measurements, where the
+Transformer differs from the true values by less than 1%. The
+error bars shown in Fig. 7 reflect the uncertainties in the simu-
+lated kSZ signal, due to residual primary CMB and instrument
+FIG. 7. Stacked kSZ temperature profiles as a function of aperture
+radiusθ. We compare the profile constructed from the true halo ve-
+locities [blue], the Transformer-corrected reconstruction [red], and
+the linear reconstruction [green] for the kSZ signal using the disk
+kSZ temperature [top] and aperture photometry [bottom]. To reflect
+the real observation analysis, we add realistic primary CMB and in-
+strument noise on top of the kSZ signal. 1σuncertainty estimated
+from the bootstrap analysis is also included.
+noise; the uncertainties in velocity reconstruction are negligi-
+ble in comparison.
+These results demonstrate that the machine learning correc-
+tion improves not only the reconstruction of individual halo
+velocities and pairwise velocity statistic, but also the stacked
+kSZ profiles. Overall, the Transformer-based residual correc-
+tion is able to preserve the physically relevant information re-
+quired for kSZ profile measurements while significantly re-
+ducing the systematic bias present in the linear reconstruction.
+VII. CONCLUSION
+In this work, we show how machine learning can improve
+peculiar velocity reconstruction beyond the standard linear
+
+15
+framework for DESI- and Rubin-like LRG and ELG sam-
+ples. Starting from a physically motivated linear reconstruc-
+tion baseline, we train two residual learning models, a GBDT
+and a Transformer, to predict corrections to the reconstructed
+LOS velocity. We build on the standard linear reconstruction
+pipeline by learning the structured nonlinear residuals.
+We demonstrate that the machine learning reconstruction
+increases both the Pearson correlation coefficient (rv) and the
+concordance correlation coefficient (CCC,ρv), the latter pro-
+vides a clear measure of how well the overall amplitude of
+the reconstructed velocity agrees with the true value. The ma-
+chine learning predictions also more accurately recover the
+momentum power spectrum and cross-correlation coefficient
+at all sampled scales. These results show that the machine
+learning model can effectively recover information beyond the
+linear approximation while preserving the large-scale physi-
+cal information already captured by the linear baseline recon-
+struction.
+For the periodic box snapshot atz=0.5, the GBDT model
+provides a clear improvement over the linear baseline in both
+real and Fourier space metrics. For the LRG sample the lin-
+ear LOS velocity estimate has (r v, ρv)=(0.69,0.60) which
+increases to (0.76,0.72) with the GBDT residuals.
+The improvements are more significant in the realistic light-
+cone setting. For the 0.4<z<0.6 LRG sample, the lin-
+ear reconstruction gives (r v, ρv)=(0.63,0.55), which im-
+proves to (0.89,0.88) for GBDT and (0.91,0.90) for the Trans-
+former. The improvement in the CCC,ρ v,indicates not only a
+tighter linear relationship between the reconstructed and true
+velocities but also that the machine learning predictions more
+accurately match the full amplitude of the velocity, while
+the linear estimate systematically underestimates it. For the
+0.7<z<0.9 LRG sample, the corresponding values improve
+from (0.65,0.55) to (0.90,0.89) and (0.92,0.91), respectively.
+In both redshift bins, the machine learning reconstructions can
+also recover the LOS momentum power spectrum much bet-
+ter than the linear baseline and maintain substantially higher
+cross-correlation with the true field in the nonlinear regime.
+Among the two models used here, the Transformer gives the
+best overall performance, indicating that a more complicated
+architecture is able to extract additional information from the
+multi-scale reconstruction features.
+We also find similar results for the ELG sample in the 0.7<
+z<0.9 redshift bin. The transformer model also improves the
+corresponding values from (0.57,0.53) to (0.83,0.82) respec-
+tively. For the higher-redshift ELG bin 1.0<z<1.2, the lin-
+ear model gives a very poor approximation to the true velocity,
+with (r v, ρv)=(0.37,0.36). The Transformer model, how-
+ever, improves the reconstruction significantly with (rv, ρv)=
+(0.76,0.74). These results show that although the recon-
+struction performance degrades at higher redshift, the learned
+residual corrections remain effective for ELG tracers. We
+discuss how the expected performance can be heuristically
+related to bias and number density of the galaxy samples,
+b2(z)n(z).
+We also tested a simplified Transformer model that uses
+only the most basic reconstruction features, excluding the
+derivative based environment features. Even in this reduced
+setting, the model can still improve significantly over the lin-
+ear baseline. This is encouraging for realistic survey applica-
+tions, where derivative based features may be noisier and less
+robust than in simulations.
+We further quantified the impact of redshift uncertainties in
+redshift identification degrade the reconstruction. A stronger
+effect is seen on the LOS component than on the transverse
+one relevant to the moving lens analysis. Our results highlight
+the trade offbetween galaxy sample size and redshift accuracy
+in velocity reconstruction performance and offer the possibil-
+ity that the higher number density of photometric galaxy sam-
+ples may counter the reduction in the reconstructed velocity
+correlation.
+We also examined the impact of the improved reconstruc-
+tion on downstream kSZ observables. For the pairwise veloc-
+ity statistic, we find that the linear reconstruction can recover
+the overall scale dependence but systematically underestimate
+the true amplitude, whereas the Transformer corrected results
+can recover the true pairwise signal accurately. In particular,
+on linear scales withr>45 Mpc, the average difference from
+the true pairwise velocity is below 2.5%. We also find a sim-
+ilar trend for the stacked kSZ profile measured from the sim-
+ulated kSZ map using both aperture photometry and disk kSZ
+temperatures. The linear reconstruction systematically over-
+estimates the profile amplitude, while the Transformer cor-
+rected result recovers the true profile accurately, with differ-
+ences below 1% at intermediate apertures. These results show
+that the machine learning correction improves not only object
+level velocity reconstruction, but also improves the kSZ ob-
+servables that are directly relevant for cosmological analysis.
+The machine learning model used in this work is trained as-
+suming a fixed cosmology used to produce the training simu-
+lations. The learned nonlinear residuals could in principle de-
+pend on the cosmological model. Quantifying the sensitivity
+of the reconstruction performance to changes in cosmological
+parameters would be valuable for assessing how such meth-
+ods can be used not only to improve velocity reconstruction,
+but also to test cosmological models. We leave a systematic
+test of both the cosmology dependence and a fuller assessment
+of the potential to use this approach for photometric redshift
+surveys to future work.
+In summary, this work demonstrates that the machine learn-
+ing models can provide an effective and practical way to im-
+prove peculiar velocity reconstruction beyond the linear ap-
+proximation. The method is shown to be promising in re-
+alistic lightcone settings relevant for ongoing and upcom-
+ing LSS and CMB surveys. We focused here on a mini-
+mal set of displacement and number density-based features
+using DESI-like spectroscopic galaxy samples. The advent
+of LSST, Roman and Euclid LSS survey data and SO and
+FYST CMB maps provides rich opportunities to consider a
+far broader set of input features, larger galaxy samples and
+a broad array of applications. Valuable avenues for future
+study include assessing improvements in velocity-based con-
+straints on the growth rate of structure and modified gravity,
+the measurement of large scale cosmic flows, and velocity
+cross-correlations with CMB lensing, galaxy lensing, cluster
+catalogs, and intensity mapping surveys.
+
+16
+ACKNOWLEDGMENTS
+We thank Boryana Hadzhiyska for helpful conversations
+during the course of this research and thank Patricio Gal-
+lardo for making publicly available the pairwise correlation
+code used in this work. We also acknowledge the use of
+the National Energy Research Scientific Computing Center
+(NERSC) computational resources and platform, through an
+allocation provided to the DESI collaboration, in this work.
+The work of YG and RB is supported by NSF grant AST-
+2206088, NASA grant 22-ROMAN11-0011 and NASA grant
+12-EUCLID12-0004.
+Appendix A: Simulated kSZ map creation and analysis
+1. Simulated kSZ Map
+To assess how velocity reconstruction errors propagate into
+a practical kSZ analysis, we construct a mock kSZ temper-
+ature map from the halo lightcone catalog, following [80].
+In the non-relativistic limit, the kSZ temperature fluctuation
+along the line of sight ˆncan be written as
+∆TkS Z(ˆn)
+T0
+=− σT
+c
+Z
+ne vlos dl,(A1)
+whereσ T is the Thomson cross section,n e is the free electron
+number density, andv los is the LOS peculiar velocity.
+We model the kSZ contribution from each haloias a pro-
+jected optical depth profile multiplied by its bulk LOS veloc-
+ity,
+∆Ti(θ)=−T CMB τi(θ) v∥,i
+c ,(A2)
+whereθis the angular distance from the halo center. The op-
+tical depth is written as
+τi(θ)= Ne,iσT
+D2
+A,i
+WG(θ;Σ i),(A3)
+whereN e,i is the total number of free electrons,D A,i the angu-
+lar diameter distance, and
+WG(θ;Σ i)= 1
+2πΣ2
+i
+exp
+− θ2
+2Σ2
+i
+ ,
+Z
+WG dΩ =1.(A4)
+The effective angular width is written as
+Σ2
+i =σ 2
+B +σ 2
+R,i,(A5)
+whereσ B is the instrumental beam size andσR,i is the intrinsic
+angular extent of the gas profile. In our implementation, we
+use
+σB = θFWHM
+√
+8 ln 2
+, θ FWHM =2.1 ′,(A6)
+and
+σR,i =α Ri
+DA,i
+,(A7)
+withα=0.6. The characteristic halo radius is defined using
+a spherical overdensity of∆ =180 with respect to the mean
+matter density,
+Ri =
+" 3Mi
+4π∆¯ρm(zi)
+#1/3
+,∆ =180.(A8)
+Assuming fully ionized gas, the total number of free elec-
+trons can be calculated as
+Ne,i = fgas Mi
+µemp
+,(A9)
+wherem p is the proton mass,µ e =1.17 is the mean molecular
+weight of free electron, and we adoptf gas =0.1574.
+The full kSZ map is then obtained by summing the contri-
+bution from all halos,
+∆TkS Z(ˆn)=
+X
+i
+∆Ti(θi).(A10)
+We construct the map in Healpix format [81] with
+nside=8192. For computation efficiency, each halo only con-
+tributes within a radius of 5Σi around the halo center. We use
+the true halo LOS velocityv true when generating the map, so
+this simulated map represents the true kSZ signal without any
+velocity reconstruction error introduced.
+It is important to note that the map constructed here is a
+semi-analytic simulation rather than a high fidelity kSZ simu-
+lation. The gas distribution around each halo is modeled with
+an idealized Gaussian profile, so the resulting map is not in-
+tended to reproduce all details of the true kSZ sky. It captures
+the dominant dependence of the signal on halo optical depth,
+angular scale, and LOS velocity, and is therefore sufficient for
+testing observables relevant to velocity reconstruction, includ-
+ing stacked kSZ measurements.
+We also simulate primary CMB and instrument noise to
+test the model performance in anticipation of realistic CMB
+observing conditions. The primary CMB is simulated using
+CAMB [82] using the same cosmology as the AbacusSummit
+simulation. We model the instrument noise as white noise
+with an amplitude of 6.3µK-arcmin and apply a Gaussian
+beam with FWHM=1.4 ′ for Simons Observatory observa-
+tion at 150 GHz [78].
+2. Pairwise kSZ Momentum and Optical Depth Fitting
+The kSZ pairwise momentum is given by
+PkS Z(r,z i)=−
+P
+i j(∆ ¯TAP,i −∆ ¯TAP,j)ci j
+P
+i j c2
+i j
+,(A11)
+where the sum is over all pairs of tracers with separations in a
+bin centered onr, and in a redshift bin centered onz.∆ ¯TAP,i is
+the kSZ temperature obtained from simulated maps by using
+aperture photometry centered on thei th tracer.
+The aperture photometry temperature is defined as
+∆ ¯TAP(ˆn)= ∆ ¯TDisk(ˆn)−∆ ¯TAnn(ˆn),(A12)
+
+17
+where the disk averaged temperature within an aperture of ra-
+diusθis given by
+¯TDisk(θ)= 1
+Ndisk
+X
+i∈disk
+∆TkS Z,i,(A13)
+where the sum runs over allN disk pixels inside a circular aper-
+ture of radiusθcentered around the tracer location ˆn. Simi-
+larly, the average temperature within a typically adjacent an-
+nulus of equal area can be written as
+¯TAnn(ˆn)= 1
+Nann
+X
+j∈ann(θ,
+√
+2θ)
+∆TkS Z,j,(A14)
+whereann(θ,
+√
+2θ) denotes the annulus with inner radiusθ
+and outer radius
+√
+2θcentered on ˆn, andN ann is the number
+of pixels in that annulus.
+The pairwise kSZ profile is related to the pairwise velocity,
+V, in Eq. (15, through
+P(r)= T0
+c ¯τˆV(r),(A15)
+where ¯τdenotes the effective mass-averaged optical depth of
+the sample. We estimate ¯τby fitting the measured pairwise
+kSZ profile with a model constructed from a given pairwise
+velocity estimate. The best-fit value is obtained by minimiz-
+ing
+χ2(¯τ)=
+X
+i,j
+∆Pi(¯τ)C−1
+i j ∆P j(¯τ),(A16)
+whereC i j is the covariance matrix of the pairwise kSZ mea-
+surement estimated from the bootstrap analysis and,
+∆Pi(¯τ)=P obs(ri)−P model(ri; ¯τ).(A17)
+HereP obs is the measured pairwise kSZ profile, whileP model
+is the prediction obtained using the chosen pairwise velocity
+correlation obtained by reconstruction in Eq.(A15) and with
+the trial value of ¯τ. We apply this fitting procedure to three
+different velocity inputs: the true, linear reconstructed, and
+machine learning derived pairwise velocities, so that the re-
+sulting best-fit optical depths directly quantify how velocity
+reconstruction affects the inferred optical depth. Following
+[83], we use scalesr>20 Mpc for our fitting process.
+
+18
+[1] N. Kaiser, Mon. Not. Roy. Astron. Soc.227, 1 (1987).
+[2] M. A. Strauss and J. A. Willick, Phys. Rep.261, 271 (1995),
+arXiv:astro-ph/9502079 [astro-ph].
+[3] C. Howlett, K. Said, J. R. Lucey, M. Colless, F. Qin, Y . Lai,
+R. B. Tully, and T. M. Davis, Mon. Not. Roy. Astron. Soc.515,
+953 (2022), arXiv:2201.03112 [astro-ph.CO].
+[4] W. J. Percival and M. White, Mon. Not. Roy. Astron. Soc.393,
+297 (2009), arXiv:0808.0003 [astro-ph].
+[5] M. J. Hudson and S. J. Turnbull, Astrophys. J. Lett.751, L30
+(2013), arXiv:1203.4814 [astro-ph.CO].
+[6] K. Said, M. Colless, C. Magoulas, J. R. Lucey, and M. J.
+Hudson, Mon. Not. Roy. Astron. Soc.497, 1275 (2020),
+arXiv:2007.04993 [astro-ph.CO].
+[7] R. J. Turner, (2024), arXiv:2411.19484 [astro-ph.CO].
+[8] R. A. Sunyaev and Y . B. Zeldovich, Mon. Not. Roy. Astron.
+Soc.190, 413 (1980).
+[9] N. Hand et al., Phys. Rev. Lett.109, 041101 (2012),
+arXiv:1203.4219 [astro-ph.CO].
+[10] E. Schaan et al. (Atacama Cosmology Telescope), Phys. Rev. D
+103, 063513 (2021), arXiv:2009.05557 [astro-ph.CO].
+[11] A. Laguë, M. S. Madhavacheril, K. M. Smith, S. Fer-
+raro, and E. Schaan, Phys. Rev. Lett.134, 151003 (2025),
+arXiv:2411.08240 [astro-ph.CO].
+[12] Y . Gong et al., Phys. Rev. D113, 063538 (2026),
+arXiv:2511.23417 [astro-ph.CO].
+[13] C. M. Springob, C. Magoulas, M. Colless, J. Mould, P. Er-
+dogdu, D. H. Jones, J. R. Lucey, L. Campbell, and C. J.
+Fluke, Mon. Not. Roy. Astron. Soc.445, 2677 (2014),
+arXiv:1409.6161 [astro-ph.CO].
+[14] J. S. Bullock and M. Boylan-Kolchin, Ann. Rev. Astron. Astro-
+phys.55, 343 (2017), arXiv:1707.04256 [astro-ph.CO].
+[15] N. Battaglia, S. Ferraro, E. Schaan, and D. Spergel, JCAP11,
+040, arXiv:1705.05881 [astro-ph.CO].
+[16] D. J. Eisenstein, H.-j. Seo, and M. J. White, Astrophys. J.664,
+660 (2007), arXiv:astro-ph/0604361.
+[17] D. J. Eisenstein, H.-j. Seo, E. Sirko, and D. Spergel, Astrophys.
+J.664, 675 (2007), arXiv:astro-ph/0604362.
+[18] N. Padmanabhan, X. Xu, D. J. Eisenstein, R. Scalzo, A. J.
+Cuesta, K. T. Mehta, and E. Kazin, Mon. Not. Roy. Astron. Soc.
+427, 2132 (2012), arXiv:1202.0090 [astro-ph.CO].
+[19] X. Xu, A. J. Cuesta, N. Padmanabhan, D. J. Eisenstein, and
+C. K. McBride, Mon. Not. Roy. Astron. Soc.431, 2834 (2013),
+arXiv:1206.6732 [astro-ph.CO].
+[20] L. Anderson et al. (BOSS), Mon. Not. Roy. Astron. Soc.439,
+83 (2014), arXiv:1303.4666 [astro-ph.CO].
+[21] H. Gil-Marin et al. (eBOSS), Mon. Not. Roy. Astron. Soc.498,
+2492 (2020), arXiv:2007.08994 [astro-ph.CO].
+[22] K. C. Chan, G. Lu, and X. Wang, Mon. Not. Roy. Astron. Soc.
+529, 1667 (2024), arXiv:2311.12611 [astro-ph.CO].
+[23] M. White, Mon. Not. Roy. Astron. Soc.450, 3822 (2015),
+arXiv:1504.03677 [astro-ph.CO].
+[24] S.-F. Chen, Z. Vlah, and M. White, JCAP09, 017,
+arXiv:1907.00043 [astro-ph.CO].
+[25] E. Schaan et al. (ACTPol), Phys. Rev. D93, 082002 (2016),
+arXiv:1510.06442 [astro-ph.CO].
+[26] P. Zhang, J. Pan, and Y . Zheng, Physical Review D87,
+10.1103/physrevd.87.063526 (2013).
+[27] C. Blake and R. J. Turner 10.33232/001c.124509 (2024),
+arXiv:2408.05660 [astro-ph.CO].
+[28] Y . Lai et al. 10.5281/zenodo.17602818 (2025),
+arXiv:2512.03229 [astro-ph.CO].
+[29] A. Aghamousa et al. (DESI), (2016), arXiv:1611.00036 [astro-
+ph.IM].
+[30] LSST Science Collaboration, LSST Science Book, version 2.0
+(2009), arXiv:0912.0201 [astro-ph.IM].
+[31] Y . Mellier et al. (Euclid), Astron. Astrophys.697, A1 (2025),
+arXiv:2405.13491 [astro-ph.CO].
+[32] D. Spergel et al., (2015), arXiv:1503.03757 [astro-ph.IM].
+[33] B. R. Guachalla, E. Schaan, B. Hadzhiyska, and S. Ferraro,
+Phys. Rev. D109, 103533 (2024), arXiv:2312.12435 [astro-
+ph.CO].
+[34] B. Hadzhiyska, S. Ferraro, B. R. Guachalla, and E. Schaan,
+Phys. Rev. D109, 103534 (2024), arXiv:2312.12434 [astro-
+ph.CO].
+[35] Y . B. Zel’dovich, Astron. Astrophys.5, 84 (1970).
+[36] X. Xu, N. Padmanabhan, D. J. Eisenstein, K. T. Mehta, and
+A. J. Cuesta, Mon. Not. Roy. Astron. Soc.427, 2146 (2012),
+arXiv:1202.0091 [astro-ph.CO].
+[37] Y .-Z. Ma, G.-D. Gong, N. Sui, and P. He, Mon. Not. Roy. As-
+tron. Soc.475, 379 (2018), arXiv:1711.08756 [astro-ph.CO].
+[38] R. J. Turner and C. Blake, Mon. Not. Roy. Astron. Soc.526,
+337 (2023), arXiv:2306.16664 [astro-ph.CO].
+[39] A. J. Tishue, C. Shiveshwarkar, and G. Holder, (2025),
+arXiv:2510.25821 [astro-ph.CO].
+[40] R. Suresh, H. Bishnoi, A. V . Kuklin, A. Parikh, M. Molokeev,
+R. Harinarayanan, S. Gharat, and P. Hiba, Front. in Phys.12,
+1322162 (2024).
+[41] Y . Gong and R. Bean, Phys. Rev. D112, 023527 (2025),
+arXiv:2505.12720 [astro-ph.CO].
+[42] O. Ronneberger, P. Fischer, and T. Brox, arXiv e-prints ,
+arXiv:1505.04597 (2015), arXiv:1505.04597 [cs.CV].
+[43] Y . Wang and X. Yang, Astrophys. J.969, 76 (2024),
+arXiv:2406.14101 [astro-ph.IM].
+[44] X. Xiao, J. Ding, X. Luo, S. K. Lan, L. Xiao, S. Liu,
+X. Wang, L. Zhang, and X.-D. Li, Astrophys. J.994, 204
+(2025), arXiv:2411.11280 [astro-ph.CO].
+[45] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn,
+X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold,
+S. Gelly, J. Uszkoreit, and N. Houlsby, arXiv e-prints ,
+arXiv:2010.11929 (2020), arXiv:2010.11929 [cs.CV].
+[46] Z. Liu, Y . Lin, Y . Cao, H. Hu, Y . Wei, Z. Zhang, S. Lin,
+and B. Guo, arXiv e-prints , arXiv:2103.14030 (2021),
+arXiv:2103.14030 [cs.CV].
+[47] C. Li, Y . Zhang, C. Cui, D. Fan, Y . Zhao, X.-B. Wu,
+B. He, Y . Xu, S. Li, J. Han, Y . Tao, L. Mi, H. Yang, and
+S. Yang, Monthly Notices of the Royal Astronomical Society
+10.1093/mnras/stab1650 (2021).
+[48] N. Sahakyan, V . Vardanyan, and M. Khachatryan, Mon. Not.
+Roy. Astron. Soc.519, 3000 (2022), arXiv:2212.06614 [astro-
+ph.HE].
+[49] A. Tolamatti, K. K. Singh, and K. K. Yadav, Mon. Not. Roy. As-
+tron. Soc.523, 5341 (2023), arXiv:2306.15393 [astro-ph.HE].
+[50] J. Coronado-Blázquez, Mon. Not. Roy. Astron. Soc.521, 4156
+(2023), arXiv:2303.07922 [astro-ph.HE].
+[51] C. Donoso-Oliva, I. Becker, P. Protopapas, G. Cabrera-Vives,
+M. Vishnu, and H. Vardhan, Astron. Astrophys.670, A54
+(2023).
+[52] H. W. Leung and J. Bovy, Monthly Notices of the Royal Astro-
+nomical Society527, 1494–1520 (2023).
+[53] Y . Gong and R. Bean, Phys. Rev. D109, 123525 (2024),
+arXiv:2403.04664 [astro-ph.CO].
+[54] T. Signor et al. (Euclid), (2024), arXiv:2402.04800 [astro-
+
+19
+ph.CO].
+[55] J. H. Friedman, The Annals of Statistics29, 1189 (2001).
+[56] G. Ke, Q. Meng, T. Finley, T. Wang,
+W. Chen, W. Ma, Q. Ye, and T.-Y . Liu, in
+Advances in Neural Information Processing Systems, V ol. 30
+(2017).
+[57] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit,
+L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, in
+Advances in Neural Information Processing Systems, V ol. 30
+(2017).
+[58] N. A. Maksimova, L. H. Garrison, D. J. Eisenstein,
+B. Hadzhiyska, S. Bose, and T. P. Satterthwaite, Mon. Not.
+Roy. Astron. Soc.508, 4017 (2021), arXiv:2110.11398 [astro-
+ph.CO].
+[59] L. H. Garrison, D. J. Eisenstein, and P. A. Pinto, Mon. Not.
+Roy. Astron. Soc.485, 3370 (2019), arXiv:1810.02916 [astro-
+ph.CO].
+[60] L. H. Garrison, D. J. Eisenstein, D. Ferrer, N. A. Maksimova,
+and P. A. Pinto, Mon. Not. Roy. Astron. Soc.508, 575 (2021),
+arXiv:2110.11392 [astro-ph.CO].
+[61] N. Aghanim et al. (Planck), Astron. Astrophys.641, A6
+(2020), [Erratum: Astron.Astrophys. 652, C4 (2021)],
+arXiv:1807.06209 [astro-ph.CO].
+[62] S. Yuan, L. H. Garrison, B. Hadzhiyska, S. Bose, and D. J.
+Eisenstein, Mon. Not. Roy. Astron. Soc.510, 3301 (2022),
+arXiv:2110.11412 [astro-ph.CO].
+[63] S. Yuan et al., Mon. Not. Roy. Astron. Soc.530, 947 (2024),
+arXiv:2306.06314 [astro-ph.CO].
+[64] Z. Zheng, A. L. Coil, and I. Zehavi, Astrophys. J.667, 760
+(2007), arXiv:astro-ph/0703457.
+[65] B. Hadzhiyska et al., (2023), arXiv:2305.11935 [astro-ph.CO].
+[66] J. L. Tinker, B. E. Robertson, A. V . Kravtsov, A. Klypin, M. S.
+Warren, G. Yepes, and S. Gottlöber, Astrophys. J.724, 878
+(2010), arXiv:1001.3162 [astro-ph.CO].
+[67] B. Hadzhiyska, L. H. Garrison, D. Eisenstein, and
+S. Bose, Mon. Not. Roy. Astron. Soc.509, 2194 (2021),
+arXiv:2110.11413 [astro-ph.CO].
+[68] V . Desjacques, D. Jeong, and F. Schmidt, Phys. Rept.733, 1
+(2018), arXiv:1611.09787 [astro-ph.CO].
+[69] S. C. Hotinli, K. M. Smith, M. S. Madhavacheril, and
+M. Kamionkowski, Phys. Rev. D104, 083529 (2021),
+arXiv:2108.02207 [astro-ph.CO].
+[70] S. C. Hotinli, E. Pierpaoli, S. Ferraro, and K. Smith, Phys. Rev.
+D108, 083508 (2023), arXiv:2305.15462 [astro-ph.CO].
+[71] B. Soergel, A. Saro, T. Giannantonio, G. Efstathiou, and
+K. Dolag, Mon. Not. Roy. Astron. Soc.478, 5320 (2018),
+arXiv:1712.05714 [astro-ph.CO].
+[72] B. Hadzhiyska, S. Ferraro, R. Pakmor, S. Bose, A. M. Delgado,
+C. Hernández-Aguayo, R. Kannan, V . Springel, S. D. M. White,
+and L. Hernquist, Mon. Not. Roy. Astron. Soc.526, 369 (2023),
+arXiv:2305.00992 [astro-ph.CO].
+[73] P. G. Ferreira, R. Juszkiewicz, H. A. Feldman, M. Davis, and
+A. H. Jaffe, Astrophys. J. Lett.515, L1 (1999), arXiv:astro-
+ph/9812456.
+[74] J. E. Forero-Romero, Y . Hoffman, S. Gottloeber, A. Klypin,
+and G. Yepes, Mon. Not. Roy. Astron. Soc.396, 1815 (2009),
+arXiv:0809.4135 [astro-ph].
+[75] L. Lucie-Smith, H. V . Peiris, and A. Pontzen, Mon. Not. Roy.
+Astron. Soc.490, 331 (2019), arXiv:1906.06339 [astro-ph.CO].
+[76] Y . Wanget al., Mon. Not. Roy. Astron. Soc.409, 737 (2010),
+arXiv:1006.3517 [astro-ph.CO].
+[77] B. Hadzhiyska et al. 10.5281/zenodo.19160138 (2026),
+arXiv:2604.19745 [astro-ph.CO].
+[78] P. Ade et al. (Simons Observatory), JCAP02, 056,
+arXiv:1808.07445 [astro-ph.CO].
+[79] Y . Gong, R. Bean, P. A. Gallardo, E. M. Vavagiakis,
+N. Battaglia, and M. Niemack, Phys. Rev. D109, 023513
+(2024), arXiv:2307.11894 [astro-ph.CO].
+[80] F. A. Roper, Y .-C. Cai, and J. A. Peacock, (2025),
+arXiv:2510.12553 [astro-ph.CO].
+[81] K. M. Górski, E. Hivon, A. J. Banday, B. D. Wandelt, F. K.
+Hansen, M. Reinecke, and M. Bartelman, Astrophys. J.622,
+759 (2005), arXiv:astro-ph/0409513.
+[82] A. Lewis and A. Challinor, CAMB: Code for Anisotropies
+in the Microwave Background, Astrophysics Source Code Li-
+brary, record ascl:1102.026 (2011), ascl:1102.026.
+[83] V . Calafut et al., Phys. Rev. D104, 043502 (2021),
+arXiv:2101.08374 [astro-ph.CO].

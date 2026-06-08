@@ -1,0 +1,2519 @@
+Title: TRINITY: A coupled model of winds, radiation, and photoionised gas in molecular clouds. I. Methods and validation
+Authors: Jia Wei Teh, Ralf S. Klessen, Simon C. O. Glover, Kathryn Kreckel
+Published: 2026-05-26
+Categories: astro-ph.GA, astro-ph.IM
+
+Astronomy & Astrophysics manuscript no. main ©ESO 2026
+May 28, 2026
+TRINITY: A coupled model of winds, radiation, and photoionised
+gas in molecular clouds
+I. Methods and validation
+Jia Wei Teh (຿)1⋆
+ 
+ 
+, Ralf S. Klessen 1, 2
+ 
+ 
+, Simon C. O. Glover 1
+ 
+ 
+, and Kathryn Kreckel 3
+ 
+ 
+1 Universität Heidelberg, Zentrum für Astronomie, Institut für Theoretische Astrophysik, Albert-Ueberle-Straße 2,
+69120 Heidelberg, Germany
+2 Universität Heidelberg, Interdisziplinäres Zentrum für Wissenschaftliches Rechnen, Im Neuenheimer Feld 205, 69120
+Heidelberg, Germany
+3 Universität Heidelberg, Zentrum für Astronomie, Astronomisches Rechen-Institut, Mönchhofstraße 12-14, 69120 Hei-
+delberg, Germany
+May 28, 2026
+ABSTRACT
+Context. Multi-wavelength surveys place cloud dispersal at ∼ 1–5 Myr after massive-star emergence, before the first
+core-collapse supernovae. Whether a cloud disperses, re-collapses, or leaks Lyman-continuum (LyC) photons depends
+on how pre-supernova winds, radiation pressure, and photoionised-gas pressure ( PH ii) couple to the swept-up shell.
+Aims. We introduce Trinity, a one-dimensional thin-shell code that succeeds warpfield and follows stellar feedback
+across flexible cloud density profiles.
+Methods. Trinity evolves the bubble-shell structure under winds, supernovae, direct and dust-reprocessed radiation
+pressure, PH ii, and gravity. A phase-aware driving prescription uses the larger of the hot-bubble and photoionised-gas
+pressures in the energy-driven phase, and PH ii plus direct ram pressure in the momentum-driven phase. The initial
+cloud may be uniform, a piecewise power law, or a Bonnor–Ebert sphere. Shell structure, hot-bubble cooling, photon
+absorption, and LyC escape are solved with the dynamics.
+Results. We validate the code against analytic wind and photoionisation limits and explore runs with cloud mass
+Mcloud = 10 5–106.5 M⊙, core density ncore = 10 3–104 cm−3, and star-formation eﬀiciency ε = 0.01–0.30. Including PH ii
+changes the dynamics measurably, increasing the shell radius by ∼ 17% at 10 Myr in the fiducial validation run. In a
+higher-eﬀiciency example, the energy-driven phase lasts less than 1 Myr, radiation pressure remains sub-dominant, and
+PH ii remains dynamically important after the transition to momentum-dominated evolution. Density structure changes
+both phase durations and outcomes: at fixed Mcloud, ncore, and ε, homogeneous and shallow profiles re-collapse, while
+a steep ρ ∝ r−2 cloud keeps expanding. In a dispersing grid, Bonnor–Ebert clouds reach cloud dispersal time τdisp
+roughly ∼ 55% later than homogeneous clouds.
+Conclusions. The first results show that both PH ii and cloud structure are important for a complete dynamical treatment:
+PH ii alters late-time shell expansion, while density structure shifts dispersal thresholds and emergence times even when
+the stellar population is fixed. Trinity provides a highly eﬀicient, interpretable framework for mapping feedback
+dominance across cloud parameter space, providing useful tool to study resolved ii regions.
+Key words. methods: numerical – ISM: bubbles – ISM: clouds – ISM: H ii regions – ISM: kinematics and dynamics –
+stars: formation
+1. Introduction
+Giant molecular clouds (GMCs) form stars ineﬀiciently.
+Across nearby galaxies, integrated cloud-scale star forma-
+tion eﬀiciencies are roughly a few per cent to ten per cent
+(Lada et al. 2010), and parent clouds disperse within 1–
+5 Myr once massive stars emerge ( Chevance et al. 2020;
+Kim et al. 2022). The first core-collapse supernovae (SNe)
+arrive only after ∼ 3–4 Myr, hinting that cloud clearing
+is caused by pre-supernova feedback (e.g., photoionisation,
+stellar winds, and radiation pressure; see Krumholz 2014;
+Dale 2015; Reissl et al. 2018). The remaining question is
+which of these channels dominates, when, and for which
+cloud properties.
+⋆ e-mail: jiaweiteh.stud@uni-heidelberg.de
+Multi-wavelength surveys now time cloud clearing by
+matching molecular gas, young stars, dust emission, and
+ionised gas at cloud-scale resolution. PHANGS (Physics at
+High Angular resolution in Nearby GalaxieS) provides the
+clearest example: ALMA traces the cold molecular reser-
+voir, HST resolves the exposed young clusters, JWST recov-
+ers embedded sources and dust structure, and VLT/MUSE
+measures the nebular gas ( Leroy et al. 2021; Lee et al.
+2022; Emsellem et al. 2022; Lee et al. 2023). Resolved
+CO, H α, and 24 µm analyses place the duration of the em-
+bedded phase of massive star formation at 2–7 Myr ( Kim
+et al. 2021), and find that GMCs typically disperse within
+∼ 3 Myr once massive stars appear ( Chevance et al. 2022).
+PHANGS-JWST extends the same argument into the dust-
+obscured phase: statistical timing across 37 galaxies puts
+Article number, page 1 of 22
+arXiv:2605.27517v1  [astro-ph.GA]  26 May 2026
+
+A&A proofs: manuscript no. main
+the embedded-to-exposed transition below 4 Myr, and be-
+low 1 Myr in some environments ( Ramambason et al. 2026).
+LEGUS (Legacy ExtraGalactic UV Survey; Calzetti et al.
+2015) H α morphologies give consistent clearing times of
+roughly 1–2 Myr for the most luminous regions ( Hannon
+et al. 2022). In the Milky Way, the SDSS-V Local Vol-
+ume Mapper now brings comparable optical emission-line
+diagnostics to parsec and sub-parsec scales over very large
+sky areas ( Kreckel et al. 2024; Drory et al. 2024; Sattler
+et al. 2026). These measurements point to the same order-
+ing: most regions expose their massive stars before the first
+core-collapse supernova arrives.
+The cloud dispersal time is not universal; cluster mass
+is one of the variables it depends on, with more massive
+clusters emerging from their natal gas earlier than lower-
+mass ones ( Pedrini et al. 2026). McQuaid et al. (2024) finds
+that low-mass clusters in NGC 4449 remain embedded for
+5–6 Myr, while more massive clusters expose their surround-
+ings by ∼ 4 Myr. The mechanism behind cloud-clearing also
+changes with scale. Barnes et al. (2021) analyses ∼ 5800 ii
+regions across 19 galaxies and find that most are overpres-
+sured and expanding. Direct radiation pressure dominates
+mostly in the most compact, embedded, or luminous envi-
+ronments: in 30 Doradus it exceeds photoionised gas pres-
+sure within ∼ 10 pc of the central cluster ( Lopez et al. 2011,
+2014), whereas in Galactic regions with r ≲ 0.5 pc dust-
+reprocessed infrared radiation pressure dominates roughly
+84 % of cases ( Olivier et al. 2021). Beyond the compact
+phase, photoionised gas pressure usually takes over ( Pathak
+et al. 2025b). Resolved studies that connect pressure terms
+to candidate ionising stellar populations recover this hierar-
+chy and begin to map its dependence on metallicity, cluster
+mass, and evolutionary state ( Barnes et al. 2022; Scheuer-
+mann et al. 2023; Rowland et al. 2024; Barnes et al. 2026;
+Scheuermann et al. 2026). Direct cross-matching of star-
+cluster catalogues with ii-region catalogues further con-
+strains how many ionising photons leak into the diffuse
+ionised gas ( Teh et al. 2023; Scheuermann et al. 2026).
+The observational target is therefore no longer limited
+to measuring cloud lifetime; rather, it is to understand
+how much feedback couples to the natal cloud, how much
+leaks out, and what medium the first supernova encounters.
+The same pre-supernova clearing physics sets the environ-
+ment into which supernovae explode ( Watkins et al. 2023;
+Barnes et al. 2023). Radiation-hydrodynamic calculations
+show that winds and photoionisation carve low-density cav-
+ities tens of parsecs across, reducing the density of the sur-
+rounding interstellar medium (ISM; Fichtner et al. 2024).
+If the expanding cavity has already reached the edge of
+the cloud, the supernova expands in a semi-confined fash-
+ion through low-density channels rather than spherically
+into an intact cloud; this can amplify small-scale turbu-
+lence ( Lau & Bonnell 2025). Modelling the pre-SN phase
+correctly is therefore a precondition for modelling SN feed-
+back at all.
+Existing tools cover different slices of this problem.
+Semi-analytic codes such as warpfield (Rahner et al.
+2017, 2019) follow winds, radiation pressure, supernovae,
+cooling, and gravity on cloud scales and can survey
+broad parameter ranges eﬀiciently. warpfield-emp cou-
+ples warpfield to cloudy (Ferland et al. 2017) and po-
+laris (Reissl et al. 2016) to predict emission lines from
+evolving ii regions ( Pellegrini et al. 2020), while toddlers
+(Kapoor et al. 2023, 2024) computes emission libraries for
+star-forming regions by coupling similar evolution models
+to the radiative transfer code skirt (Baes et al. 2011).
+Jiménez et al. (2026) includes the metallicity dependence
+of the wind–cooling balance, identifying a standing-shell
+regime in low-metallicity clouds. Three-dimensional sim-
+ulations follow feedback with similar physical fidelity but
+at much higher computational cost (see Walch et al. 2015;
+Girichidis et al. 2016; Smith et al. 2020; Grudić et al. 2021).
+The parameter space of the problem is large: the cloud
+mass, mean density and density profile, the cluster mass and
+the metallicity can all have a significant impact on the evo-
+lution of the feedback-driven cavity. Mapping this param-
+eter space statistically requires an eﬀicient forward model
+that follows every form of pre-SN feedback self-consistently,
+and produces outputs that align directly with resolved ob-
+servations. Thus Trinity is built for that role: it cou-
+ples winds, supernovae, direct and dust-reprocessed radia-
+tion pressure, photoionised gas pressure ( PH ii), and gravity
+through a continuous energy- to momentum-driven bubble
+evolution. In this first paper of the Trinity series, we intro-
+duce two changes relative to warpfield. First, PH ii enters
+the shell equation of motion explicitly and combines with
+the hot-bubble pressure Pb. Second, the initial cloud is not
+restricted to simple homogeneous density profiles; uniform,
+power-law, and Bonnor–Ebert structures can be compared
+at different cloud mass and star formation eﬀiciency.
+This study is structured as follows: Section 2 describes
+the Trinity model. Section 3 validates against analytic
+limits and warpfield, Sect. 4 demonstrates the diagnos-
+tic suite, and Sect. 5 collects the limitations before Sect. 6
+concludes.
+2. The TRINITY model
+Trinity1 is a one-dimensional, spherically symmetric thin-
+shell code 2 that follows the expansion of a feedback-driven
+bubble and swept-up shell into a giant molecular cloud. It
+builds on the warpfield framework ( Rahner et al. 2017,
+2019), with the extensions noted in Sect. 1: an explicit
+photoionised-gas-pressure term in the shell equation of mo-
+tion, a phase-aware combination of PH ii and the bubble
+pressure across the energy- to momentum-driven transition,
+and support for Bonnor–Ebert profiles alongside uniform
+and power-law clouds. The code solves a coupled system
+of ordinary differential equations for the bubble radius Rb,
+bubble velocity vb, and bubble thermal energy Eb, sub-
+ject to forces from stellar winds, supernovae, direct and
+dust-reprocessed radiation pressure, photoionised gas pres-
+sure, and self-gravity of the shell and enclosed cluster. At
+each time step, a hydrostatic shell-structure calculation de-
+termines the ionisation-front position, absorbed radiation
+fraction, and infrared optical depth, so that the coupling
+between radiation and gas is solved self-consistently rather
+than prescribed.
+Trinity is written in Python and uses the SciPy
+solve_ivp interface to the LSODA stiff integrator ( Hind-
+marsh 1983; Petzold 1983). Stellar wind luminosities, mass-
+loss rates, ionising photon rates, and bolometric luminosi-
+ties are drawn from starburst99 population synthesis ta-
+bles (Leitherer et al. 1999), though the modular input inter-
+1 https://jiaweiteh.github.io/trinity-web/
+2 We treat the shell as a single mass element in the equation of
+motion, with one radius and one velocity.
+Article number, page 2 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+Fig. 1. Schematic of the bubble geometry and evolutionary sequence modelled by Trinity. The central cluster (yellow stars) injects
+free-streaming winds (light blue), which thermalise at the wind termination shock Rts. The shocked wind fills the hot bubble out
+to the bubble radius Rb (red). Outside Rb, the swept-up shell contains an ionised layer (pink) bounded by the ionisation-front
+radius Rif, and a neutral layer (black) extending to the outer shell radius Rsh. The surrounding grey region denotes the natal cloud.
+The inset shows the corresponding one-dimensional radial structure, ordered as Rts < R b < R if < R sh. In the energy-driven phase
+(left), the hot-bubble pressure dominates the shell dynamics and the classical wind-bubble solution gives R ∝ t3/5 in a uniform
+medium ( Weaver et al. 1977). As cooling drains the hot bubble, the system enters the momentum-driven phase (centre), where
+shell expansion is supported by photoionised-gas pressure, radiation pressure, and direct ram pressure from winds and supernova
+ejecta. The final outcome depends on whether feedback overcomes gravity: the shell may break through and disperse the cloud
+(top right), or decelerate, turn around, and re-collapse (bottom right). Blue arrows indicate the direction of shell motion.
+face accepts any tabulated stellar-evolution model (see Ap-
+pendix A). A single run for a 105 M⊙ cloud with a 103 M⊙
+cluster completes in ∼ 30 minutes on one core, fast enough
+for systematic surveys in cloud mass, density profile, star-
+formation eﬀiciency, and metallicity. The code is released
+under an open-source licence; installation instructions and
+example scripts are provided in the repository.
+2.1. Initial conditions
+A star cluster of mass M⋆ = ε Mcloud forms instanta-
+neously3 at the centre of a spherical molecular cloud of
+initial mass Mcloud, star formation eﬀiciency (SFE) ε,
+and metallicity Z. The remaining cloud mass is Mgas =
+(1 − ε)Mcloud, with radial density profile ( ρcloud(r); see
+Sect. 2.5). The cluster immediately launches a stellar wind,
+which must push through this gas before any bubble-shell
+structure can form.
+We adopt a helium-to-hydrogen number ratio xHe =
+0.1 throughout, giving a mass per hydrogen nucleus µH =
+1.4 mH, where mH is the proton mass. The mean mass per
+particle depends on the ionisation state: µ = µn in neutral
+3 We place the cluster on the zero-age main sequence (ZAMS);
+see Appendix B for the effect of neglecting pre-main-sequence
+evolution.
+gas and µ = µp in ionised gas, with
+µn = µH
+1 + xHe
+= 14
+11 mH, (1)
+µp = µH
+2 + xHe(1 + ZHe) = 14
+23 mH, (2)
+where ZHe = 2 throughout this work (helium doubly
+ionised)4. All number densities n that follow denote hy-
+drogen nuclei densities.
+The cloud boundary Rcloud is defined implicitly by
+Mgas = 4π
+Z Rcloud
+0
+r2 ρcloud(r) dr, (3)
+thus Rcloud is not a free parameter but a derived conse-
+quence of the chosen density profile and Mgas.
+The cluster injects mass at rate ˙Mw with terminal speed
+vw, so the mechanical luminosity and momentum injection
+rate are
+Lw = 1
+2
+˙Mwv2
+w, ˙pw = ˙Mwvw. (4)
+4 We treat helium as doubly ionised throughout both the hot
+wind-blown bubble and the swept-up shell for consistency with
+previous semi-analytic feedback codes ( Martínez-González et al.
+2014; Rahner et al. 2017); the doubly ionised assumption is exact
+for the bubble but an approximation for the T ∼ 104 K shell,
+where most of the helium is singly ionised.
+Article number, page 3 of 22
+
+A&A proofs: manuscript no. main
+In practice Lw(t) and ˙pw(t) are time-dependent quantities
+read from stellar evolution tables (see Sect. A); the expres-
+sions above define instantaneous values at any given t.
+Initially, the wind expands freely into the cloud. The
+swept-up shell becomes dynamically important once the
+swept-up cloud mass equals the ejected wind mass, defined
+as the free-expansion time
+tfe =
+s
+3
+4
+˙Mw
+πρcorev3w
+, (5)
+where ρcore is the core density of the cloud (see Lamers
+& Cassinelli 1999). For our parameters tfe ∼ 103–104 yr,
+far shorter than any feedback-relevant timescale, so the ini-
+tial conditions set at tfe are insensitive to the detailed free-
+expansion dynamics.
+At t = tfe, the bubble structure is already self-similar, so
+the initial state of the bubble-shell system follows directly
+from dimensional analysis of the energy-driven solution:
+vb = Lw
+˙pw
+, (6)
+Rb = vb tfe, (7)
+Eb = 5
+11 Lw tfe. (8)
+Equation 8 is the adiabatic energy content of a Weaver
+bubble at tfe, where the factor 5/11 arises from the γ =
+5/3 self-similar profile ( Weaver et al. 1977). The interior
+temperature profile at t = tfe follows
+T (ζ) = 1 .51 × 106 L8/35
+w,36 n2/35 t−6/35
+6 (1 − ζ)2/5 K, (9)
+where ζ ≡ r/Rb ∈ [0, 1], Lw,36 ≡ Lw/1036 erg s−1, and
+t6 ≡ tfe/106 yr. We evaluate T at ζ = 0 .9, near the outer
+bubble boundary, to characterise the conduction front that
+drives mass evaporation into the hot interior; this value
+initialises the temperature solver for the energy-driven
+phase. Together, Eqs. ( 3)–(9) fully specify the state vector
+(Rb, vb, Eb, Tb) at t = tfe and define the cloud geometry
+into which the bubble expands.
+2.2. Bubble structure
+A wind-blown bubble has four zones (Fig. 1; Castor et al.
+1975; Weaver et al. 1977): (a) a freely streaming hyper-
+sonic stellar wind out to the wind termination shock at
+Rts; (b) the hot bubble — a region of shocked stellar wind
+(T ∼ 107 K) bounded by Rts and the outer contact discon-
+tinuity at Rb; (c) a thin, dense, cold shell of swept-up ISM;
+and (d) the undisturbed GMC or ISM.
+The hot bubble is collisionally ionised at T ∼ 106–108 K
+and suﬀiciently rarefied that Lyman-continuum (LyC) pho-
+tons traverse it without absorption, since recombinations
+are negligible at those temperatures. Ionising radiation
+therefore reaches the swept-up shell at Rb unattenuated,
+and the photoionised region always surrounds the bub-
+ble, extending from Rb outward to the ionisation front at
+Rif ≥ Rb.
+The bubble evolves through three dynamical phases de-
+pending on whether its internal energy is conserved or radi-
+ated away ( Weaver et al. 1977; Mac Low & McCray 1988):
+an early energy-driven phase in which the overpressured in-
+terior drives the shell ( R ∝ t3/5); a transition phase when
+radiative losses drain the thermal reservoir on a sound-
+crossing timescale; and a momentum-driven phase in which
+the shell coasts on the accumulated momentum of winds
+and supernovae (see Sect. 2.7). Density gradients and pho-
+toionised gas pressure shift the timing and sharpness of each
+transition in real clouds ( Rahner et al. 2017, 2019).
+With the initial state (Rb, vb, Eb, Tb) established at tfe,
+we advance this four-zone structure through two coupled
+equations: one for the bubble’s momentum,
+d
+dt
+
+Msh ˙Rb
+
+= 4πR2
+b(Pdrive − Pext) + Frad − Fgrav , (10)
+and one for the bubble’s thermal energy,
+dEb
+dt = Lw − Lcool − 4πR2
+b Pb ˙Rb , (11)
+where Msh is the shell swept-up mass.
+Let Vb ≡ 4π/3(R3
+b − R3
+ts) denote the volume of the hot
+bubble between the wind termination shock at Rts and the
+contact discontinuity at Rb. The bubble thermal pressure
+follows
+Pb = (γ − 1) Eb
+Vb
+, (12)
+with γ = 5/3 for an ideal monatomic gas. The wind ter-
+mination shock radius Rts, where the free-streaming wind
+thermalises, is set by pressure balance between the ram
+pressure at Rts and the hot bubble,
+Rts =
+ 3Fram Vb
+8π Eb
+1/2
+, (13)
+where Fram ≡ ˙Mwvw + ˙MSNvSN is the total mechanical
+momentum injection rate from stellar winds and supernovae
+combined. Since Vb itself depends on Rts, Equation ( 13) is
+implicit and is solved numerically at each timestep given
+the current state (Rb, Eb).
+The mass flux from the shell into the hot bubble is set
+by conductive evaporation at the inner shell edge ( Cowie
+& McKee 1977; Weaver et al. 1977). The evaporation rate
+is determined by the bulk inflow velocity of shell material
+heated by the conduction front, evaluated at r → Rb,
+˙Mb = lim
+r→Rb
+4πr2 µ Pb
+kB
+αr/t − vb
+T , (14)
+where α is the self-similar expansion exponent (Equa-
+tion 30). Consistency with the classical conduction-driven
+structure ( Weaver et al. 1977) then requires the tempera-
+ture and velocity profiles inside the bubble to satisfy
+T =
+ 25
+4
+˙Mb
+kB
+4πR2
+b µ C
+2/5
+(1 − ζ)2/5 R2/5
+b , (15)
+∂T
+∂r = − 2
+5
+T
+(1 − ζ) Rb
+, (16)
+v = αRb
+t − ˙Mb
+kBT
+4πR2
+b µ Pb
+, (17)
+where C = 6 × 10−7 erg s−1 cm−1 K−7/2 is the Spitzer con-
+duction coeﬀicient.
+Article number, page 4 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+2.3. Force budget on the shell
+The radiation force combines direct photon absorption with
+infrared re-emission trapping,
+Frad = f bol
+abs Lbol
+c (1 + τIR) , (18)
+where f bol
+abs is the luminosity-weighted bolometric absorp-
+tion fraction, Lbol is the bolometric cluster luminosity, and
+τIR is the shell infrared optical depth ( Krumholz & Matzner
+2009; Murray et al. 2010; Rahner et al. 2017). Gravity com-
+bines the cluster potential with shell self-gravity,
+Fgrav = G Msh
+R2
+b
+
+M⋆ + Msh
+2
+
+. (19)
+The enclosed mass in Eq. ( 19) omits the pre-existing field
+stellar population, an approximation valid at natal-cloud
+scales but not for Rb ≳ 50–100 pc (Section 5.2).
+The driving pressure Pdrive in Eq. ( 10) may receive con-
+tributions from three physical terms: the thermal pressure
+of the shocked wind bubble, Pb, the thermal pressure of
+the photoionised gas, PH ii, and the ram pressure of newly
+injected wind and supernova ejecta, Pram. These terms can-
+not be added blindly. The relative importance of the wind
+bubble and the photoionised region depends on cluster age
+and environment, because the wind bubble can either over-
+pressure the ionised gas or remain subdominant to it ( Lan-
+caster et al. 2025). In the overpressured limit, the ionised
+gas collapses into a geometrically thin layer with Rb ≃ Rif;
+pressure balance at the contact discontinuity then implies
+PH ii ≃ Pb, so adding both pressures would count the same
+support twice ( Rahner et al. 2017; Martínez-González et al.
+2014; Geen et al. 2021). On the other hand, during the
+energy-driven phase, winds thermalise at the reverse shock
+Rts and their kinetic energy enters Eb; adding Pram at Rb
+would count the mechanical input once as stored thermal
+pressure and again as instantaneous momentum flux.
+We avoid both double counts by selecting the driving
+term according to the dynamical phase. In the energy-
+driven phase, Pb already contains the thermalised wind con-
+tribution, so Pram is excluded; PH ii drives the shell only if
+it exceeds the bubble pressure,
+P (E)
+drive = max(Pb, P H ii) . (20)
+In the transition phase (see Sect. 2.7), Pb declines as the
+hot bubble cools and freshly injected material begins to
+act more directly on the shell. We therefore compare the
+remaining bubble pressure with the additive momentum-
+phase support,
+P (T)
+drive = max(Pb, P H ii + Pram) . (21)
+In the momentum-driven phase, Eb → 0 and Pb → 0 by
+construction, leaving
+P (M)
+drive = PH ii + Pram. (22)
+The max operator in Eqs. ( 20) and ( 21) therefore prevents
+Pb and PH ii from acting as independent pressures when
+they describe the same contact-discontinuity balance, and it
+hands control to PH ii + Pram once the stored bubble energy
+no longer dominates.
+The bubble pressure Pb is the thermal pressure of the
+hot shocked interior (Eq. 12). It encodes the integrated
+history of mechanical energy injection, because wind and
+supernova ejecta thermalise at Rts and accumulate in Eb
+before cooling or doing work on the shell.
+The photoionised gas pressure is the thermal pressure
+of the ionised layer,
+PH ii = µH
+µp
+n Str
+sh,if kB Tion , (23)
+where Tion ≃ 104 K. Observed and modelled ii regions show
+typical values near Tion ∼ 8000 K at solar abundance and
+can exceed 1.2 × 104 K below 0.1 Z⊙ (Shaver et al. 1983;
+Geen et al. 2020; Balser & Wenger 2024). The ionisation-
+front radius Rif comes from the shell-structure calculation
+(Sect. 2.6). Reading the density directly from the shell so-
+lution at Rif would tie PH ii too closely to Pb, because
+the inner-edge density is itself set by the bubble-pressure
+boundary condition. We therefore estimate the density from
+recombination balance. For a uniform density in the ionised
+volume,
+n Str
+sh,if =
+ 
+3 (1 − f LyC
+esc ) Qi
+4π (1 + ZHexHe) αB∆V
+!1/2
+, (24)
+where f LyC
+esc is the LyC escape fraction (see Sect. 4.1) and
+∆V is the ionised-shell volume (see Section 5.5). We as-
+sume a case-B recombination with a coeﬀicient αB =
+2.59 × 10−13 cm3s
+−1
+(Osterbrock & Ferland 2006). The fac-
+tor (1 + ZHe xHe) accounts for the contribution of ionised
+helium to the free-electron density.
+The ram pressure is the instantaneous momentum flux
+of newly injected wind and supernova ejecta at the shell,
+Pram = Fram
+4πR2
+b
+. (25)
+Unlike Pb, it represents current momentum deposition
+rather than energy stored in the hot bubble.
+The external confining pressure is
+Pext =
+(PISM + µH
+µp
+next kB Tion, f LyC
+esc > 0,
+PISM, otherwise,
+(26)
+where PISM is the ambient ISM pressure, and the second
+term represents the back-pressure from gas ( next) outside
+the shell once ionising photons leak into the surrounding
+medium.
+In this paper we set PISM = 0 in order to isolate the
+feedback-driven dynamics from environmental confinement.
+Observed and inferred confining pressures around ii re-
+gions span several orders of magnitude across galactic discs,
+centres, low-metallicity dwarfs, and nearby Galactic star-
+forming regions ( Barnes et al. 2021; Rowland et al. 2024;
+Kreckel et al. 2024; Schinnerer & Leroy 2024; Pathak et al.
+2025b; Barnes et al. 2026). The dependence of feedback
+dominance on PISM is examined in companion papers.
+2.4. Bubble interior cooling
+Cooling sets the bubble’s internal pressure (Equation 11),
+the timescale on which Eb decays, and the moment the
+Article number, page 5 of 22
+
+A&A proofs: manuscript no. main
+bubble crosses into the momentum-driven phase (Sect. 2.7).
+The volumetric net cooling rate enters the bubble energy
+equation as
+dU
+dt
+
+rad
+= −nH ne Λnet(T, . . .), (27)
+where U is the thermal energy density of the hot interior,
+nH and ne are the hydrogen nuclei and electron number
+densities, and the net cooling function Λnet ≡ Λcool(T, . . .)−
+Λheat(T, . . .) > 0 for a gas parcel that is losing net energy
+to radiation. The total cooling luminosity of the bubble,
+Lcool =
+R
+nH ne Λnet dV , integrated over the bubble volume,
+is what appears explicitly in Equation ( 11). What physical
+processes set Λnet, and which of its dependencies have to
+be tracked explicitly?
+2.4.1. CIE and non-CIE regime
+The dominant cooling mode for plasmas of solar metallicity
+within the temperature range of 104–107 K is by metal line
+transitions. At high temperatures, the plasma can be as-
+sumed to be in collisional ionisation equilibrium (CIE; T ≳
+105.5 K), meaning an optically thin plasma where collisional
+processes dominate, and the cooling/heating timescale tcool
+is longer than the ionisation/recombination timescale. In
+this regime Λnet reduces to a one-parameter function of
+temperature (for fixed abundances), so a tabulated cooling
+curve interpolated in T is enough.
+Our choice of the temperature at which the transi-
+tion from non-CIE to CIE cooling occurs follows simple
+timescale arguments: the timescale on which gas radiates
+thermal energy is tcool ∼ U (dU /dt)−1 ∝ T /Λ(T ) at fixed
+density, and the cooling function Λ(T ) peaks near 105–5.5 K
+owing to metal-line emission (from e.g. Fe, O; see Schure
+et al. 2009). By contrast, the ion fractions relax approxi-
+mately on the recombination time trec ∼ αeff(T )−1, with
+αeff(T ) ∝ T −η, 0.5 ≲ η ≲ 1.5 (Verner & Ferland 1996)
+so that trec lengthens as T rises. For temperatures be-
+low the peak in the cooling function, one therefore ex-
+pects trec ≳ tcool: the gas cools faster than charge states
+can re-equilibrate, and the ionization state lags the in-
+stantaneous temperature (non-CIE; see Sutherland & Do-
+pita 1993; Gnat & Sternberg 2007; Oppenheimer & Schaye
+2013). At temperatures above the peak, however, Λ(T ) de-
+clines and tcool grows rapidly; the inequality reverses, and
+CIE becomes a good approximation.
+This simplification breaks down whenever a strong pho-
+toionising radiation field is present or when the gas un-
+dergoes rapid thermal or dynamical evolution. Both condi-
+tions are generically satisfied inside ii regions and feedback-
+driven bubbles: the central cluster continuously irradiates
+the surrounding gas with a time-evolving ultraviolet spec-
+trum, and the bubble interior can cool rapidly once Eb be-
+gins to drain. Under non-CIE conditions, the charge-state
+distribution is set by competition between photoionisation,
+collisional ionisation, and recombination, and Λnet depends
+explicitly on four parameters: the gas temperature T , the
+gas density n, the ionising photon flux ϕi, and the cluster
+age tage (Rahner et al. 2019). The density enters because
+it modulates the recombination rate, and the cluster age
+matters because older clusters produce softer spectra that
+are less effective at ionising metals. At high temperatures
+(T ≳ 105.5 K) the collisionally ionised fractions dominate
+even in the presence of a strong radiation field, so non-CIE
+corrections are small.
+2.4.2. Self-similar bubble profiles
+Before cooling becomes important, the velocity and tem-
+perature profile of the bubble are governed by a self-similar
+solution (see Weaver et al. 1977):
+1
+pr2
+∂
+∂r
+
+CT 5/2r2 ∂T
+∂r
+
+− 5
+2
+
+v − αr
+t
+ 1
+T
+∂T
+∂r
+− nenHΛnet
+p = β + 2.5δ
+t , (28)
+1
+r2
+∂
+∂r
+ 
+r2v
+
+−
+
+v − αr
+t
+ 1
+T
+∂T
+∂r = β + δ
+t . (29)
+Conceptually, the equations describe how heating and cool-
+ing affect the evolution of temperature, velocity and pres-
+sure profiles through thermal conduction, advection, and
+radiative loss. In practice, the above similarity solution can
+be solved with values α = 3/5 , β = 4/5 , δ = −6/35. How-
+ever, when cooling becomes prominent (i.e., when the bub-
+ble age exceeds ∼ 105 yr), the expansion of the bubble will
+depart from the standard adiabatic scalings (i.e., r ∝ t3/5),
+and these constants must deviate from their similarity val-
+ues. Namely, we define:
+α ≡ d ln Rb
+d ln t , β ≡ − d ln Pb
+d ln t , δ ≡
+ ∂ ln T
+∂ ln t
+
+ζ
+. (30)
+The bulk of the computation is the determination of β
+and δ by solving a coupled root-finding problem at each
+timestep. Given the state {Rts, Rb, Eb, Pb}, Trinity pro-
+poses (β, δ) and computes two independent estimates of ˙Eb:
+(i) ˙Eb,E via the energy equation from Eq. 11; and (ii) ˙Eb,PE
+via the ˙Pb– ˙Eb relation:
+˙Eb =
+2π ˙Pb d2 + 3Eb ˙RbR2
+b
+
+1 − c
+Eb+c
+
+− a R3
+tsE2
+b
+Eb + c
+d
+
+1 − c
+Eb + c
+ , (31)
+where
+a ≡ 3
+2
+˙Fram
+Fram
+, c ≡ 3
+4 Fram Rts , d ≡ R3
+b − R3
+ts . (32)
+The correct pair (β, δ) is the one for which the residual
+R(β, δ) ≃ 0, where
+R(β, δ) = ˙Eb, E(β, δ) − ˙Eb, PE(β, δ) . (33)
+2.5. Cloud density profiles
+Trinity supports two initial density profiles: a piecewise
+power law and a Bonnor–Ebert (BE) sphere ( Ebert 1955;
+Bonnor 1956; Alves et al. 2001). The power law offers flexi-
+bility and computational simplicity but has limited physical
+motivation, whereas the BE sphere more closely reflects the
+observed structure of real molecular clouds. In this section,
+we describe how each profile is implemented in Trinity and
+how their corresponding mass distributions are computed.
+Article number, page 6 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+2.5.1. Power-law profile
+A simple power-law density distribution is described as
+ρcloud(r) =
+8
+>>><
+>>>:
+ρcore, r ≤ Rcore,
+ρcore
+ r
+Rcore
+αρ
+, R core < r ≤ Rcloud,
+ρISM, r > R cloud.
+(34)
+Here Rcore is the core radius and ρISM is the ambient ISM
+density. We allow −2 ≤ αρ ≤ 0, with a focus on αρ = 0
+and −2. The limiting case αρ = 0 corresponds to a uni-
+form cloud in which ρcore is the constant density through-
+out. This profile does not represent a structured molecular
+cloud, but it isolates the feedback physics in the simplest
+possible geometry. The opposite limit, αρ = −2, reproduces
+the ρ ∝ r−2 envelope of the singular isothermal sphere
+(Larson 1969; Shu 1977), but retains a finite-density core
+for r ≤ Rcore and truncates the cloud at Rcloud. The core
+removes the central singularity, while the outer truncation
+keeps the total mass finite. Observed core radii span a broad
+range, from ∼ 0.01–1 pc depending on sample, tracer, and
+decomposition method ( Könyves et al. 2015; Massi et al.
+2019). The power-law family thus brackets a useful range
+of idealised centrally concentrated structures.
+2.5.2. Bonnor–Ebert profile
+Our piecewise power-law prescription already gives the shell
+a flat central structure; however, the logarithmic slope
+changes discontinuously at Rcore, and the profile remains
+an approximation of a real hydrostatic equilibrium solution.
+We therefore also implement BE profiles: pressure-confined,
+self-gravitating isothermal spheres in hydrostatic equilib-
+rium ( Ebert 1955; Bonnor 1956; Hartmann 1998). These
+profiles have a finite central density, a flat inner region,
+and an outer envelope that steepens toward the boundary
+(see Fig. 4). They provide a standard idealised description
+of individual dense cores, with Barnard 68 as the canon-
+ical extinction-mapping example ( Alves et al. 2001), and
+related BE-like core models have been used widely in obser-
+vations and simulations of prestellar-core structure ( John-
+stone et al. 2000).
+A BE sphere has to fulfil the following equations of hy-
+drostatic equilibrium, Poisson’s equation and the isother-
+mal equation of state:
+dP
+dr = −ρ(r) GM (r)
+r2 , (35)
+1
+r2
+d
+dr
+
+r2 dΦ
+dr
+
+= 4πGρ(r) , (36)
+P = ρ c2
+s . (37)
+Combining these equations we arrive at a variant of the
+Lane-Emden equation (see Emden 1907; Chandrasekhar
+1939):
+1
+ξ2
+d
+dξ
+
+ξ2 dψ
+dξ
+
+= e−ψ , (38)
+where ξ =
+ 
+4πGρcore/c2
+s
+1/2
+r is the non-dimensional radial
+parameter, ρcore is the core mass density, cs = ( kBT /µ)1/2
+is the isothermal sound speed and ψ(ξ) = Φ/ c2
+s is the di-
+mensionless potential. The equation can then be numeri-
+cally solved with the following boundary conditions:
+ψ(0) = 0 , dψ
+dξ
+
+ξ=0
+= 0 , (39)
+giving us the density profile in the form of
+ρ(r) = ρcore exp{−ψ(ξ)} . (40)
+The solution is truncated at a dimensionless boundary
+radius ξcl, which sets the density contrast between cen-
+tre and edge, Ω = ρcore/ρ(ξcl) = exp
+
+ψ(ξcl)
+	
+. Equilibrium
+configurations exist only for ξcl ≤ 6.45, corresponding to
+Ω ≤ 14.1; beyond this critical value the sphere is gravi-
+tationally unstable and must collapse ( Bonnor 1956). We
+adopt ξcl = 6 .45 as our default, placing the cloud at the
+marginally stable state 5.
+2.5.3. Shell mass and mass accretion rate
+As the feedback-driven shell expands at velocity ˙R =
+dR/dt, the total swept-up mass within radius R is
+Msh(R) =
+Z R
+0
+4πr2 ρcloud(r) dr , (41)
+and the mass accretion rate follows as
+˙Msw = dMsh
+dR
+˙R = 4πR2 ρcloud(R) ˙R . (42)
+For the piecewise power-law profile, the enclosed mass
+for Rcore < R ≤ Rcloud admits the closed form
+Msh(R) = 4 πρcore
+"
+R3
+core
+3 + R3+αρ − R3+αρ
+core
+(3 + αρ) Rαρ
+core
+#
+. (43)
+For the BE sphere, the enclosed mass follows analyti-
+cally from the Lane–Emden solution. Defining the dimen-
+sionless mass function m(ξ) = ξ2 dψ/dξ (Bonnor 1956), the
+mass within radius R is
+Msh(R) = Mgas
+m(ξ)
+m(ξcl) , (44)
+where ξ = ξcl (R/Rcloud) and m(ξcl) is the total dimension-
+less mass at the cloud boundary. The mass accretion rate
+is then
+˙Msw = Mgas
+m(ξcl)
+dm
+dξ
+dξ
+dR
+˙R = 4πR2 ρcore e−ψ(ξ) ˙R , (45)
+where we have used d m/dξ = ξ2e−ψ from the Lane–Emden
+equation (38) and d ξ/dR = ξcl/Rcloud. This recovers Eq. 42
+exactly within the cloud boundary.
+5 There is, however, some leeway for departures from strict BE
+stability. In particular, modest oscillations around the critical
+state are expected, driven by additional physical effects such
+as internal magnetic pressure or external pressure arising from
+turbulence, nearby stellar winds, and radiation, which can act
+as stabilising mechanisms beyond purely thermal support (see
+Alves et al. 2001).
+Article number, page 7 of 22
+
+A&A proofs: manuscript no. main
+2.5.4. Allowed parameter ranges
+We note that not every combination of
+(Mcloud, n core, R core) produces a physically realisable
+cloud: the requirements of mass closure, a physically sound
+cloud radius, and a monotonically decreasing profile that
+remains above the ambient ISM density at the cloud
+boundary together restrict the allowed parameter space.
+We discuss these cloud-related caveats in Appendices C
+and D.
+2.6. Radiation-shell coupling
+The shell traps and reprocesses the radiation it absorbs,
+and the resulting density profile feeds back on fabs and τIR.
+The shell-structure system that closes this coupling is (see
+also Draine 2011b; Martínez-González et al. 2014; Rahner
+et al. 2017):
+d
+dr
+ µH
+µp
+nsh kB Tion
+
+= 1
+4πr2c
+d
+dr
+ 
+Lne−τd + Liϕf
+
+, (46)
+dϕf
+dr = − 4πr2
+Qi
+(1 + ZHe xHe) αB n2
+sh
+− nsh σd ϕf , (47)
+dτd
+dr = nsh σd . (48)
+where nsh(r) is the number density of hydrogen nuclei in
+the shell, Qi is the rate of ionising photons emitted by the
+central cluster, ϕf(r) is the fraction of Qi that remains unab-
+sorbed at radius r, Tion = 10 4 K is the ionised gas temper-
+ature, Li, Ln are the ionising and non-ionising luminosities
+respectively, where Li + Ln = Lbol is the bolometric lumi-
+nosity. We set σd = 1.5 × 10−21 cm2 (Draine 2011b) as the
+dust absorption cross section per hydrogen atom 6. We ob-
+tain the star cluster feedback parameters (i.e., Li, Ln, Qi)
+directly with starburst99 (Leitherer et al. 1999).
+Here, Equation 46 describes the gradient in the gas pres-
+sure set up in response to the gradient in the radiation pres-
+sure within the shell. Equation 47 and Equation 48 describe
+radiation-gas coupling (recombination and dust absorption)
+and optical depth respectively. We hold σd constant (see
+Section 5.4 for justification). However, we note that dust
+opacity actually varies with environment: lower-metallicity
+systems carry less grain mass, and the effective cross sec-
+tion drops as the cluster ages and hard photons fade. We
+absorb only the metallicity scaling, σeff = (Z/Z⊙) σd.
+We assume the central cluster has evacuated a low-
+density cavity, so absorption inside this zone is negligible.
+Such idealisation is common in modelling ii regions (see
+Draine 2011b; Martínez-González et al. 2014). Thus, we
+impose the conditions ϕf(Rb) = 1 and τd(Rb) = 0 . The sec-
+ond boundary condition follows from pressure equilibrium
+across the contact discontinuity ( Rahner et al. 2017): the
+ionised gas at the shell base matches the bubble thermal
+pressure Pb, giving
+nsh(Rb) = ( µp/µH) Pb/ (kB Tion) . (49)
+6 Although the scattering of photons off dust grains also con-
+tributes to the radiation pressure, in practice at the relevant
+photon energies the scattering is almost completely forwards
+and hence the difference between the absorption cross-section
+and the radiation pressure cross-section is small ( Draine 2011a)
+and can be safely neglected.
+We integrate outward until the ionising budget is ex-
+hausted (i.e., ϕf(r) → 0). Once the shell grows suﬀiciently
+thick, the ionisation front slows down; the outer layer there-
+fore cools and forms a neutral layer that is dynamically
+coupled to the radiation field predominantly through dust
+absorption of the non-ionising continuum that leaks from
+the interior. In this regime, the equations above simplify to:
+d
+dr
+ µH
+µn
+nshkBTneu
+
+= 1
+4πr2c
+d
+dr
+ 
+Lne−τd
+
+, (50)
+dτd
+dr = nshσd , (51)
+We adopt Tneu = 100 K for the cold neutral layer. In this
+limit, the neutral shell’s acceleration is governed by the
+coupling between dust and the non-ionising flux.
+2.7. Energy-to-momentum transition
+The bubble transitions from energy- to momentum-driven
+once radiative losses drain its thermal reservoir. From Equa-
+tion ( 11), the bubble remains energy-driven while Lmech
+exceeds the combined drain from cooling losses ( Lcool) and
+P dV work on the shell. The transition is triggered when
+Lcool rises to approach Lmech, at which point ˙Eb → 0 and
+Eb begins to decay ( Weaver et al. 1977; Harper-Clark &
+Murray 2009). In the self-similar Weaver solution Lcool ∝
+t−22/35, so cooling inevitably dominates at suﬀiciently high
+ambient density or late time.
+Once Lcool/Lmech exceeds the threshold ( Lcool/Lmech >
+0.95), Trinity enters a transition phase in which Eb decays
+at the sound-crossing rate,
+dEb
+dt = − Eb
+tsc
+, t sc ≡ Rb
+cs
+, (52)
+with cs the sound speed in the hot interior. The transi-
+tion phase ends when the ram-pressure fraction Pram/(Pb +
+Pram) exceeds 0.9, at which point the code switches to the
+momentum-driven equations ( 22).
+As Eb → 0, wind and supernova ejecta no longer ther-
+malise at the inner shock but impinge directly on the shell
+as a momentum flux Pram. The shell then coasts on the mo-
+mentum accumulated during the energy-driven phase and
+decelerates under gravity, with subsequent winds and su-
+pernovae adding momentum directly.
+2.8. Stopping criteria
+The bubble has two natural endpoints. In one, gravity wins
+and the shell re-collapses; in the other, the bubble con-
+tinues to expand until it dissolves into the ambient ISM.
+We evolve each model until one of two stopping criteria is
+met. The first is a temporal cutoff set by the lifetime of
+the massive stars that supply the momentum and energy,
+carried through the latest plausible supernovae; the second
+is a spatial cutoff at which the structure ceases to be a co-
+herent shell and instead merges with its surroundings. To
+this end, we adopt fiducial thresholds of tmax = 30 Myr and
+Rmax = 500 pc.
+A later version of the code will add fragmentation path-
+ways that can both drain energy and break shell coherence:
+gravitational fragmentation of the swept shell, Rayleigh–
+Taylor growth at the decelerating contact, and venting
+Article number, page 8 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+2.5 5.0 7.5 10.0
+t [Myr]
+0
+50
+100Rb [pc]
+TRINITY
+WARPFIELD (no PHII)
+pure energy (wind)
+pure photoionised
+pure momentum
+Fig. 2. Bubble radius evolution for the fiducial test cloud
+(Mcloud = 10 6 M⊙, ncore = 10 3 cm−3, ε = 0 .01), comparing
+Trinity (full physics) with a warpfield-equivalent run ob-
+tained by turning PHII off, and with three analytic limiting
+solutions in a uniform medium without gravity: the energy-
+driven Weaver wind, the photoionised Spitzer expansion, and the
+momentum-driven snowplow. For this run, the inclusion of PH ii
+boosts the bubble radius at late times by ∼ 17% (see Sect. 3).
+through low-density channels. With these in place, the spa-
+tial cutoff above can be replaced by a physical breakdown
+criterion.
+3. Validation
+We validate Trinity by overplotting its predicted radius
+trajectory Rb(t) on three analytic limiting solutions, and
+on a warpfield-equivalent run obtained by turning PHII
+off in Trinity. The three reference curves are the energy-
+driven wind solution R ∝ (Lw/ρ0)1/5 t3/5 (Castor et al.
+1975; Weaver et al. 1977); the photoionised expansion of
+Spitzer (1978), with R ∝ t4/7 once the ii region has over-
+run its initial Strömgren radius; and the momentum-driven
+snowplow R ∝ t1/2 in which the wind delivers momentum
+at a constant rate to a thin shell without thermal support.
+Each scaling relation is essentially a feedback-isolated so-
+lution in a uniform medium without gravity. We note that
+they are not bounds to the Trinity trajectory; they serve
+instead as scaling references against which the full trajec-
+tory’s behaviour can be compared to.
+Figure 2 shows the comparison for our fiducial test
+cloud, with Mcloud = 10 6 M⊙, ncore = 10 3 cm−3, and
+ε = 0.01. The cluster mass is M⋆ = ε Mcloud = 10 4 M⊙, low
+enough that radiation pressure stays subdominant through-
+out and the comparison reduces to a clean test of the wind,
+ionised-gas, and momentum channels. Trinity tracks the
+pure-wind Weaver curve over the energy-driven phase, re-
+covering the adiabatic wind limit at early times before cool-
+ing has integrated up to a significant fraction of the wind
+energy. The trajectory then deviates away from Weaver and
+rises more shallowly. The late-time Trinity curve sits be-
+tween the pure-photoionised and pure-energy reference so-
+lutions, indicating that ionised-gas pressure and wind ram
+pressure both contribute meaningfully to the driving. The
+curve does not converge onto either limiting solution, since
+neither channel dominates on its own at this eﬀiciency.
+0
+200
+400R [pc]
+energy transition momentum
+Rb
+Rts
+Rsh
+vb
+0.2
+0.4
+0.6
+0.8
+1.0
+F/Ftot
+Fgrav
+Fdrive
+Frad
+Fext
+HII
+wind
+SN
+2 4
+t [Myr]
+0.2
+0.4
+0.6
+0.8
+1.0
+Qi budget
+fgas
+abs fdust
+abs fLyC
+esc
+102
+103
+vb [km s−1]
+Fig. 3. Diagnostic outputs of Trinity for a run with Mcloud =
+106 M⊙, ncore = 10 3 cm−3, and ε = 0 .10. Top: bubble ra-
+dius Rb(t), reverse-shock radius Rts(t), shell radius Rsh(t), and
+bubble velocity vb(t), with the energy-driven, transition, and
+momentum-driven phases marked. Middle: fractional force bud-
+get on the shell, normalised to the sum of force magnitudes. The
+outer stack shows gravity Fgrav, the total driving force Fdrive, ra-
+diation pressure Frad, and external pressure Fext. Within Fdrive,
+the momentum phase is decomposed into wind, photoionised-
+gas ( ii), and supernova (SN) contributions. Bottom: fraction of
+ionising photons absorbed by gas f gas
+abs , absorbed by dust f dust
+abs ,
+or escaping past the ionisation front f LyC
+esc .
+The warpfield-equivalent run also quantifies the pho-
+toionisation contribution directly. By t = 10 Myr the Trin-
+ity bubble radius is ∼ 17% larger than the gated run, and
+at later times the gap continues to grow because PHII keeps
+the shell expanding while the cooled bubble in the gated
+run loses its driving pressure. A complete mapping of the
+parameter space ( Mcloud, ε, ncore, Rcore) is the subject of
+Paper II.
+4. First results
+4.1. Feedback budget and escape fractions
+With the dynamics validated against analytic limits at low
+cluster mass, we now demonstrate the full diagnostic suite
+at higher SFE. For the model in Fig. 3, ε = 0 .10 gives
+M⋆ = 10 5 M⊙, large enough for feedbacks to appear at
+measurable levels. The figure reports three outputs from
+the same run: the shell trajectory, the force budget, and
+Article number, page 9 of 22
+
+A&A proofs: manuscript no. main
+the ionising-photon budget. The full diagnostic output is
+documented in Appendix E.
+The top panel shows the dynamical trajectory. The
+energy-driven phase lasts less than 1 Myr, after which hot-
+bubble cooling becomes eﬀicient and the solution enters the
+momentum-dominated evolution. The middle panel shows
+which forces act on the shell. We plot fractional contribu-
+tions to the sum of force magnitudes, not a signed accelera-
+tion budget; gravity and external pressure therefore appear
+alongside the outward-driving terms even though they op-
+pose expansion.
+We keep Fdrive as a single band during the energy-
+driven and transition phases, and decompose it into wind,
+photoionised-gas ( ii), and SN channels only in the momen-
+tum phase. This follows the driving prescription. During the
+energy-driven phase, Pdrive = max(Pb, PH ii) assigns the full
+driving pressure to whichever thermal component is larger,
+so a channel split would flicker between bubble and ii la-
+bels as the selected pressure changes. Once the shell en-
+ters the momentum phase and Pdrive = PH ii + Pram, the
+decomposition becomes additive and well defined. In this
+phase, ii retains a measurable share of the driving force, so
+photoionised-gas pressure continues to support expansion
+alongside wind ram pressure and SN ejecta.
+The radiation force remains sub-dominant throughout
+this run, consistent with analytic expectations that ra-
+diation pressure becomes dynamically important mainly
+in compact, high-column, or high-luminosity regions (e.g.
+Krumholz & Matzner 2009; Pathak et al. 2025b). The
+external pressure term acts against expansion and grows
+once ionising photons escape the shell, because the sur-
+rounding gas becomes photoionised and exerts a back-
+pressure. We set PISM = 0 in this fiducial run to isolate
+the stellar-feedback terms from environmental confinement.
+This is a controlled simplification: thermal pressures in the
+neutral ISM span from Solar-neighbourhood values of or-
+der P /kB ∼ 3 × 103 K cm−3 to high-pressure tails above
+105 K cm−3 in dynamically active environments ( Wolfire
+et al. 2003; Jenkins & Tripp 2011).
+The bottom panel tracks the fate of the cluster’s ionising
+photons. The shell-structure calculation in Sect. 2.6 parti-
+tions the LyC photon rate into absorption by hydrogen,
+absorption by dust, and escape past the ionisation front.
+We define
+f gas
+abs = 4π (1 + ZHexHe) αB
+Qi
+Z Rif
+Rb
+n2
+sh(r) r2 dr, (53)
+f dust
+abs = σd
+Z Rif
+Rb
+nsh(r) ϕf(r) dr, (54)
+f LyC
+esc ≡ ϕf(Rif), (55)
+where ϕf(r) is the surviving LyC photon fraction, nor-
+malised to ϕf(Rb) = 1 , and the gas term assumes case-B
+recombination in fully ionised hydrogen. These terms sat-
+isfy
+f gas
+abs + f dust
+abs + f LyC
+esc = 1 (56)
+by construction. At early times, the shell is ionisation-
+bounded; LyC photons are absorbed inside the shell, a
+neutral layer remains beyond the ionisation front, and
+f LyC
+esc = 0 . The gas channel takes most of the budget,
+while the dust share is set by the dust optical depth across
+10−2 10−1 100 101
+r [pc]
+−22
+−20
+log10(ρcloud(r)) [g cm −3]
+ρcloud(r)
+Menc(< r)
+−5
+0
+5
+log10(Menc(< r)) [M⊙]
+0 2 4
+t [Myr]
+0
+5
+10
+15Rb [pc]
+ρ ∝ r0
+ρ ∝ r−1
+ρ ∝ r−2
+ρ ∝ exp{−ψ(ξcl)}
+Fig. 4. Top: density profiles (solid, left axis) and enclosed mass
+(dashed, right axis) for the four configurations in Sect. 4.2. All
+share ncore = 10 4 cm−3, Mcloud = 10 5 M⊙ and ε = 0.01; steeper
+slopes concentrate mass toward the core, reducing the mass en-
+countered by the expanding shell at large radii. Bottom: bubble
+radius Rb(t). The bubble within a αρ = −2 profile accelerates
+into the declining density gradient and expands beyond 15 pc
+without stalling; the remaining three profiles reach a maximum
+radius and re-collapse.
+the ionised layer. Once the shell becomes density-bounded,
+f LyC
+esc rises and ionising photons leak into the diffuse ISM.
+This connects the cloud-scale calculation to the galaxy-scale
+ionising-photon budget and, by extension, to the reioni-
+sation problem. Nearby measurements already show that
+f LyC
+esc varies strongly between regions, from galactic ii re-
+gions (Sattler et al. 2026), to 30 Doradus in the Large Mag-
+ellanic Cloud ( Doran et al. 2013), to ii regions in nearby
+galaxy (Teh et al. 2023; Scheuermann et al. 2026). By track-
+ing f LyC
+esc on the same time grid as the shell dynamics and
+force budget, Trinity separates two related clocks: the
+time at which feedback changes the shell dynamics, and
+the time at which LyC photons begin to escape. This makes
+the model useful for sub-grid prescriptions in galaxy-scale
+simulations, where ionising-photon escape often depends on
+feedback-cleared low-column-density channels below the re-
+solved scale ( Kimm & Cen 2014).
+4.2. Dependence on the cloud density profile
+To isolate the effect of cloud structure, we hold cluster mass,
+cloud mass, and metallicity fixed, and vary only the radial
+Article number, page 10 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+0 1 2 3 4
+t [Myr]
+ρ ∝ r0
+ρ ∝ r−1
+ρ ∝ r−2
+ρ ∝ exp{−ψ(ξcl)}
+energy-driven
+transition
+momentum-driven
+re-collapse
+Fig. 5. Phase timeline for the four density profiles in Sect. 2.5.
+Each horizontal bar shows the duration of the energy-driven
+(white), transition (light grey), momentum-driven (hatched),
+and re-collapse (dark grey) phases. At fixed Mcloud, ncore, Rcore,
+and ε, changing only the density profile shifts both the phase du-
+rations and the final outcome. Only the αρ = −2 cloud avoids
+re-collapse within the 4 Myr runtime.
+density profile. The fiducial cloud has Mcloud = 10 5 M⊙,
+ncore = 10 4 cm−3, core radius Rcore = 1 pc, and ε = 0 .01,
+corresponding to M⋆ = 10 3 M⊙. The cloud is embedded
+in an ambient medium with nISM = 1 cm−3, into which
+the shell may expand freely. We compare four profiles at
+fixed ncore and Mcloud: power laws with ρ ∝ rαρ and αρ =
+0, −1, −2, and a Bonnor–Ebert sphere truncated at ξcl =
+6.45 (Sect. 2.5.2). Figures 4 and 5 summarise the resulting
+shell histories.
+At this deliberately low ε, the feedback budget sits near
+the dispersal threshold. The density profile therefore con-
+trols the shell trajectory by setting how fast the swept-
+up mass grows. While Rb < R core, all four clouds present
+the same central density to the bubble, so the early tra-
+jectories overlap in Fig. 4. Once the shell leaves the core,
+the runs diverge. In the homogeneous cloud, the shell en-
+counters a mass reservoir that grows rapidly with radius,
+Msh ∝ R3. The bubble remains compact, the shell loads
+mass eﬀiciently, and the energy-driven phase lasts 0.84 Myr.
+In the steep αρ = −2 cloud, the density falls fast enough
+that the shell mass grows only linearly with radius outside
+the core. The shell therefore loads much less mass at large
+radii, accelerates down the density gradient, and leaves the
+energy-driven phase after 0.19 Myr.
+The Bonnor–Ebert sphere and the αρ = −1 power law
+fall between these limits, with energy-phase durations of
+0.44 Myr and 0.26 Myr, respectively. The Bonnor–Ebert
+profile tracks the αρ = −1 run closely because, over the
+radii sampled by the shell, its envelope has a similar effec-
+tive slope. The outcomes then split cleanly. Three profiles
+turn around and re-collapse on timescales of tcoll = 1 .5–
+2.7 Myr. Only the αρ = −2 cloud keeps expanding through-
+out the 4 Myr runtime 7. The reason is simple: in the steep
+profile, the shell reaches the low-density envelope before
+gravity and inertia can trap it. A steeper density profile
+therefore lowers the minimum ε required for dispersal at
+fixed Mcloud, ncore, and Rcore.
+Three broader implications follow. First, in this
+marginal case, the cloud outcome is decided before super-
+novae dominate. The first core-collapse supernovae occur
+after ∼ 3–4 Myr; by then, the re-collapsing models have
+already turned around, while the dispersing model has al-
+ready escaped the dense cloud. Winds, radiation pressure,
+and photoionised-gas pressure therefore determine the fate
+of the cloud in this experiment. Second, the re-collapse
+times of 1.5–2.7 Myr and the dispersal time of the expand-
+ing model fall in the same Myr-scale window inferred from
+CO-to-Hα spatial decorrelation measurements in nearby
+galaxies (Chevance et al. 2020; Kruijssen et al. 2019). Trin-
+ity produces this range by changing only the density pro-
+file at fixed Mcloud and ε. Third, the existence of a critical
+slope between αρ = −1 and −2 means that the minimum
+star-formation eﬀiciency for cloud dispersal is not a single
+number. It depends on cloud structure. Extragalactic mea-
+surements of cloud-scale eﬀiciencies necessarily average over
+a distribution of density profiles, and population predic-
+tions, such as bubble size distributions compared with the
+PHANGS-JWST census in NGC 628, should marginalise
+over that distribution rather than assume a canonical ho-
+mogeneous cloud or a single power-law slope ( Watkins et al.
+2023).
+4.3. On the emergence timescale of clusters
+We define the dispersal timescale τdisp as the time from
+cluster birth at which the bubble first reaches the natal
+cloud edge,
+Rb(τdisp) = Rcloud. (57)
+We note that this is a model diagnostic, not a direct ob-
+servable. It is nevertheless the closest single-cloud analogue
+of the emergence timescales inferred from embedded and
+optically exposed cluster populations in nearby galaxies
+(Pedrini et al. 2026).
+Figure 6 compares τdisp across a 4 × 4 grid in (Mcloud, ε)
+at fixed central density ncore = 10 3 cm−3, with M⋆ =
+εMcloud. The key result is not the weak global trend with
+M⋆, but the systematic offset between density profiles. At
+every matched (Mcloud, ε) pair, the Bonnor–Ebert cloud
+disperses roughly ∼ 55% later than the homogeneous cloud.
+The two models contain the same mass and have the same
+central density, but the Bonnor–Ebert structure places that
+mass over a larger physical radius. This matters because,
+once feedback is strong enough to disperse every model
+in the grid, the density profile no longer decides whether
+the cloud survives; it instead shifts the inferred dispersal
+clock by order unity. A homogeneous initial condition would
+therefore underestimate the emergence time for the corre-
+sponding Bonnor–Ebert cloud, even though both runs have
+the same Mcloud, ncore, and ε.
+The dependence on cluster mass is more subtle. At fixed
+Mcloud, increasing ε from 0.01 to 0.3 raises M⋆ and short-
+7 The 4 Myr endpoint is the runtime of this comparison, not a
+physical stopping time. The αρ = −2 shell could still decelerate
+and turn around at later times.
+Article number, page 11 of 22
+
+A&A proofs: manuscript no. main
+0
+1
+2
+3τdisp [Myr]
+Bonnor-Ebert
+3 4 5
+log10(M⋆) [M⊙]
+0
+1
+2
+3τdisp [Myr]
+homogeneous Mcloud = 105 M⊙
+Mcloud = 106.5 M⊙
+0.01
+0.1
+ε
+0.01
+0.1
+ε
+Fig. 6. Dispersal timescale τdisp as a function of cluster stel-
+lar mass M⋆ at fixed central density ncore = 10 3 cm−3. Top:
+Bonnor–Ebert profile. Bottom: homogeneous profile. Marker
+colour encodes the star-formation eﬀiciency ε ∈ [0.01, 0.3];
+marker size scales with Mcloud from 105 to 106.5 M⊙. At fixed
+(Mcloud, ε), the Bonnor–Ebert clouds disperse ∼ 55% later than
+the homogeneous clouds. This systematic offset shows that the
+assumed density profile changes the inferred emergence time
+even when dispersal is guaranteed. Within each panel, increasing
+ε shortens τdisp at fixed Mcloud, while increasing Mcloud length-
+ens τdisp at fixed ε; these opposing trends weaken the apparent
+global relation with M⋆.
+ens τdisp by roughly a factor of five, because the feedback
+input per unit cloud mass rises. This trend has the same
+sign as observational emergence studies, where more mas-
+sive clusters tend to clear their surroundings faster ( Pedrini
+et al. 2026). At fixed ε, however, increasing M⋆ also means
+increasing Mcloud and hence Rcloud; the shell must cross a
+larger system, so τdisp increases by a comparable factor. The
+two effects partly cancel when all models are projected onto
+the M⋆ axis. A direct comparison to the observed mass–
+emergence relation therefore requires a cloud population
+model, not a one-dimensional reading of this plot.
+Across both density profiles, τdisp lies in the range 0.3–
+3 Myr, less than the time required for the first core-collapse
+supernova to occur. In this grid, the cloud outcome is there-
+fore set by pre-supernova feedback. This ordering is consis-
+tent with earlier W arpfieldcalculations and with nearby-
+galaxy timing measurements that identify pre-supernova
+feedback as the main driver of molecular-cloud dispersal
+(Rahner et al. 2017; Chevance et al. 2020; Ramambason
+et al. 2026). Paper II extends this comparison by varying
+ncore and imposing empirical cloud-density scalings, so that
+the simulated tracks can be compared directly with the
+mass-dependent emergence sequence.
+5. Limitations
+5.1. Geometry and initial conditions
+Real regions do not evolve so cleanly. Density gradients
+drive blister and champagne flows ( Tenorio-Tagle 1979;
+Geen et al. 2020), turbulent clouds open low column den-
+sity escape channels through which hot gas vents preferen-
+tially, rather than pushing isotropically on the whole shell
+(Harper-Clark & Murray 2009; Lancaster et al. 2024). Our
+1D treatment averages over this angular structure and re-
+places it with a single effective radius.
+Spherical symmetry is a better approximation than it
+might at first appear. Many observed ii regions are approx-
+imately round in projection: the Rosette Nebula ( Celnik
+1985), the Orion Veil shell ( Pabst et al. 2019), RCW 120
+(Luisi et al. 2021), and a wide variety of Galactic infrared
+ring nebulae ( Churchwell et al. 2006). Extragalactic sur-
+veys show the same mixture of order and complexity: most
+young, compact ii regions in nearby spirals are well de-
+scribed by circular or mildly elliptical apertures ( Hannon
+et al. 2022; Barnes et al. 2026), though older superbubbles
+increasingly deviate from sphericity as galactic shear and
+bubble merging take over ( Watkins et al. 2023). The Mag-
+ellanic Clouds provide a nearby laboratory for this range of
+morphologies. MCELS and DeMCELS ( Smith & MCELS
+Team 1999; Points et al. 2024) map the ionised gas across
+the LMC at parsec-scale resolution, from relatively simple
+shells and superbubbles to the highly structured 30 Do-
+radus complex. The same machinery may also prove useful
+for compact star-forming systems at high redshift, where
+JWST now resolves dense young stellar complexes and
+bound clusters at z ≳ 8 (Adamo et al. 2024). Extending
+the code to that regime requires adapting the input physics
+to primordial ISM conditions, including reduced metallic-
+ity, modified cooling, and potentially top-heavy IMFs, all
+of which we defer to future work.
+The cloud density profile ρ(r) is set at t = 0 , and ma-
+terial beyond the expanding bubble does not evolve. It nei-
+ther collapses, fragments, forms new stars, nor accretes onto
+the central cluster during the run. This is a reasonable ap-
+proximation when the cloud is being dispersed: the expand-
+ing bubble crosses each radial annulus faster than the lo-
+cal dynamical time, so the molecular gas has no chance
+to restructure before being swept up. Observed GMCs are
+broadly consistent with turbulent or quasi-equilibrium sup-
+port on cloud scales ( Heyer et al. 2009; Mac Low & Klessen
+2004), whereas dense sub-structures can be formally sub-
+virial ( Kauffmann et al. 2013). For these cases, coupling
+the shell dynamics to a live treatment of cloud self-gravity
+and turbulent evolution is left to future work.
+5.2. Gravity beyond the natal cloud
+Our gravity term in Eq. 19 includes only the young cluster
+and the swept-up shell. We neglect the pre-existing stel-
+lar component of the host galaxy: disc stars older than the
+natal cloud whose enclosed mass adds to the inward force
+as the shell expands. On natal-cloud scales this omission is
+small, because the shell encloses little of the surrounding
+disc. It becomes less secure once Rb reaches tens of par-
+secs. For a local old-stellar surface density Σ⋆, the enclosed
+background stellar mass scales as Mold(Rb) ∼ πR2
+bΣ⋆, so it
+can become comparable to or larger than M⋆ at Rb ∼ 50–
+Article number, page 12 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+100 pc in normal galactic discs. Recent PHANGS measure-
+ments of ∼ 18 000 H ii regions find that older stars dominate
+over young stars on ≳ 10 pc scales, and that self-gravity be-
+comes competitive with pre-supernova feedback on scales of
+order 60–130 pc depending on environment ( Pathak et al.
+2025a). Adding a radius-dependent term Mold(Rb) from an
+axisymmetric stellar disc model is straightforward, but we
+defer this extension to the version of Trinity aimed at
+shell evolution beyond the parent cloud.
+5.3. Bubble interior: missing physics
+We compute bubble energy losses with the conductive-
+evaporation prescription following Weaver et al. (1977).
+The resulting cooling rate assumes classical electron heat
+conduction across a smooth, spherical contact disconti-
+nuity. Three-dimensional simulations and analytic models
+show that Kelvin–Helmholtz and Rayleigh–Taylor insta-
+bilities can shred the contact discontinuity into a corru-
+gated, fractal-like surface; the enlarged interface enhances
+turbulent mixing and radiative cooling relative to a smooth
+spherical area (e.g. Lancaster et al. 2021, 2024). A 1D code
+cannot resolve this geometry directly; it can only absorb the
+effect into an effective cooling prescription. In the absence
+of such a subgrid enhancement, Trinity likely keeps the
+hot bubble over-pressured for too long. We therefore inter-
+pret the time at which our models reach the momentum-
+driven phase as an upper limit when turbulent mixing dom-
+inates the real interface.
+In Trinity, three pieces of feedback physics are cur-
+rently omitted from the dynamics. The first is magnetic
+support. At the cloud densities in our grid ( n ∼ 102–
+103 cm−3), the empirical magnetic-field scaling compiled by
+Crutcher (2012) gives order-of-magnitude magnetic pres-
+sures around Pmag/kB ∼ 105 K cm−3, with substantial
+cloud-to-cloud scatter. This pressure lies below the ther-
+mal pressure of photoionised gas for the fiducial models
+considered here, and below the early wind ram pressure in
+our model outputs. The approximation weakens at the up-
+per end of the density grid, where Pmag ∝ n4/3 (Crutcher
+2012).
+Second, we include cosmic-ray ionisation in the cooling
+tables, but neglect cosmic-ray pressure in the shell momen-
+tum equation. This is a reasonable approximation here, as
+the smooth Galactic cosmic-ray background does not exert
+a considerable net force on a spherical shell; only a cosmic-
+ray pressure gradient across the bubble would contribute
+to the equation of motion. Such gradients can matter on
+galactic scales and in supernova-driven environments, but
+they are not part of the pre-supernova, single-cloud mod-
+els considered here ( Grenier et al. 2015; Vink 2012). Pre-
+supernova acceleration at stellar-wind termination shocks
+remains possible, but its impact depends on eﬀicient con-
+finement and on the cluster/wind geometry; it is there-
+fore unlikely to dominate the shell dynamics in the ordi-
+nary GMC regimes modelled here (e.g. Morlino et al. 2021;
+Bednarek 2024).
+We also neglect turbulent pressure inside the ionised
+gas. In the Orion Nebula, the non-thermal velocity dis-
+persion is subsonic: Arthur et al. (2016) find σturb ≈ 4–
+5 km s−1, below the ionised sound speed ci ≈ 11 km s−1.
+Radiation-hydrodynamic simulations of ii regions in tur-
+bulent molecular clouds reach a comparable subsonic state
+within a few sound-crossing times ( Medina et al. 2014). This
+approximation should be safest for compact and interme-
+diate ii regions. It becomes weaker for giant regions such
+as 30 Doradus, where observed line widths are supersonic
+and cluster winds, shells, and large-scale flows shape the
+gas kinematics ( Melnick et al. 2021; García-Vázquez et al.
+2023).
+5.4. Dust and shell leakage
+We scale the dust cross-section linearly with metallicity
+and ignore both grain sublimation and the evolution of
+the grain-size distribution. Sublimation does destroy grains
+within rsub of the cluster, but only a negligible fraction
+of the total dust mass is lost in the regime modelled here
+(Draine 2011b). Our prescription is nevertheless a good ap-
+proximation during the dense embedded phase, when the
+shell column density is high and the dust is well coupled
+to the gas. It will overestimate the radiation-pressure boost
+factor (1 + τIR) at late times in luminous, low-density en-
+vironments where cumulative grain depletion reduces τIR
+below its initial value.
+We also assume a closed shell throughout (i.e., covering
+fraction Cf = 1 ). The code does not evaluate fragmenta-
+tion criteria or transition to a leaky-shell regime. Once the
+shell opens, hot gas escapes, ionising photons leak out, and
+the shell captures less of the available momentum. Harper-
+Clark & Murray (2009) showed for Carina that the dy-
+namics depend on the sky-averaged covering fraction rather
+than on the detailed shape of individual holes, which makes
+a parametrised Cf(t) a sensible next step. Implementing an
+evolving covering fraction and propagating it into f LyC
+esc will
+be deferred to future work.
+5.5. Treatment of photoionised gas pressure
+Resolved observations of ii regions show that the dominant
+pressure term depends on size and evolutionary state. The
+crux of the problem is therefore how photoionised gas pres-
+sure should enter the equation of motion, not whether it
+matters. Our construction in Section 2.3 reduces, but does
+not remove, the coupling between PH ii and Pb. The inner-
+edge density depends on Pb, the hydrostatic shell structure
+depends on that boundary value, and Rif enters Eq. ( 24)
+through the resulting geometry. The recombination-balance
+estimate is therefore less directly tied to Pb than the local
+shell density at Rif, but it is not an independent two-radius
+wind-bubble and ii-region model. Evolving Rb and Rif as
+separate dynamical variables would provide that treatment;
+we leave this extension to the next paper in this series.
+Existing semi-analytic treatments make different
+architectural choices. One approach starts from a
+photoionisation-driven ii-region solution and adds winds,
+radiation pressure, gravity, or photon breakout as correc-
+tion terms to the same ionisation-front dynamics ( Geen
+et al. 2020). A different approach, followed by Lancaster
+et al. (2025), carries separate radii for the wind-bubble
+boundary Rb and the ionisation front Rif, then evolves the
+wind bubble and photoionised region as coupled parts of
+one feedback bubble through force balance and ionisation–
+recombination equilibrium. The third approach ( Rahner
+et al. 2017, 2019; Jiménez et al. 2026) sits closer to the
+single-radius class: PH ii enters the hydrostatic shell struc-
+ture through the inner boundary condition at the shell face,
+Article number, page 13 of 22
+
+A&A proofs: manuscript no. main
+but does not appear as an explicit force in the shell equa-
+tion of motion. Trinity lies between these two: it includes
+PH ii explicitly in the shell equation of motion, but keeps a
+single radius for the bubble–ionisation-front system.
+6. Summary and conclusions
+We have presented Trinity, a one-dimensional spheri-
+cal thin-shell model for the expansion of feedback-driven
+bubbles in molecular clouds. The code succeeds warp-
+field (Rahner et al. 2017, 2019) and follows winds, su-
+pernovae, direct and dust-reprocessed radiation pressure,
+photoionised-gas pressure, and gravity in a single time-
+dependent calculation. The central design choice is the
+phase-aware driving pressure (Sect. 2.3): in the energy-
+driven phase the shell is driven by the larger of the
+hot-bubble and photoionised-gas pressures, while in the
+momentum-driven phase the pressure support comes from
+photoionised gas plus the direct ram pressure of freshly in-
+jected wind and supernova ejecta.
+In the low-eﬀiciency test cloud ( Mcloud = 10 6 M⊙,
+ncore = 10 3 cm−3, ε = 0 .01), Trinity reproduces the adi-
+abatic Weaver wind solution while the bubble is energy-
+driven (Sect. 3). At late times, the full Trinity trajectory
+lies between the pure photoionised and pure energy-driven
+limits, showing that both ionised-gas pressure and ram pres-
+sure play an important role in the bubble evolution. Includ-
+ing PH ii increases the radius by ∼ 17% at 10 Myr relative
+to the warpfield-equivalent run in this test, and the sepa-
+ration continues to grow as the cooled bubble loses thermal
+support.
+Trinity also returns the shell dynamics, the force bud-
+get, and ionising-photon budget on a single time grid. At
+higher eﬀiciency ( ε = 0 .10, M⋆ = 10 5 M⊙), the energy-
+driven phase lasts less than 1 Myr before cooling pushes the
+solution into momentum-dominated evolution (Sect. 4.1).
+Radiation pressure remains sub-dominant in this run, while
+photoionised-gas pressure continues to provide a measur-
+able part of the driving after the transition. The LyC es-
+cape fraction is not a direct cloud-dispersal diagnostic, but
+it records a second clock: the time at which ionising photons
+begin to leak into the surrounding ISM. Trinity therefore
+separates dynamical clearing from photon leakage, which
+is essential for comparing cloud-scale feedback models with
+H ii-region surveys and galaxy-scale LyC escape prescrip-
+tions.
+The density-profile experiments show that cloud struc-
+ture can decide the outcome at fixed cloud mass, central
+density, cluster mass, and metallicity. Of the four pro-
+files tested at fixed Mcloud and ncore (uniform, αρ = −1,
+αρ = −2, and a truncated Bonnor–Ebert sphere), only
+the αρ = −2 cloud disperses within the 4 Myr runtime;
+the other three turn around and re-collapse on 1.5–2.7 Myr
+timescales (Sect. 4.2). The minimum eﬀiciency for cloud
+destruction at fixed Mcloud and ncore therefore depends on
+cloud structure, and pre-supernova feedback decides the
+outcome before the first core-collapse supernovae arrive.
+The emergence-time experiment reinforces the same
+point in a regime where every cloud disperses. At fixed
+(Mcloud, ε) and central density, Bonnor–Ebert clouds dis-
+perse about 55% later than homogeneous clouds because
+they place the same mass over a larger physical radius
+(Sect 4.3). The density profile thus shifts the inferred emer-
+gence clock by order unity even when feedback is strong
+enough to clear every model. Across the grid, τdisp lies in the
+range 0.3–3 Myr, below the delay to the first core-collapse
+supernovae. Population predictions, including comparisons
+with the bubble size distribution measured in the cold ISM
+(Watkins et al. 2023), should therefore marginalise over a
+realistic distribution of cloud profiles rather than adopt a
+single canonical geometry.
+The present implementation has clear limits. Trin-
+ity averages over angular structure and cannot resolve
+champagne flows, blister breakouts, or the corrugated
+wind–bubble interface produced by Kelvin–Helmholtz and
+Rayleigh–Taylor instabilities. The treatment of PH ii also
+remains intermediate between single-radius shell models
+and a fully coupled two-radius wind-bubble plus H ii-region
+model. These limitations define future development steps:
+an evolving covering fraction, an environmental confine-
+ment through non-zero PISM, and a two-radius treatment
+of Rb and Rif.
+The main conclusion of this first paper is that feed-
+back dominance cannot be inferred from the stellar pop-
+ulation alone. It depends on how the feedback channels
+couple to the shell, when the hot bubble cools, how much
+ionising radiation leaks out, and how mass is arranged
+inside the natal cloud. Trinity is designed to measure
+these quantities directly, and can be used to eﬀiciently
+map the wind-, photoionisation-, radiation-, and supernova-
+dominated regimes across cloud parameter space and to
+compare the predicted dispersal and leakage timescales
+with resolved observations.
+Data availability
+The Trinity source code, input configurations, and
+post-processing scripts used to produce the figures
+in this paper will be made publicly available at
+https://github.com/JiaWeiTeh/trinity upon publication
+of this paper. The figures can be regenerated by
+running python paper/make_figures.py . The curve-
+simplification routine described in Appendix E.1 is also re-
+leased independently 8.
+Acknowledgements. We thank Moritz Sturm and Loke Ohlin for con-
+tributions to the code and for many helpful discussions during its de-
+velopment. The team acknowledges financial support from the Euro-
+pean Research Council (ERC) via Synergy Grant “ECOGAL” (project
+ID 855130) and from the German Excellence Strategy via the Hei-
+delberg Cluster “STRUCTURES” (EXC 2181 - 390900948). In addi-
+tion RSK thanks for funding from the German Ministry for Economy
+and Energy (BMWE) in project “MAINN” (funding ID 50OO2206),
+and from the German Science Foundation (DFG) as well as the
+French National Research Agency (ANR) for project “STARCLUS-
+TERS” (funding ID KL 1358/22-1). RSK is grateful for computing
+resources provided by the Ministry of Science, Research and the Arts
+(MWK) of the State of Baden-Württemberg through bwHPC and
+DFG through grants INST 35/1134-1 FUGG and 35/1597-1 FUGG,
+and also for data storage at SDS@hd funded through grants INST
+35/1314-1 FUGG and INST 35/1503-1 FUGG. KK gratefully ac-
+knowledges funding from DFG in the form of an Emmy Noether
+Research Group (grant number KR4598/2-1) and the ERC Starting
+Grant “ISM-METALS” (project ID 101077573).
+References
+Adamo, A., Bradley, L. D., Vanzella, E., et al. 2024, Nature, 632, 513
+Alves, J. F., Lada, C. J., & Lada, E. A. 2001, Nature, 409, 159
+8 https://github.com/JiaWeiTeh/simplify
+Article number, page 14 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+Arthur, S. J., Medina, S.-N. X., & Henney, W. J. 2016, MNRAS, 463,
+2864
+Baes, M., Verstappen, J., De Looze, I., et al. 2011, ApJS, 196, 22
+Balser, D. S. & Wenger, T. V. 2024, ApJ, 964, 47
+Barnes, A. T., Chandar, R., Kreckel, K., et al. 2026, A&A, 706, A95
+Barnes, A. T., Chandar, R., Kreckel, K., et al. 2022, A&A, 662, L6
+Barnes, A. T., Glover, S. C. O., Kreckel, K., et al. 2021, MNRAS, 508,
+5362
+Barnes, A. T., Watkins, E. J., Meidt, S. E., et al. 2023, ApJ, 944, L22
+Bednarek, W. 2024, MNRAS, 527, 3818
+Bergin, E. A. & Tafalla, M. 2007, ARA&A, 45, 339
+Beuther, H., Schilke, P., Menten, K. M., et al. 2002, ApJ, 566, 945
+Bonnor, W. B. 1956, MNRAS, 116, 351
+Calzetti, D., Lee, J. C., Sabbi, E., et al. 2015, AJ, 149, 51
+Castor, J., McCray, R., & Weaver, R. 1975, ApJ, 200, L107
+Celnik, W. E. 1985, A&A, 144, 171
+Chandrasekhar, S. 1939, An introduction to the study of stellar struc-
+ture
+Chevance, M., Kruijssen, J. M. D., Hygate, A. P. S., et al. 2020,
+MNRAS, 493, 2872
+Chevance, M., Kruijssen, J. M. D., Krumholz, M. R., et al. 2022,
+MNRAS, 509, 272
+Choi, J., Dotter, A., Conroy, C., et al. 2016, ApJ, 823, 102
+Churchwell, E., Povich, M. S., Allen, D., et al. 2006, ApJ, 649, 759
+Cowie, L. L. & McKee, C. F. 1977, ApJ, 211, 135
+Crutcher, R. M. 2012, ARA&A, 50, 29
+da Silva, R. L., Fumagalli, M., & Krumholz, M. 2012, ApJ, 745, 145
+Dale, J. E. 2015, New A Rev., 68, 1
+Doran, E. I., Crowther, P. A., de Koter, A., et al. 2013, A&A, 558,
+A134
+Dotter, A. 2016, ApJS, 222, 8
+Draine, B. T. 2011a, ApJ, 732, 100
+Draine, B. T. 2011b, Physics of the Interstellar and Intergalactic
+Medium
+Drory, N., Blanc, G. A., Kreckel, K., et al. 2024, AJ, 168, 198
+Ebert, R. 1955, ZAp, 37, 217
+Eldridge, J. J., Stanway, E. R., Xiao, L., et al. 2017, PASA, 34, e058
+Emden, R. 1907, Gaskugeln
+Emsellem, E., Schinnerer, E., Santoro, F., et al. 2022, A&A, 659, A191
+Falgarone, E., Phillips, T. G., & Walker, C. K. 1991, ApJ, 378, 186
+Ferland, G. J., Chatzikos, M., Guzmán, F., et al. 2017, Rev. Mexicana
+Astron. Astrofis., 53, 385
+Fichtner, Y. A., Mackey, J., Grassitelli, L., Romano-Díaz, E., & Por-
+ciani, C. 2024, A&A, 690, A72
+García-Vázquez, J., Henney, W. J., & Castañeda, H. O. 2023, MN-
+RAS, 523, 4202
+Geen, S., Bieri, R., Rosdahl, J., & de Koter, A. 2021, MNRAS, 501,
+1352
+Geen, S., Pellegrini, E., Bieri, R., & Klessen, R. 2020, MNRAS, 492,
+915
+Girichidis, P., Walch, S., Naab, T., et al. 2016, MNRAS, 456, 3432
+Gnat, O. & Sternberg, A. 2007, ApJS, 168, 213
+Grenier, I. A., Black, J. H., & Strong, A. W. 2015, ARA&A, 53, 199
+Grudić, M. Y., Guszejnov, D., Hopkins, P. F., Offner, S. S. R., &
+Faucher-Giguère, C.-A. 2021, MNRAS, 506, 2199
+Hannon, S., Lee, J. C., Whitmore, B. C., et al. 2022, MNRAS, 512,
+1294
+Harper-Clark, E. & Murray, N. 2009, ApJ, 693, 1696
+Hartmann, L. 1998, Accretion Processes in Star Formation, Vol. 32
+Hawcroft, C., Leitherer, C., Aranguré, O., et al. 2025, ApJS, 280, 5
+Heyer, M., Krawczyk, C., Duval, J., & Jackson, J. M. 2009, ApJ, 699,
+1092
+Hillier, D. J. & Miller, D. L. 1998, ApJ, 496, 407
+Hindmarsh, A. C. 1983, in IMACS Transactions on Scientific Com-
+putation, Vol. 1, Scientific Computing, ed. R. S. Stepleman,
+M. Carver, R. Peskin, W. F. Ames, & R. Vichnevetsky (Amster-
+dam: North-Holland), 55–64
+Jenkins, E. B. & Tripp, T. M. 2011, ApJ, 734, 65
+Jiménez, S., Kománek, D., Wünsch, R., et al. 2026, A&A, 709, A100
+Johnstone, D., Wilson, C. D., Moriarty-Schieven, G., et al. 2000, ApJ,
+545, 327
+Kapoor, A. U., Baes, M., van der Wel, A., et al. 2023, MNRAS, 526,
+3871
+Kapoor, A. U., Baes, M., van der Wel, A., et al. 2024, A&A, 692, A79
+Kauffmann, J., Pillai, T., & Goldsmith, P. F. 2013, ApJ, 779, 185
+Kim, J., Chevance, M., Kruijssen, J. M. D., et al. 2022, MNRAS, 516,
+3006
+Kim, J., Chevance, M., Kruijssen, J. M. D., et al. 2021, MNRAS, 504,
+487
+Kimm, T. & Cen, R. 2014, ApJ, 788, 121
+Könyves, V., André, P., Men’shchikov, A., et al. 2015, A&A, 584, A91
+Kreckel, K., Egorov, O. V., Egorova, E., et al. 2024, A&A, 689, A352
+Kroupa, P. 2001, MNRAS, 322, 231
+Kruijssen, J. M. D., Schruba, A., Chevance, M., et al. 2019, Nature,
+569, 519
+Krumholz, M. R. 2014, Phys. Rep., 539, 49
+Krumholz, M. R., Fumagalli, M., da Silva, R. L., Rendahl, T., & Parra,
+J. 2015, MNRAS, 452, 1447
+Krumholz, M. R. & Matzner, C. D. 2009, ApJ, 703, 1352
+Lada, C. J., Lombardi, M., & Alves, J. F. 2010, ApJ, 724, 687
+Lamers, H. J. G. L. M. & Cassinelli, J. P. 1999, Introduction to Stellar
+Winds
+Lancaster, L., Kim, J.-G., Bryan, G. L., et al. 2025, ApJ, 989, 42
+Lancaster, L., Ostriker, E. C., Kim, C.-G., Kim, J.-G., & Bryan, G. L.
+2024, ApJ, 970, 18
+Lancaster, L., Ostriker, E. C., Kim, J.-G., & Kim, C.-G. 2021, ApJ,
+914, 89
+Larson, R. B. 1969, MNRAS, 145, 271
+Lau, C. S. C. & Bonnell, I. A. 2025, MNRAS, 540, 1124
+Lee, J. C., Sandstrom, K. M., Leroy, A. K., et al. 2023, ApJ, 944, L17
+Lee, J. C., Whitmore, B. C., Thilker, D. A., et al. 2022, ApJS, 258,
+10
+Leitherer, C., Ekström, S., Meynet, G., et al. 2014, ApJS, 212, 14
+Leitherer, C., Schaerer, D., Goldader, J. D., et al. 1999, ApJS, 123, 3
+Leroy, A. K., Schinnerer, E., Hughes, A., et al. 2021, ApJS, 257, 43
+Lopez, L. A., Krumholz, M. R., Bolatto, A. D., Prochaska, J. X., &
+Ramirez-Ruiz, E. 2011, ApJ, 731, 91
+Lopez, L. A., Krumholz, M. R., Bolatto, A. D., et al. 2014, ApJ, 795,
+121
+Luisi, M., Anderson, L. D., Schneider, N., et al. 2021, Science Ad-
+vances, 7, eabe9511
+Mac Low, M.-M. & Klessen, R. S. 2004, Reviews of Modern Physics,
+76, 125
+Mac Low, M.-M. & McCray, R. 1988, ApJ, 324, 776
+Martínez-González, S., Silich, S., & Tenorio-Tagle, G. 2014, ApJ, 785,
+164
+Massi, F., Weiss, A., Elia, D., et al. 2019, A&A, 628, A110
+McQuaid, T., Calzetti, D., Linden, S. T., et al. 2024, ApJ, 967, 102
+Medina, S.-N. X., Arthur, S. J., Henney, W. J., Mellema, G., & Gazol,
+A. 2014, MNRAS, 445, 1797
+Melnick, J., Tenorio-Tagle, G., & Telles, E. 2021, A&A, 649, A175
+Miville-Deschênes, M.-A., Murray, N., & Lee, E. J. 2017, ApJ, 834,
+57
+Morlino, G., Blasi, P., Peretti, E., & Cristofari, P. 2021, MNRAS, 504,
+6096
+Mueller, K. E., Shirley, Y. L., Evans, II, N. J., & Jacobson, H. R.
+2002, ApJS, 143, 469
+Murray, N., Quataert, E., & Thompson, T. A. 2010, ApJ, 709, 191
+Olivier, G. M., Lopez, L. A., Rosen, A. L., et al. 2021, ApJ, 908, 68
+Oppenheimer, B. D. & Schaye, J. 2013, MNRAS, 434, 1043
+Osterbrock, D. E. & Ferland, G. J. 2006, Astrophysics of gaseous
+nebulae and active galactic nuclei
+Pabst, C., Higgins, R., Goicoechea, J. R., et al. 2019, Nature, 565, 618
+Pathak, D., Leroy, A. K., Barnes, A. T., et al. 2025a, ApJ, 993, L20
+Pathak, D., Leroy, A. K., Thompson, T. A., et al. 2025b, ApJ, 982,
+140
+Pauldrach, A. W. A., Hoffmann, T. L., & Lennon, M. 2001, A&A,
+375, 161
+Paxton, B., Bildsten, L., Dotter, A., et al. 2011, ApJS, 192, 3
+Pedrini, A., Adamo, A., Calzetti, D., et al. 2026, arXiv e-prints,
+arXiv:2603.09867
+Pellegrini, E. W., Rahner, D., Reissl, S., et al. 2020, MNRAS, 496,
+339
+Petzold, L. R. 1983, SIAM Journal on Scientific and Statistical Com-
+puting, 4, 136
+Points, S. D., Long, K. S., Blair, W. P., et al. 2024, ApJ, 974, 70
+Rahner, D., Pellegrini, E. W., Glover, S. C. O., & Klessen, R. S. 2017,
+MNRAS, 470, 4453
+Rahner, D., Pellegrini, E. W., Glover, S. C. O., & Klessen, R. S. 2019,
+MNRAS, 483, 2547
+Ramambason, L., Chevance, M., Kim, J., et al. 2026, A&A, 706, A186
+Reissl, S., Klessen, R. S., Mac Low, M.-M., & Pellegrini, E. W. 2018,
+A&A, 611, A70
+Reissl, S., Wolf, S., & Brauer, R. 2016, A&A, 593, A87
+Rowland, L. E., McLeod, A. F., Fattahi, A., et al. 2024, A&A, 685,
+A46
+Sattler, N., Méndez-Delgado, J. E., Kreckel, K., et al. 2026, A&A,
+706, A81
+Scheuermann, F., Kreckel, K., Barnes, A. T., et al. 2023, MNRAS,
+522, 2369
+Article number, page 15 of 22
+
+A&A proofs: manuscript no. main
+Scheuermann, F., Kreckel, K., Teh, J. W., et al. 2026, A&A, 708, A202
+Schinnerer, E. & Leroy, A. K. 2024, ARA&A, 62, 369
+Schure, K. M., Kosenko, D., Kaastra, J. S., Keppens, R., & Vink, J.
+2009, A&A, 508, 751
+Shaver, P. A., McGee, R. X., Newton, L. M., Danks, A. C., & Pottasch,
+S. R. 1983, MNRAS, 204, 53
+Shu, F. H. 1977, ApJ, 214, 488
+Smith, L. J., Norris, R. P. F., & Crowther, P. A. 2002, MNRAS, 337,
+1309
+Smith, R. C. & MCELS Team. 1999, in IAU Symposium, Vol. 190,
+New Views of the Magellanic Clouds, ed. Y.-H. Chu, N. Suntzeff,
+J. Hesser, & D. Bohlender, 28
+Smith, R. J., Treß, R. G., Sormani, M. C., et al. 2020, MNRAS, 492,
+1594
+Solomon, P. M., Rivolo, A. R., Barrett, J., & Yahil, A. 1987, ApJ,
+319, 730
+Spitzer, L. 1978, Physical processes in the interstellar medium
+Stanway, E. R. & Eldridge, J. J. 2018, MNRAS, 479, 75
+Sutherland, R. S. & Dopita, M. A. 1993, ApJS, 88, 253
+Teh, J. W. 2026, simplify: heuristic downsampling of one-dimensional
+curves
+Teh, J. W., Grasha, K., Krumholz, M. R., et al. 2023, MNRAS, 524,
+1191
+Tenorio-Tagle, G. 1979, A&A, 71, 59
+Verner, D. A. & Ferland, G. J. 1996, ApJS, 103, 467
+Vink, J. 2012, A&A Rev., 20, 49
+Walch, S., Girichidis, P., Naab, T., et al. 2015, MNRAS, 454, 238
+Watkins, E. J., Barnes, A. T., Henny, K., et al. 2023, ApJ, 944, L24
+Weaver, R., McCray, R., Castor, J., Shapiro, P., & Moore, R. 1977,
+ApJ, 218, 377
+Wolfire, M. G., McKee, C. F., Hollenbach, D., & Tielens, A. G. G. M.
+2003, ApJ, 587, 278
+Article number, page 16 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+Appendix A: Cluster feedback input tables
+Trinity reads the cluster-integrated feedback budget from
+a single time-resolved table, computed in advance for a sin-
+gle stellar population (SSP) cluster of mass M⋆ and metal-
+licity Z. For each tabulated age t we require the ionising
+photon rate Qi(t), the bolometric luminosity Lbol(t), split
+at 13.6 eV into ionising and non-ionising components Li(t)
+and Ln(t), the wind and supernova mechanical luminosi-
+ties Lw(t) and LSN(t), and the corresponding momentum
+injection rates ˙pw(t) and ˙pSN(t). For this paper, we gener-
+ate the default tables with starburst99 (SB99; Leitherer
+et al. 1999, 2014; Hawcroft et al. 2025), run with a Kroupa
+(2001) IMF over 0.1–100 M⊙ and Geneva tracks at the re-
+quested metallicity and rotation regime.
+Nevertheless, Trinity is not tied to specific stellar pop-
+ulation synthesis code. So long as atmospheric models are
+taken into account (e.g., for Qi, ˙M v∞; see Hillier & Miller
+1998; Pauldrach et al. 2001; Smith et al. 2002), any combi-
+nation of synthesis code and atmospheric models that de-
+livers the eight quantities above on a common time grid
+can be substituted, including BPASS ( Eldridge et al. 2017;
+Stanway & Eldridge 2018), which adds binary mass trans-
+fer, and SLUG ( da Silva et al. 2012; Krumholz et al. 2015),
+which samples the initial mass function (IMF) stochasti-
+cally.
+Appendix B: Validity of the ZAMS assumption
+Trinity starts every simulation with a fully formed stellar
+population at t = 0, placed on the zero-age main sequence
+(ZAMS): the cluster mass M⋆ = ε Mcloud is distributed
+across a Kroupa IMF, and starburst99 (Leitherer et al.
+1999) supplies the feedback tables from that moment on-
+ward. We do not model pre-main-sequence (PMS) evolu-
+tion. The error this introduces depends on two things: how
+long PMS contraction takes for a star of given mass, and
+which mass range actually generates the feedback. We ad-
+dress them in turn.
+To answer the first, we use the MESA Isochrones and
+Stellar Tracks library (MIST v1.2; Choi et al. 2016; Dot-
+ter 2016), built on the Mesa stellar evolution code ( Pax-
+ton et al. 2011). Models at solar metallicity and zero rota-
+tion are adopted to match the starburst99 Geneva non-
+rotating tracks used elsewhere in this paper. The choice is
+also conservative for the present purpose: changing the ro-
+tation prescription affects the detailed massive-star tracks,
+but the feedback budget still comes from stars that reach
+the main sequence on timescales short compared to cloud
+clearing.
+Figure B.1 (top panel) shows six MIST evolutionary
+tracks covering Minit ∈ [0.5, 60] M⊙, with the PMS segment
+drawn dashed and ZAMS marked by a filled circle. A 60 M⊙
+star reaches the ZAMS in roughly 17 kyr, a 30 M⊙ star in
+32 kyr, and a 10 M⊙ star in roughly 190 kyr. A 0.5 M⊙ star,
+by contrast, takes about 160 Myr to contract, longer than
+the host GMC itself survives. The ZAMS assumption there-
+fore misrepresents low-mass stars; whether that misrepre-
+sentation matters depends on how much feedback they pro-
+duce.
+That question is answered by Fig. B.1 (bottom panel),
+which plots the cumulative luminosity fraction F (> M ; t),
+i.e., the share of the cluster bolometric luminosity con-
+tributed by stars with initial mass above M . We com-
+pute this quantity by integrating MIST isochrones against
+a Kroupa (2001) IMF. For the stellar mass range used here,
+the Kroupa IMF is a broken power law,
+ξ(M ) = k
+8
+<
+:
+M −αIMF
+1 , Mmin ≤ M < M break,
+M αIMF
+2 −αIMF
+1
+break M −αIMF
+2 , M break ≤ M ≤ Mmax,
+(B.1)
+with αIMF
+1 = 1 .3, αIMF
+2 = 2 .3, Mbreak = 0 .5 M⊙, Mmin =
+0.08 M⊙, and Mmax = 120 M⊙. Here, k is the normalisation
+factor, and the M αIMF
+2 −αIMF
+1
+break prefactor enforces continuity
+at the break. The cumulative fraction is then
+F (> M ; t) ≡
+Z Mto(t)
+M
+Lbol(M ′; t) ξ(M ′) dM ′
+Z Mto(t)
+Mmin
+Lbol(M ′; t) ξ(M ′) dM ′
+, (B.2)
+where Lbol(M ; t) is the bolometric luminosity of a star of
+initial mass M at age t read from the MIST isochrone, and
+Mto(t) is the main-sequence turnoff mass, and the denom-
+inator is the total cluster bolometric luminosity.
+Note that we use Lbol as the figure of merit, which is
+the natural scalar for radiation pressure but not for every
+feedback channel. Photoionisation is driven by the ionising
+photon rate Qi and winds by the mechanical luminosity
+Lw = 0 .5 ˙M v2
+∞; each is more concentrated on the massive
+tail of the IMF than the bolometric luminosity. Substituting
+Qi or Lw for Lbol in Equation B.2 therefore pushes every
+entry closer to unity, since stars below ∼ 10 M⊙ contribute
+almost nothing to either channel.
+Together, these two results give us a clear picture. At
+ages between 0.1 and 3 Myr (i.e., the window over which
+pre-SN feedback clears the natal cloud), more than 98%
+of the cluster bolometric luminosity comes from stars with
+Minit > 10 M⊙. These same stars reach the zero-age main
+sequence in ≲ 0.3 Myr. The resulting error in the integrated
+bolometric luminosity is thus bounded below ∼ 2%; the
+ZAMS assumption has a negligible bearing on the cluster
+feedback budget because the low-mass stars it misrepresents
+are too faint to contribute appreciably.
+Appendix C: Constraints on the cloud parameter
+space
+Not every combination of cloud parameters ( Mcloud, ncore,
+Rcore, αρ) yields a physically realisable initial condition.
+Trinity enforces two constraints before accepting a model.
+First, the cloud radius Rcl, fixed by requiring the inte-
+grated mass profile to equal the prescribed cloud mass
+Mcloud, must remain within the observed range of Galac-
+tic GMC and molecular-cloud-complex sizes. We adopt
+Rcl ≤ 200 pc as a conservative upper cutoff ( Solomon et al.
+1987; Miville-Deschênes et al. 2017). Second, the density at
+the cloud boundary must remain above the ambient ISM
+value, n(Rcl) ≥ nISM. For power-law profiles with slope
+αρ < 0, this condition gives
+Rcl/Rcore ≤ (ncore/nISM)1/|αρ| , (C.1)
+which becomes increasingly restrictive for steeper slopes.
+Article number, page 17 of 22
+
+A&A proofs: manuscript no. main
+4 6 8 10
+log10(t) [yr]
+−2
+0
+2
+4
+6
+log10(Lbol) [L⊙]
+0.5 M⊙
+1 M⊙
+3 M⊙
+10 M⊙
+30 M⊙
+60 M⊙
+−1 0 1 2
+log10(Minit) [M⊙]
+95
+96
+97
+98
+99
+100Lbol(> M )/Lbol, tot [%]
+98%
+> 10 M⊙
+0.1 Myr
+0.3 Myr
+1 Myr
+3 Myr
+10 Myr
+Fig. B.1. Left: MIST single-star evolutionary tracks at solar metallicity and zero rotation for six initial masses between 0.5 and
+60 M⊙. PMS segments are drawn dashed with the region below them shaded; main-sequence and post-main-sequence segments are
+solid. Filled circles mark the zero-age main sequence. Massive stars ( Minit ≳ 10 M⊙) reach the main sequence within ≲ 0.3 Myr.
+Right: Cumulative luminosity fraction F (> M ; t) from Equation B.2, evaluated for a 106 M⊙ Kroupa (2001) cluster at five ages
+drawn from MIST basic isochrones. Curves at t ≤ 3 Myr are solid, marking the regime in which the young-cluster argument
+applies. The 10 Myr curve is drawn as a grey dashed line because stars with Minit > 20 M⊙ have already died by then, and it
+exits the plotting window below Minit = 10 M⊙. The dotted horizontal line marks F = 0 .98 and the dotted vertical line marks
+Minit = 10 M⊙. For all t ≤ 3 Myr, more than 98% of cluster Lbol during the feedback-relevant window comes from stars with
+Minit > 10 M⊙.
+Figure C.1 maps the allowed parameter space in the
+(Mcloud, ncore) plane for power-law and BE profiles. For a
+fixed core radius Rcore = 0 .1 pc, valid combinations form
+a diagonal band whose width and position depend on the
+profile shape. Steeper power-law slopes and larger BE di-
+mensionless radii ξcl restrict the allowed region to higher
+core densities at a given cloud mass, because the extended
+envelope reaches nISM at a smaller physical radius. Ob-
+servational surveys of Galactic molecular clouds find mean
+densities ¯n ∼ 102–103 cm−3 on GMC scales ( Solomon et al.
+1987; Heyer et al. 2009; Miville-Deschênes et al. 2017), ris-
+ing to ≳ 104 cm−3 in dense clumps and cores ( Bergin &
+Tafalla 2007). Massive star-forming clumps and cores of-
+ten show approximate power-law density structures, with
+typical indices near p ∼ 1.5–2 for n ∝ r−p, albeit with sub-
+stantial source-to-source scatter and modelling systematics
+(Beuther et al. 2002; Mueller et al. 2002).
+Appendix D: The cloud–ISM density discontinuity
+In many idealised cloud models, the cloud–ISM transition
+is treated as a step function at r = Rcloud (e.g. Rahner et al.
+2017). In our model grid this jump often spans several or-
+ders of magnitude in density. When solving the dynamical
+equations for quantities such as vb and Eb, LSODA adapts
+its step size to maintain the requested local error tolerance.
+At the discontinuity, the solver may attempt to reduce the
+step size excessively and terminate with an Unexpected
+istate error.
+Whether this happens depends on the shell speed at the
+crossing. In our tests, the failure appears when the shell
+reaches the cloud edge at roughly ≳ 10 km s−1: a slow shell
+traverses the density jump in many small accepted steps,
+whereas a fast shell encounters the jump too abruptly for
+the adaptive integrator to regularise. When this happens,
+LSODA exits at the last successful step and Trinity then
+hands the solution to the transition and momentum phases.
+The run therefore still reaches completion and returns a full
+Rb(t) history, but the exact timing and location of the phase
+transition become unreliable.
+We avoid this numerical error by replacing the dis-
+continuity with a hyperbolic-tangent bridge across Rcloud
+(Fig. D.1),
+w(r) = 1
+2
+
+1 + tanh
+ r − Rcloud
+δsmooth
+
+, (D.1)
+with width δsmooth = 0 .01 Rcloud, and defining the
+smoothed profile as
+nsmooth(r) = ncloud(r) [1 − w(r)] + nISM w(r). (D.2)
+where ncloud is the density profile within cloud. Observed
+cloud boundaries are structured rather than perfectly dis-
+continuous (Falgarone et al. 1991), so we use this bridge as
+a numerical regularisation only.
+Appendix E: Output format and post-processing
+Tables E.1 and E.2 list the input and output quantities of
+a Trinity run. The output file dictionary.jsonl stores
+one snapshot per line as a self-contained JSON object; this
+flat-text format requires no external libraries and is both
+human-readable and appendable. All quantities are stored
+in Trinity’s internal astronomy unit system (M ⊙, pc, Myr,
+K).
+Article number, page 18 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+103
+105
+α = −0.5
+(2500/2500 valid)
+α = −1
+(2057/2500 valid)
+105 107
+103
+105
+α = −1.5
+(1275/2500 valid)
+105 107
+α = −2
+(560/2500 valid)
+ξ = 3.0
+(1465/2500 valid)
+ξ = 4.0
+(1597/2500 valid)
+105 107
+ξ = 6.45 (critical)
+(1759/2500 valid)
+105 107
+ξ = 10.0
+(1834/2500 valid)
+10−1
+100
+101
+102
+rcloud [pc]
+Power-Law Bonnor-Ebert
+Mcloud [M⊙]
+ncore [cm−3]
+Fig. C.1. Left: Allowed parameter space for power-law density profiles ( ρ ∝ rαρ ) at fixed core radius Rcore = 0.1 pc. Each panel
+shows the cloud radius Rcl as a function of cloud mass Mcloud and core density ncore, for αρ = −0.5, −1, −1.5, and −2. White
+regions are excluded by at least one of three constraints: Rcl > 200 pc, edge density below the ISM value ( nISM = 1 cm−3), or mass
+inconsistency (see Appendix C). Steeper slopes restrict the allowed band to higher core densities at a given cloud mass, because
+the envelope reaches nISM at a smaller radius. Right: Same as before, but for BE spheres with dimensionless radii ξcl = 3 .0, 4.0,
+6.45 (critical, marginally stable), and 10.0.
+T able E.1. Example input parameters of a Trinity run. A
+single run is launched via python run.py <paramfile> .
+Parameter Description
+mCloud Initial cloud mass Mcloud
+nCore Core number density ncore
+rCore Core radius Rcore
+nISM Ambient ISM density
+sfe Star formation eﬀiciency ε
+dens_profile Density profile type ( densPL or densBE)
+model_name Run identifier string
+Appendix E.1: Profile array compression
+The bubble and shell profiles, for example T (r) and n(r),
+are solved on a refined grid with Nsolver ∼ 3 × 104 sam-
+ples per snapshot. Writing every sample would dominate
+the output size, while most points lie in smooth regions
+between physically important structures such as the con-
+duction front, the contact discontinuity, and the ionisa-
+tion front. Before writing each snapshot, Trinity therefore
+compresses every profile to a smaller set of representative
+points. The default target is Nmin = 100 points per profile.
+The downsampling operates on a working curve y(r),
+which may be either the raw profile or log 10 y. We first
+rescale both axes to [0, 1], giving (˜r, ˜y), so that profiles
+with different units and dynamic ranges can be treated with
+the same thresholds. Three detectors then select candidate
+points. The first identifies sharp bends using the Menger
+curvature,
+κi = 2
+(˜ri − ˜ri−1) × (˜ri+1 − ˜ri)
+
+˜ri − ˜ri−1
+˜ri+1 − ˜ri
+˜ri+1 − ˜ri−1
+ , (E.1)
+and flags points with κi > 1. The second detector flags
+local extrema from sign changes in the derivative. The third
+samples the cumulative arc length,
+sk =
+kX
+j=1
+q
+(˜rj − ˜rj−1)2 + (˜yj − ˜yj−1)2, (E.2)
+at Nmin equally spaced positions along the curve. The initial
+kept set is the union of these three detector outputs and the
+two endpoints of the original array.
+A subset of the kept points is then marked mandatory
+and protected from later downsampling. First, prominent
+extrema are retained. For a local maximum at index p, let
+ℓ and r be the nearest indices on the left and right for
+which yj > y p, or the corresponding array boundary if no
+such point exists. The prominence is
+prom(p) = yp − max
+
+min
+ℓ<j<p
+yj, min
+p<j<r
+yj
+
+, (E.3)
+and for a local minima we use a mirrored construction. Ex-
+trema with prom (p) > 0.05 (ymax − ymin) are mandatory,
+preserving deep dips and tall spikes. Second, we impose a
+weak radial ‘skeleton’: the radial domain is split into equal-
+width chunks, and the kept point nearest each chunk centre
+is marked mandatory. This preserves low-amplitude regions
+that may contribute little to the variance but remain phys-
+ically meaningful.
+The final compressed profile is checked against the orig-
+inal solver grid using the coeﬀicient of determination,
+R2 = 1 −
+P
+i
+
+yi − ˆy(ri)
+2
+P
+i
+ 
+yi − ¯y
+2 , (E.4)
+Article number, page 19 of 22
+
+A&A proofs: manuscript no. main
+100
+101
+102
+103
+n(r) [cm−3]
+step (original)
+fsmooth= 0.005
+fsmooth= 0.01 (default)
+fsmooth= 0.02
+10−1 101
+Rb [pc]
+102
+103
+vb [km s−1]
+LSODA succeeded
+LSODA failed
+Fig. D.1. Top: The hyperbolic-tangent bridge of Equation D.1
+for three widths fsmooth ≡ δsmooth/Rcloud, plotted against the
+unsmoothed step (black). The default width fsmooth = 0 .01
+(green) places the transition well inside the unresolved region
+of the unsmoothed profile. Bottom: Phase-space trajectory vb vs
+Rb for an Mcloud = 10 6 M⊙, ncore = 10 3 cm−3, αρ = 0 , ε = 0 .1
+run before (red dashed) and after (black solid) the smoothing
+(Equation D.1) is applied. As the bubble crosses cloud radius
+(vertical dashed line), both lines part ways; the solid line traces
+the true trajectory of the expanding bubble.
+where ˆy(r) is the piecewise-linear reconstruction from the
+kept points. Figure E.1 shows an example for an early
+snapshot of a low-mass cloud, where the radial profiles are
+still smooth except near the shell. Reducing the original
+Nsolver = 3 ×104 samples to 40 retained points preserves the
+large-scale gradients in both T (r) and n(r), while still re-
+solving the rapid variation near the shell. The residual pan-
+els show that the piecewise-linear reconstruction remains
+accurate at the ∼ 10−3 level in logarithmic space.
+The version included here is the subset used internally
+by Trinity for profile compression; a more general imple-
+mentation, with a command-line interface and diagnostic
+utilities, is maintained as a standalone Python module 9
+(Teh 2026).
+9 https://github.com/JiaWeiTeh/simplify
+105
+106
+T (r) [K]
+original (n = 3 × 104)
+simpliﬁed (n = 40)
+10−4
+10−3
+|∆ logT |
+101
+102
+103
+n(r) [cm−3]
+original (n = 3 × 104)
+simpliﬁed (n = 40)
+0.05 0.10 0.15 0.20 0.25
+r [pc]
+10−4
+10−3
+|∆ logn|
+Fig. E.1. Example of profile downsampling for an early Trin-
+ity snapshot. The model has Mcloud = 4 × 103 M⊙, ε = 0 .01,
+and ncore = 50 cm−3, shown at t = 3 .81 kyr. Grey curves show
+the original solver profiles with Nsolver = 3 × 104 samples; red
+markers and black connecting lines show the simplified represen-
+tation with N = 40 retained points. The upper pair of panels
+shows the temperature profile T (r) and the absolute logarithmic
+reconstruction error |∆ log T |; the lower pair shows the density
+profile n(r) and |∆ log n|. The reduced profile preserves both the
+smooth interior gradient and the sharp structure near the shell
+while keeping the logarithmic interpolation error at the ∼ 10−3
+level.
+Appendix E.2: The trinity_reader API
+Analysis scripts access Trinity output through the
+trinity_reader module, which wraps the raw JSONL
+files in a NumPy-oriented interface analogous to
+astropy.io.fits. Opening a dictionary.jsonl file
+returns a TrinityOutput object that behaves like an
+ordered sequence of snapshots, supports iteration and
+integer indexing, and automatically converts JSON lists
+back to NumPy arrays on load. Table E.3 summarises the
+main methods.
+Article number, page 20 of 22
+
+J. W. Teh et al.: Trinity I: Unified feedback in bubbles
+T able E.2. Time-dependent output quantities accessible through the trinity_reader API. Quantities are accessed via dot
+notation on a Snapshot object (e.g. snap.radii.R_b) and are reported in TRINITY’s internal AU unit system (mass in M ⊙,
+length in pc, time in Myr), with derived units following. Number densities are kept in cm −3 for compatibility with the case-B
+recombination coeﬀicient αB, temperatures in K, and the ionising photon rate Qi in s −1 to match the Starburst99 spectral synthesis
+output. Bidirectional conversion between AU and cgs is provided by the unit_conversions module. Pressures and forces are related
+by F = 4πR2P in consistent code units.
+Attribute Unit Description Attribute Unit Description
+snap.time snap.radii
+.t Myr Simulation time .R_ts pc Wind termination shock
+Rts
+.phase — Current phase label .R_b pc Bubble boundary Rb
+.R_if pc Ionisation front Rif
+.R_shell pc Shell outer edge Rsh
+.R_cloud pc Cloud edge Rcloud
+snap.bubble snap.bubble.cooling
+.E M⊙ pc2 Myr−2 Thermal energy Eb .L_gain M⊙ pc2 Myr−3 Luminosity into bubble
+.T_edge K Temperature at Rb .L_loss M⊙ pc2 Myr−3 Total cooling + leaking
+.T_avg K Volume-averaged
+temperature
+.L_rad M⊙ pc2 Myr−3 Radiative cooling total
+.M M⊙ Hot gas mass .L_int M⊙ pc2 Myr−3 Cooling in interior zone
+.dMdt M⊙ Myr−1 Evaporation rate .L_cond M⊙ pc2 Myr−3 Cooling in conduction zone
+.v_b pc Myr−1 Bubble boundary velocity .L_leak M⊙ pc2 Myr−3 Leaking luminosity
+.beta — Pressure index β
+.delta — Temperature index δ
+snap.pressure snap.force
+.P_drive M⊙ pc−1 Myr−2 Driving pressure
+(phase-aware)
+.F_grav M⊙ pc Myr−2 Gravitational force
+.P_b M⊙ pc−1 Myr−2 Bubble thermal pressure .F_rad M⊙ pc Myr−2 Radiation force
+.P_HII M⊙ pc−1 Myr−2 Photoionised gas pressure
+PH ii
+.F_HII M⊙ pc Myr−2 PH ii force
+.P_ram M⊙ pc−1 Myr−2 Ram pressure (wind + SN) .F_bubble M⊙ pc Myr−2 Bubble thermal force
+(Pb 4πR2
+b)
+.F_ram M⊙ pc Myr−2 Total ram force (wind +
+SN)
+.F_ram_wind M⊙ pc Myr−2 Wind ram component
+.F_ram_SN M⊙ pc Myr−2 SN ram component
+.F_ISM M⊙ pc Myr−2 ISM confining force
+snap.shell snap.feedback
+.M M⊙ Swept-up shell mass Msh .L_mech_w M⊙ pc2 Myr−3 Wind mechanical
+luminosity
+.dMdt M⊙ Myr−1 Mass accretion rate .L_mech_SN M⊙ pc2 Myr−3 SN mechanical luminosity
+.n_inner pc−3 Density at Rb .L_mech_tot M⊙ pc2 Myr−3 Total mechanical
+luminosity
+.n_max pc−3 Peak shell density .L_bol M⊙ pc2 Myr−3 Bolometric luminosity
+.n_if pc−3 Density at Rif .L_ion M⊙ pc2 Myr−3 Ionising luminosity
+.n_outer pc−3 Density at Rsh .L_neu M⊙ pc2 Myr−3 Non-ionising luminosity
+.n_IF_Str pc−3 Strömgren density (drives
+PH ii)
+.Q_ion Myr−1 Ionising photon rate Qi
+.thickness pc Shell thickness ∆Rsh .pdot_w M⊙ pc Myr−2 Wind momentum rate ˙pw
+.c_s pc Myr−1 Ionised-gas sound speed .pdot_SN M⊙ pc Myr−2 SN momentum rate ˙pSN
+.f_abs_ion — Ionising-photon absorbed
+fraction
+.pdot_tot M⊙ pc Myr−2 Total momentum rate
+.collapsed bool Shell has collapsed
+.dissolved bool Cloud has dissolved
+Article number, page 21 of 22
+
+A&A proofs: manuscript no. main
+T able E.3. Methods of the TrinityOutput class. All methods that return data default to NumPy arrays for numeric quantities.
+Method Description Example
+open(path) Load a .jsonl or legacy .json file and
+return a new TrinityOutput instance.
+out = TrinityOutput.open(`output.jsonl')
+get(key) Extract a single quantity across all
+snapshots as a NumPy array. Pass
+as_array=False for non-numeric
+fields.
+t = out.get(`t_now')
+R = out.get(`R2')
+get_at_time(t) Return the snapshot at time t [Myr]:
+interpolated by default, or the nearest
+actual snapshot with mode=`closest'.
+s = out.get_at_time(1.0)
+print(s[`R2'], s[`Eb'])
+filter(...) Return a new TrinityOutput
+restricted by phase label and/or time
+interval [tmin, t max].
+out.filter(phase=`energy')
+info() Print a summary: model name,
+number of snapshots, time range,
+breakdown by phase. verbose=True
+lists all stored parameters.
+out.info(verbose=True)
+to_dataframe() Export all scalar (non-array)
+quantities to a pandas DataFrame with
+one row per snapshot.
+out.to_dataframe()
+Article number, page 22 of 22

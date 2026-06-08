@@ -1,0 +1,612 @@
+Title: One Transit Is All You Need: Detecting Exoplanets Through Learned Stellar Behaviour with EXOVEIL
+Authors: Pratik Priyanshu
+Published: 2026-06-01
+Categories: astro-ph.EP, astro-ph.IM, cs.LG
+
+Astronomy & Astrophysicsmanuscript no. exoveil©ESO 2026
+June 3, 2026
+One T ransit Is All Y ou Need:
+Detecting Exoplanets Through Learned Stellar Behaviour with
+ExoVeil
+P. Priyanshu1
+SRH Hochschule, Heidelberg, Germany
+e-mail:pratikpriyanshu12345@gmail.com
+ABSTRACT
+I presentExoVeil, a transit detection system that learns what a star’s brightnessshouldlook like and flags when
+reality disagrees. Unlike existing systems that require phase-folded input,ExoVeiloperates on raw flux time series
+and can detect planets that transit only once.
+A Transformer world model, trained on 16499 Kepler light curves with transit-masked self-supervised learning, predicts
+expected stellar flux. A matched-filter detector with variance weighting extracts transit signals from the prediction
+residuals. A learned classifier (XGBoost) separates planets from false positives, achieving AUC 0.938 on Kepler DR25.
+Applied to single-transit injection-recovery,ExoVeilrecovers 32% of transits at1000 ppmdepth, a task where all
+classification-based systems score 0% by construction. A blind search of 3737 Kepler stars yields 179 new transit-like
+signals not present in the DR25 TCE catalogue, including 46 monotransit candidates. Applied without retraining to 47
+confirmed TESS planets in the PLATO LOPS2 field,ExoVeilachieves 100% recovery, demonstrating zero-shot cross-
+mission transfer. At PLATO’s 25-second cadence, detection reaches100 ppm, approaching the Earth-analog regime.
+I provide the first application of conformal prediction to transit detection (95.9% empirical coverage) and release the
+system aspip install exoveilwith pretrained weights and a candidate catalogue.
+Key words.planets and satellites: detection methods: data analysis techniques: photometric
+1. Introduction
+If a planet crosses its star only once, no existing machine
+learning system can detect it. Every current ML transit
+detector – ExoMiner, AstroNet, RAVEN requires a known
+orbital period and phase-folded input. For the long-period
+planets that drive the design of billion-euro missions like
+PLATO, this is a structural blind spot.
+The Kepler mission observed nearly 200000 stars over
+four years and produced roughly 34000 threshold crossing
+events, periodic dips in brightness that might be planetary
+transits (Thompson et al. 2018). The Transiting Exoplanet
+Survey Satellite (TESS) has since generated over 147000
+TCEs (Guerrero et al. 2021). Most of these signals are not
+planets. They are eclipsing binaries, instrumental artefacts,
+or stellar variability masquerading as transits. Separating
+the real from the false is the vetting problem, and machine
+learning has become the standard tool for solving it.
+The current generation of ML vetting systems
+– ExoMiner (Valizadegan et al. 2022), AstroNet
+(Shallue & Vanderburg 2018), ExoNet (Islam 2026),
+RAVEN (Hadjigeorghiou et al. 2025), are all classifiers.
+They take a phase-folded light curve and output a prob-
+ability that it is a planet. They work well: ExoMiner
+achieves AUC 0.98 and has validated 301 new planets.
+But this approach has a structural limitation: it requires
+a known period. If a planet transits its star only once during
+the observation window, a common scenario for long-period
+planets in TESS’s 27-day sectors there is nothing to fold.
+The classifier cannot even attempt detection.
+This matters because the planets most wanted are ex-
+actly the ones that transit rarely. An Earth-like planet or-
+biting a Sun-like star has a period of roughly 365 days. In a
+27-day TESS sector, it transits at most once. In PLATO’s
+planned two-year stare at a single field, it transits perhaps
+twice. These are the targets that drive the design of billion-
+euro missions, yet no existing ML system can detect them
+from a single transit event.
+In this paper I take a different approach. Rather than
+classifying light curves, I learn to predict them. I train a
+world model, a Transformer-based sequence model to pre-
+dict a star’s expected brightness at each timestep given its
+history. The model learns normal stellar photometric be-
+haviour. A planetary transit appears as a systematic nega-
+tive deviation in the prediction residuals.
+I go beyond demonstrating this as a proof of concept.
+I train on 16499 Kepler stars using transit-masked self-
+supervised learning, apply matched filtering with variance
+weighting to the residuals, and conduct a blind search
+that identifies 179 new transit-like signals in Kepler data
+not present in the DR25 TCE catalogue. I validate cross-
+mission transfer by recovering all 47 confirmed TESS plan-
+ets in the PLATO LOPS2 field without any retraining. And
+I demonstrate that at PLATO’s 25-second cadence, detec-
+tion sensitivity reaches100 ppm, within reach of the Earth-
+analog regime.
+Article number, page 1
+arXiv:2606.02778v1  [astro-ph.EP]  1 Jun 2026
+
+A&A proofs:manuscript no. exoveil
+The prediction-based paradigm is not new in astro-
+physics: Muthukrishna et al. (2022) applied it to supernova
+detection in transient surveys. I adapt it to exoplanet tran-
+sits, where signals are 10–100×shallower and confounding
+sources mimic the target signal far more closely.
+I releaseExoVeilas an open-source Python package
+(pip install exoveil) with pretrained weights, a candi-
+date catalogue, and a demonstration notebook.
+2. Related work
+2.1. Classification-based transit vetting
+The dominant paradigm treats transit vetting as bi-
+nary classification on phase-folded light curves. AstroNet
+(Shallue & Vanderburg 2018) pioneered this with a two-
+column CNN processing global and local views. Ex-
+oMiner (Valizadegan et al. 2022) extended the approach
+with multiple diagnostic branches and validated 301 new
+Kepler planets. ExoMiner++ (Valizadegan et al. 2025)
+adapted the system to TESS data, processing 147568
+TCEs. RAVEN (Hadjigeorghiou et al. 2025) used Bayesian
+gradient-boosted trees trained on synthetic false positive
+scenarios, achieving AUC>0.97.
+All of these systems require phase-folded input with
+a known period. None provides instance-level decomposed
+uncertainty.
+2.2. Single-transit detection
+Hansen & Dittmann (2024) applied a CNN ensemble to Ke-
+pler data, reporting>80%recovery for single transits, but
+their method uses spacecraft diagnostic features beyond
+raw flux. Salinas et al. (2025) used a Transformer on TESS
+full-frame images and identified 214 candidates, 88 of them
+single-transit, though without reporting depth-specific re-
+covery rates. Citizen science efforts (Malik et al. 2025) have
+also contributed to monotransit catalogues.
+This work differs in using a self-supervised world model
+that operates on raw flux alone, in providing quantitative
+recovery rates as a function of transit depth, and in con-
+ducting a blind search that produces a new candidate cat-
+alogue.
+2.3. Uncertainty quantification in exoplanet science
+ExoNet (Islam 2026) introduced temperature scaling to
+transit detection, finding that 37.5% of TESS candidates
+exceeded an 85% confidence threshold before calibration.
+MC Dropout has been applied to variable star classifica-
+tion (Cadiz-Leyton et al. 2025) but not to transit detection.
+Conformal prediction has been used for exoplanet mass-
+radius estimation (Singer et al. 2025) but never for transit
+vetting. No published system combines decomposed uncer-
+tainty with transit detection.
+2.4. World models in astronomical time series
+Muthukrishna et al. (2022) introduced prediction-based
+anomaly detection for astronomical transients. Hones et al.
+(2021) applied a dual-VAE to detect anomalieswithin
+known transit signals, but their system detects anomalies
+in transits, not transits themselves.
+This work bridges these lines: temporal prediction for
+transit detection, where transit dips are 100–10000ppm,
+buried in stellar variability that can be 10–1000×larger.
+3. The EXOVEIL framework
+3.1. Overview
+ExoVeilhas four stages (Fig. 1): (1) a world model pre-
+dicts expected flux, (2) a matched-filter detector identifies
+transit-shapedanomaliesintheresiduals,(3)alearnedclas-
+sifier separates planets from false positives, and (4) confor-
+mal prediction provides coverage-guaranteed rankings with
+decomposed uncertainty.
+3.2. World model architecture
+The world model is a causal Transformer encoder (6 lay-
+ers, 8 heads,d model = 192, feed-forward dimension 768,
+approximately 3.2 million parameters) trained to predict
+the next flux value given all preceding observations. It uses
+a learnable continuous time encoding with 16 sinusoidal
+basis functions to handle irregular cadence, and a learned
+detrending module that operates at8×downsampled reso-
+lution to remove low-frequency stellar variability while pre-
+serving transit ingress and egress features.
+The model is trained with transit-masked self-
+supervised learning: for planet-hosting stars in the training
+set, known transit regions are replaced with interpolated
+baselines before training. The model never sees a transit
+during training, making transit signals maximally anoma-
+lous at inference.
+Two output heads produce the predicted fluxˆyt and
+log-variancelogσ 2
+t. Training uses Gaussian negative log-
+likelihood with variance regularisation.
+3.3. Matched-filter transit detection
+The prediction residualsr t =y t −ˆyt contain the transit
+signal mixed with prediction noise. I extract the signal us-
+ing matched filtering: convolution with zero-mean box tem-
+plates at durations of [3, 5, 7, 9, 13, 17, 25] data points via
+FFT, taking the maximum response across durations.
+The world model’s predicted variance provides inverse
+weights:˜rt =r t/σt. This makes the detector more sensitive
+in photometrically quiet regions and less susceptible to false
+triggers in noisy regions. A local threshold based on median
+absolute deviation accounts for non-stationary noise.
+3.4. Learned classifier
+Transit detection and classification are different problems.
+My initial hand-crafted scoring achieved AUC 0.36, worse
+than random because eclipsing binaries produce deeper
+residuals than planets. I train XGBoost on 21 features
+derived from the world model output (folded residual
+SNR, variance-normalised depth, epistemic uncertainty ra-
+tio) and stellar parameters (effective temperature, surface
+gravity, orbital period).
+3.5. Conformal prediction and uncertainty decomposition
+I apply split conformal prediction (Vovk et al. 2005) with
+α= 0.05. Uncertainty decomposes into aleatoric (mean
+Article number, page 2
+
+Priyanshu: EXOVEIL
+Light Curve
+(flux + time)
+World Model
+Continuous Time Encoding
+Learned Detrending
+Causal Transformer (4L, 8H)
+Pred: 
+ Var: ²
+Matched-Filter
+Detector
+(variance-
+weighted)
+XGBoost
+Classifier
+(21 features)
+Conformal
+Prediction
++ Decomp. UQ
+Ranked
+Candidates
++ Guarantees
+residualsflux, t
+MC Dropout (T=30)
+Fig. 1.TheExoVeilpipeline.
+predicted variance) and epistemic (MC Dropout variance
+acrossT= 30passes). Each candidate is categorised as
+confident,data-limited,model-uncertain, orambiguous.
+4. Data and experimental setup
+4.1. Training data
+The world model is trained on 16499 Kepler long-cadence
+light curves downloaded from the MAST archive, span-
+ning the full Kepler DR25 catalogue. Training uses transit-
+masked self-supervised next-step prediction: for the∼2000
+planet-hosting stars, in-transit flux is replaced with inter-
+polated baselines. The classifier is trained on∼1000 labeled
+TCEs (388 planets, 579 false positives) with star-level splits
+to prevent leakage.
+4.2. Single-transit injection-recovery
+I inject synthetic limb-darkened transits (quadratic law,
+u1 = 0.3,u 2 = 0.2) at eight depths (50–10000ppm) with
+durations of 3–12 hours into 200 host stars. Classification-
+based systems cannot be evaluated on this test.
+4.3. TESS LOPS2 validation
+I download 2-minute cadence TESS light curves for 47 con-
+firmed transiting planets in the PLATO LOPS2 field di-
+rectly from the MAST archive. These are processed with
+the Kepler-trained model without any retraining or fine-
+tuning (zero-shot transfer).
+4.4. PLATO cadence demonstration
+TESS LOPS2 light curves are resampled to PLATO’s 25-
+second cadence via interpolation, with added Gaussian
+noise at 50ppmper exposure (consistent with PLATO’s
+expected noise budget for bright targets). Single transits
+are injected and detection is evaluated.
+5. Results
+5.1. Blind search: 179 new Kepler candidates
+I applyExoVeilin blind search mode to 3737 Kepler
+stars at a4σthreshold. The search recovers 2873 known
+confirmed planet signals, validating the detection pipeline.
+T able 1.Top five monotransit candidates from the blind search.
+KIC ID SNR Depth (ppm) Duration (hrs)T eff (K)
+11706231 31.2 231 12.5 3274
+10450536 29.9 2213 12.5 6544
+11551430 28.7 467 6.5 5648
+12406908 20.1 532 12.5 4582
+10274993 18.4 239 2.5 4324
+It also identifies 179 transit-like signals not present in the
+DR25 TCE catalogue, from 179 distinct stars.
+After vetting, removing signals consistent with eclipsing
+binaries (depth>15 000 ppm, short duration with extreme
+depth, giant host stars withlogg <3.5) I retain:
+–46 Tier 1 monotransit candidates: single events
+with SNR>10and transit-consistent depth (200–
+15000ppm)
+–133 Tier 2 candidates: 1–3 events with SNR>8
+The strongest monotransit candidate is KIC 11706231
+(SNR = 31.2, depth = 231ppm, duration = 12.5 hours), a
+Neptune-depth single-transit event on a cool dwarf (Teff =
+3274K). Figure 2 shows the detection: the world model pre-
+dicts smooth stellar behaviour, and the transit appears as
+a sharp negative excursion in the prediction residual. This
+is the type of long-period, small-planet signal that phase-
+folding-dependent systems structurally cannot detect.
+These are candidates, not confirmed planets. Confirma-
+tion requires follow-up observations (radial velocity, sec-
+ondary eclipse search, centroid analysis) that are beyond
+the scope of this work. The full candidate catalogue is re-
+leased as supplementary material.
+Of the 82 candidates with depths in the super-Earth
+range (50–300ppm), several orbit cool dwarfs where even
+shallow transits correspond to potentially rocky planets.
+These represent high-priority follow-up targets for ground-
+based facilities.
+5.2. Cross-mission validation: TESS LOPS2
+To test whetherExoVeilgeneralises beyond its Kepler
+training data, I apply the Kepler-trained model directly to
+TESS light curves, without any retraining or fine-tuning.
+I use 2-minute cadence light curves for 47 confirmed
+transiting planets in the PLATO LOPS2 field.ExoVeil
+Article number, page 3
+
+A&A proofs:manuscript no. exoveil
+0.950
+0.975
+1.000
+1.025
+1.050Normalised flux
+KIC 11706231  Monotransit candidate (SNR = 31.5, depth = 227 ppm)
+World model
+Detected transit
+0.96
+0.98
+1.00
+1.02Normalised flux
+227 ppm dip
+Predicted flux
+1260 1265 1270 1275 1280 1285
+Time (BJD  2454833 d)
+2000
+0
+2000
+4000
+Residual (ppm)
+±3  (87 ppm)
+Fig. 2.Example detection of the strongest monotransit candidate KIC 11706231.Top:Full Kepler light curve (grey) with world
+model prediction (red).Middle:Zoom around the detected event att= 1272.8d, showing the 227ppmdip against the predicted
+baseline.Bottom:Prediction residual in ppm with±3σlocal noise threshold. The transit signal is clearly resolved in the residual.
+detects transit signals in all 47 systems (100% recovery),
+including long-period planets (TOI-4562 b,P= 225d;
+TOI-4507 b,P= 105d) and shallow transits (GJ 238 b,
+160 ppm; TOI-500 b,249 ppm).
+This zero-shot transfer result is notable because Kepler
+and TESS have different cadences (29.4 min vs. 2 min), dif-
+ferentnoisecharacteristics,differentsystematics,anddiffer-
+ent stellar populations. The world model’s ability to gener-
+alise across these differences suggests it has learned genuine
+stellar physics rather than Kepler-specific artefacts.
+5.3. PLATO cadence demonstration
+PLATO will observe at 25-second cadence, providing∼70×
+moredatapointspertransitthanKepler.Itestwhetherthis
+highertemporalresolutionimprovessingle-transitdetection
+by resampling TESS LOPS2 light curves to 25-second ca-
+dence with realistic PLATO noise (50ppmper exposure).
+ExoVeilachieves detection down to100 ppmdepth
+with SNR>30. The improvement over Kepler cadence is
+consistent with the expected
+√
+Nscaling: a 6-hour transit
+contains 864 data points at 25-second cadence versus 12 at
+30-minute cadence, yielding∼8.5×better SNR.
+While the sample size is small and these results should
+be treated as indicative rather than definitive, they suggest
+T able 2.Single-transit injection-recovery at two thresholds.
+Depth Sensitive (3σ) Conservative (4σ)
+(ppm) Raw FP-corr. Raw FP-corr.
+500 26.5% 12.3% 16.5% 10.7%
+1000 46.5% 32.3% 29.0% 23.2%
+2000 57.5% 43.3% 39.5% 33.7%
+5000 66.0% 51.8% 55.0% 49.2%
+10000 79.5% 65.3% 66.0% 60.2%
+that the world-model approach will benefit substantially
+from PLATO’s observing strategy.
+5.4. Single-transit detection
+Table 2 presents recovery rates at two operating points. At
+1000 ppm,ExoVeilrecovers 32% of injected transits (FP-
+corrected) in sensitive mode and 23% in conservative mode.
+The recovery rate increases monotonically with depth, con-
+firming genuine signal detection above the noise floor.
+Article number, page 4
+
+Priyanshu: EXOVEIL
+102 103 104
+Injected Transit Depth (ppm)
+0
+20
+40
+60
+80
+100Recovery Rate (%)
+Earth
+84 ppm
+Super-Earth
+500 ppm
+Single-Transit Recovery
+V1 (naive median)
+V2 (matched filter, raw)
+V2 (FP-corrected)
+ExoMiner / AstroNet (0%)
+FP floor (~14%)
+102 103 104
+Injected Transit Depth (ppm)
+0
+2
+4
+6
+8Mean Detection SNR
+Detection SNR vs Depth
+3  threshold
+Fig. 3.Single-transit recovery rate vs. injected depth. ExoMiner and AstroNet score 0% at every depth by construction.
+Hand-crafted
+(Phase 3)
+Hand-crafted
+(Phase 4)
+Hand-crafted
+(Scale-up)
+Raw CNN
+(Layer 1)
++World Model
+(Layer 2)
+XGBoost
+(Layer 3)
+Ensemble
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Test AUC-ROC0.362
+0.553
+0.485
+0.793
+0.721
+0.938 0.938
+Hand-crafted scoring
+(inverted AUC)
+Classification Performance: From Failure to Success
+Random (0.5)
+Target (0.85)
+ExoMiner (0.98)
+Fig. 4.Classification AUC through development. Hand-crafted
+scoring (red) produced inverted results. Switching to learned
+features with XGBoost (green) exceeded the target of 0.85.
+T able 3.Classification performance on Kepler DR25.
+System AUC F1 Input
+ExoMiner 0.98 0.95 DV diagnostics
+RAVEN 0.97 0.91 Synthetic + BLS
+ExoVeil(this work) 0.938 0.893 Flux only
+AstroNet 0.96 – Phase-folded flux
+ExoNet 0.955 – Flux + stellar
+5.5. Classification performance
+The XGBoost classifier achieves AUC 0.938 on the Kepler
+DR25 test set (Table 3). ExoMiner achieves AUC 0.98, but
+processes multiple diagnostic inputs from the Data Vali-
+dation module (centroid shifts, difference images, odd-even
+comparisons).ExoVeiluses only the flux time series.
+0.0 0.2 0.4 0.6 0.8 1.0
+Ensemble Score
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5Density
+Score Distribution (Conformal Coverage: 95.9%)
+Planets
+False Positives
+Conformal threshold (0.27)
+Best F1 threshold (0.48)
+Fig. 5.Score distribution with conformal threshold (95.9% cov-
+erage).
+5.6. Conformal coverage
+Split conformal prediction achieves 95.9% empirical cover-
+age against a 95% nominal level, the first such application
+in transit detection (cf. Singer et al. 2025, for mass-radius
+estimation).
+6. Discussion
+6.1. Detection versus classification
+The world model excels at detecting that an anomaly ex-
+ists. It is less effective at determining what the anomaly
+is, my initial hand-crafted scoring achieved AUC 0.36 be-
+cause eclipsing binaries produce deeper residuals than plan-
+ets. This failure revealed that detection and classification
+are distinct problems requiring distinct solutions. The two-
+stage architecture (world model for detection, XGBoost for
+classification) emerged from this insight.
+Article number, page 5
+
+A&A proofs:manuscript no. exoveil
+6.2. Limitations
+My single-transit sensitivity drops below500 ppmat Ke-
+pler cadence. Earth-like transits (84 ppm) remain out of
+reach from a single transit at 30-minute cadence, though
+my PLATO cadence results suggest the sensitivity bound-
+ary shifts substantially at higher temporal resolution.
+The 179 blind-search candidates require follow-up vali-
+dation. While I apply basic vetting (EB depth and duration
+filters, giant star removal), dedicated false positive analysis,
+centroid motion, odd-even depth comparison, spectroscopic
+follow-up are needed to confirm any individual candidate.
+The Transformer backbone’sO(n2)attention complex-
+ity limits processing to windowed segments of∼500 points.
+A linear-complexity backbone (e.g., Mamba) would enable
+processing full 65000-point Kepler light curves in a single
+pass, potentially improving both prediction quality and de-
+tection sensitivity.
+6.3. Implications for PLATO
+ESA’s PLATO mission (Rauer et al. 2025) will observe over
+200000 stars at 25-second cadence. Its current detection
+pipeline relies on classical methods (BLS, TLS, DST) with-
+out ML components. My results suggest three waysEx-
+oVeilcould contribute:
+First, few-transit detection. An Earth analog in the
+PLATO field transits 2–3 times in two years. The world-
+model approach detects individual events without requiring
+periodicity.
+Second, our 100% recovery rate on TESS planets in
+the LOPS2 field, achieved without any TESS-specific train-
+ing, demonstrates that the system generalises across mis-
+sions. Adaptation to PLATO data may require minimal
+fine-tuning.
+Third, the PLATO cadence results show detection
+reaching100 ppm, close to the Earth-analog depth of
+84 ppm. With PLATO’s lower noise floor and multi-camera
+fusion (24 simultaneous cameras), the84 ppmtarget may
+become achievable.
+6.4. Reducing follow-up cost
+Confirming a transit candidate requires ground-based
+follow-up radial velocity measurements, high-resolution
+imaging,orspectroscopyusingfacilitieswhereasinglenight
+of observation can cost tens of thousands of euros. Not all
+candidates are equally worth observing.
+ExoVeil’s conformal prediction layer ranks every can-
+didate with a calibrated confidence score and decomposes
+uncertainty into aleatoric (data quality) and epistemic
+(model confidence) components. Candidates flagged ascon-
+fidenthave both high SNR and low model uncertainty;
+data-limitedcandidates may improve with better photom-
+etry;model-uncertaincandidates warrant caution. This
+ranking allows observers to prioritise the most promising
+targets first, allocating expensive telescope time where it is
+most likely to yield a confirmation.
+Of the 46 Tier 1 monotransit candidates, the confor-
+mal ranking directly identifies which are worth immediate
+follow-up and which require additional photometric cov-
+erage before committing telescope resources. This triage
+capability becomes increasingly valuable as missions like
+PLATO generate hundreds of thousands of candidates that
+cannot all receive individual follow-up.
+I releaseExoVeilaspip install exoveilto enable
+the community to test and build upon this approach.
+7. Conclusions
+I have presentedExoVeil, a prediction-based transit de-
+tectionsystemthatreframestheproblemfromclassification
+to anomaly detection. My main results:
+1. A blind search of 3737 Kepler stars identifies 179 new
+transit-like signals not in the DR25 TCE catalogue,
+including 46 monotransit candidates. The strongest is
+KIC 11706231 (SNR = 31.2, 231ppm), a Neptune-depth
+single transit on a cool dwarf.
+2. Single-transit injection-recovery yields 32% recovery at
+1000 ppmdepth,ataskthatclassification-basedsystems
+cannot attempt by construction.
+3. Zero-shot transfer to TESS recovers 47/47 confirmed
+planets in the PLATO LOPS2 field without retrain-
+ing, including long-period (P >100d) and shallow
+(<250 ppm) transits.
+4. At PLATO’s 25-second cadence, detection sensitivity
+reaches100 ppm, approaching the Earth-analog regime.
+5. Conformal prediction provides formal 95% coverage
+guarantees on candidate rankings, a first in transit de-
+tection.
+ExoVeildoes not replace classification systems, it ex-
+tends detection to regimes they cannot reach. The complete
+system is available as a Python package with pretrained
+weights
+pip install exoveil
+from exoveil import ExoVeil
+model = ExoVeil.from_pretrained()
+# Detect transits in any Kepler or TESS star
+results = model.detect("KIC 11706231")
+# Works with TESS (zero-shot, no retraining)
+results = model.detect("TIC 1167538")
+# Or pass custom data
+results = model.detect_from_array(time, flux)
+Each detection returns SNR, estimated depth, and
+an uncertainty category (confident,data-limited,model-
+uncertain, orambiguous). Source code, candidate cat-
+alogue, and documentation are available athttps://
+github.com/Pratik25priyanshu20/ExoVeil.
+Acknowledgements.I thank the Kepler and TESS teams for public
+data access through MAST. P.P. acknowledges support from SRH
+Hochschule Heidelberg.
+References
+Cadiz-Leyton, M., Cabrera-Vives, G., Protopapas, P., et al. 2025,
+A&A, 699, A168
+Guerrero, N. M., Seager, S., Huang, C. X., Vanderburg, A., et al. 2021,
+ApJS, 254, 39
+Hadjigeorghiou, A., Armstrong, D. J., Cui, K., et al. 2025, arXiv e-
+prints [arXiv:2509.17645], submitted to MNRAS
+Article number, page 6
+
+Priyanshu: EXOVEIL
+Hansen, M. T. & Dittmann, J. A. 2024, AJ, 168, 291
+Hones, C. J., Miller, B. K., Heras, A. M., & Foing, B. H. 2021, in
+NeurIPS 2021 Workshop on Machine Learning and the Physical
+Sciences
+Islam, M. R. 2026, arXiv e-prints [arXiv:2604.15560]
+Malik, S. A., Eisner, N. L., Mason, I. R., et al. 2025, AJ, 170, 39
+Muthukrishna, D., Mandel, K. S., Lochner, M., Webb, S., & Narayan,
+G. 2022, MNRAS, 517, 393
+Rauer, H., Aerts, C., Cabrera, J., et al. 2025, Experimental Astron-
+omy, 59, 26
+Salinas, H., Brahm, R., Olmschenk, G., et al. 2025, MNRAS, 538,
+2031
+Shallue, C. J. & Vanderburg, A. 2018, AJ, 155, 94
+Singer, N., Williams, J. P., & Ghosh, S. 2025, MNRAS, 539, 1372
+Thompson, S. E., Coughlin, J. L., Hoffman, K., et al. 2018, ApJS,
+235, 38
+Valizadegan, H., Martinho, M. J. S., Wilkens, L. S., et al. 2022, ApJ,
+926, 120
+Valizadegan, H. et al. 2025, AJ, 170, 287
+Vovk, V., Gammerman, A., & Shafer, G. 2005, Algorithmic Learning
+in a Random World (New York: Springer)
+Article number, page 7

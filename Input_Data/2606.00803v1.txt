@@ -1,0 +1,1374 @@
+Title: Generative Diffusion Priors for 3D Mapping of the Dark Universe
+Authors: Brandon Zhao, Diana Scognamiglio, Olivier Doré, Katherine L. Bouman
+Published: 2026-05-30
+Categories: astro-ph.CO, cs.CV, cs.LG
+
+Generative Diffusion Priors for 3D Mapping of the Dark Universe
+Brandon Zhao1∗ Diana Scognamiglio2,3 Olivier Dor´e2,4 Katherine L. Bouman1,4
+1Department of Computing and Mathematical Sciences, California Institute of Technology
+2 Jet Propulsion Laboratory, California Institute of Technology
+3Department of Physics, Duke University
+4Cahill Center for Astronomy and Astrophysics, California Institute of Technology
+∗byzhao@caltech.edu
+Abstract
+Reconstructing the three-dimensional distribution of dark
+matter from weak-lensing observations is a central but
+highly ill-posed inverse problem in cosmology. Unlike stan-
+dard 3D reconstruction with multiple viewpoints, we ob-
+serve the universe from a single line of sight, through noisy
+shape distortions of galaxies with uncertain distances, so
+meaningful recovery of the 3D matter field requires strong
+prior assumptions. Existing methods either produce point
+estimates with handcrafted priors or use neural ensembles
+for approximate Bayesian uncertainty, and struggle to cap-
+ture the non-Gaussian, filamentary structure of the cosmic
+web. With the advent of new high-resolution cosmological
+simulations, we now have an alternative source of prior
+knowledge that captures the nonlinear statistics of struc-
+ture formation with far greater fidelity than analytic pre-
+scriptions. We leverage these simulations to build a new
+datasetConicus3D, which enables us to learn a data-
+driven diffusion-model prior capturing the full 3D distribu-
+tion of dark matter structure across cosmic time. Building
+on recent plug-and-play approaches, we modify a diffusion-
+based posterior sampling scheme to the 3D weak-lensing
+setting, combining the learned prior with a differentiable
+physical forward model. On realistic simulations targeting
+a modern weak lensing survey, our approach yields substan-
+tially improved 2D and 3D reconstruction accuracy over
+baseline methods. Moreover, it produces posterior samples
+whose statistics closely track the underlying simulations,
+while remaining robust to moderate shifts in cosmology.
+1. Introduction
+Reconstructing the three-dimensional distribution of dark
+matter is a central challenge in modern cosmology. Be-
+cause dark matter drives structure formation, recovering its
+3D distribution is essential for testing gravity, constraining
+dark energy, and interpreting galaxy surveys to model the
+dynamics of the universe at large scales.
+Dark matter does not emit or absorb light, so its struc-
+ture must be inferred indirectly through its gravitational ef-
+fects, most notably through the weak lensing (WL) of back-
+ground galaxies. Recovering the underlying mass distribu-
+tion from such indirect observations is an ill-posed inverse
+problem, and traditional reconstruction methods typically
+rely on smoothness-based priors which tend to overly damp
+high-frequency features.
+Recent advances in cosmological simulations now offer
+high-resolution, large-volume realizations of structure for-
+mation across cosmic time [27, 31, 33, 47]. These datasets
+capture the full statistical complexity of the evolving dark
+matter field, enabling machine-learning approaches that
+learn directly from simulated universes. Modern generative
+models, in particular, provide powerful tools for represent-
+ing these high-dimensional distributions as priors in inverse
+problems [51].
+Building on these developments, we introduce a new
+dataset,Conicus3D, and diffusion-based generative prior
+for 3D cosmological mass mapping. Our dataset, derived
+from state-of-the-art N-body simulations, consists of dark
+matter light cones paired with 2D lens-plane projections
+that preserve the relevant physics for lensing-based infer-
+ence. Using this dataset, we train a score-based diffusion
+model that learns the 3D statistical distribution of cosmic
+structure and serves as a prior within a posterior sampler to
+generate physically realistic mass reconstructions.
+We demonstrate our method on the inverse problem of
+WL mass mapping, performing posterior sampling for to-
+mographic reconstruction within simulations modeled after
+the James Webb Space Telescope (JWST) COSMOS-Web
+survey [9]. Our approach achieves substantially higher spa-
+tial fidelity than previous methods [42, 49], produces pos-
+terior samples whose statistics match true simulations, and
+arXiv:2606.00803v1  [astro-ph.CO]  30 May 2026
+
+Figure 1. Lightcone structure and redshift-conditional diffusion model. Left: The large-scale matter distribution is represented as a 3D
+lightcone, built from a sequence of lens planes slicing the dark matter density field at increasing comoving distance (redshift). Right: Each
+lens plane is modeled with a redshift-conditional 2D diffusion prior that learns the statistics of simulated overdensity maps at that redshift.
+During generation, we start from Gaussian noise on each plane, append one-hot redshift encodings, and denoise with a U-Net score model
+to obtain a coherent 3D lightcone. This redshift-conditioned factorization enables efficient generation of realistic volumetric dark matter
+fields consistent with lightcone geometry.
+generalizes robustly to cosmologies beyond the training do-
+main. Our key contributions are:
+•Conicus3D: A first-of-its-kind 3D dark matter light-
+cone dataset, derived from state-of-the-art N-body simu-
+lations [15, 27] and tailored for WL mass mapping, made
+publicly available for training and benchmarking by the
+computer vision and astrophysics communities;
+• A diffusion-based posterior sampling framework that
+combines data-driven priors with WL observables to en-
+able robust, uncertainty-aware cosmological inference.
+All data, simulated measurements, and code will be pub-
+licly released with documentation, establishing a repro-
+ducible testbed that invites broad participation in advancing
+3D dark matter mass mapping.
+2. Background
+In the standardΛCDM cosmological model, the universe
+began hot and nearly uniform, seeded by tiny quantum fluc-
+tuations in the primordial density field. As the universe ex-
+panded and cooled, gravity amplified those fluctuations into
+the cosmic web of dark matter halos, filaments, and voids
+that now host galaxies and gas. A central goal of cosmology
+is to determine how matter is arranged and how it evolves:
+the statistics of the initial conditions, the growth of structure
+over time, and the astrophysical processes that modulate it.
+Observationally, we infer this history indirectly, by measur-
+ing how light is deflected as it travels through the universe.
+The focus of this work is a probe known as weak gravita-
+tional lensing, which measures the tiny, coherent “shearing”
+of galaxy shapes as their light passes through uneven distri-
+butions of matter. For a single galaxy, the induced distor-
+tion is subtle and masked by the galaxy’s unknown intrinsic
+shape, but averaging over many galaxies recovers a shear
+field that statistically traces the underlying dark matter.
+In cosmology, distance is often expressed in terms of
+redshiftz, which measures how much cosmic expansion
+has stretched a galaxy’s light. Larger redshift corresponds
+tomore distantgalaxies that we observe atearliercosmic
+times. Throughout this work, we treat redshift as a coor-
+dinate along the line of sight. Moreover, galaxy distances
+can be estimated from their colors via photometric redshifts;
+these redshift estimates provide a noisy but informative 3D
+signal along the line of sight that can be used to constrain
+the radial structure of the matter field.
+Because light travels at a finite speed, increasing redshift
+also means looking deeper into the past. As a result, cosmo-
+logical probes such as WL measure integrated signals along
+our past light cone, offering a layered view of the evolving
+matter distribution (see Fig. 1). 3D reconstruction therefore
+reveals not only where matter structures exist, but when they
+emerge in the history of the Universe.
+3. Related Work
+Weak Lensing Mass MappingWeak Lensing (WL)
+mass mapping is the inverse problem of reconstructing the
+distribution of total (mostly dark) matter along our past light
+cone from its gravitational-lensing imprints on galaxy im-
+ages. In WL, deflections are small and can be approxi-
+mated as stretching or magnification of intrinsically ellipti-
+cal galaxy shapes. The induced shape change depends on a
+weighted line-of-sight projection of the matter overdensity,
+known as the convergenceκ, which traces the integrated
+mass between the source galaxy and the observer. Because
+the cosmic matter field is dominated by dark matter, this
+task is referred to asdark matter mass mapping.
+Kaiser and Squires [20] first showed that the 2D shear
+fieldγ, describing coherent shape distortions as a func-
+tion of sky position, can be analytically inverted to yield
+a projected 2D convergence map of the intervening mass.
+In practice, however, we only observe noisy estimates of
+γinferred from galaxy ellipticities, contaminated by each
+galaxy’s unknown intrinsic shape (“shape noise”). Previ-
+ous work proposes smoothing the observed galaxy shape
+field before inversion [20], while regularized approaches
+
+such as a Gaussian prior [40] and sparsity [25] have also
+been proposed. More recent developments include deep-
+learning-based reconstructions employing U-Net convolu-
+tional architectures [19] and diffusion models [5, 6, 37],
+which learn nonlinear priors directly from simulated data.
+Related simulation-based reconstruction work has also used
+diffusion models trained on simulation to probabilistically
+infer dark matter fields from biased galaxy tracers [32].
+While significant progress has been made in the develop-
+ment and implementation of 2D mass mapping algorithms,
+the problem of inferring the three-dimensional matter distri-
+bution from WL observations is extremely challenging and
+remains a largely unsolved problem. While observed galaxy
+redshifts (distances from the observer) can be estimated
+to give a 3D signal, the combination of intrinsic shape
+noise, large uncertainties in redshift estimation, and a single
+viewpoint limitation make the 3D mass mapping problem
+highly ill-posed. Existing approaches from the astrophysics
+community involve the use of strong regularizers such as
+a Gaussian prior [42], sparsity constraints [26], singular
+vector truncation [44] or multiresolution wavelet methods
+[28] to obtain highly oversmoothed point estimates. Re-
+cent machine learning-based works [49, 50] have explored
+neural-field representations and ensemble models that pro-
+vide approximate uncertainty quantification but do not cor-
+respond to exact Bayesian posterior sampling. Our ap-
+proach targets the exact posterior with respect to the chosen
+simulation-derived prior. Alternatively, rigorous Bayesian
+forward modeling approaches such as the BORG frame-
+work [35, 36] infer the 3D density field by sampling ini-
+tial conditions and evolving them through gravity solvers,
+ensuring physical consistency but at significant computa-
+tional expense. In this work, we introduce a diffusion-based
+framework that leverages outputs from state-of-the-art N-
+body simulations as physically motivated, data-driven pri-
+ors. This approach produces high-resolution posterior sam-
+ples of the 3D matter field consistent with both WL observa-
+tions and structure-formation physics. While we can use the
+mean of this posterior as a point estimate, being able to also
+sample the posterior will enable crucial uncertainty quan-
+tification as well as statistical estimation for downstream
+cosmological analyses. This direction is closely related to
+recent work using diffusion models trained on cosmologi-
+cal simulations for field-level emulation and parameter in-
+ference [29, 30], but differs in that we infer the matter field
+indirectly through noisy WL measurements.
+Diffusion Models for Inverse ProblemsDiffusion mod-
+els have recently achieved state-of-the-art performance
+across a wide range of scientific inverse problems [51].
+A straightforward yet common approach for general sci-
+entific inverse problems treats a diffusion model as a pos-
+terior estimator, incorporating the measurements as condi-
+tioning through concatenation to the model input. However,
+this ignores the physics underlying the actual measurement
+model and thus can produce physically implausible solu-
+tions. From a Bayesian perspective, if the measurement
+process is defined by a known likelihoodp(y|x), the diffu-
+sion model acts as a score estimator for the data-driven prior
+p(x), approximating its log-gradient∇ x logp(x). To gen-
+erate an unconditional prior samplex 0, a diffusion model
+smoothly removes noise from an unstructured initial noise
+samplex T by solving a stochastic differential equation.
+Many methods have been proposed for combining an un-
+conditional diffusion model prior with a known measure-
+ment likelihood to sample from the resulting posterior.
+Early work such as DPS [11] uses guidance-based tech-
+niques to “nudge” samples along the likelihood gradient
+during training; however, the resulting samples are not the-
+oretically guaranteed to correspond to a proper posterior. To
+address this limitation, a family ofPlug-and-Play[45] dif-
+fusion samplers has been developed, which incorporate the
+likelihood score term directly into the reverse process in a
+principled way. In this work, we propose a modified version
+of the DAPS (Decoupled Annealing Posterior Sampling,
+[51]) framework, which unifies the learned diffusion prior
+with a known forward model to perform physically consis-
+tent posterior sampling. This enables us to reconstruct mat-
+ter fields that fulfill observational constraints and preserve
+the statistics learned from cosmological simulations.
+4.Conicus3D- 3D Lightcone Dataset
+We introduceConicus3D, a large-scale 3D lightcone
+dataset designed for training and evaluating dark matter
+mass-mapping algorithms on state-of-the-art, realistic N-
+body simulations of the universe. By providing a compre-
+hensive and well-documented resource derived from high-
+fidelity cosmological simulations, our goal is to make the
+challenge of 3D WL mass reconstruction more accessible
+to both the astrophysics and computer-vision communities.
+Upon release,Conicus3Dwill contain:
+• 20,000 in-distribution dark matter lightcones, generated
+from a fiducial cosmology corresponding to the baseline
+parameters of the AbacusSummit suite [15, 27].
+• 800 out-of-distribution lightcones, produced under alter-
+native cosmological parameters that yield different statis-
+tical properties, enabling controlled evaluation of gener-
+alization performance across cosmological shifts.
+• Mock galaxy shape catalogs, containing realistic galaxy
+positions, redshifts, and projection weights, along with
+open-source code for sampling additional shape catalogs
+to simulate observational noise and selection effects.
+Dataset ConstructionConicus3Dis derived from the
+AbacusSummit simulations [15, 27], which evolve over 300
+billion particles under varying cosmological models. Each
+
+Figure 2. Weak Lensing Measurements. (Left) As light from dis-
+tant galaxies propagates through the universe, it is deflected by
+intervening matter, producing small differences between the in-
+trinsic (unlensed) shapee int and the observed shapee obs. These
+subtle distortions provide a powerful probe of the 3D dark matter
+distribution. (Right) To characterize cosmic shear, galaxy shapes
+are often represented in the complex ellipticity plane, whose com-
+ponents encode the axis ratio and orientation of an ellipse. In typi-
+cal WL surveys, shape noise is more than two orders of magnitude
+larger than the shear signal, so the lensing effect, described by the
+shearγand approximately additive in ellipticity space, must be
+extracted statistically by combining many measurements from a
+dense field of galaxies to recover the coherent imprint of the un-
+derlying matter distribution. Figure adapted from [38, 49].
+N-body simulation can be viewed as a function of (1) the
+cosmological parameters, which determine the statistical
+properties of the initial matter field and the cosmic expan-
+sion history, and (2) a random phase field, which sets the
+initial perturbations of the simulation. Evolving these ini-
+tial conditions forward generates realistic projections of the
+dark matter field across redshift.
+To create each lightcone volume, we process particle
+counts from the AbacusSummit base simulation, projecting
+the simulated particles directly onto the observer’s lightcone
+geometry. We compute density contrasts (overdensities) for
+a sequence of redshift shells extending toz≈2, and bin the
+results into 20 lens planes equally spaced in comoving dis-
+tance. Finally, we crop each plane to the COSMOS survey
+footprint so that the resulting lightcone volumes match the
+geometry and sky coverage of real observations.
+Broader ApplicationsWhile our dataset is primarily
+designed for 3D dark matter mass mapping, its struc-
+ture makes it naturally extensible to a wide range of in-
+verse problems on the lightcone. Many astrophysical
+observables—such as Fast Radio Bursts (FRBs) [34], CMB
+secondary anisotropies [1, 8], and 21-cm intensity maps
+[7]—can be interpreted as line-of-sight projections of the
+underlying matter field across cosmic time. The same light-
+cone geometry, redshift binning, and comoving-distance
+sampling used in this work provide a unified framework for
+simulating and reconstructing these observables.
+5. Methods
+5.1. Weak Lensing Measurements
+As light from distant galaxies travels toward us, its tra-
+jectory is continuously deflected by the intervening (dark-
+dominated) matter distribution. In the WL regime, these
+deflections are small and manifest as slight distortions in the
+observed galaxy shapes. To quantify these small changes,
+approximately elliptical galaxy shapes are described using
+a complex ellipticity parametere. Given an approximately
+elliptical galaxy with axis ratiorand orientation angleϕ,
+we can define the magnitude and phase of its ellipticityeas
+in [38]:
+|e|= 1−r
+1 +r ∠e= 2ϕ. (1)
+WL measurements relate a galaxy’s observed ellipticityeobs
+to its intrinsic ellipticitye int, which describes what its ob-
+served shape would be in the absence of lensing. In the
+regime of WL, the lensing effects of intervening matter can
+be approximately described as a shearγ, which is additive
+in the ellipticity domain ([38]):
+eobs −e int =γ. (2)
+An overview of shear measurements and the complex el-
+lipticity can be found in Fig. 2. In practice, although the
+observed shapee obs can be measured directly from an im-
+age, a galaxy’s intrinsic shapee int is much more difficult to
+estimate. In traditional WL surveys,e int is completely un-
+known [38]. The standard assumption is that the true shape
+of galaxies are randomly distributed without a preferred
+overall direction, soe int is modeled as an additive Gaussian
+“shape noise”. To mitigate the effects of the shape noise,
+WL surveys combine measurements from many galaxies
+into a galaxy catalog containing the sky position, redshift
+(distance), and observed shapes of millions of galaxies, con-
+stituting the measurements for 3D mass mapping.
+The shearγobserved in a survey image arises from the
+cumulative lensing occurring along the line of sight be-
+tween us and the galaxy. More precisely, the shear is a
+projection followed by a 2D convolution of theoverden-
+sityδ= (ρ−¯ρ)/¯ρintersected by a ray of light as it trav-
+els towards earth. Hereρis the continuous matter density
+field and¯ρis the mean density of the universe at the time
+of the intersection. In this section we introduce only the
+specific equations governing the forward model; a more de-
+tailed derivation can be found in the supplement.
+ProjectionTo compute the shear from the matter over-
+density fieldδ, we first introduce the convergenceκ[38],
+which for a source galaxy with sky positionθand comov-
+
+ing distance1 wis:
+κ(θ, w) =Qδ= 3H2
+0Ωm
+2c2
+Z w
+0
+dw′ w′(w−w ′)
+w
+δ(w′θ, w′)
+a(w′) ,
+(3)
+whereH 0 andΩ m are cosmological parameters andcis
+the speed of light. The scale parametera(w)represents the
+known expansion of the universe that occurs as light travels
+towards us, andδis the matter overdensity. In the case of
+standard WL surveys,whas a degree of uncertainty, as it is
+inferred from photometric estimates of the galaxy redshift.
+In this case, we take the convergence to be the expected
+value over the estimated distribution of the galaxy comov-
+ing distancew, thereby incorporating photometric redshift
+uncertainty directly into the forward model.
+Convolutionγis obtained by convolving the convergence
+κwith a complex kernelD(θ) =−1/(θ ∗)2 ([38]):
+γ(θ, w) =Pκ= 1
+π
+Z
+C2
+d2θ′D(θ−θ ′)κ(θ′, w). (4)
+Here, the angular positionθ=θ 1 +iθ 2 is expressed in
+complex coordinates, and the asterisk∗represents complex
+conjugation. Notably, the forward operators in Eqns. 3 and
+4 are both linear with respect to the overdensityδ, so obtain-
+ing the overdensity from the shear measurements is a linear
+inverse problem. Combining Eqns. 2, 3 and 4 gives the full
+formulation with the effects of the additive shape noiseε:
+eobs =PQδ+ε ε∼ N(0, σ shape). (5)
+This assumption of additive Gaussian noise implies a Gaus-
+sian likelihood for the observed ellipticities across the
+galaxy catalog. Reconstructingκ=Qδrather than the full
+3D overdensity is known as 2D mass mapping, and is much
+more well-constrained. A majority of the uncertainty in 3D
+mass mapping comes from the inversion of the projection
+operatorQ. Although some resolution in the radial direc-
+tion can be inferred using the known distances to (i.e., red-
+shifts of) galaxies, uncertainty in these redshift estimations
+coupled with shape noise and single-view geometry make
+the backprojection severely ill-posed.
+5.2. Lightcone Diffusion Model
+Diffusion models are powerful generative models which
+generate data by learning to reverse a diffusion noising pro-
+cess applied to the data distribution. In this work, we de-
+rive our data-driven prior by estimating the score of the
+data distributionp(δ)of possible lightconesδ. As is com-
+mon in WL analyses, we represent each lightconeδas a
+set of discrete lensplanes{δ (z)}M
+z=1, and take the distribu-
+tions of lensplanes at different redshifts to be independent,
+1Comoving distance refers to a distance measure that factors out the
+expansion of the universe.
+i.e.p(δ) = QM
+z=1 p(δ(z)). Because the lensplanes cover
+such large distance scales, this is a reasonable assumption to
+make [42]; this can also be seen empirically in the simulated
+dataset (see Fig. 5). We then train a conditional diffusion
+model usingConicus3Dto estimate the prior distributions
+p(δ(z)|z)for each ofMredshift values, which are fixed be-
+forehand. Our diffusion model uses a standard DDPM UNet
+architecture operating on128×128lens-plane images. In
+this way, we can use a traditional image denoising model to
+generate 3D lightcones, by denoising a batch of images with
+a list of one-hot vectors corresponding to different redshifts;
+see Fig. 1 for an illustration.
+5.3. Decoupled Annealing Posterior Sampling
+Given our data-driven lightcone priorp(δ), and the physics-
+based likelihoodp(γ|δ)from the forward model above, we
+wish to sample from the resulting posterior distribution
+p(δ|γ)∝p(γ|δ)p(δ). (6)
+To do so, we propose a modified version of the Decoupled
+Annealing Posterior Sampling (DAPS) algorithm, which
+has been shown to be successful on a wide range of scien-
+tific inverse problems in the InverseBench framework [48].
+DAPS samples a target “clean” posteriorp(δ 0|γ)by se-
+quentially generating samples from noise annealed poste-
+riorsp(δ t|γ)fromt=Tto0. To generate samplesδ t
+fromδ t+∆t, DAPS alternates between (1) samplingδ 0|γ ∼
+p(δ0|δt+∆t, γ), and (2) samplingδ t ∼ N(δ 0|γ, σ2
+t2I). This
+process is repeated for decreasingtuntilδ 0 are sampled
+from the target posterior [48].
+The original DAPS algorithm samplesp(δ 0|δt, γ)∝
+p(δ0|δt)p(γ|δ0)with score-based methods such as
+Langevin dynamics, approximating the intractablep(δ 0|δt)
+with a Gaussian distribution with diagonal covariance
+Σt. While this approximation enables efficient posterior
+sampling, it does not encode any information about pos-
+sible spatial correlations that may exist inδ. Motivated
+by the cosmological principles of translation invariance
+and isotropy, we propose a physically informed covariance
+which is instead diagonalized in Fourier Space according
+to the matter power spectrum (PS)P k:
+Σ−1
+t =F −1 diag
+ 
+σ−2
+t +P −1
+k
+
+F. (7)
+In our experiments, we estimateP k empirically by aver-
+aging over the training data. This Fourier-diagonal covari-
+ance structure arises in any inverse problem over approxi-
+mately stationary fields, including adaptive optics [24], geo-
+physical inversion [18], and CMB map-making [13], sug-
+gesting that our spectral sampling strategy could improve
+diffusion-based posterior sampling in these settings; see
+Supplement Sec. 15 for further discussion. A detailed ex-
+planation and pseudocode of our specific implementation
+can also be found in the supplement.
+
+Figure 3. Two-dimensional mass reconstruction results from simulated WL data. For three representative lightcone volumes (rows),
+we show the projected convergence (κ) maps for the ground truth, our method, the Neural Ensemble baseline, and the Wiener filter
+reconstruction (columns); for each method, we use the posterior mean as a point estimate. Our reconstructions recover sharp cluster peaks
+and filamentary features that closely match the trueκmaps, while the baselines exhibit oversmoothing and reduced contrast in high-density
+regions. The third row highlights performance under a cosmology mismatch; even in this out-of-distribution setting, our method maintains
+high-fidelity 2D mass reconstructions that better preserve the locations and amplitudes of prominent structures.
+While the posterior mean provides a strong map-level
+reconstruction, most WL science evaluates non-linear func-
+tionals of the field posterior. Our sampler targets the full
+posterior, combining a data-driven diffusion prior with the
+physical likelihood so that each draw preserves small-scale
+power and realistic radial structure. This ensures that
+statistics computed from the ensemble—not only from the
+mean—are unbiased and well calibrated, which is crucial
+when moving from simulations to real data.
+6. Experiments
+6.1. Mock Weak Lensing Survey
+We evaluate our method on simulated WL data modeled af-
+ter the JWST COSMOS-Web survey [9], which targets one
+of the most extensively studied extragalactic fields, large
+enough to capture a representative portion of the cosmic
+large-scale structure. While the shear catalogs for JWST
+COSMOS-Web are not publicly available, we consider
+mock surveys that reproduce the footprint, source density,
+and shape-noise characteristics of the real COSMOS-Web
+observations [39]. We assume a footprint of 0.54 deg2 with
+a mean redshift catalog source density of≈261 galaxies
+arcmin−2, an intrinsic shape-noise dispersion ofσ e ≈0.25
+[39], and Gaussian photo-zdispersionσ z = 0.11(1 +z).
+We compare against two publicly available baseline meth-
+ods for 3D mass mapping: the analytical Wiener filter re-
+construction [42] and the neural ensemble estimator [49].
+We first present results for recovering the projected 2D
+convergence fieldκ(a weighted integral of the overdensityδ
+along the line of sight) from a simulated light cone. Figure 3
+and Table 1 show the reconstructedκmaps and quantitative
+comparisons. For each method, we compute the posterior
+mean projected overdensity across 128 samples and evalu-
+ate agreement with the ground-truth map using the mean-
+subtracted Pearson cross-correlation coefficient, which is
+appropriate since the WL forward model is invariant under
+constant additive shifts inκ. Our method achieves signif-
+icantly higher correlation with the true convergence field
+than both the Wiener filter and neural ensemble baselines,
+demonstrating the ability of the diffusion-based posterior
+sampling framework to recover fine-scale structure while
+maintaining physically consistent large-scale modes. In
+Fig. 4 we reconstruct the 3D overdensity fieldδfor the same
+simulated light cones up to redshiftz= 1. We again com-
+pute the posterior mean across 128 samples as a point esti-
+mate of the overdensity. Because of single-view limitations,
+
+Figure 4. Three-dimensional mass reconstruction results from simulated WL data. Each row corresponds to a different simulated lightcone
+volume, and columns compare the ground-truth overdensity field to reconstructions from our diffusion-based posterior sampler, the Neural
+Ensemble baseline [49], and the Wiener filter method [42]; for each method, we use the posterior mean as a point estimate. Our recon-
+structions better recover the spatial morphology of clusters and filaments and place structures at the correct redshift slices, whereas the
+baselines tend to smear overdensities along the line of sight or miss small-scale features. The third row illustrates the challenging case of
+a misspecified cosmology with massless neutrinos, where our method still tracks the true 3D structure more faithfully despite a mismatch
+between the prior cosmology and the ground-truth simulation.
+103 104
+ℓ (radians)
+10−11
+10−10
+κ angular power spectrum
+Ground Truth
+Ours
+Neural
+Ground Truth
+Ours
+Neural
+10−2
+ℓ (distance)
+104
+4 × 104
+δ radial power spectrum
+Ground Truth
+Ours
+Neural
+White Noise
+103 104
+ℓ (radians)
+10−11
+10−10
+10−9
+10−8
+10−7
+κ angular power spectrum
+In-Dist Recon
+In-Dist GT
+OOD Recon
+OOD GT
+Prior
+Figure 5. Sample quality. Our diffusion-based posterior sampler produces 3D mass-field realizations whose statistics match those of
+realistic dark matter simulations. Left: Angular PSC κ
+ℓ of the convergenceκfor individual samples. Our samples retain the correct high-ℓ
+(small-scale) power, whereas the Neural Ensemble [49] baseline over-smooths small-scale modes when the noise power exceeds the signal
+power and the reconstruction becomes prior-dominated. Center: Radial PS of the overdensityδacross lens planes. Our samples are nearly
+flat in this radial spectrum, indicating decorrelation between different redshift planes and avoiding the spurious line-of-sight correlations
+seen in the neural ensemble outputs. Because many downstream WL statistics are nonlinear functionals of each sample (e.g., peak counts,
+voids), matching these sample-level power spectra is essential for unbiased cosmological inference and calibrated uncertainties. Right: Our
+diffusion prior is trained under a fiducial cosmology, which implies an expected angular PS forκ(“Prior”). We plot five power spectra:
+the ground truth and reconstruction for an in-distribution cosmology (In-Dist GT / In-Dist Recon), the ground truth and reconstruction for
+an out-of-distribution cosmology with massless neutrinos (OOD GT / OOD Recon), and the prior from our diffusion model. When the
+true cosmology matches the training cosmology, prior samples and reconstructions reproduce the same spectrum. In the out-of-distribution
+case, the true power is significantly higher, but our posterior samples still match the ground-truth spectrum due to likelihood guidance,
+showing that the method adapts to the observed universe even when the prior cosmology is misspecified.
+
+V ol. Methodρ 3D
+blur(↑)ρ 3D(↑)ρ 2D(↑)
+1
+Ours 0.83 0.23 0.87
+Neur. [49] 0.79 0.21 0.86
+Wien. [42] 0.71 0.21 0.77
+2
+Ours 0.83 0.27 0.88
+Neur. [49] 0.80 0.21 0.87
+Wien. [42] 0.72 0.23 0.83
+3
+Ours 0.92 0.18 0.98
+Neur. [49] 0.86 0.09 0.96
+Wien. [42] 0.84 0.13 0.92
+Table 1. Quantitative comparison of reconstruction quality. We
+summarize 3D and 2D mass-mapping performance for three simu-
+lated JWST-scale lightcone volumes. We report the Pearson cross-
+correlation coefficients averaged over lensplanes between recon-
+structed and ground-truth maps:ρ 3D
+blur where both lightcones are
+first blurred with a Gaussian kernel of widthσ= 4lensplanes
+in the line-of-sight direction,ρ 3D for the full-resolution 3D fields,
+andρ 2D for the projected 2D convergence maps (higher is better
+in all cases). Our diffusion-based method consistently achieves
+higher correlations than both the Neural Ensemble and Wiener fil-
+ter baselines across all three volumes in 2D and 3D.
+and large amounts of noise, it is only possible to reconstruct
+the overdensity field with a limited radial resolution. Uncer-
+tainty in the radial position of structures results in point es-
+timates with a blur along the line of sight. For each method,
+we additionally blur the ground truth and reconstructed vol-
+umes with a Gaussian filter of lengthσ= 4lensplanes in
+the radialzdirection (see supplement for detailed analysis
+ofzblur lengths). We then report the cross-correlation (av-
+eraged across lensplanes) of each reconstruction with the
+ground truth, blurred and unblurred. Our method outper-
+forms the 3D reconstruction baselines in each volume.
+6.2. Cosmology Mismatch
+Because our method is supervised, a key question is
+whether or not we can generalize well under a reasonable
+error in our prior assumptions. Thus, we repeat the exper-
+iment described in Sec. 6.1 but for a ground truth light-
+cone generated under different cosmological assumptions.
+In particular, we consider a cosmology with massless neu-
+trinos, which results in significantly higher amplitudes in
+the PS. Recovery results are shown in row 3 of Figs. 3,
+4. Our method generalizes well despite a mismatch in the
+statistics of the prior and ground truth volumes. In this
+case, the OOD cosmology produces higher power and thus
+stronger lensing signal, allowing the likelihood to partially
+overcome the mismatched prior.
+In addition, we compare the PS of both the fiducial (as-
+sumed) cosmology and the out-of-distribution cosmology,
+the PS for both of our reconstructions, and the PS for uncon-
+ditional PS in Fig. 5. Although our prior samples match the
+fiducial cosmology of the training set, our method is able
+to generate posterior samples with angular PS matching the
+ground truth due to likelihood guidance.
+6.3. Sample Quality
+Beyond point estimation, our method’s principal advantage
+is the ability tosamplefrom a realistic posterior whose
+statistics are consistent with the true dark matter distribu-
+tion. We assess sample realism using the angular PS of the
+recovered 2D convergence maps (Fig. 5); matching both
+amplitude and scale-dependence indicates correct two-point
+statistics.
+Although all methods have access to the same theoretical
+PS, smoothness regularization in the Neural Ensemble esti-
+mator inevitably damps small-scale structure in each recon-
+struction. This suppression wipes out high-frequency power
+and produces convergence maps that look overly smoothed
+(Fig. 5). In contrast, our diffusion-based posterior gener-
+ates high-resolution samples whose angular power spectra
+match the ground truth across all scales. This fidelity is
+essential for extracting reliable cosmological information
+from WL data. Many key probes, such as peak and void
+counts [22], Minkowski functionals [23], bispectra [12],
+halo and filament finders [21, 43], cross-correlation with
+galaxies, clusters [10, 46], or CMB lensing [17], depend di-
+rectly on the detailed small-scale and radial structure in each
+possible 3D realization of the matter field. If the samples
+are oversmoothed or exhibit spurious correlations across
+redshift planes, the resulting cross-correlation amplitudes,
+cosmological parameter constraints, and covariance esti-
+mates will be systematically biased. Our samples robustly
+reproduce the correct angular power and remain decorre-
+lated along the line of sight, ensuring that downstream
+non-Gaussian statistics remain unbiased and that ensemble-
+based uncertainty propagation is physically meaningful.
+6.4. Uncertainty Calibration
+Another important aspect of our method is the ability to es-
+timate uncertainty from the statistics of samples recovered
+from our posterior sampler. Results are shown in Fig. 6. We
+show a very clear correlation between sample standard de-
+viation and error with the ground truth, with a near perfect
+correspondence for a majority of the lightcone voxels. Ad-
+ditionally, although both our method and the neural ensem-
+ble method offer “samples” for uncertainty quantification,
+only our method can be interpreted as a proper Bayesian
+posterior. Together with the sample-level power-spectrum
+agreement in Fig. 5, this behavior indicates that posterior-
+predictive intervals for non-linear summaries (e.g., peak
+counts, cross-correlations in COSMOS-Web) should be cor-
+rectly calibrated on real data.
+
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5
+Sample Std
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5Mean Absolute Error
+Sample Uncertainty Calibration
+Ours (r=0.92)
+Neural (r=0.90)
+Bin Fraction (Ours)
+Bin Fraction (Neural)
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+Proportion per bin
+Figure 6. Uncertainty calibration. For each voxel, we compute
+the standard deviation of the posterior samples (“sample std”) and
+the mean absolute error (MAE) between the posterior mean and
+the ground truth. We then bin voxels by sample std and plot the
+average MAE per bin, along with the fraction of voxels in each bin.
+Both our method (r = 0.92) and the neural ensemble estimator (r =
+0.90) [49] show a strong correlation between predicted uncertainty
+and actual error, but only our samples correspond to a well-defined
+Bayesian posterior distribution.
+7. Conclusion
+In this work, we introduce a first-of-its-kind 3D dark matter
+lightcone dataset tailored for WL mass mapping. Build-
+ing on this resource, we propose a diffusion-based posterior
+sampler that reconstructs the 3D matter distribution from
+noisy 2D shear observations. Our approach significantly
+outperforms Neural Ensemble and Wiener filter baselines in
+3D/2D correlation and power-spectrum fidelity on simula-
+tions designed to mimic JWST observations, and remains
+effective even under cosmology mismatch, indicating ro-
+bustness to realistic modeling uncertainties. Important di-
+rections for future work include analyzing the sensitivity of
+reconstructions to the choice of simulation-derived prior, in-
+cluding different cosmological parameter settings and simu-
+lation codes. By releasing our dataset, code, and evaluation
+protocol, we aim to create a reproducible testbed that opens
+3D cosmological mass mapping to a far broader research
+community. Our work brings humanity closer to seeing the
+dark universe in three dimensions, yielding reconstructions
+that not only reveal its structure with unmatched fidelity, but
+also unlock richer and more powerful downstream analyses.
+8. Acknowledgements
+The authors would like to thank Supranta Boruah, Bhu-
+vnesh Jain, and Carolina Cuesta–Lazaro for helpful discus-
+sions. Part of this work was done at Jet Propulsion Labo-
+ratory, California Institute of Technology, under a contract
+with the National Aeronautics and Space Administration
+(80NM0018D0004) and funded through the President’s and
+Director’s Research and Development Fund (PDRDF). This
+work was also supported by the Stanback Innovation Fund
+and NSF Career award 2048237.
+References
+[1] Nabila Aghanim, Subhabrata Majumdar, and Joseph Silk.
+Secondary anisotropies of the cmb.Reports on Progress in
+Physics, 71(6):066902, 2008. 4
+[2] Bradley Atcheson, Ivo Ihrke, Wolfgang Heidrich, Art Tevs,
+Derek Bradley, Marcus Magnor, and Hans-Peter Seidel.
+Time-resolved 3d capture of non-stationary gas flows.ACM
+transactions on graphics (TOG), 27(5):1–9, 2008. 4
+[3] Matthias Bartelmann and Peter Schneider. Weak gravita-
+tional lensing.Physics Reports, 340(4-5):291–472, 2001. 3,
+4
+[4] Max Born and Emil Wolf.Principles of optics: electromag-
+netic theory of propagation, interference and diffraction of
+light. Elsevier, 2013. 4
+[5] Supranta S Boruah, Michael Jacob, and Bhuvnesh Jain.
+Diffusion-based mass map reconstruction from weak lensing
+data.Physical Review D, 111(8):083542, 2025. 3
+[6] Supranta S Boruah, Michael Jacob, Bhuvnesh Jain, Riya
+Maiya, and Raghav Venkataramanan. High-resolution weak
+lensing mass mapping from des-y3 data using diffusion-
+based prior.arXiv preprint arXiv:2511.14667, 2025. 3
+[7] Philip Bull, Pedro G Ferreira, Prina Patel, and Mario G San-
+tos. Late-time cosmology with 21 cm intensity mapping ex-
+periments.The Astrophysical Journal, 803(1):21, 2015. 4
+[8] John E Carlstrom, Gilbert P Holder, and Erik D Reese. Cos-
+mology with the sunyaev-zel’dovich effect.Annual Review
+of Astronomy and Astrophysics, 40(1):643–680, 2002. 4
+[9] Caitlin M Casey, Jeyhan S Kartaltepe, Nicole E Drakos,
+Maximilien Franco, Santosh Harish, Louise Paquereau,
+Olivier Ilbert, Caitlin Rose, Isabella G Cox, James W
+Nightingale, et al. Cosmos-web: an overview of the jwst
+cosmic origins survey.The Astrophysical Journal, 954(1):
+31, 2023. 1, 6
+[10] Chihway Chang, Vinu Vikram, Bhuvnesh Jain, David Bacon,
+A Amara, MR Becker, G Bernstein, C Bonnett, S Bridle, D
+Brout, et al. Wide-field lensing mass maps from dark energy
+survey science verification data.Physical review letters, 115
+(5):051301, 2015. 8
+[11] Hyungjin Chung, Jeongsol Kim, Michael T Mccann, Marc L
+Klasky, and Jong Chul Ye. Diffusion posterior sam-
+pling for general noisy inverse problems.arXiv preprint
+arXiv:2209.14687, 2022. 3
+[12] Asantha Cooray and Wayne Hu. Weak gravitational lensing
+bispectrum.The Astrophysical Journal, 548(1):7, 2001. 8
+[13] Franz Elsner and Benjamin D Wandelt. Efficient Wiener fil-
+tering without preconditioning.Astronomy & Astrophysics,
+549:A111, 2013. 5, 7
+[14] Lawrence C Evans.Partial differential equations. American
+mathematical society, 2022. 5
+[15] Lehman H Garrison, Daniel J Eisenstein, Douglas Ferrer,
+Nina A Maksimova, and Philip A Pinto. The abacus cos-
+
+mological n-body code.Monthly Notices of the Royal Astro-
+nomical Society, 508(1):575–596, 2021. 2, 3, 5
+[16] Boryana Hadzhiyska, Sihan Yuan, Chris Blake, Daniel J
+Eisenstein, J Aguilar, Steven Ahlen, David Brooks, Todd
+Claybaugh, Axel de la Macorra, Peter Doel, et al. Synthetic
+light-cone catalogues of modern redshift and weak lensing
+surveys with abacussummit.Monthly Notices of the Royal
+Astronomical Society, 525(3):4367–4387, 2023. 5, 6
+[17] Nick Hand, Alexie Leauthaud, Sudeep Das, Blake D Sher-
+win, Graeme E Addison, J Richard Bond, Erminia Calabrese,
+Aldee Charbonnier, Mark J Devlin, Joanna Dunkley, et al.
+First measurement of the cross-correlation of cmb lensing
+and galaxy lensing.Physical Review D, 91(6):062001, 2015.
+8
+[18] Thomas Mejer Hansen, Andre G Journel, Albert Tarantola,
+and Klaus Mosegaard. Linear inverse Gaussian theory and
+geostatistics.Geophysics, 71(6):R101–R111, 2006. 5, 7
+[19] Niall Jeffrey, Franc ¸ois Lanusse, Ofer Lahav, and Jean-Luc
+Starck. Deep learning dark matter map reconstructions from
+des sv weak lensing data.Monthly Notices of the Royal As-
+tronomical Society, 492(4):5023–5029, 2020. 3
+[20] Nick Kaiser and Gordon Squires. Mapping the dark matter
+with weak gravitational lensing.Astrophysical Journal, Part
+1 (ISSN 0004-637X), vol. 404, no. 2, p. 441-450., 404:441–
+450, 1993. 2, 5
+[21] Alexander Knebe, Steffen R Knollmann, Stuart I Muldrew,
+Frazer R Pearce, Miguel Angel Aragon-Calvo, Yago Ascasi-
+bar, Peter S Behroozi, Daniel Ceverino, Stephane Colombi,
+Juerg Diemand, et al. Haloes gone mad: the halo-finder com-
+parison project.Monthly Notices of the Royal Astronomical
+Society, 415(3):2293–2318, 2011. 8
+[22] Jan M Kratochvil, Zolt ´an Haiman, and Morgan May. Prob-
+ing cosmology with weak lensing peak counts.Physical Re-
+view D—Particles, Fields, Gravitation, and Cosmology, 81
+(4):043519, 2010. 8
+[23] Jan M Kratochvil, Eugene A Lim, Sheng Wang, Zolt ´an
+Haiman, Morgan May, and Kevin Huffenberger. Probing
+cosmology with weak lensing minkowski functionals.Phys-
+ical Review D—Particles, Fields, Gravitation, and Cosmol-
+ogy, 85(10):103513, 2012. 8
+[24] Richard G Lane, Andreas Glindemann, and John C Dainty.
+Simulation of a Kolmogorov phase screen.Waves in Random
+Media, 2(3):209–224, 1992. 5, 7
+[25] Francois Lanusse, J-L Starck, Adrienne Leonard, and San-
+drine Pires. High resolution weak lensing mass mapping
+combining shear and flexion.Astronomy & Astrophysics,
+591:A2, 2016. 3
+[26] Adrienne Leonard, Franc ¸ois Lanusse, and Jean-Luc Starck.
+Glimpse: accurate 3d weak lensing reconstructions using
+sparsity.Monthly Notices of the Royal Astronomical Soci-
+ety, 440(2):1281–1294, 2014. 3, 5
+[27] Nina A Maksimova, Lehman H Garrison, Daniel J Eisen-
+stein, Boryana Hadzhiyska, Sownak Bose, and Thomas P
+Satterthwaite. Abacussummit: a massive set of high-
+accuracy, high-resolution n-body simulations.Monthly No-
+tices of the Royal Astronomical Society, 508(3):4017–4037,
+2021. 1, 2, 3, 5
+[28] Richard Massey, Jason Rhodes, Richard Ellis, Nick Scoville,
+Alexie Leauthaud, Alexis Finoguenov, Peter Capak, David
+Bacon, Herv ´e Aussel, Jean-Paul Kneib, et al. Dark matter
+maps reveal cosmic scaffolding.Nature, 445(7125):286–
+290, 2007. 3
+[29] Nayantara Mudur, Carolina Cuesta-Lazaro, and Douglas P
+Finkbeiner. Cosmological field emulation and param-
+eter inference with diffusion models.arXiv preprint
+arXiv:2312.07534, 2023. 3
+[30] Nayantara Mudur, Carolina Cuesta-Lazaro, and Douglas P
+Finkbeiner. Diffusion-hmc: Parameter inference with
+diffusion-model-driven hamiltonian monte carlo.The Astro-
+physical Journal, 978(1):64, 2025. 3
+[31] Dylan Nelson, V olker Springel, Annalisa Pillepich, Vicente
+Rodriguez-Gomez, Paul Torrey, Shy Genel, Mark V ogels-
+berger, Ruediger Pakmor, Federico Marinacci, Rainer Wein-
+berger, et al. The illustristng simulations: public data release.
+Computational Astrophysics and Cosmology, 6(1):2, 2019. 1
+[32] Victoria Ono, Core Francisco Park, Nayantara Mudur, Yuey-
+ing Ni, Carolina Cuesta-Lazaro, and Francisco Villaescusa-
+Navarro. Debiasing with diffusion: Probabilistic reconstruc-
+tion of dark matter fields from galaxies with camels.The
+Astrophysical Journal, 970(2):174, 2024. 3
+[33] Nathana ¨el Perraudin, Ankit Srivastava, Aurelien Luc-
+chi, Tomasz Kacprzak, Thomas Hofmann, and Alexandre
+R´efr´egier. Cosmological n-body simulations: a challenge
+for scalable generative models.Computational Astrophysics
+and Cosmology, 6(1):5, 2019. 1
+[34] Emily Petroff, JWT Hessels, and DR Lorimer. Fast radio
+bursts.The Astronomy and Astrophysics Review, 27(1):4,
+2019. 4
+[35] Natalia Porqueres, Alan Heavens, Daniel Mortlock, and
+Guilhem Lavaux. Bayesian forward modelling of cosmic
+shear data.Monthly Notices of the Royal Astronomical Soci-
+ety, 502(2):3035–3044, 2021. 3
+[36] Natalia Porqueres, Alan Heavens, Daniel Mortlock, and
+Guilhem Lavaux. Lifting weak lensing degeneracies with
+a field-based likelihood.Monthly Notices of the Royal Astro-
+nomical Society, 509(3):3194–3202, 2022. 3
+[37] Benjamin Remy, Francois Lanusse, Niall Jeffrey, Jia Liu, J-L
+Starck, Ken Osato, and Tim Schrabback. Probabilistic mass-
+mapping with neural score estimation.Astronomy & Astro-
+physics, 672:A51, 2023. 3
+[38] Peter Schneider. Weak gravitational lensing. InGravi-
+tational lensing: strong, weak and micro, pages 269–451.
+Springer, 2006. 4, 5, 3
+[39] Diana Scognamiglio et al. The highest resolution map of
+(dark) matter.accepted for Nature Astronomy, 2025. 6, 5
+[40] Uro ˇs Seljak. Weak lensing reconstruction and power spec-
+trum estimation: minimum variance methods.The Astro-
+physical Journal, 506(1):64, 1998. 3
+[41] Marko Shuntov, Hollis B Akins, Louise Paquereau,
+Caitlin M Casey, Olivier Ilbert, Rafael C Arango-Toro,
+Henry Joy McCracken, Maximilien Franco, Santosh Harish,
+Jeyhan S Kartaltepe, et al. Cosmos2025: The cosmos-web
+galaxy catalog of photometry, morphology, redshifts, and
+physical parameters from jwst, hst, and ground-based imag-
+ing.arXiv preprint arXiv:2506.03243, 2025. 5
+
+[42] Patrick Simon, AN Taylor, and Jan Hartlap. Unfolding
+the matter distribution using three-dimensional weak grav-
+itational lensing.Monthly Notices of the Royal Astronomical
+Society, 399(1):48–68, 2009. 1, 3, 5, 6, 7, 8
+[43] Thierry Sousbie. The persistent cosmic web and its filamen-
+tary structure–i. theory and implementation.Monthly notices
+of the royal astronomical society, 414(1):350–383, 2011. 8
+[44] JT VanderPlas, AJ Connolly, Bhuvnesh Jain, and Mike
+Jarvis. Three-dimensional reconstruction of the density field:
+An svd approach to weak-lensing tomography.The Astro-
+physical Journal, 727(2):118, 2011. 3
+[45] Singanallur V Venkatakrishnan, Charles A Bouman, and
+Brendt Wohlberg. Plug-and-play priors for model based re-
+construction. In2013 IEEE global conference on signal and
+information processing, pages 945–948. IEEE, 2013. 3
+[46] Vinu Vikram, Chihway Chang, Bhuvnesh Jain, D Bacon,
+Adam Amara, Matthew R Becker, G Bernstein, Christopher
+Bonnett, Sarah Bridle, Dillon Brout, et al. Wide-field lens-
+ing mass maps from dark energy survey science verification
+data: Methodology and detailed analysis.Physical Review
+D, 92(2):022006, 2015. 8
+[47] Francisco Villaescusa-Navarro, ChangHoon Hahn, Elena
+Massara, Arka Banerjee, Ana Maria Delgado, Doogesh Kodi
+Ramanah, Tom Charnock, Elena Giusarma, Yin Li, Erwan
+Allys, et al. The quijote simulations.The Astrophysical Jour-
+nal Supplement Series, 250(1):2, 2020. 1
+[48] Bingliang Zhang, Wenda Chu, Julius Berner, Chenlin Meng,
+Anima Anandkumar, and Yang Song. Improving diffusion
+inverse problem solving with decoupled noise annealing. In
+Proceedings of the Computer Vision and Pattern Recognition
+Conference, pages 20895–20905, 2025. 5, 7
+[49] Brandon Zhao, Aviad Levis, Liam Connor, Pratul P Srini-
+vasan, and Katherine Bouman. Revealing the 3d cosmic
+web through gravitationally constrained neural fields. InThe
+Thirteenth International Conference on Learning Represen-
+tations. 1, 3, 4, 6, 7, 8, 9
+[50] Brandon Zhao, Aviad Levis, Liam Connor, Pratul P Srini-
+vasan, and Katherine L Bouman. Single view refractive
+index tomography with neural fields. InProceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 25358–25367, 2024. 3
+[51] Hongkai Zheng, Wenda Chu, Bingliang Zhang, Zihui Wu,
+Austin Wang, Berthy T Feng, Caifeng Zou, Yu Sun, Nikola
+Kovachki, Zachary E Ross, et al. Inversebench: Benchmark-
+ing plug-and-play diffusion priors for inverse problems in
+physical sciences.arXiv preprint arXiv:2503.11043, 2025.
+1, 3
+
+Generative Diffusion Priors for 3D Mapping of the Dark Universe
+Supplementary Material
+9. Visualization of Sample Quality
+A central goal of our diffusion-based posterior sampler is
+not only to produce a high-fidelityposterior meanas a point
+estimate of the mass distribution, but also to generatereal-
+istic posterior samplesthat reflect the variability and statis-
+tical structure of the underlying dark matter field. In this
+section, we provide qualitative visualizations of 2D and 3D
+samples (Figs. 7 and 8) that complement the quantitative
+sample-quality diagnostics in the main text.
+In the two-dimensional case, both our method and the
+neural ensemble produce posterior means that broadly re-
+cover the ground-truth convergence fieldκ. However, the
+individual samples reveal clear differences in sample qual-
+ity. Samples from the neural ensemble contain spurious
+small-scale artifacts that are not present in the trueκmaps
+and that only disappear after averaging over many sam-
+ples. In contrast, samples drawn from our diffusion-based
+posterior are relatively stable from realization to realiza-
+tion, without significant sample-wise artifacts. This indi-
+cates that our learned prior and sampling procedure pre-
+serve physically plausible structure at the level of individual
+convergence maps, not just in the mean.
+The three-dimensional visualizations highlight an addi-
+tional limitation of neural-ensemble-based uncertainty es-
+timates. Neural ensemble samples exhibit spurious cor-
+relations along the line of sight: overdense regions are
+stretched into radially elongated features that persist across
+neighboring redshift slices, inconsistent with the statistics
+of the ground-truth overdensity fieldδand with the radial
+power-spectrum behavior discussed in the main text. Our
+diffusion-based posterior samples, by contrast, maintain re-
+alistic slice-to-slice variability and remain relatively decor-
+related across lens planes. The posterior mean naturally ex-
+hibits modest radial blurring, reflecting the intrinsic limits
+of 3D weak-lensing reconstruction, but individual samples
+themselves do not suffer from spurious line-of-sight coher-
+ence. These properties are crucial for downstream non-
+Gaussian analyses that operate directly on posterior sam-
+ples, ensuring that ensemble-based statistics remain physi-
+cally meaningful and well calibrated.
+10. Additional Recovery Results
+To further validate the robustness of our method, we present
+recovery results for three additional simulated lightcones
+(V olumes 4, 5 and 6), expanding upon the qualitative and
+quantitative comparisons shown in the main paper. Simi-
+lar to the reconstruction results in the main text, volumes
+4 and 5 correspond to the in-distribution cosmology of
+V ol. Methodρ 3D
+blur(↑)ρ 3D(↑)ρ 2D(↑)
+Ours 0.88 0.25 0.93
+4 Neur. [49] 0.85 0.24 0.92
+Wien. [42] 0.84 0.24 0.90
+Ours 0.85 0.25 0.91
+5 Neur. [49] 0.81 0.18 0.87
+Wien. [42] 0.80 0.22 0.86
+Ours 0.95 0.24 0.88
+6 Neur. [49] 0.91 0.15 0.82
+Wien. [42] 0.86 0.23 0.77
+Table 2. Additional quantitative comparison of recovery per-
+formance. We report 3D and 2D reconstruction quality for
+three additional simulated JWST-scale lightcone volumes: two in-
+distribution (V olumes 4 and 5) and one out-of-distribution with
+massless neutrinos (V olume 6). As in the main paper, we compute
+(1) the blurred 3D correlationρ 3D
+blur after applying a Gaussian filter
+of widthσ= 4lensplanes along the line of sight, (2) the full-
+resolution 3D correlationρ 3D, and (3) the 2D convergence corre-
+lationρ 2D. Across all metrics and volumes, our diffusion-based
+posterior sampler achieves the highest agreement with the ground
+truth, outperforming the Neural Ensemble and Wiener filter base-
+lines.
+the training set, while volume 6 corresponds to an out-
+of-distribution cosmology with massless neutrinos. Fig-
+ure 9 and Figure 10 illustrate the 2D convergenceκre-
+construction and the full 3D overdensityδrecovery, re-
+spectively. Consistent with the three volumes shown in
+the main text, our diffusion-based posterior sampler recon-
+structs high-contrast cluster peaks and filamentary struc-
+ture that closely match the ground truth, while the Neural
+Ensemble baseline tends to smooth overdensities and the
+Wiener filter over-regularizes fine features. These qualita-
+tive trends persist across all test volumes—including those
+with complex multi-scale structure—and indicate that our
+sampler reliably maintains small-scale power and accurate
+radial localization.
+Table 2 provides quantitative cross-correlation metrics
+for these additional volumes. As before, we report (1) the
+blurred 3D correlation usingσ= 4 lensplanes, (2) the full-
+resolution 3D correlation, and (3) the projected 2D con-
+vergence correlation. Across all metrics, our method again
+achieves the highest agreement with the ground truth.
+
+Figure 7. 2D ConvergenceκPosterior Samples. Left: Ground-truth convergence field for a representative lightcone. Top row: Posterior
+mean and individual posterior samples from our diffusion-based method. Bottom row: Posterior mean and samples from the neural
+ensemble baseline. While both methods produce reasonable posterior means, the neural ensemble samples contain spurious small-scale
+artifacts that are washed out only when averaging. In contrast, our diffusion-based posterior produces visually coherent, artifact-free
+samples consistent with the statistics of the trueκfield.
+Figure 8. 3D OverdensityδPosterior Samples. Left: Ground-truth 3D overdensity for a representative volume. Top row: Posterior mean
+and individual samples from our diffusion-based sampler. Bottom row: Corresponding mean and samples from the neural ensemble.
+Neural-ensemble samples display artificial correlations along the line of sight, producing radially elongated structures not present in the
+true simulation. Our samples maintain realistic slice-to-slice variability and avoid spurious line-of-sight correlations; only the posterior
+mean exhibits expected radial blurring. These properties underscore the validity of our method’s 3D posterior samples for downstream
+non-Gaussian cosmological analyses.
+
+Figure 9. Additional 2D Recovery Results. For three additional simulated lightcones (V olumes 4, 5 and 6), we compare the reconstructed
+convergenceκmaps from our method, the Neural Ensemble baseline, and the Wiener filter against the ground truth. Consistent with
+the results in the main text, our method preserves high-contrast peaks and sharp filamentary features, whereas the baselines exhibit over-
+smoothing and reduced small-scale power. These trends persist across diverse structures and demonstrate the robustness of our 2D recovery
+performance.
+11. Detailed Resolution Analysis
+In the main paper, we evaluated 3D reconstruction fidelity
+using a single Gaussian blur scale (σ= 4lensplanes) as
+a summary metric for radial resolution. Figure 11 shows
+the blurred 3D cross-correlationρ blur
+3D (σ)between each re-
+construction and the ground-truth volume as a function of
+σ, where both volumes are convolved with the same Gaus-
+sian kernel and largerσcorresponds to more aggressive
+smoothing along the line of sight. For all five test volumes,
+our method outperforms the baselines at every blur scale,
+demonstrating that the improvements provided by our dif-
+fusion prior are not tied to any particular choice of radial
+smoothing.
+12. Weak Gravitational Lensing Formalism
+12.1. Deflection and Shape Distortion
+A more explicit derivation of Eq. (3)–Eq. (5) is presented
+below. Further details can be found in [3, 38].
+Consider a background galaxy (“source”) whose image
+is being weakly lensed by an extended 3D mass distribution
+(“lens”). The source is observed at angular positionθon the
+sky, whereas in the absence of lensing it would appear atβ.
+We therefore define the scaled deflection angleαthrough
+the lens equation:
+β=θ−α. (8)
+For an extended 3D mass distribution, the deflection an-
+gle depends on the gravitational potentialΦencountered by
+
+Figure 10. Additional 3D Recovery Results. We show full 3D overdensityδreconstructions for V olumes 4, 5 and 6, comparing our
+diffusion-based posterior sampler with the Neural Ensemble and Wiener filter baselines. Our method more accurately localizes structures
+to the correct redshift slices and recovers finer-scale morphology along the line of sight. The baselines tend to smear overdense regions
+or miss small-scale features entirely. Together with Fig. 9, these results confirm that the improvements observed in the main paper hold
+across all evaluated lightcones.
+the light ray along its path from source to observer. Under
+the Born approximation [3], this becomes the line-of-sight
+integral:
+α(θ, w) = 2
+c2
+Z w
+0
+dw′ w−w ′
+w ∇⊥Φ(w′θ, w′). (9)
+This expression is closely analogous to the Eikonal ray
+equation from optics, which describes the deflection of a ray
+by a refractive-index field [2, 4]. For convenience, we pull
+the transverse gradient∇ ⊥ outside the integral and define
+theeffective lensing potentialψ(θ, w), which represents the
+weighted integral ofΦalong the line of sight:
+ψ(θ, w) = 2
+c2
+Z w
+0
+dw′ w−w ′
+w·w ′ Φ(w′θ, w′),(10)
+α=∇ θψ (11)
+While gravitational lensing deflects the apparent position
+of light rays, our primary interest lies in how it distorts the
+ellipticityeof a galaxy image (Eq. (1)). In the weak-lensing
+regime, a first-order expansion shows that the shear compo-
+nentsγ(Eq. (2)) are given by the partial derivatives of the
+scaled deflection angle [3]:
+γ1 ≈ 1
+2(α11 −α 22)(12)
+γ2 ≈α 12 =α 21 (13)
+Here, we adopt the notationαij =∂α i/∂θ j, andα 12 =
+α21 follows from the fact thatαis a gradient field. Con-
+sequently, the shear can also be expressed in terms of the
+effective lensing potential:
+γ1 = 1
+2( ∂2ψ
+∂θ2
+1
+− ∂2ψ
+∂θ2
+2
+)(14)
+γ2 = ∂2ψ
+∂θ1∂θ2
+(15)
+Intuitively, instead of a point-like ray, one may picture
+a small ellipse representing a galaxy image. The gradient
+(first-order derivatives) ofΦdetermines the deflectionαof
+the ellipse’s center, while the second-order derivatives ofΦ
+describe the shearγthat distorts its shape. To connect this
+potential to the underlying matter field, quantified by the
+density overdensityδ, we now introduce the convergence
+
+κ:
+κ= 1
+2∆θψ(16)
+= 1
+c2 ∆θ
+Z w
+0
+dw′ w−w ′
+w·w ′ Φ(w′θ, w′)(17)
+= 1
+c2
+Z w
+0
+dw′ w′(w−w ′)
+w ∆Φ(w′θ, w′) (18)
+In Eq. (18) we assume that theΦhas negligible deriva-
+tive in the radial direction. Next, applying the Poisson equa-
+tion for gravitational potential in comoving coordinates,
+∆Φ = 3H2
+0Ωmδ
+2a (19)
+which leads directly to the weighted projection of the
+matter overdensity given in Eq. (3). To relate the conver-
+genceκto the shearγ, we first invert the Poisson equa-
+tion given in Eq. (16) using the method of Green’s functions
+[14, 20]:
+˜ψ(θ) = 1
+π
+Z
+R2
+d2θ′ ln|θ−θ ′|κ(θ′) (20)
+Finally, plugging ˜ψinto Eq. (14) and Eq. (15) yields
+Eq. (4).
+12.2. Photometric Redshift Errors
+When a survey relies on photometric redshifts, the projec-
+tion defined in equation Eq. (3) must be marginalized over
+the uncertainty in the source’s true redshift. For a galaxy
+with a redshift probability distributionp(z), the expected
+convergence is therefore obtained by averagingκ(θ, w)
+over this distribution
+κ(θ) =E z∼p(z),z=z(w) [κ(θ, w)] (21)
+Conceptually, this replaces the upper limit in the line-of-
+sight projection with an expectation over all comoving dis-
+tances consistent with the photometric redshift estimate.
+This leads to the standard expression in which the conver-
+gence is written as an integral over comoving distance
+κ(θ) = 3H2
+0Ωm
+2c2
+Z w
+0
+dw δ(wθ, w)
+a(w) g(w)w (22)
+Here,g(w)denotes the lensing efficiency, which incor-
+porates the probability that the galaxy lies behind a given
+lens plane. It is defined by
+g(w) =
+Z wk
+w
+dw′ w′ −w
+w′
+
+p(z) dz
+dw
+
+z=z(w ′)
+. (23)
+Herew k is some reasonable upper limit on the source co-
+moving distance. In practice, the efficiency functiong(w)
+can be precomputed for each galaxy at any set of lens-
+plane positions. To evaluate the required derivatives, such
+asdz/dwand the mapping between redshift and comov-
+ing distance, we use the cosmology packagejax-cosmo,
+which provides differentiable cosmological functions.
+Throughout this work, we model the photometric-
+redshift distributionp(z)as a Gaussian centered on the mea-
+sured redshift,
+p(z)∼ N(z, σ z), σz = 0.11(1 +z) (24)
+with the scatterσ z estimated from the JWST COSMOS-
+Web shear catalog [39, 41]. This Gaussian approximation
+is standard and has been adopted in several previous weak-
+lensing studies [26, 42].
+13.Conicus3D- Dataset Construction
+Conicus3Dis a dataset of 3D lightcones, binned
+into lensplanes, derived from theAbacusSummit
+simulations [15, 27]. We use the 25base
+boxes with the AbacusSummit fiducial cosmology
+(AbacusSummit base c000 ph{000-024}),
+as well as onebasebox from the cos-
+mology corresponding to massless neutrinos
+(AbacusSummit base c009 ph000). Each box
+contains two lightcones spanning approximately28×28
+deg2, from which we crop smaller patches to train the
+diffusion model on a chosen survey footprint.
+To construct the overdensity lensplanes, we follow the
+methodology in [16] to compute the overdensity maps on
+spherical shells. Given a particle shell map with particle
+countN ij at pixel indexij, we compute the overdensity as:
+δ(ij) = ρ(ij)
+¯ρ −1 (25)
+where
+¯ρ= (Npart/L3
+box)∆Ωχ2
+j dχj (26)
+is the mean density. HereN part = 69123 is the number
+of particles in a simulation box,L box = 2Gpc/his the sim-
+ulation box length,∆Ωis the solid-angle pixel area, andχ j
+anddχ j are the shell center and width, respectively. The
+density per pixel is therefore
+ρ(ij) = Nij
+dVj
+= Nij
+∆Ωχ2
+j dχj
+. (27)
+After computing an overdensity map on each shell, we
+combine the shells into 20 lensplanes using a weighted av-
+erage. These planes span comoving distances from approx-
+imately290to3580(z≈2) Mpc/h. Each lensplane is
+assigned an effective scale factor and comoving distance;
+values for a subset of these planes are provided in Table 3.
+
+Figure 11. Resolution Analysis across radial blur scales. We evaluate the blurred 3D cross-correlationρblur
+3D (σ)between each reconstruction
+and the ground truth as a function of the Gaussian blur widthσ(in lensplanes). Largerσcorresponds to more aggressive smoothing
+along the line of sight. Across all five simulated volumes, our method achieves higher correlation than both baselines for every blur scale,
+demonstrating improved depth resolution at both fine and coarse radial smoothing regimes. The consistently superior performance indicates
+that our diffusion-based prior enhances radial structure recovery independently of the chosen blur width.
+Plane Index RedshiftzScale FactoraCenter (Mpc/h) Width (Mpc/h)
+0 0.13 0.88 372.25 164.5
+2 0.25 0.80 701.25 164.5
+6 0.52 0.66 1359.25 164.5
+12 1.04 0.49 2346.25 164.5
+19 1.92 0.34 3497.75 164.5
+Table 3. Geometry of selectedConicus3Dlensplanes. For reference, we list the redshift, scale factor, comoving distance, and physical
+width for several representative lensplanes used in theConicus3Ddataset. These planes are derived from overdensity shells computed
+following the methodology of [16] and subsequently binned into 20 evenly spaced lensplanes in comoving distance. The planes span the full
+radial range of the lightcone (approximately 290–3580 Mpc/h, corresponding toz≈2), and their geometry is used both in constructing the
+dataset and in defining the line-of-sight distances relevant for weak-lensing projections. This subset illustrates the non-uniform evolution
+of redshift and scale factor across the lightcone and provides context for the depth-dependent analysis presented in the supplement.
+
+Algorithm 1Modified Decoupled Annealing Posterior Sampling
+Require:Observationγ, diffusion priorp(δ), weak-lensing forward model, annealing schedule{σ T , . . . , σ0}, power spec-
+trumP(k)
+1:Initializeδ T ∼ N(0, σ 2
+TI)
+2:fort=T, T−1, . . . ,0do
+3:Prior projection via diffusion model:
+4: ˆδ0 ←REVERSEDIFFUSION(δ t, σt)
+5:Likelihood-guided refinement (Langevin dynamics):
+6:Define prior covarianceΣusing Fourier diagonalP(k)
+7:Sampleδ 0|γ with Langevin updates targetinglogp(γ|δ) + logN(δ; ˆδ0,Σ)
+8:ift >0then
+9:Drawϵ∼ N(0,I)
+10:δ t−1 ←δ 0|γ +σ t−1 ϵ
+11:end if
+12:end for
+13:returnsamples{δ 0}approximatingp(δ|γ)
+14. Decoupled Annealing Posterior Sampling
+To draw samples from the posterior distributionp(δ|γ),
+we use a modified version of Decoupled Annealing Poste-
+rior Sampling (DAPS) [48]. DAPS constructs a sequence of
+noise-annealed posteriorsp(δ t |γ)indexed by a decreasing
+noise scaleσ t. Sampling proceeds from a high-noise initial
+distribution toward the target posterior, alternating between
+(1) projecting the current sample toward the learned prior
+using the diffusion model, and (2) refining it using likeli-
+hood guidance from the weak-lensing forward model.
+At each stage, the diffusion model provides a clean esti-
+mate ˆδ0 consistent with the data-driven prior. This estimate
+is then refined using Langevin dynamics that incorporates
+both the WL likelihood and a Gaussian prior term. Unlike
+the standard DAPS formulation, we replace the diagonal
+covariance of this Gaussian prior with a Fourier-space co-
+variance derived from the estimated matter power spectrum.
+This modification enforces statistical isotropy and transla-
+tion invariance and helps ensure that radial and angular cor-
+relations of the overdensity field are preserved throughout
+sampling.
+After refinement, the sample is re-noised according to
+the next noise levelσ t−1, enabling a coherent annealing
+schedule. Iterating this process yields approximate samples
+fromp(δ|γ), which accurately capture both small-scale
+structure and the full posterior variability needed for down-
+stream cosmological analyses.
+15. Broader Applicability of the Spectral Co-
+variance Formulation
+The prior covariance in our formulation (Eq. 7) is diago-
+nalized in Fourier space by the power spectrum, a struc-
+ture that arises naturally whenever the field of interest is ap-
+proximately translation-invariant. This property is common
+across scientific inverse problems.
+In adaptive optics, the Kolmogorov power spectrum
+characterizes atmospheric wavefront phase covariance, and
+phase screens are standardly generated by spectral filter-
+ing in Fourier space [24]. In geophysical inversion, sub-
+surface properties such as seismic velocity and porosity are
+modeled as stationary fields with spectrally defined covari-
+ance for posterior sampling in tomography and reservoir
+characterization [18]. In CMB analysis, the angular power
+spectrumC ℓ defines a harmonic-diagonal signal covariance
+for Wiener filtering and constrained realizations of the mi-
+crowave sky [13].
+In each case, translation invariance permits efficient
+spectral representation of the prior. We believe our spectral
+sampling strategy could be adapted to improve diffusion-
+based posterior sampling in these and similar inverse prob-
+lems, as properly modeling the covariance structure allows
+the sampler to more faithfully represent the learned prior
+distribution during inference.

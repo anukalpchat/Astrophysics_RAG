@@ -1,0 +1,956 @@
+Title: Posterior sampling in the Age of Emulators
+Authors: Andreas Nygaard, Luca Janken, Steen Hannestad, Thomas Tram
+Published: 2026-06-03
+Categories: astro-ph.IM, astro-ph.CO
+
+Prepared for submission to JCAP
+Posterior sampling in the Age of
+Emulators
+Andreas Nygaard, a Luca Janken, a Steen Hannestad, a and Thomas
+Trama
+aDepartment of Physics and Astronomy, Aarhus University, DK-8000 Aarhus C, Denmark
+E-mail: andreas@phys.au.dk, andreas.hansen@uzh.ch, luca.janken@post.au.dk,
+steen@phys.au.dk, thomas.tram@phys.au.dk
+Abstract.We investigate posterior sampling strategies for cosmological parameter infer-
+ence using fully differentiable neural-network likelihood emulators, which provide both rapid
+likelihood evaluations and automatic differentiation.
+We compare Metropolis–Hastings (MH), the Metropolis-Adjusted Langevin Algorithm
+(MALA), Hamiltonian Monte Carlo (HMC), the No U-Turn Sampler (NUTS), and Affine In-
+variant Ensemble Sampling (AIES) using likelihood emulators constructed with the CLiENT
+framework. The methods are tested on emulators of both theΛCDM model and a sterile-
+neutrino extension.
+While NUTS generally converges in the fewest samples, its higher computational cost
+reduces this advantage when performance is measured by wall time. As a result, MALA and
+even standard MH remain highly competitive. We further find that whitening and covariance
+adaptation substantially improve sampling efficiency.
+The TensorFlow implementations developed for this work are released as the BEST
+(Batched Emulator Sampling with TensorFlow) package, providing a general framework for
+sampling arbitrary TensorFlow likelihood functions. The package is available through PyPI
+asbest-inferenceand on GitHub/github.
+arXiv:2606.04895v1  [astro-ph.IM]  3 Jun 2026
+
+Contents
+1 Introduction 1
+2 Sampling methods 2
+2.1 Gradient-based sampling 2
+2.2 Mass matrix or canonical transformation 3
+2.3 Ensemble sampling 5
+3 Sampler implementation 7
+3.1 Unified sampling interface 7
+3.2 Covariance adaptation and parameter space whitening 8
+3.3 Computational implementation and performance 8
+4 Comparison of sampling methods 9
+4.1 Convergence metrics 10
+4.2ΛCDM results 12
+4.3 Sterile neutrino results 14
+5 Conclusion 17
+1 Introduction
+Bayesian parameter inference is a cornerstone of modern cosmology, but its computational
+cost is often dominated by repeated evaluations of theoretical prediction codes. Since these
+calculations are typically expensive and rarely provide reliable derivatives of the likelihood,
+cosmological analyses have historically relied on gradient-free sampling methods such as
+Metropolis–Hastings [1, 2] (MH). Over time, this practical limitation has shaped both soft-
+ware and methodology, making random-walk-based Markov Chain Monte Carlo methods the
+standard approach for cosmological inference.
+The situation is now beginning to change. A growing number of efforts aim to make
+cosmological inference pipelines differentiable, thereby enabling the use of gradient-based
+sampling algorithms. Recent examples include differentiable Boltzmann solvers such as
+ABCMB [3] and broader efforts to construct differentiable inference pipelines. At the same
+time, emulators have become increasingly common in cosmology, primarily as a means of
+accelerating expensive theoretical calculations. Most existing emulators target intermediate
+observables rather than the final likelihood [4–7]. While highly successful, such approaches
+aregenerallylimitedbyspeedoftherelevantlikelihoodcodes, andtheavailabilityofgradients
+hinges on the likelihoods being implemented in a compatible framework.
+An alternative strategy is to emulate the likelihood directly. This approach has recently
+been demonstrated with the CLiENT framework [8], which replaces the entire parameter-
+to-likelihood pipeline with a neural-network surrogate. In addition to providing likelihood
+evaluations that are orders of magnitude faster than the original pipeline, such emulators
+are naturally differentiable and can be evaluated efficiently in large batches. Related ideas
+have also been explored with Gaussian-process likelihood emulators, for example in GPry [9],
+– 1 –
+
+although such approaches become increasingly challenging to scale as the dimensionality of
+the parameter space grows.
+The emergence of differentiable likelihood emulators raises a natural question: how
+much do gradients actually help for posterior sampling? For many years, the lack of gradients
+has encouraged the view that gradient-based samplers would dramatically outperform tradi-
+tional methods if only derivatives were available. Indeed, algorithms such as the Metropolis-
+Adjusted Langevin Algorithm [10] (MALA), Hamiltonian Monte Carlo [11] (HMC), and the
+No U-Turn Sampler [12] (NUTS) are known to generate samples with substantially lower au-
+tocorrelation than conventional random-walk samplers. However, they also require additional
+computations per sample. When likelihood evaluations themselves become extremely inex-
+pensive, the balance between sample quality and sample throughput may be quite different
+from the regime in which these algorithms were originally developed and analysed.
+In this paper, we investigate posterior sampling in this new emulator-driven setting.
+Using fully differentiable neural-network likelihood emulators constructed with the CLiENT
+framework, we compare MH, MALA, HMC, NUTS, and Affine Invariant Ensemble Sam-
+pling [13] (AIES) on bothΛCDM and sterile-neutrino likelihoods. Rather than focusing
+solely on the number of likelihood evaluations or effective sample sizes, we assess perfor-
+mance using the practical quantity of greatest interest to end users: the wall-clock time
+required to obtain converged posterior constraints.
+The paper is organised as follows. In section 2 we review the sampling methods consid-
+ered in this work, and in section 3 we discuss their implementation. Section 4 describes the
+numerical implementation, convergence diagnostics, and performance metrics, and presents
+the comparison of the different samplers. Finally, we summarise our findings in section 5.
+2 Sampling methods
+We employ several different MCMC methods in order to test their capabilities and how well
+they can exploit the computational benefits of a neural network emulator. Both the auto-
+differentiation and vectorisation of the emulator enable more efficient methods compared to
+those used in standard cosmological parameter inference.
+2.1 Gradient-based sampling
+While traditional MCMC methods have optimal acceptance rates between 0.2 and 0.4 [14],
+the acceptance rate of gradient-based MCMC methods are typically above 0.65, with some
+variants even having an acceptance rate close to 1 [15]. The most widely used class of
+gradient-based samplers are Hamiltonian Monte Carlo (HMC) samplers which explores the
+parameter space using Hamiltonian dynamsinics. This is achieved by treating the likelihood
+landscape as an energy landscape and sampling points along the trajectories of particles
+moving according to the equations of motion defined by the Hamiltonian of the system:
+H(x,p) =U(x) + 1
+2 p⊤M−1p,(2.1)
+where the first term,U(x) =−log (π(x)), is the potential energy (the energy landscape)
+related to the probability density,π(x), while the second term is the kinetic energy of the
+particles with a symmetric and positive definite mass matrix,M. Each step proposes a
+long trajectory based on the gradients and the momentum variables sampled from the mass
+matrix, which makes the sampling very efficient since it explores regions of high probability in
+– 2 –
+
+an almost deterministic way. The only stochasticity in the sampling comes from resampling
+of the momentum variables and numerical errors in the leap-frog integrator.
+There are numerous variants of HMC and one that is often used is the No U-Turn
+Sampler (NUTS), which automatically controls the number of leap-frog steps. It does so, as
+the name implies, by making sure the trajectories do not perform a u-turn. A binary tree
+is built for both forward and backwards moving trajectories and the leap-frog integrator is
+halted as soon as the u-turn criterion is fulfilled, i.e., the momentum of either the forward or
+backwards moving particle begins to point to the other particle. The next MCMC point is
+then sampled uniformly from all valid points (preserving detailed balance) in the trajectory
+in the binary tree, and the process repeats from that new point.
+Besides variants of HMC, there are various other types of gradient-based MCMC meth-
+ods to choose from. A different approach is the Metropolis-Adjusted Langevin Algorithm
+(MALA) utilising Langevin dynamics for sampling. The proposal can be derived from the
+Langevin equation,
+md2x
+dt2 =−λdx
+dt−∇U(x) +η(t),(2.2)
+where thexis the position of a particle with massm,λis the damping coefficient,U(x)is the
+potential, andη(t)is a Gaussian white-noise process. MALA corresponds to the overdamped
+limit,m→0, where inertia disappears and we are left with Brownian motion and drift
+due to the gradients. The potential is the same as for HMC,U(x) =−log (π(x)), and the
+noise term can be rescaled to a multivariate normal distribution. Discretising this differential
+equation thus yields the proposal
+xn+1 =x n +ϵ∇log (π(xn)) +
+√
+2ϵξn,(2.3)
+whereξn∼N(0,1), andϵis the step size. This proposal corresponds to a normal distribution
+with meanµ=x n +ϵ∇log (π(xn))and covarianceΣ = 2ϵ1, thus shifting the proposal
+distribution in the direction of the gradients compared to the standard Metropolis–Hastings
+proposal.
+2.2 Mass matrix or canonical transformation
+Gradient-basedMCMCmethodsthatarevariantsofHMCtypicallyallrequireamassmatrix,
+M, as shown in equation (2.1) in order to work efficiently. In the TensorFlow implementation
+of HMC1, however, there is no option for providing a mass matrix to the sampler. This means
+that the mass matrix of the system is essentially the identity, and the momentum components
+along each parameter direction are thus similar in magnitude since the momentum is drawn
+fromN(0,M). This is not ideal when parameters have different scales due to the step size
+being dominated by the parameters with the smallest scales, leading to very suboptimal
+sampling in parameters of larger scales. In order to accommodate this, we can transform the
+parameters to a whitened parameter space using the Cholesky decomposition of the posterior
+covariance matrix,Σ[16]:
+Σ =LL ⊤,(2.4)
+x=µ+Lz,(2.5)
+whereLis the lower triangular matrix obtained from the Cholesky decomposition,µis
+the posterior mean, which we want to subtract from the position coordinate to center the
+1Defined in the TensorFlow-Probability package.
+– 3 –
+
+distribution around the origin, andzis the transformed position vector in the whitened
+parameter space. In order to ensure the properties of the Hamiltonian system, we want
+the transformation to be canonical [17]. This requires preserving the canonical symplectic
+2-form,ω= dx⋀ dp, with the corresponding transformation of the momentum space:
+p=
+(
+L⊤
+)−1
+q,(2.6)
+whereqis the transformed momentum vector. These transformations ensure the preservation
+of the phase-space volume [18, 19], and since the mass matrix is roughly the inverse of the
+posterior covariance, i.e.,M= Σ −1[20], the transformations also result in the mass matrix
+in the whitened space being exactly the identity:
+p⊤M−1p=q ⊤L−1Σ
+(
+L⊤
+)−1
+q=q ⊤L−1LL⊤
+(
+L⊤
+)−1
+q=q ⊤1q.(2.7)
+The Hamiltonian in the whitened space is then
+˜H(z,q) = ˜U(z) + 1
+2 q⊤1q,(2.8)
+with ˜U(z) =U(µ+Lz)being the potential energy in the whitened space.
+We now need to modify the probability function used in the sampling as well. The
+probability mass is invariant under reparameterisation, which means that
+∫
+A
+πx(x)dx=
+∫
+T −1(A)
+πz(z)dz,(2.9)
+whereT:R n→Rn is the affine transformation defined byT(z) =µ+Lz,π x(x)is the
+probability density in the correlated parameter space, andπz(z)is the same for the whitened
+parameter space. We can transform the RHS of equation (2.9) to the whitened space using
+the determinant of the Jacobian of the transformation [21], i.e.,|det(JT )|=|det(L)|,
+∫
+A
+πx(x)dx=
+∫
+T −1(A)
+πx (T(z))|det(L)|dx.(2.10)
+Comparing the RHSs of equations (2.9) and (2.10), shows that the probability density,πz,
+in the whitened space is related to the probability density,πx, in the correlated space as
+πz(z) =πx (T(z))|det(L)|.(2.11)
+The logarithm of the probability density (which is what we actually want to sample from) is
+then
+log (πz(z)) = log (πx (T(z))) + log (|det(L)|),(2.12)
+where the last term is just a constant defined by the transformation. Omitting the constant
+does not change the sampling procedure, but we would then need to account for it when
+transforming back to the correlated parameter space. By including it in the function we
+are sampling from, we ensure that the resulting distribution transforms neatly back to the
+correlated space using only the transformationT. Sampling in a whitened parameter space
+can be beneficial in other types of sampling besides HMC variants as well, simply because
+very pronounced covariances in high dimensionality are difficult to sample, and we will use
+this strategy for all our samplings2. The procedure for sampling in the whitened space is
+summed up in Algorithm 1.
+2We will not use whitening for the Affine Invariant Ensemble Sampler, since whitening is an affine trans-
+formation.
+– 4 –
+
+Σ =posterior covariance matrix
+µ=posterior mean vector
+log_prob=logarithm of probability density function
+L=CholeskyDecomposition(Σ)
+deflog_prob_whitened(z):
+x=µ+MatrixMultiplication(L,z)
+log_det=sum(log(Diagonal(L)))
+returnlog_prob(x)+log_det
+chain=Do_HMC(π=log_prob_whitened,
+start_position=[0,0,...,0])
+chain=µ+MatrixMultiplication(L,chain)
+transformed probability
+density
+sampling with HMC
+transform back
+Algorithm 1:Pseudo-code sampling in whitened space. The probability density function
+is transformed using equation(2.12), and the resulting probability density function in the
+whitened space is used for the Hamiltonian Monte Carlo sampling.
+2.3 Ensemble sampling
+Another great attribute of neural networks is the very efficient parallelisation through vec-
+torised calls to the networks. As shown in Figure 1, evaluating the emulator for up to 100
+points simultaneously does not affect the evaluation time significantly. We can thus utilise
+ensemble sampling methods very efficiently.
+There are various sampling methods that can exploit the favourable scaling of vectorised
+calls to the neural network. Simply using vectorisation to run multiple independent chains in
+parallel without much extra cost is certainly a possibility, but for standard MCMC methods,
+such as Metropolis-Hastings, having a large number of chains is not usually beneficial due to
+the high autocorrelation of the chains, i.e., a larger number of chains do not necessarily lead
+to faster convergence. For HMC, one can absolutely use multiple chains as well, even though
+it and its variants are already quite efficient with only a single chain. Running multiple chains
+is rarely needed, but vectorisation allows for many simultaneous chains at essentially no extra
+cost, which makes the sampling much faster. The MALA implementation in TensorFlow is,
+likewise, very optimised for multiple chains. For this method, running a large number of
+chains (50-100) results in much faster convergence of the posterior distribution, so the chains
+do not need to be as long as those of some of the other methods.
+Even though they can utilise vectorised calls to the emulator, these methods are not
+ensemble methods. The individual walkers or particles simulated in ensemble methods are
+generally not independent since they exchange information in order to update their posi-
+tion. A widely used class of ensemble sampling methods are the Affine Invariant Ensemble
+Samplers (AIES), which rely on a large number of walkers exploring the parameter space
+– 5 –
+
+10 20 30 40 50 102 103 104 105
+Batch size
+0.000
+0.001
+0.002
+0.003
+0.004
+0.005
+Time [s]
+CPU (95% CI)
+GPU (95% CI)
+Figure 1:Mean evaluation time of the neural network emulator as a function of batch
+size on both CPU (14-core Apple M4 Pro) and GPU (NVIDIA Tesla V100). On the CPU,
+evaluation time increases only slightly for batch sizes of up to 100, which allows for parallel
+calls with almost no extra costs for low batch sizes. On the GPU, however, the evaluation
+time remains constant for batch sizes as high as104, thus making vectorised parallelisation
+much more efficient. The vertical dashed line marks the transition from a linear axis to a
+logarithmic axis on the plot.
+simultaneously and exchanging information. As the name implies, the sampling process of
+these methods is invariant to affine transformation such as a Cholesky transformation to
+whitened space. This means that they perform well without being given any prior informa-
+tion about the correlations and length scales of the parameters. The standard AIES method
+exchanges information between pairs of walkers and update their position with a so-called
+stretch move[13]:
+xi
+n+1 =x j
+n +z(x i
+n−xj
+n),(2.13)
+whereiandjrefer to a pair of walkers andzis drawn from a distribution with density
+g(z)∝
+
+
+
+1√z ifx∈
+[1
+a,a
+]
+,
+0 otherwise.
+(2.14)
+The parametera>1is a hyperparameter that is usually set toa= 2[22]. In practice, this
+means drawing a numberufrom a uniform distribution between 0 and 1, and transforming
+it by equating it with the cumulative distribution function ofg(z). The correctly distributed
+value ofzis thus
+z= 1
+a (u(a−1) + 1)2 .(2.15)
+Other variants of AIES differ in theirmoves, i.e., how the positions of the walkers
+are updated. Different moves can be well suited for different scenarios depending on the
+dimensionality and geometry of the probability surface. The Differential Evolution (DE)
+– 6 –
+
+move draws inspiration from genetic algorithms and uses information from two walkers to
+update the position of a third walker. This move takes the form
+xi
+n+1 =x i
+n +γ(xj
+n−xk
+n),(2.16)
+wherei,j, andkrefer to the three walkers used for the move andγ= (1 +η)2.38/√2ndim.
+η∼ N(0,σγ)is normally distributed withσ γas the standard deviation controlling the
+randomness of the move.
+3 Sampler implementation
+To complement the TensorFlow-based emulator framework, we provide a unified sampling
+library, BEST (BatchedEmulatorSampling withTensorFlow), which implements a set
+of scalable MCMC methods designed for GPU execution and emulator-based likelihoods.
+The package is built to interface directly with any differentiable TensorFlow likelihood
+function and is distributed as a standalone Python package installable viapip install
+best-inferenceand also available on GitHub3. While originally developed in conjunction
+with the CLiENT framework, BEST is fully agnostic to emulator architecture and can be
+used with any TensorFlow-compatible log-likelihood.
+3.1 Unified sampling interface
+All samplers are exposed through a single high-level interface implemented in theSampler
+class, which manages initialisation of walkers, boundary handling, and covariance adaptation.
+The sampler is initialised as
+sampler = best.Sampler(log_prob_fn, bounds=(lower, upper))
+wherelog_prob_fndefines the target log-probability andboundsoptionally specify a hyper-
+rectangular support of the parameter space. When bounds are provided, the likelihood is
+automatically extended with a smooth exponential penalty outside the domain, ensuring
+that walkers are discouraged from leaving the physically relevant region while preserving
+differentiability.
+Sampling is performed through a unified call,
+results = sampler.sample(method="hmc", n_steps=..., n_chains=...)
+wheremethodselects between MH, AIES, HMC, NUTS, and MALA. The interface further
+supports flexible burn-in schedules, multiple initialisation strategies of the walker positions
+(uniform, repeated, or Gaussian), and optional covariance matrix updates during burn-in.
+The returned object contains both samples and diagnostics:
+results.samples
+results.acceptance_rate
+results.evaluations
+with optional fields for burn-in trajectories and covariance estimates when adaptive phases
+are enabled.
+3Available at:https://github.com/AndreasNygaard/best-inference.git
+– 7 –
+
+CPU + GE CPU + JIT GPU + GE GPU + JIT
+MH608 (153) 1,287 (207) 864 (973) 8,688 (2,932)
+MALA131 (29) 344 (84) 277 (286) 3,534 (1,028)
+HMC76 (7) 167 (22) 123 (129) 1,856 (294)
+NUTS8 (0.8) 36 (3.7) 13 (9) 153 (46)
+AIES836 (168) 1,030 (188) 806 (947) 8,238 (2,901)
+Table 1:Sampling speeds (steps per second) across different hardware and execution modes.
+CPU corresponds to a 14-core Apple M4 Pro, and GPU corresponds to an NVIDIA Tesla
+V100. GE denotes standard TensorFlow graph execution, while JIT refers to XLA-compiled
+execution. Values are reported for 20 (1,000) chains.
+3.2 Covariance adaptation and parameter space whitening
+For MH, HMC, NUTS, and MALA, BEST performs automatic covariance estimation during
+burn-in. After each burn-in iteration, an empirical covariance matrix is computed from the
+ensemble of walkers and used to construct a whitening transformation (as in Algorithm 1) of
+the parameter space. This improves isotropy of the target distribution and reduces autocor-
+relation times in highly anisotropic posteriors.
+To ensure numerical stability, the covariance estimate is regularised via Cholesky fac-
+torisation, enforcing positive definiteness before reuse. The affine-invariant ensemble sampler
+is excluded from this procedure due to its invariance under affine transformations.
+Initial walker configurations can be drawn from either uniform distributions over the
+parameter bounds, replicated initial states, or Gaussian perturbations around a central point.
+The Gaussian initialisation is implemented using a hypersphere-based sampler, ensuring con-
+sistent scaling across dimensions.
+3.3 Computational implementation and performance
+The sampling kernels are implemented in TensorFlow and TensorFlow-Probability, with mod-
+ifications enabling full compatibility with graph execution and XLA just-in-time (JIT) compi-
+lation. While TensorFlow-Probability provides native implementations of MH, HMC, NUTS,
+and MALA, their default Python control flow and loop structure prevents efficient compila-
+tion. To remedy this, we wrap these kernels in a custom JIT-compatible driver that enables
+execution entirely within the TensorFlow computation graph.
+Although publicly available implementations of AIES TensorFlow do exist [5], these are
+most often not optimised for graph execution like the ones implemented in the TensorFlow-
+Probability package. We therefore provide a custom implementation of AIES, based on the
+stretch-move update rule, designed specifically for vectorised GPU execution. This imple-
+mentation achieves approximately10 4 steps per second (for all walkers combined) on an
+NVIDIA Tesla V100 under JIT compilation.
+The custom driver allows for very fast sampling with all of the methods with speeds
+ranging from∼102 steps per second for NUTS to∼104 steps per second for AIES and MH.
+NUTS is the most advanced algorithm and it also utilises a large binary tree of leap-frog
+steps (requiring gradient computations), so this of course samples slower than gradient-free
+algorithms.
+– 8 –
+
+103 104
+Samples per chain
+0.03
+0.04
+0.1
+1
+Sliced Wasserstein distance
+Burn-in
+AIES
+MH
+HMC
+NUTS
+MALA
+1000 chains
+500 chains
+100 chains
+20 chains
+Noise level
+Figure 2:Sliced Wasserstein distance as a function of samples per chain for each MCMC
+method and different numbers of chains when sampling with theΛCDM emulator. The grey
+region represents burn-in consisting of three iterations, except for AIES which uses a single
+extended burn-in phase.
+The speeds of the different samplers are reported in Table 1 for different hardware
+and compilation settings. Using the GPU with standard TensorFlow graph execution but
+without JIT compilation yields similar speeds for 20 chains and 1,000 chains, as suggested
+by Figure 1. However, enabling JIT compilation introduces a clearer dependence on batch
+size, resulting in lower throughput for a smaller number of chains. This is likely because
+XLA generates fused kernels that more efficiently utilise the GPU compute resources even
+for smaller workloads, whereas standard graph execution relies more heavily on large batch
+dimensions to achieve high GPU occupancy. As a result, JIT compilation improves overall
+sampling performance on the GPU, while also making the scaling behaviour with respect
+to the number of chains more apparent. This demonstrates that large-scale vectorisation
+on GPUs provides a practical speedup in terms of effective sampling efficiency, even when
+wall-clock scaling saturates.
+4 Comparison of sampling methods
+For this paper, we will compare the performances of five different MCMC sampling methods:
+•Metropolis-Hastings (MH)
+•Metropolis-Adjusted Langevin Algorithm (MALA)
+•Hamiltonian Monte Carlo (HMC)
+•No U-Turn Sampler (NUTS)
+•Affine Invariant Ensemble Sampling (AIES)
+– 9 –
+
+Each method is tested on both theΛCDM model as well as a sterile neutrino extension with
+two additional parameters,Neff,s andm s. A likelihood emulator for both models was created
+using the CLiENT framework [8] and the following data sets:
+•Planck 2018 high-ℓTTTEEE, low-ℓTT+EE, and lensing [23, 24].
+•Baryon Acoustic Oscillations (BAO) measurements from BOSS DR12 [25], the main
+galaxy sample of BOSS DR7 [26] and 6dFGS [27].
+This results in a 27-dimensional parameter space (including nuisance parameters) for the
+ΛCDM model and a 29-dimensional space for the sterile neutrino extension model.
+As mentioned in section 2.2, some of the MCMC methods require a decent covariance
+matrix for more optimal sampling, so all samplings are initialised with a burn-in loop where
+the covariance matrix and the best-fit point are iteratively updated based on short chains.
+The initial covariance matrix is diagonal with scales proportional to the dimensions of the
+bounding box of the emulator. AIES does not need a covariance matrix, although one can be
+used to initialise the walkers more optimally. However, to not impose additional information,
+we instead initialise the walkers uniformly in the bounding box. We also do not use a burn-in
+loop for AIES, but rather a single burn-in run of significant length, where the last positions
+of the walkers are used as initial positions in the final run. This effectively corresponds to a
+higher number of steps where the first part is discarded.
+4.1 Convergence metrics
+To test the convergence of the MCMC methods, we use three different metrics; the Gelman-
+Rubin type convergence statistic [28], the credible metric introduced in Ref. [8], and the sliced
+Wasserstein distance [29].
+The Gelman-Rubin convergence statistic,R, measures the discrepancy between
+the variance of chain means and the typical within-chain variance. When all chains are
+perfectly mixed, this statistic should approach 1 from above, and usingR−1instead yields
+a metric that tends toward zero when the chains reach a fully mixed steady-state. In the
+multivariate case, the metric can be computed from the covariance,B, of the chain means,
+and the mean,W, of chain covariances. Inspired by the implementation in Cobaya [30],
+we can eliminate scale dependence, by scaling these matrices using the diagonalB, i.e.,
+di =√Bii:
+D= diag(d),
+˜B=D −1BD−1,(4.1)
+˜W=D −1WD−1.
+The metric is then the maximum absolute eigenvalue of the matrix˜W−1˜B:
+R−1 = max
+i
+|λi|,forλi∈eig
+(
+˜W−1˜B
+)
+.(4.2)
+This metric is close to the multivariate potential scale reduction factor (MPSRF) introduced
+in Ref. [31], except for the diagonal normalisation. This metric, however, only measures how
+well the MCMC sampling has converged to a steady state. It does not measure how similar
+the resulting posterior is to the “ground truth”. For this, we need the other metrics.
+– 10 –
+
+The credible metricfor thei th parameterθi and credible levelαis defined as
+∆ CMα
+i =
+|θα+
+i −θα+
+i,0|+|θα−
+i −θα−
+i,0|
+θα+
+i,0 −θα−
+i,0
+,(4.3)
+where+(−) refers to upper (lower) credible limits and the subscript 0 refers to the true
+credible levels. The metric we will be using is the maximum value of the credible metric
+across all parameters, i.e.∆ CMα = maxi(∆ CMα
+i )forα={68%,95%}. The credible metric
+thus measures how similar the obtained credible limits are to the true limits, but it has a few
+drawbacks. One of them is that the metric is scale dependent, but this can be alleviated by
+whitening the chains prior to the computation (the true limits should of course be whitened
+using the same covariance). Another problem is that the denominator of the metric, i.e., the
+width of the credible interval, is dependent on the credible levelα. If the relative error is the
+same for two credible levels, a 95% level will thus result in a smaller value of the metric than
+one would obtain with a 68% level. This cannot as easily be circumvented so we effectively
+treat different credible levels as separate metrics. The credible metric is also only sensitive
+to information from the marginalised 1D posteriors, so possible differences in correlations
+would not be probed by this.
+The Wasserstein distance, also known as the optimal transport distance, measures
+the minimum cost required to transport probability mass from one distribution in order to
+transform it into another. As such, it captures the full multidimensional geometry and corre-
+lations of the posterior distribution. The exact computation of the d-dimensional Wasserstein
+distance involves constructing a pairwise cost matrix and solving an optimal transport prob-
+lem, typically formulated as a linear program. While constructing the cost matrix scales as
+O(dnm), wherenandmare the number of samples in the two distributions being compared,
+solving the transport problem itself scales substantially worse and quickly becomes compu-
+tationally infeasible for more than a few thousand samples due to both runtime and memory
+requirements. Because of this limitation, we instead employ thesliced Wasserstein distance,
+which averages 1-dimensional Wasserstein distances over many random projections through
+parameter space. The 1-dimensional Wasserstein distance is significantly cheaper to compute
+since, for empirical distributions, it reduces to sorting the projected samples and computing
+their mean absolute difference, avoiding the need for linear programming entirely. Although
+approximate, the sliced Wasserstein distance still captures multidimensional structure and
+correlations provided that a sufficiently large number of projections is used. The same set
+of 500 projection directions is reused for all computations to ensure that equivalent features
+and correlations of the posterior are probed consistently across all samplers.
+The latter two metrics require a comparison with a “ground truth” which in our case
+will be a very long Metropolis-Hastings sampling of 200,000 steps and 100 walkers, where we
+only keep the last 100,000 points for the comparisons. We use the emulator to obtain this
+reference run since its accuracy has already been established in Ref. [8]. The stochasticity of
+the sliced Wasserstein distance and the fact that a finite MCMC sampling will be used as the
+“ground truth” make both the sliced Wasserstein distance and the credible metric approach
+a noise floor instead of exactly zero. These noise floors can be estimated by computing the
+metrics for an MCMC sampling similar to the reference run (same number of walkers and
+steps). This should yield metric values that are as good as we can realistically obtain.
+– 11 –
+
+10−2
+10−1
+100
+101
+R-1
+AIES
+MH
+HMC
+NUTS
+MALA
+10−2
+10−1
+100
+101
+maxi
+(
+∆CM
+i
+)
+68% credible level
+95% credible level
+103 104
+Samples per chain
+0.03
+0.04
+0.1
+1
+Sliced Wasserstein distance
+Burn-in
+CM(68%) noise level
+CM(95%) noise level
+Wasserstein noise level
+Figure 3:All metrics as a function of samples per chain for every MCMC method using the
+ΛCDM emulator and 1,000 chains. The grey region refers to the burn-in period consisting
+of three updates of the covariance matrix before the final sampling, except for AIES which
+only has a single longer burn-in iteration. Noise levels obtained from independent reference
+runs are also depicted for the credible metric and the sliced Wasserstein distance.
+4.2ΛCDM results
+Figure 3 likewise shows the convergence for all the MCMC methods but for all three metrics
+as a function of samples per chain and only showing the results for the samplings with
+1,000 chains. Also shown are the expected noise levels for the credible metric and the sliced
+Wasserstein distance estimated from a second independent reference run. The general trend
+is that NUTS converges fastest (in terms of samples per chain) followed by HMC, MALA,
+and lastly MH and AIES. The gradient-based samplers, unsurprisingly, thus seem to be most
+– 12 –
+
+10−2
+10−1
+100
+101
+R-1
+AIES
+MH
+HMC
+NUTS
+MALA
+10−2
+10−1
+maxi
+(
+∆CM
+i
+)
+68% credible level
+95% credible level
+10−2 10−1 100 101
+Wall time (seconds)
+0.03
+0.04
+0.05
+0.1
+Sliced Wasserstein distance
+CM(68%) noise level
+CM(95%) noise level
+Wasserstein noise level
+Figure 4:All metrics as a function of wall time for every MCMC method using theΛCDM
+emulatorand1,000chains. Onlythefinalsamplingsaredepictedandthenoiselevelsobtained
+from independent reference runs are depicted for the credible metric and the Wasserstein
+distance.R−1for NUTS can not be computed before around 0.05 seconds of sampling due
+to the slow sampling speed.
+efficient in exploring the parameter space in the least amount of steps. Notably, NUTS
+(and to some extent also HMC) seems to settle on a good covariance matrix already after
+a single burn-in iteration, whereas MALA and MH benefit from having all three iterations.
+Especially in the credible metric and the sliced Wasserstein distance, we see significant drops
+in the metric value after each burn-in iteration. One might think that increasing the number
+of burn-in iterations would result in a better initialisation of MH, MALA, and AIES, allowing
+them to match the level of NUTS and HMC in the beginning of the final sampling, but this
+is not the case. We have verified the covariance matrices obtained by each method (except
+– 13 –
+
+for AIES that does not use the covariance matrix) after the burn-in period is very close to
+optimal, and initialising the methods with a covariance matrix computed from the reference
+run results in roughly the same initial metric values.
+Since likelihood evaluations are no longer the dominant computational cost, wall time
+provides a more practically relevant comparison between samplers than convergence mea-
+sured solely in terms of samples or likelihood evaluations. When taking the sampling speeds
+reported in table 1 into account, the conclusion changes. Figure 4 shows the same metrics
+but as a function of wall time instead (and without the burn-in phase). In terms of wall time,
+MALA now seems to be the fastest converging, closely followed by HMC, MH, and lastly,
+NUTS and AIES. Due to the complexity of NUTS and the resulting much slower speed, its
+convergence is very similar to that of AIES which was the slowest in terms of samples per
+chain. In fact, all the methods seem to converge very similarly in terms of wall time, so the
+most significant difference between running AIES or NUTS for 10 seconds is the amount of
+points sampled. The incredible sampling speeds of AIES and regular MH make them a viable
+alternative to more advanced approaches at the cost of having a significantly larger sample
+size due to their high autocorrelation lengths.
+4.3 Sterile neutrino results
+When sampling using the sterile neutrino extension emulator, we again initialise with three
+burn-in iterations (except for AIES having only 1) and sample 1,000 chains simultaneously.
+Due to this likelihood having two additional and highly non-Gaussian dimensions, the sam-
+pling and covariance estimation is more difficult. To accommodate this, the burn-in period
+has been increased in order to obtain good covariance matrices. In particular, the conver-
+gence of MALA is very sensitive to how well the covariance is estimated during burn-in for
+this specific likelihood. Using the same burn-in settings as forΛCDM yields great results
+for all the other methods, but it was insufficient for MALA. We have nonetheless extended
+the burn-in periods of all other samplers to three iterations of 3,000 steps (of which the first
+1,000 steps are used for step size adaptation and afterwards discarded) except for AIES still
+having only a single burn-in iteration but now of 20,000 steps.
+For MALA we have tested multiple burn-in configurations, and aside from increasing
+the number of burn-in iterations and the number of burn-in steps within each iteration,
+we can attempt to accommodate the sampling problems that arise due to the two extension
+parameters. The initial step size (in whitened space) is by default the same for all parameters,
+but due to the large plateaus of the extension parameters, it would be reasonable to increase
+the step size for these two dimensions alone4. We have varied the number of burn-in iterations
+(3 or 5) as well as modified the initial step sizes of the extension parameters (increased by
+a factor of 10 compared to the rest of the parameters) while keeping the number of burn-in
+steps in each burn-in iteration fixed to 6,000 steps (of which the first 1,000 steps are used
+for step size adaptation and afterwards discarded). Figure 5 depicts the sliced Wasserstein
+distances for the four different configurations; 3 burn-in iterations and default step sizes, 5
+burn-in iterations and default step sizes, 3 burn-in iterations and increased step sizes for
+the extension parameters, and 5 burn-in iterations and increased step sizes for the extension
+parameters. The number of burn-in iterations matter much more than modifying the step size
+and based on tests of varying the number of burn-in steps when a fixed number (3) of burn-in
+iterations, a smaller number of iterations cannot be made to work by simply increasing the
+4Aggressively increasing the step size for all parameters leads to suboptimal sampling and might result in
+very low acceptance rates for this likelihood.
+– 14 –
+
+103 104
+Samples per chain
+0.03
+0.1
+1
+Sliced Wasserstein distance
+Burn-in
+10−2 10−1 100 101
+Wall time (seconds)
+0.03
+0.04
+0.05
+0.1
+Sliced Wasserstein distance
+3 iterations, normal step size
+5 iterations, normal step size
+3 iterations, modiﬁed step size
+5 iterations, modiﬁed step size
+Figure 5:Sliced Wasserstein distance as a function of samples per chain (top) and wall time
+(bottom) for different burn-in configurations of MALA sampling with the sterile neutrino
+extension emulator. The dashed (solid) vertical lines in the top figure depicts 5 (3) burn-in
+iterations. Results are shown for the default step size configuration, where all dimensions
+(in whitened space) are sampled with the same step size, as well as for a modified step size
+where the sterile neutrino extension parameters are sampled with a 10 times larger step size.
+number of steps within them. It is well known that MALA does not sample optimally for
+likelihoods like this where the gradient is not informative everywhere and the geometry varies
+much across the parameter space [32]. Despite modifying the step sizes not having a major
+impact on the convergence, we include the results of the test with 5 burn-in iterations and a
+modified step size for the extension parameters in the following figures comparing with the
+results of the other MCMC methods.
+Figure 6 shows the three metrics as a function of samples per chain. The burn-in periods
+are depicted here as well, and the 5 burn-in iterations of the MALA sampling are indicated
+by vertical dashed lines. The first iteration of MALA did not result in a sample with non-zero
+variance for all parameters, soR−1could not be computed for that iteration. When allowing
+MALA to initialise with a good covariance matrix, we see roughly the same convergences as
+forΛCDM. NUTS converges the fastest in terms of samples per chain and also this time, it
+seems to be well initialised even after a single burn-in iteration. The same is true for HMC
+even though it performs slightly worse compared to NUTS.
+– 15 –
+
+10−2
+10−1
+100
+101
+R-1
+AIES
+MH
+HMC
+NUTS
+MALA
+10−2
+10−1
+100
+101
+maxi
+(
+∆CM
+i
+)
+68% credible level
+95% credible level
+103 104
+Samples per chain
+0.03
+0.1
+1
+Sliced Wasserstein distance
+Burn-in
+CM(68%) noise level
+CM(95%) noise level
+Wasserstein noise level
+Figure 6:All metrics as a function of samples per chain for every MCMC method using the
+sterile neutrino extension emulator. The grey region refers to the burn-in period consisting of
+three updates of the covariance matrix before the final sampling, except for AIES which only
+has a single longer burn-in iteration. Noise levels obtained from independent reference runs
+are also depicted for the credible metric and the sliced Wasserstein distance. The vertical
+dashed lines depicts the 5 burn-in iterations of MALA necessary to obtain a good covariance
+matrix for this model.
+Turning to Figure 7, it is again very clear that the slow sampling speed of NUTS
+completely negates the efficiency of its advanced algorithm in terms of wall time. Also for
+this likelihood it converges slower than the other methods, but does so, however, with fewer
+points. Due to their very high sampling speeds, MH and MALA converge very fast, but in
+turn, collects many more samples with larger autocorrelation length. In terms of wall time
+AIES converges similarly to HMC for this likelihood, but AIES will also collect many more
+– 16 –
+
+10−1
+100
+101
+R-1
+AIES
+MH
+HMC
+NUTS
+MALA
+10−2
+10−1
+maxi
+(
+∆CM
+i
+)
+68% credible level
+95% credible level
+10−2 10−1 100 101
+Wall time (seconds)
+0.03
+0.04
+0.05
+0.1
+Sliced Wasserstein distance
+CM(68%) noise level
+CM(95%) noise level
+Wasserstein noise level
+Figure 7:All metrics as a function of wall time for every MCMC method using the ster-
+ile neutrino extension emulator. Only the final samplings are depicted and the noise levels
+obtained from independent reference runs are depicted for the credible metric and the Wasser-
+stein distance.R−1for NUTS can not be computed before around 0.05 seconds of sampling
+due to the slow sampling speed.
+samples in order to match HMC’s convergence.
+5 Conclusion
+The increasing use of neural-network emulators for cosmological inference changes some of
+the practical considerations involved in posterior sampling. In conventional analyses, where
+likelihood evaluations are computationally expensive, sampling efficiency is often assessed
+primarily in terms of the number of likelihood evaluations required to reach convergence. In
+– 17 –
+
+the emulator setting considered here, likelihood evaluations become sufficiently inexpensive
+that performance in terms of wall time and hardware utilisation also become important
+factors. We have compared five MCMC methods (MH, MALA, HMC, NUTS, and AIES)
+using differentiable likelihood emulators implemented in TensorFlow. By combining graph
+execution, JIT compilation, and GPU acceleration, all methods achieve sampling speeds that
+are substantially higher than those typically encountered in traditional cosmological inference
+pipelines.
+When convergence is considered as a function of samples per chain, the gradient-based
+samplers perform best. NUTS generally requires the fewest samples to reach convergence,
+followed by HMC and MALA. This is consistent with the use of gradient information to
+guide exploration of parameter space and reduce random-walk behaviour. However, these
+gains in sample efficiency are partially offset by the additional computational cost of the more
+sophisticated algorithms. When convergence is instead considered as a function of wall time,
+thedifferencesbetweenthemethodsbecomeconsiderablysmaller. Inthiscomparison, MALA
+oftenprovidesafavourablebalancebetweencomputationalcostandsamplingefficiency, while
+the high throughput of MH allows it to remain competitive despite its comparatively poor
+sample efficiency. NUTS remains the most efficient method in terms of samples required
+for convergence, but its lower sampling speed reduces this advantage when measured in wall
+time.
+A second observation is the usefulness of large-scale vectorisation. Running hundreds
+or thousands of chains simultaneously leads to faster convergence for all methods consid-
+ered here, while the associated increase in wall time remains relatively modest on modern
+GPUs. This makes highly parallel sampling an attractive option when using emulator-based
+likelihoods.
+Our results also illustrate some limitations of gradient-based approaches. While HMC
+and NUTS perform robustly for both likelihoods considered in this work, MALA becomes
+more sensitive to covariance estimation and burn-in for the sterile neutrino extension. The
+strongly non-Gaussian structure of this posterior appears to reduce the effectiveness of local
+gradient information and makes covariance adaptation more challenging. Nevertheless, once
+supplied with a sufficiently accurate covariance estimate or allowed enough burn-in iterations,
+MALA again performs competitively.
+Overall, no single sampler is optimal in all situations. NUTS is the most sample-
+efficient method considered in this work, whereas MALA often performs favourably when
+convergence is measured in wall time. MH and AIES remain viable alternatives due to their
+simplicity and their ability to exploit vectorised likelihood evaluations efficiently. The choice
+of sampler therefore depends both on the properties of the posterior distribution and on the
+computational environment in which the sampling is performed. More generally, these results
+indicate that emulator-based cosmological inference shifts part of the focus from minimising
+likelihood evaluations to balancing sample efficiency, computational overhead, and parallel
+performance. In this setting, methods that would traditionally be regarded as inefficient can
+remain competitive when combined with highly parallel likelihood evaluations on modern
+hardware.
+Acknowledgements
+We acknowledge computing resources from the Centre for Scientific Computing Aarhus
+(CSCAA). A.N. was supported by the Carlsberg Foundation, grant CF24-1944.
+– 18 –
+
+References
+[1] N. Metropolis, A. W. Rosenbluth, M. N. Rosenbluth, A. H. Teller, and E. Teller, “Equation of
+State Calculations by Fast Computing Machines,”Journal of Chemical Physics21(1953)
+no. 6, 1087–1092.
+[2] W. K. Hastings, “Monte Carlo sampling methods using Markov chains and their applications,”
+Biometrika57(1970) no. 1, 97–109,
+http://biomet.oxfordjournals.org/cgi/reprint/57/1/97.pdf.
+http://biomet.oxfordjournals.org/cgi/content/abstract/57/1/97.
+[3] Z. Zhou, C. Giovanetti, and H. Liu, “ABCMB: A Python+JAX Package for the Cosmic
+Microwave Background Power Spectrum,”arXiv:2602.15104 [astro-ph.CO].
+[4] A. Nygaard, E. B. Holm, S. Hannestad, and T. Tram, “CONNECT: a neural network based
+framework for emulating cosmological observables and cosmological parameter inference,”
+JCAP05(2023) 025,arXiv:2205.15726 [astro-ph.IM].
+[5] A. Spurio Mancini, D. Piras, J. Alsing, B. Joachimi, and M. P. Hobson, “CosmoPower:
+emulating cosmological power spectra for accelerated Bayesian inference from next-generation
+surveys,”Mon. Not. Roy. Astron. Soc.511(2022) no. 2, 1771–1788,arXiv:2106.03846
+[astro-ph.CO].
+[6] S. Günther, L. Balkenhol, C. Fidler, A. R. Khalife, J. Lesgourgues, M. R. Mosbech, and R. K.
+Sharma, “OLÉ — Online Learning Emulation in cosmology,”JCAP09(2025) 059,
+arXiv:2503.13183 [astro-ph.CO].
+[7] M. Bonici, F. Bianchini, and J. Ruiz-Zapatero, “Capse.jl: efficient and auto-differentiable CMB
+power spectra emulation,”arXiv:2307.14339 [astro-ph.CO].
+[8] L. Janken, S. Hannestad, T. Tram, and A. Nygaard, “CLiENT: A new tool for emulating
+cosmological likelihoods using deep neural networks,”arXiv:2512.17509 [astro-ph.CO].
+[9] J. E. Gammal, N. Schöneberg, J. Torrado, and C. Fidler, “Fast and robust Bayesian Inference
+using Gaussian Processes with GPry,”arXiv:2211.02045 [astro-ph.CO].
+[10] G. O. Roberts and J. S. Rosenthal, “Optimal Scaling of Discrete Approximations to Langevin
+Diffusions,”Journal of the Royal Statistical Society Series B: Statistical Methodology60(1998)
+no. 1, 255–268,
+https://academic.oup.com/jrsssb/article-pdf/60/1/255/49589077/jrsssb_60_1_255.pdf.
+https://doi.org/10.1111/1467-9868.00123.
+[11] S. Duane, A. D. Kennedy, B. J. Pendleton, and D. Roweth, “Hybrid Monte Carlo,”Phys. Lett.
+B195(1987) 216–222.
+[12] M. D. Hoffman and A. Gelman, “The No-U-Turn Sampler: Adaptively Setting Path Lengths in
+Hamiltonian Monte Carlo,”arXiv e-prints(2011) ,arXiv:1111.4246 [stat.CO].
+[13] J. Goodman and J. Weare, “Ensemble samplers with affine invariance,”Communications in
+Applied Mathematics and Computational Science5(2010) no. 1, 65 – 80.
+https://doi.org/10.2140/camcos.2010.5.65.
+[14] A. Gelman, G. O. Roberts, and W. R. Gilks, “Efficient Metropolis Jumping Rules,” in
+Bayesian Statistics 5, J. M. Bernardo, J. O. Berger, A. P. Dawid, and A. F. M. Smith, eds.,
+pp. 599–608. Oxford University Press, Oxford, 1996.
+[15] I. Romero and M. Ortiz, “The energy-stepping Monte Carlo method: an exactly
+symmetry-preserving, a Hamiltonian Monte Carlo method with a 100% acceptance ratio,”
+arXiv:2312.07215 [math-ph].https://arxiv.org/abs/2312.07215.
+[16] R. Neal, “MCMC Using Hamiltonian Dynamics,”.
+– 19 –
+
+[17] J. H. Tran and T. S. Kleppe, “Tuning diagonal scale matrices for HMC,”arXiv:2403.07495
+[stat.CO].https://arxiv.org/abs/2403.07495.
+[18] V. I. Arnold,Mathematical Methods of Classical Mechanics, vol. 60 ofGraduate Texts in
+Mathematics. Springer-Verlag, New York, 2 ed., 1989.
+https://doi.org/10.1007/978-1-4757-2063-1. Chapter 9: Canonical Formalism.
+[19] H. Goldstein,Classical Mechanics. Addison-Wesley, 1980.
+[20] M. Betancourt, “A Conceptual Introduction to Hamiltonian Monte Carlo,”arXiv:1701.02434
+[stat.ME].
+[21] T. M. Apostol,Calculus, Volume 2: Multi-Variable Calculus and Linear Algebra with
+Applications to Differential Equations and Probability. Wiley, 2 ed., 1969. Chapter 11: Multiple
+Intergrals.
+[22] D. Foreman-Mackey, D. W. Hogg, D. Lang, and J. Goodman, “emcee: The MCMC Hammer,”
+Publ. Astron. Soc. Pac.125(2013) 306–312,arXiv:1202.3665 [astro-ph.IM].
+[23]PlanckCollaboration, N. Aghanimet al., “Planck 2018 results. VI. Cosmological parameters,”
+Astron. Astrophys.641(2020) A6,arXiv:1807.06209 [astro-ph.CO]. [Erratum:
+Astron.Astrophys. 652, C4 (2021)].
+[24]PlanckCollaboration, N. Aghanimet al., “Planck 2018 results. V. CMB power spectra and
+likelihoods,”Astron. Astrophys.641(2020) A5,arXiv:1907.12875 [astro-ph.CO].
+[25]BOSSCollaboration, S. Alamet al., “The clustering of galaxies in the completed SDSS-III
+Baryon Oscillation Spectroscopic Survey: cosmological analysis of the DR12 galaxy sample,”
+Mon. Not. Roy. Astron. Soc.470(2017) no. 3, 2617–2652,arXiv:1607.03155 [astro-ph.CO].
+[26] A. J. Ross, L. Samushia, C. Howlett, W. J. Percival, A. Burden, and M. Manera, “The
+clustering of the SDSS DR7 main Galaxy sample – I. A 4 per cent distance measure at
+z= 0.15,”Mon. Not. Roy. Astron. Soc.449(2015) no. 1, 835–847,arXiv:1409.3242
+[astro-ph.CO].
+[27] F. Beutler, C. Blake, M. Colless, D. H. Jones, L. Staveley-Smith, L. Campbell, Q. Parker,
+W. Saunders, and F. Watson, “The 6dF Galaxy Survey: Baryon Acoustic Oscillations and the
+Local Hubble Constant,”Mon. Not. Roy. Astron. Soc.416(2011) 3017–3032,
+arXiv:1106.3366 [astro-ph.CO].
+[28] A. Gelman and D. B. Rubin, “Inference from Iterative Simulation Using Multiple Sequences,”
+Statistical Science7(1992) no. 4, 457 – 472.https://doi.org/10.1214/ss/1177011136.
+[29] S. Kolouri, K. Nadjahi, U. Simsekli, R. Badeau, and G. K. Rohde, “Generalized Sliced
+Wasserstein Distances,”arXiv:1902.00434 [cs.LG].https://arxiv.org/abs/1902.00434.
+[30] J. Torrado and A. Lewis, “Cobaya: Code for Bayesian Analysis of hierarchical physical
+models,”JCAP05(2021) 057,arXiv:2005.05290 [astro-ph.IM].
+[31] S. P. Brooks and A. Gelman, “General Methods for Monitoring Convergence of Iterative
+Simulations,”Journal of Computational and Graphical Statistics7(1998) no. 4, 434–455,
+https://www.tandfonline.com/doi/pdf/10.1080/10618600.1998.10474787.
+https://www.tandfonline.com/doi/abs/10.1080/10618600.1998.10474787.
+[32] M. Biron-Lattes, N. Surjanovic, S. Syed, T. Campbell, and A. Bouchard-Cote, “autoMALA:
+Locally adaptive Metropolis-adjusted Langevin algorithm,” inProceedings of The 27th
+International Conference on Artificial Intelligence and Statistics, S. Dasgupta, S. Mandt, and
+Y. Li, eds., vol. 238 ofProceedings of Machine Learning Research, pp. 4600–4608. PMLR,
+02–04 May, 2024.https://proceedings.mlr.press/v238/biron-lattes24a.html.
+– 20 –

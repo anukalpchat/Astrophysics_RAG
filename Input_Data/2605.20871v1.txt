@@ -1,0 +1,1549 @@
+Title: Robustness Analysis of USmorph: II. Optimizing Feature Extraction, Dimensionality Reduction, and Clustering for Unsupervised Galaxy Morphology Classification
+Authors: Guanwen Fang, Xiaolei Yin, Yirui Zheng, Zesen Lin, Shiwei Zhu, Jie Song, Chichun Zhou, Xu Kong
+Published: 2026-05-20
+Categories: astro-ph.GA
+
+DRAFT VERSIONMAY21, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX631
+Robustness Analysis of USmorph: II. Optimizing Feature Extraction, Dimensionality Reduction, and Clustering for
+Unsupervised Galaxy Morphology Classification
+GUANWENFANG
+ ,1, 2 ,∗ XIAOLEIYIN
+ ,1, 2 YIRUIZHENG
+ ,1, 2 ZESENLIN
+ ,3 SHIWEIZHU
+ ,1, 2 JIESONG
+ ,4, 5, 6
+CHICHUNZHOU
+ ,7 ANDXUKONG
+ 4, 5, 6
+1School of Physics and Astronomy, Anqing Normal University, Anqing 246011, China; wen@mail.ustc.edu.cn
+2Institute of Astronomy and Astrophysics, Anqing Normal University, Anqing 246133, China
+3Institute for Astrophysics, School of Physics, Zhengzhou University, Zhengzhou, 450001, China
+4Department of Astronomy, University of Science and Technology of China, Hefei 230026, China; xkong@ustc.edu.cn
+5School of Astronomy and Space Science, University of Science and Technology of China, Hefei 230026, China
+6Institute of Deep Space Sciences, Deep Space Exploration Laboratory, Hefei 230026, China
+7School of Engineering, Dali University, Dali 671003, China
+ABSTRACT
+We conduct a systematic robustness analysis of the unsupervised machine learning module within the hybrid
+frameworkUSmorph. This module automatically discovers morphological structures from large-scale galaxy
+images, forming the foundation of the complete classification workflow. We evaluate five pre-trained models for
+feature extraction and identify an ImageNet-pretrained AlexNet as the most effective for capturing discrimina-
+tive morphological features. UMAP is chosen for dimensionality reduction due to its optimal balance between
+preserving high-dimensional structure and computational efficiency. To enhance clustering stability, we propose
+a Bagging-based multi-cluster voting scheme, which significantly improves label consistency and cluster purity.
+We compare the convergence, scalability, and quality of five clustering algorithms, finding that the Bagging vot-
+ing scheme has the best performance with the combination of K-means, Birch, and Agg. A bagging clustering
+number ofK= 16is used to achieve the optimal balance between classification granularity and manual valida-
+tion efficiency. Our tests show that: (1) the t-distributed stochastic neighbor embedding (t-SNE) reveals clear,
+compact cluster boundaries in low-dimensional space with strong feature separability; (2) the morphology clas-
+sification results align with galaxy evolution theory, showing physically plausible distributions of different types
+in parameter space. These results demonstrate the technical robustness and scientific credibility ofUSmorph,
+establishing it as a reliable method for automated morphological classification in future large-scale surveys such
+as the China Space Station Telescope (CSST) mission.
+Keywords:Galaxy structure (622), Astrostatistics techniques (1886), Astronomy data analysis (1858)
+1.INTRODUCTION
+Galaxy morphology is a fundamental topic in astrophysics
+as it is tightly correlated with many physical properties of the
+galaxy (e.g., color, star formation rate, environment, mass,
+etc.)(e.g., Kauffmann et al. 2004; Omand et al. 2014; Schaw-
+inski et al. 2014; Kawinwanichakij et al. 2017; Gu et al. 2018;
+Su et al. 2025). Consequently, studying galaxy morphology
+helps us understand the formation and evolution of galaxies
+(see Conselice 2014 for a review).
+Several methods have been used for describing galaxy
+morphology, with the most direct being visual inspection
+(Hubble 1926; van den Bergh 1976). A notable example is
+the Galaxy Zoo project, which recruited a large number of
+volunteers to visually classify the morphology of nearly one
+million galaxies (Lintott et al. 2008; Lintott et al. 2011). Be-
+∗ Corresponding author: Guanwen Fang
+sides visual inspection, both parametric and non-parametric
+methods have been applied to galaxy morphology classifica-
+tion. Parametric measurements fit analytical functions to the
+luminosity profiles of galaxies and use the resulting param-
+eters to describe galaxy morphology (S´ersic 1963; Odewahn
+et al. 2002; Balcells et al. 2002). Common parameters in-
+clude the effective radius (r e), S ´ersic index (n), axis ratio
+(b/a), and so on. In contrast, non-parametric methods com-
+pute statistical indicators directly from image pixels to char-
+acterize the morphological features of galaxies, such as the
+CAS system (ConcentrationC, AsymmetryA, and Smooth-
+nessS; Conselice et al. 2000; Conselice 2003), the Gini-
+M20 coefficient (Lotz et al. 2004, 2008), and the MID sys-
+tem (Multimode, Intensity, Deviation; Freeman et al. 2013;
+Rodriguez-Gomez et al. 2018).
+We are now in a new era of large-scale sky surveys, includ-
+ing the Sloan Digital Sky Survey (SDSS; Stoughton et al.
+2002), the Cosmic Evolution Survey (COSMOS; Scoville
+arXiv:2605.20871v1  [astro-ph.GA]  20 May 2026
+
+2 FANG. ET AL
+et al. 2007), the Euclid space telescope (Euclid; Euclid Col-
+laboration et al. 2025), and the upcoming China Space Sta-
+tion Telescope (CSST; Gong et al. 2026). The next genera-
+tion of sky surveys will produce an unprecedented volume
+of high-resolution galaxy images, a scale that renders tra-
+ditional classification methods—including visual inspection,
+parametric, and non-parametric techniques—increasingly in-
+adequate. Visual inspection is prohibitively time-consuming
+and difficult to scale, while traditional quantitative meth-
+ods depend on predefined features that may not capture the
+full complexity of galaxy morphology. In contrast, machine
+learning methods can automatically learn discriminative fea-
+tures from images and identify complex non-linear patterns,
+offering a scalable, efficient, and consistent solution. They
+are thus particularly well-suited for automated galaxy mor-
+phology classification in the era of modern surveys.
+Machine learning has been widely used in the study of
+galaxy morphology. In particular, convolutional neural net-
+works (CNNs) have demonstrated considerable potential in
+galaxy morphology classification, as they possess the abil-
+ity to automatically extract multi-level abstract features from
+image data and achieve precise modeling and classification
+of high-dimensional visual information through hierarchical
+feature learning. A series of studies have already applied
+CNNs to galaxy morphology classification (e.g., Dieleman
+et al. 2015; Dom´ınguez S´anchez et al. 2018; Dickinson et al.
+2018; Walmsley et al. 2022). Traditional supervised ma-
+chine learning (SML) methods require substantial amounts
+of labeled data for training. Recent studies have shown
+that transfer learning and domain adaptation can partially
+alleviate this requirement by adapting pretrained models to
+new surveys with only a modest number of labeled targets
+(e.g., ´Ciprijanovi´c et al. 2023; Huertas-Company & Lanusse
+2023). Nevertheless, they still rely on some labeled data, and
+their performance remains sensitive to domain shifts—such
+as variations in point-spread function, imaging depth, and
+redshift—thereby limiting their general applicability across
+diverse surveys. In contrast, unsupervised machine learn-
+ing (UML) does not require pre-labeled samples and can di-
+rectly perform clustering, dimensionality reduction, or fea-
+ture learning on raw data, which helps reveal underlying pat-
+terns in the data. UML is well-established as a powerful ap-
+proach for efficient analysis of large-scale unlabeled galaxy
+datasets (e.g., Hocking et al. 2018; Martin et al. 2020; Cheng
+et al. 2021; Tohill et al. 2024).
+However, UML methods still face challenges in practical
+applications. First, their performance is highly sensitive to
+the quality of the input data features. Raw high-dimensional
+data often contains significant noise, missing values, and ir-
+relevant features, which can severely impair the effectiveness
+of the learned distance metrics. Furthermore, most UML
+methods employ a single clustering strategy, which often
+fails to capture true semantic relationships in data with com-
+plex manifold structures or imbalanced distributions. This
+limitation typically leads to unreasonable clustering and un-
+dermines the reliability of the clustering results.
+In our previous research, Song et al. (2024) proposed
+theUSmorphframework for galaxy morphology classifica-
+tion, which includes feature extraction, unsupervised clus-
+tering, and supervised classification.USmorphsignifi-
+cantly reduces the reliance on labeled data when classifying
+new galaxy datasets. The framework includes the follow-
+ing processes: (1) Using a convolutional autoencoder (CAE;
+Massey et al. 2009) to perform denoising and reconstruction
+of images; (2) Performing adaptive polar coordinate trans-
+formation (APCT; Fang et al. 2023) on the denoised im-
+ages to enhance the model’s rotation invariance; (3) Using
+a Bagging-based multi-clustering voting method (Zhou et al.
+2022) to cluster the extracted galaxy features; (4) Using la-
+bels obtained from clustering to train the CNN (GoogLeNet;
+Szegedy et al. 2015), and successfully classifying nearly
+100,000 galaxies in the COSMOS field.
+AlthoughUSmorphhas demonstrated excellent perfor-
+mance in large-scale applications, its robustness under dif-
+ferent configurations has not been systematically evaluated.
+Future sky surveys like those planned by the CSST will
+combine depth and breadth. It is therefore essential to en-
+sure theUSmorphframework can consistently produce sta-
+ble and scientifically credible results. To this end, we con-
+duct a systematic investigation with four key aspects. First,
+while keeping the core components of the originalUSmorph
+framework unchanged (specifically, the CAE-based denois-
+ing stage and the APCT task design), we systematically com-
+pare the performance of five widely used pretrained encoders
+in the unsupervised morphology learning task, providing a
+quantitative assessment of encoder sensitivity. Second, based
+on AlexNet features, we conduct a comprehensive evaluation
+of four dimensionality-reduction methods and present quan-
+titative comparisons in terms of separability and preservation
+of local/global structures. Third, we propose a Bagging-style
+multi-clustering voting strategy and demonstrate that this en-
+semble approach significantly improves both the purity and
+the stability of clustering assignments across multiple algo-
+rithms. Finally, we evaluate the impact of different choices
+of the number of clustersKon clustering performance, intra-
+cluster consistency, and the efficiency of subsequent human
+labeling, thereby providing practical guidance for parameter
+settings in future large-scale surveys.
+Throughout this paper, we use the AB magnitude system
+(Oke & Gunn 1983) and assume a Chabrier (2003) initial
+mass function and a standard flatΛCDM cosmology with
+parametersH 0 = 70km s −1 Mpc−1,Ω m = 0.3, andΩ Λ =
+0.7.
+2.DATA AND SAMPLE SELECTION
+2.1.COSMOS
+The COSMOS survey covers an area of approximately 2
+deg2 and is specifically designed to investigate the interplay
+between galaxy evolution, star formation, active galactic nu-
+clei (AGNs), dark matter, and large-scale structure across a
+redshift range of0.5< z <6(Scoville et al. 2007; Weaver
+et al. 2022). In this study, we utilize high-resolution F814W-
+band images from the Hubble Space Telescope/Advanced
+
+CLASSIFICATION OFCOSMOS 3
+Camera for Surveys (HST/ACS), covering an area of approx-
+imately 1.64 deg 2 within the COSMOS field. These image
+data were processed using the MultiDrizzle software pack-
+age (Koekemoer et al. 2003), resulting in images with a pixel
+scale of0.′′03and a 5σdepth of 27.2 AB magnitude within a
+0.′′24aperture.
+2.2.COSMOS2020 Catalogue
+The COSMOS2020 “Farmer” galaxy catalog (Weaver
+et al. 2022) is one of the most comprehensive multi-
+wavelength photometric datasets currently available for ex-
+tragalactic research, providing comprehensive photometric
+information across 35 bands from the ultraviolet to the near-
+infrared. Using this photometric dataset, Weaver et al. (2022)
+fitted the spectral energy distributions (SEDs) of galaxies
+and estimated various physical properties of galaxies, includ-
+ing photometric redshifts, stellar masses, and star formation
+rates. To determine photometric redshifts, the catalog em-
+ployed two different codes:EAZY(Brammer et al. 2008) and
+LePhare(Ilbert et al. 2006). In this study, we adopt the
+redshifts obtained fromLePharesince the redshifts mea-
+sured byLePhareexhibit higher reliability within the rele-
+vant magnitude range (see Figure 15 of Weaver et al. 2022).
+Additionally, their analysis employed a series of dust extinc-
+tion or attenuation curves, including the starburst attenuation
+curves proposed by Calzetti et al. (2000), the SMC dust ex-
+tinction curves from Prevot et al. (1984), and two variants
+of the Calzetti et al. (2000) attenuation law that include the
+2175 ˚A absorption feature. The final photometric redshift is
+defined as the median value obtained from the redshift likeli-
+hood distribution. Subsequently, the redshift is fixed atzLePh,
+and theLePharefitting procedure is re-run to derive stellar
+mass and other related physical properties. Further details
+can be found in Laigle et al. (2016) and Weaver et al. (2022).
+2.3.Sample Selection
+In this work, we select galaxy samples from the COS-
+MOS2020 catalog based on the following criteria:
+(1)lp type = 0, to ensure that the samples we select are
+galaxies instead of stars; here,lp type is the source-type
+flag in the catalog;
+(2)I mag <25mag, to exclude galaxies that are too faint
+to obtain reliable morphological measurements;
+(3)FLAG COMBINE = 0, to ensure that flux measure-
+ments are not affected by bright stars and the object
+is located at the center of the image, thereby guaran-
+teeing the reliability of photometric redshift and mass
+estimates;
+(4)0.2< z <1.2, to ensure the measurements of galaxy
+morphology in the rest-frame optical band;
+(5) High-quality source images with a signal-to-noise ratio
+(S/N) greater than 5 and no abnormal pixels, to ensure
+the high quality of source images.
+The selected sample contains 99,806 galaxies, and their dis-
+tribution in I-band magnitude and redshift is shown in Fig-
+ure 1.
+3.THE UNSUPERVISED METHOD FOR
+MORPHOLOGICAL CLASSIFICATION
+This section presents extensive experiments conducted to
+determine the optimal configuration specifically for the UML
+component within theUSmorphframework under current
+conditions. As illustrated in Figure 2, the UML clustering
+process primarily involves the following steps: First, pre-
+processed galaxy images are input into a pre-trained model
+for feature encoding to obtain high-dimensional feature rep-
+resentations. Second, dimensionality reduction techniques
+(e.g., Principal Component Analysis, Uniform Manifold Ap-
+proximation, Projection, Random Projection and Mean Pool-
+ing over Blocks) are applied to compress these features into
+a low-dimensional space, reducing redundancy and improv-
+ing computational efficiency for subsequent steps(see Sec-
+tion 3.2.2 for details). Next, multiple clustering algorithms
+are executed on the reduced-dimensional feature space to
+group samples. Their clustering results are then fused
+through a voting mechanism to achieve a more stable and re-
+liable partition. Finally, the resulting clusters undergo visual
+inspection and summarization, and are mapped to common
+galaxy morphological categories to generate the final mor-
+phological classification results. Based on this workflow, we
+evaluate different feature encoders and dimensionality reduc-
+tion techniques. We further test combinations of three clus-
+tering algorithms for the Bagging-based voting model and
+determine the optimal value for the number of clusters (K).
+3.1.Data Preprocessing
+To enhance the stability and accuracy of the clustering
+model, we perform data preprocessing on galaxy images to
+reduce image noise and improve rotational invariance. Fig-
+ure 3 shows the employed denoising framework that is based
+on a CAE (Massey et al. 2010). The framework first extracts
+latent features from raw galaxy images through a series of
+convolutional and pooling operations and then reconstructs
+these features with deconvolution and upsampling operations
+to generate the final denoised images. The CAE configura-
+tion used here was carefully validated through comparative
+experiments to ensure that the denoising process preserves
+galaxy structural features for the downstream analysis. The
+architectural parameters and a comprehensive description of
+the CAE-based denoising framework are provided in Zhu
+et al. (2025).
+After denoising the raw images, we need to further im-
+prove rotational invariance. Previous studies have shown that
+spatial rotation transformations can lead to incorrect classi-
+fication of galaxy morphological types by the model, sig-
+nificantly reducing its performance (Dieleman et al. 2015;
+Yao et al. 2019). To overcome this limitation, we adopt the
+APCT technique proposed by Fang et al. (2023), whose study
+demonstrated that APCT significantly enhances the robust-
+ness of convolutional neural networks to orientation varia-
+
+4 FANG. ET AL
+/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019/uni00000013/uni00000011/uni0000001b/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000015
+/uni0000005d
+/uni00000013
+/uni00000018/uni00000013/uni00000013
+/uni00000014/uni00000013/uni00000013/uni00000013
+/uni00000014/uni00000018/uni00000013/uni00000013
+/uni00000015/uni00000013/uni00000013/uni00000013
+/uni00000015/uni00000018/uni00000013/uni00000013
+/uni00000016/uni00000013/uni00000013/uni00000013
+/uni00000016/uni00000018/uni00000013/uni00000013/uni00000031/uni00000058/uni00000050/uni00000045/uni00000048/uni00000055
+/uni00000014/uni0000001a/uni00000011/uni00000018/uni00000015/uni00000013/uni00000011/uni00000013/uni00000015/uni00000015/uni00000011/uni00000018/uni00000015/uni00000018/uni00000011/uni00000013/uni00000015/uni0000001a/uni00000011/uni00000018/uni00000016/uni00000013/uni00000011/uni00000013
+/uni0000002c/uni00000050/uni00000044/uni0000004a
+/uni00000013
+/uni00000018/uni00000013/uni00000013/uni00000013
+/uni00000014/uni00000013/uni00000013/uni00000013/uni00000013
+/uni00000014/uni00000018/uni00000013/uni00000013/uni00000013
+/uni00000015/uni00000013/uni00000013/uni00000013/uni00000013/uni00000031/uni00000058/uni00000050/uni00000045/uni00000048/uni00000055
+Figure 1. Left:the redshift distribution of the selected sample;Right:theI mag distribution of the COMOS2020 in the range of0.2< z <1.2
+with the vertical dashed line indicating the brightness thresholdI mag <25of the selected sample.
+tions, thereby improving classification accuracy in scenarios
+requiring rotational invariance. The APCT technique first de-
+fines the initial polar axis based on the pixels with extreme
+values (i.e., maximum and minimum brightness) within the
+image. This polar axis is then systematically rotated coun-
+terclockwise in increments of 0.05 radians. At each rotation
+angle, pixel intensities along the current polar axis direction
+are integrated via polar coordinate projection. A mirroring
+operation is then applied to enhance centrally symmetric fea-
+tures. This coordinate system transformation enhances the
+representation of galaxy morphological structures while im-
+proving the model’s rotational invariance.
+Figure 4 shows the effects of the CAE denoising frame-
+work and the APCT technique with six image sets. Each
+set consists of three components: the original image (left
+panels), the denoised reconstructed image generated by CAE
+(central panels), and the polar coordinate transformation out-
+put by ACPT (right panels). The significant differences be-
+tween the original image and the denoised image demon-
+strate that the CAE architecture effectively removes noise
+from the image while preserving its key morphological fea-
+tures. Similarly, the right panels show that APCT processing
+effectively highlights structures like spiral arms. The signifi-
+cant differences between the original images and the prepro-
+cessed ones demonstrate the effectiveness and necessity of
+noise reduction and rotational invariance improvement.
+3.2.UML Clustering Process
+3.2.1.Feature Encoder
+Large-scale pre-trained models have achieved remarkable
+advances in computer vision, establishing themselves as a
+technical cornerstone for image understanding and feature
+learning (Krizhevsky et al. 2012; He et al. 2016; Dosovit-
+skiy et al. 2020). These models are typically pre-trained on
+large-scale image datasets (such as ImageNet and JFT-300M)
+(Deng et al. 2009; Sun et al. 2017) using either supervised
+or self-supervised learning strategies (He et al. 2020; Cheng
+et al. 2020), leveraging deep neural network architectures
+(e.g., ResNet and Vision Transformer; He et al. 2016; Doso-
+vitskiy et al. 2020) to learn general-purpose visual represen-
+tations. After sufficient training, intermediate layers of the
+model can efficiently extract features, transforming raw im-
+ages into high-dimensional feature vectors rich in semantic
+information. These features are widely used in various down-
+stream tasks, including image classification, object detection,
+image retrieval, and medical image analysis (Girshick et al.
+2014; Russakovsky et al. 2015; Litjens et al. 2017). It offers
+several advantages to extract image features with pre-trained
+models. During pre-training, the model captures hierarchi-
+cal visual features ranging from low-level edges and textures
+to high-level semantic concepts (Zeiler & Fergus 2014), ef-
+fectively reflecting the essential structure and content of im-
+ages. Additionally, using pre-trained models reduces the re-
+liance on extensive annotated data. Their capability of trans-
+fer learning enables reliable feature extraction, which allows
+downstream tasks to achieve good performance even when
+labeled samples in the target domain are limited (Yosinski
+et al. 2014). With growing model capacity and scale of train-
+ing data, the generalization ability and cross-domain adapt-
+ability of the learned features are further enhanced.
+In this work, we evaluate five pre-trained models for
+their performance in feature extraction, including AlexNet
+(Krizhevsky et al. 2012), ResNet (He et al. 2016), Efficient-
+
+CLASSIFICATION OFCOSMOS 5
+ 
+  
+a. Feature extraction from single image by feature encoder 
+Feature encoder 
+feature extraction 
+( 
+ ) 
+... 
+... 
+x 
+1 
+ x 
+2 
+ x 
+n 
+Input 
+ Output 
+e 
+1 
+ ... 
+e 
+2 
+ ... 
+... 
+e 
+n 
+ ... 
+b. Feature extraction from collective image by  
+dimensionality reduction methods 
+ 
+ 
+Collective
+feature 
+encodings 
+ 
+ 
+ 
+Dimensionality reduction methods
+(feature dimensionality reduction) 
+Input 
+ Output 
+c. V oting on three clustering methods 
+Feature 
+encodings 
+K-means 
+Agg 
+Birch 
+Input 
+Clustering 
+voting 
+K-means 
+Birch 
+ Agg 
+V oting 
+results 
+Rejected  
+images 
+Clustered  
+images 
+f 
+1 
+ ... 
+f 
+2 
+ ... 
+... 
+f 
+n 
+ ... 
+Figure 2.Flowchart of the unsupervised galaxy morphology classification pipeline of theUSmorphframework, comprising three main stages:
+feature extraction (Panel(a)), dimensionality reduction (Panel(b)), and unsupervised clustering (Panel(c)).
+Net (Tan & Le 2019), ViT (Dosovitskiy et al. 2020), and
+ConvNext (Liu et al. 2022). Our experiments confirm that
+AlexNet achieves the best performance on the galaxy mor-
+phology classification task, as shown in Figure 5. In this
+experiment, we use different pre-trained models as feature
+extractors to encode the preprocessed galaxy images. With
+these extracted features, we apply three clustering algorithms
+to generate cluster assignments, which are treated as pseudo-
+labels. We then train a supervised classifier (GoogLeNet;
+Szegedy et al. 2015) on the preprocessed galaxy images using
+these pseudo-labels, with a train/test split of 9:1 (Fang et al.
+2023), and report the classification accuracy on the held-out
+test set. The accuracy is defined as
+Acc = 1
+N
+NX
+i=1
+I(ˆyi =y i),(1)
+whereNis the number of evaluated samples,y i ∈
+{1, . . . , K}is the ground-truth class label of thei-th sam-
+ple,ˆyi is the predicted class label,Kis the number of classes,
+andI(·)is the indicator function, which equals1if the condi-
+tion holds and0otherwise. This accuracy is used as a proxy
+metric to evaluate the effectiveness of feature representations
+produced by different pre-trained models.
+All five pretrained models considered in this work were ini-
+tialized with weights learned from the same large-scale natu-
+ral image dataset (ImageNet). Therefore, the performance
+differences among them should be attributed to the archi-
+tectural characteristics rather than differences in pretraining
+data. AlexNet benefits from its shallow convolutional layers
+that effectively capture low-level patterns. This aligns well
+with the fact that galaxy morphology is defined by such pat-
+terns, including global structure, symmetry, and local geo-
+metric features like spiral arms and core distribution. Mean-
+while, AlexNet’s lower model complexity enables stronger
+generalization on datasets of the ten-thousand-scale. Addi-
+tionally, the standard convolutional operations of AlexNet
+are well-suited for smooth, symmetric astronomical images,
+whereas the patch-based attention mechanism of ViT may
+introduce spatial fragmentation when processing continuous
+galaxy structures. The better alignment with the target data
+distribution and task essence supports AlexNet’s best perfor-
+
+6 FANG. ET AL
+Feature Vectors
+Encoder
+ Decoder
+Convolve
+ Maxpool
+ Convolve
+ Maxpool
+ Unfold
+Raw 
+images
+Denoised 
+images
+Figure 3.Schematic illustration of the CAE architecture. The left part is the encoder, and the right part is the decoder. The original image is
+fed as input, and a denoised image is reconstructed at the output after processing through the encoder and decoder.
+Raw Denoised Polared 
+ Raw Denoised Polared Raw Denoised Polared 
+1 arcsec
+Figure 4.Six image sets that demonstrate image preprocessing steps. Each set contains two galaxies of the same classification category. In
+each set, the left, center, and right panels show the original images in the rest-frame optical band, post-CAE-based denoised images, and the
+images after polar coordinate expansion, respectively. The blue bar in the first panel indicates an angular scale of1 ′′ (≈33pixels).
+mance among the five models, despite its lack of state-of-the-
+art architectural features.
+3.2.2.Feature Dimensionality Reduction
+The feature representations extracted by deep pre-
+trained models from preprocessed images are often high-
+dimensional. While these high-dimensional features contain
+rich semantic information, their dimensionality itself poses
+significant challenges for downstream clustering tasks. With
+higher dimensionality, data becomes more sparse in high-
+dimensional space. It undermines the discriminative abil-
+ity of traditional distance metrics (e.g., Euclidean distance),
+making it more difficult for clustering algorithms to accu-
+rately capture similarity relationships among samples. This
+“curse of dimensionality” significantly increases computa-
+tional and storage costs, thereby reducing clustering effi-
+ciency (Aggarwal et al. 2001; Kriegel et al. 2009). This
+issue is particularly pronounced when handling large-scale
+datasets. Additionally, high-dimensional features often con-
+tain redundant information or noise, which may interfere
+with the clustering process and lead to unstable results or de-
+graded performance (Qu et al. 2023). It is essential to reduce
+dimensionality before clustering.
+Proper dimensionality reduction techniques can project
+data into a lower-dimensional space while retaining its intrin-
+sic structure and critical information. They effectively miti-
+gate the curse of dimensionality, improve computational effi-
+ciency, and enhance the robustness of clustering algorithms.
+
+CLASSIFICATION OFCOSMOS 7
+By compressing dimensions and removing redundancy, these
+methods reveal the intrinsic clustering structure in a lower-
+dimensional space, thereby providing more compact and dis-
+criminative representations for subsequent clustering analy-
+sis. Thus, appropriate dimensionality reduction serves as a
+crucial bridge connecting deep feature extraction with effi-
+cient clustering.
+Several dimensionality-reduction techniques are com-
+monly used. In particular, Principal Component Analysis
+(PCA; Ma ´ckiewicz & Ratajczak 1993) and Uniform Man-
+ifold Approximation and Projection (UMAP; McInnes &
+Healy 2018) are widely adopted. PCA is a linear dimension-
+ality reduction technique. It identifies orthogonal directions
+of maximum variance (principal components) by computing
+eigenvalues and eigenvectors. PCA then projects the data
+onto a lower-dimensional subspace defined by these principal
+components. Such a process preserves the global structure of
+the data while enabling effective data compression and noise
+reduction. In galactic morphology classification, PCA com-
+presses high-dimensional galaxy image features into a lower-
+dimensional space. It removes redundancy while preserving
+key morphological information, thereby improving the ac-
+curacy of classification and clustering. In contrast, UMAP
+is a nonlinear technique that effectively preserves both lo-
+cal and global data structures. By constructing a topologi-
+cal representation of the high-dimensional data, UMAP op-
+timizes the preservation of local neighborhoods while main-
+taining broader global relationships. This makes it especially
+effective for capturing complex, nonlinear patterns in high-
+dimensional data such as galaxy images. In galaxy morphol-
+ogy classification, UMAP effectively groups similar galaxy
+samples by capturing subtle local similarities between differ-
+ent galaxy types. Therefore, UMAP enhances cluster sepa-
+ration and improves downstream clustering or classification
+performance (Fang et al. 2026). To evaluate the effectiveness
+of UMAP and PCA in ourUSmorphframework, we further
+test two additional classical dimensionality-reduction meth-
+ods: Random Projection (RA; Bingham & Mannila 2001)
+and Mean Pooling over Blocks (BM; Boureau et al. 2010).
+RA multiplies the feature vectors with a sparse random pro-
+jection matrix whose shape is set to match the desired output
+dimension. It reduces the data dimensions while approxi-
+mately preserving pairwise distances at minimal computa-
+tional cost. In contrast, BM is a simple and fast method that
+partitions the vector into contiguous segments (“blocks”) cor-
+responding to the target dimensionality and takes the mean
+within each block.
+Our experiments show that UMAP yields the highest ac-
+curacy for galaxy morphology classification among the four
+methods. To ensure a fair comparison, we extract features
+using the same pre-trained AlexNet encoder and evaluate
+different dimensionality reduction algorithms under identi-
+cal clustering settings. The results indicate that, compared
+with the other dimensionality reduction methods, UMAP
+provides a more effective low-dimensional embedding, lead-
+ing to higher classification accuracy and improved computa-
+tional efficiency. Detailed results are summarized in Table 1,
+where the reported accuracy is computed with Equation (1).
+Table 1.Clustering accuracy of AlexNet features under different
+dimensionality reduction and clustering methods.
+Model DR Method Clust. Acc (%)
+AlexNet
+RA
+K-means 84.7
+Agg 78.1
+Birch 79.5
+BM
+K-means 86.3
+Agg 77.9
+Birch 79.6
+PCA
+K-means 87.7
+Agg 85.8
+Birch 80.3
+UMAP
+K-means 88.6
+Agg 86.5
+Birch 87.2
+Note:The second column lists different dimensionality reduction methods,
+and the third column lists different clustering algorithms.
+An appropriate choice of dimensionality is crucial when
+applying linear dimensionality reduction methods. An opti-
+mal dimension preserves the majority of data variance, elim-
+inates redundancy, and captures essential features effectively.
+Common approaches for determining the optimal dimension
+include analyzing the cumulative explained variance or the
+information ratio. In this work, we employ theelbow method
+to identify the optimal number of dimensions. Specifically,
+we first compute the covariance matrix of the data and per-
+form eigenvalue decomposition to project the data onto a new
+feature space spanned by the principal components. We then
+extract the eigenvalues corresponding to each principal com-
+ponent and compute theinformation ratio, defined as the ra-
+tio between consecutive eigenvalues. The information ratio
+at componentkis computed as:
+Information Ratiok = λk+1
+λk
+,(2)
+whereλ k denotes the eigenvalue of thek-th principal compo-
+nent. Information ratio serves as an indicator of the relative
+importance between adjacent components and helps iden-
+tify the “elbow” point, the dimension at which the marginal
+gain in information drops significantly. The dimension cor-
+responding to this turning point is derived as the optimal re-
+duced dimension.
+We compute the information ratio as a function of dimen-
+sion with the PCA method and plot the results in Figure 6.
+The result shows a distinct “elbow” point, after which the
+ratio starts to drop significantly. This indicates that the prin-
+cipal features are concentrated within the first 2900 dimen-
+
+8 FANG. ET AL
+sions, which we therefore select as the optimal dimensional-
+ity for linear reduction.
+The Davies-Bouldin Index (DB Index; Davies & Bouldin
+1979) is a widely used internal metric for evaluating clus-
+tering quality. As an unsupervised measure, it operates in-
+dependently of external class labels and assesses the validity
+of clustering results by quantifying the ratio between intra-
+cluster compactness and inter-cluster separation. The DB In-
+dex is defined as:
+DB= 1
+N
+NX
+i=1
+max
+j̸=i
+ Si +S j
+d(ci, cj)
+
+,(3)
+whereNis the total number of clusters;S i (Sj) represents
+the cohesiveness of clustersi(j), defined as the average dis-
+tance between its members and its centroidc i (cj);d(c i, cj)
+denotes the distance between the centroidsc i andc j. The
+DB Index is particularly effective for evaluating clusters with
+convex geometries (Halkidi et al. 2001).LowerDB Index
+values indicate more compact and separated clusters, imply-
+ing better clustering performance. To balance dimensional-
+ity reduction effectiveness and computational efficiency in
+the UMAP dimensionality reduction process, we compute
+the DB Index across a range of dimensions from 50 to 500
+in steps of 50. The index is minimized at 300 dimensions;
+consequently, we use 300 dimensions for downstream anal-
+ysis. This approach is simple, parameter-light, but provides
+a reliable, data-driven criterion for determining the optimal
+reduced dimensionality.
+3.2.3.Clustering Methods
+To improve the stability and robustness of the hybrid clus-
+tering framework for galaxy morphology classification, we
+systematically evaluate several clustering algorithms and an-
+alyze their influence on classification performance. As an
+unsupervised learning paradigm, clustering partitions data
+samples by their intrinsic similarities. It aims to maxi-
+mize cohesion within clusters while maintaining clear sepa-
+ration between different clusters, which is essential for effec-
+tively distinguishing different morphological types of galax-
+ies, such as ellipticals, spirals, and irregulars, from their high-
+dimensional feature representations. However, the perfor-
+mance of clustering algorithms is highly sensitive to the un-
+derlying data distribution, the structure of the feature space,
+and the intrinsic complexity of the morphological classes.
+We compare five commonly used clustering approaches:
+K-means (Hartigan & Wong 1979), Agglomerative Cluster-
+ing (Agg; Murtagh 1983; Murtagh & Legendre 2014), Birch
+(Zhang et al. 1996), DBSCAN (Ester et al. 1996; Campello
+et al. 2013), and Spectral Clustering (Ng et al. 2001). Three
+of them exhibit distinct strengths. K-means provides fast and
+efficient partitioning based on centroid distances, performing
+well on approximately spherical and well-separated clusters.
+Birch demonstrates strong scalability for large astronomical
+datasets by constructing a compact Clustering Feature (CF)
+tree with low memory overhead (Zhang et al. 1996; Yang
+et al. 2022). Agglomerative Clustering effectively captures
+hierarchical patterns within the data, which is particularly
+valuable for identifying nested or multi-scale galaxy mor-
+phologies (Cheng et al. 2021; Yu & Hou 2022).
+To address the limitations of individual algorithms, par-
+ticularly in robustly classifying ambiguous or transitional
+morphologies like merging systems or low-SNR objects, we
+employ a voting-based ensemble strategy that integrates the
+clustering results of K-means, Birch, and Agg. This con-
+sensus approach effectively reduces the bias and instabil-
+ity associated with any single method, leading to a sig-
+nificant improvement in clustering purity and morphologi-
+cal consistency. Although DBSCAN and Spectral Cluster-
+ing can recover non-convex structures (Ester et al. 1996;
+V on Luxburg 2007), they are not well suited to large-scale,
+high-dimensional settings. Both are sensitive to hyperpa-
+rameters (e.g.,ϵandminPtsfor DBSCAN (Ester et al.
+1996), and affinity-graph construction for Spectral Clustering
+(V on Luxburg 2007)) and are increasingly resource-intensive
+at scale. DBSCAN relies on costly neighborhood queries in
+high dimensions (Gan & Tao 2015), while Spectral Clus-
+tering requires anN×Naffinity matrix (Ng et al. 2001),
+which is prohibitive forN∼10 5. In our dataset of 99,806
+samples with nearly10 3-dimensional features, both methods
+yielded trivial partitions dominated by a single large cluster,
+providing little morphological discrimination. Therefore, we
+exclude DBSCAN and Spectral Clustering from our frame-
+work. In the final hybrid clustering framework, we select
+K-means, Birch, and Agg as the core components. This
+choice is consistent with our previous series of experiments
+and analyses (Zhou et al. 2022; Song et al. 2024; Yin et al.
+2025). This combination achieves an optimal trade-off be-
+tween classification accuracy, computational efficiency, and
+robustness. Our ensemble strategy proves particularly effec-
+tive in handling the heterogeneity and scale of modern galaxy
+morphology datasets (Zhou et al. 2022; Yin et al. 2025).
+To further validate the effectiveness of the proposed hy-
+brid clustering framework, we systematically compare inde-
+pendent clustering methods and the hybrid clustering method
+inspired by the Bagging technique. As shown in Table
+2, the clustering accuracy of the hybrid voting strategy is
+consistently higher than that achieved by individual algo-
+rithms. This result underscores the stability and consistency
+of the ensemble method in producing reliable morphological
+groupings. In our evaluation, the reference labels for com-
+puting the clustering accuracy are the cluster assignments
+produced by each clustering method, which are treated as
+pseudo-labels. These pseudo-labels are obtained by cluster-
+ing AlexNet-extracted features that are reduced to 300 di-
+mensions through UMAP. We then train a supervised classi-
+fier (GoogLeNet; Szegedy et al. 2015) on the preprocessed
+galaxy images using these pseudo-labels, and evaluate its
+prediction accuracy on a held-out test split (train/test = 9:1).
+This accuracy serves as a proxy metric to assess the effec-
+tiveness of the clustering results.
+Although approximately 40% of the samples are excluded
+during the consensus voting process due to label disagree-
+ment across base classifiers, the retained subset forms high-
+
+CLASSIFICATION OFCOSMOS 9
+/uni00000028/uni00000049/uni00000049/uni0000004c/uni00000046/uni0000004c/uni00000048/uni00000051/uni00000057/uni00000031/uni00000048/uni00000057/uni00000026/uni00000052/uni00000051/uni00000059/uni00000031/uni00000048/uni0000003b/uni00000057/uni00000039/uni0000004c/uni00000057/uni00000035/uni00000048/uni00000056/uni00000031/uni00000048/uni00000057/uni00000024/uni0000004f/uni00000048/uni0000005b/uni00000031/uni00000048/uni00000057
+/uni00000033/uni00000055/uni00000048/uni00000057/uni00000055/uni00000044/uni0000004c/uni00000051/uni00000048/uni00000047/uni00000003/uni00000030/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000013/uni00000011/uni00000013
+/uni00000015/uni00000013/uni00000011/uni00000013
+/uni00000017/uni00000013/uni00000011/uni00000013
+/uni00000019/uni00000013/uni00000011/uni00000013
+/uni0000001b/uni00000013/uni00000011/uni00000013/uni00000037/uni00000052/uni00000057/uni00000044/uni0000004f/uni00000003/uni00000024/uni00000046/uni00000046/uni00000058/uni00000055/uni00000044/uni00000046/uni0000005c/uni00000003/uni0000000b/uni00000008/uni0000000c
+/uni0000001a/uni00000013/uni00000011/uni00000014/uni0000001a/uni00000013/uni00000011/uni00000015
+/uni0000001a/uni00000017/uni00000011/uni00000014
+/uni0000001a/uni0000001b/uni00000011/uni00000016
+/uni0000001b/uni0000001c/uni00000011/uni00000015
+/uni00000019/uni0000001a/uni00000011/uni0000001c/uni00000019/uni00000019/uni00000011/uni0000001c
+/uni0000001a/uni00000016/uni00000011/uni0000001c
+/uni0000001a/uni00000013/uni00000011/uni00000013
+/uni0000001a/uni0000001c/uni00000011/uni00000014
+/uni00000019/uni00000014/uni00000011/uni0000001b
+/uni00000019/uni00000016/uni00000011/uni0000001c
+/uni00000019/uni0000001b/uni00000011/uni00000013/uni00000019/uni0000001b/uni00000011/uni00000017
+/uni0000001b/uni00000019/uni00000011/uni0000001c/uni0000002e/uni00000010/uni00000050/uni00000048/uni00000044/uni00000051/uni00000056
+/uni00000024/uni0000004a/uni0000004a
+/uni00000025/uni0000004c/uni00000055/uni00000046/uni0000004b
+Figure 5.Comparison of total accuracy for different pretrained models and clustering methods.
+0 500 1000 1500 2000 2500 3000 3500 4000
+Dimension
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Ratio
+2800 2900 3000
+0.8
+1.0
+Figure 6.The information ratio as a function of dimension with the
+PCA method. The ratio starts to drop significantly after 2900 di-
+mensions, indicating that the main features are concentrated within
+the first 2900 dimensions. Therefore, we choose to reduce the di-
+mensionality to 2900.
+purity, high-confidence clusters with substantially lower am-
+biguity. These high-quality clusters serve as ready-to-use as-
+sets in downstream tasks. They are especially valuable for
+generating pre-labeled datasets with high annotation confi-
+dence, therefore, helping identify rare galaxy types in large-
+scale surveys and supporting training supervised models
+when annotated samples are scarce. Although the hybrid vot-
+ing strategy reduces the effective training set size, the result-
+ing improvement in label reliability better matches the re-
+quirements of high-precision classification. Importantly, ob-
+jects excluded at this stage are subsequently reintroduced in
+the SML step ofUSmorph(see Fig.2 of Yin et al. 2025),
+yielding morphology classifications for the full sample. This
+trade-off between coverage and purity demonstrates the ef-
+fectiveness and utility of our hybrid clustering framework for
+galaxy morphology analysis.
+3.2.4.Cluster Number
+In unsupervised galaxy morphology classification, the
+choice of the number of clusters is critical for both model
+performance and the efficiency of subsequent human annota-
+tion. An appropriate cluster count shall balance between an-
+notation workload and differentiation ability: excessive clus-
+ters increase the burden of manual inspection and labeling,
+whereas insufficient clusters may oversimplify the intrinsic
+morphological diversity, leading to inadequate separation be-
+tween distinct galaxy types.
+To investigate the influence of cluster number on classifi-
+cation performance, we conduct a series of experiments on a
+publicly available galaxy imaging dataset encompassing di-
+verse morphological classes (e.g., ellipticals, spirals, irregu-
+lars, and mergers). As shown in Table 2, clustering accuracy
+generally improves with an increasing number of clusters, as
+finer partitioning better captures subtle morphological varia-
+tions. However, beyond an optimal point, the accuracy im-
+proves only marginally and may decline in some cases. Two
+factors are proposed to be blamed for this decline: (1) an
+excessive number of clusters leads to over-segmentation in
+the feature space, producing small and unstable clusters that
+amplify noise instead of meaningful morphological differ-
+
+10 FANG. ET AL
+Table 2.Performance comparison of our method with different
+numbers of clusters.
+Cluster Method Acc (%) Reject (%)
+8
+K-means 86.1 0
+Agg 88.4 0
+Birch 84.5 0
+Bagging 95.4 42.7
+12
+K-means 91.3 0
+Agg 88.6 0
+Birch 80.1 0
+Bagging 96.2 40.2
+16
+K-means 92.1 0
+Agg 90.1 0
+Birch 90.7 0
+Bagging 97.5 40.3
+20
+K-means 91.0 0
+Agg 90.0 0
+Birch 88.0 0
+Bagging 94.6 41.6
+Note:Accuracy (Acc) marks the clustering classification accuracy, and Re-
+ject denotes the percentage of ambiguous or low-confidence samples ex-
+cluded by the ensemble voting process. Bagging is employed as an ensemble
+voting framework that combines K-means, Agglomerative clustering, and
+Birch by aggregating their predictions through majority voting, with low-
+confidence samples rejected based on consensus.
+ences; and (2) the increased number of clusters complicates
+manual inspection and labeling, introducing subjective bias
+and inconsistency that further degrade the overall clustering
+quality. Our analysis suggests that setting the cluster number
+to 16 achieves an optimal balance between accuracy, stabil-
+ity, and interpretability. At this configuration, the clustering
+yields clear separation among major morphological popula-
+tions, while the manual inspection of 16 representative clus-
+ter centroids can be efficiently completed by experts within
+minutes, without significant cognitive load.
+It is noteworthy that the optimal number of clusters may
+depend on the scientific objectives and operational priori-
+ties. A moderate cluster count is preferable to ensure both
+accuracy and efficiency for the rapid processing of mil-
+lions of galaxies in large-scale surveys conducted by next-
+generation telescopes. In contrast, a larger number of clus-
+ters is suggested even at the cost of higher complexity when
+attempting to uncover finer substructures, such as morpho-
+logical transitions or rare intermediate forms. In this study,
+the unsupervised clustering step primarily serves to con-
+struct a high-confidence training dataset by grouping galax-
+ies with consistent morphological characteristics. This re-
+fined dataset is then used to train a convolutional neural net-
+work (CNN), enabling accurate and efficient large-scale clas-
+sification of galaxy morphologies across extensive imaging
+surveys. Therefore, the choice of cluster number should be
+driven by a synthesis of quantitative performance metrics, the
+desired level of morphological detail, and the downstream
+application requirements, balancing scientific interpretability
+with computational practicality.
+4.RESULTS AND DISCUSSION
+This section aims to validate the effectiveness of the pro-
+posed galaxy morphology classification framework. We first
+configure each component of the framework to its optimal
+settings. We then present the classification results through
+t-SNE visualization and display both parameterized and non-
+parameterized measurement results. This comprehensive
+presentation demonstrates and substantiates the reliability of
+the classification framework.
+4.1.Optimal Configuration Selection
+Extensive experimental validation confirms thatUSmorph
+achieves optimal performance under specific configura-
+tions. The feature extraction module employs the ImageNet-
+pretrained AlexNet as the backbone encoder to fully capture
+hierarchical visual features in galaxy images. The dimen-
+sionality reduction stage utilizes the UMAP method to ef-
+fectively preserve local and global structural information in
+the high-dimensional feature space. For the clustering anal-
+ysis, three representative algorithms (K-means, Birch, and
+Agg) are used, with the number of clusters set to 16 to bal-
+ance fine-grained classification and physical interpretability.
+Under this optimized configuration, unsupervised classifica-
+tion is performed on the selected galaxy dataset, yielding the
+clustering results shown in Table 2. Galaxies are classified
+into five morphological types: spherical (SPH), early-type
+disk (ETD), late-type disk (LTD), irregular (IRR), and un-
+classified (UNC). SPHs typically exhibit a compact, smooth,
+and nearly symmetric light distribution. ETDs often show
+a prominent central bulge together with a disk component,
+but lack clear or coherent spiral arms and are generally less
+compact than SPHs. In contrast, LTDs are more extended
+and disk-dominated, frequently featuring well-defined spiral
+arms and a more diffuse light distribution. IRRs encompass
+a wide range of appearances, including asymmetric or dis-
+turbed structures, and may show features suggestive of past
+or ongoing interactions/mergers. UNCs usually correspond
+to low–signal-to-noise (S/N) cases and remain difficult to in-
+terpret morphologically: their faint surface-brightness pro-
+files and limited structural detail hinder reliable placement
+within our classification scheme.
+We then evaluate the precision, recall, and F1-score for
+each galaxy type. These metrics are defined as follows:
+Precision = T P
+T P+F P ,(4)
+Recall = T P
+T P+F N ,(5)
+F1 = 2× Precision×Recall
+Precision + Recall,(6)
+
+CLASSIFICATION OFCOSMOS 11
+whereT P,F P, andF Ndenote the numbers of true posi-
+tives, false positives, and false negatives, respectively, com-
+puted in a one-vs-rest manner for each galaxy type. Here,
+the reference labels are the proxy morphological labels ob-
+tained by mapping the UML-generated clusters to morpho-
+logical categories via manual visual inspection. We train
+GoogLeNet on the processed galaxy images using a 9:1
+train/test split, and report precision, recall, and F1-score on
+the held-out test set (Figure 7). All three metrics exceed
+95% for every galaxy type, indicating that the UML-derived
+proxy labels are sufficiently consistent with the image mor-
+phology to enable large-scale supervised morphological clas-
+sification.
+4.2.Overall Morphological Classification Results and
+t-SNE
+We employ t-distributed stochastic neighbor embedding (t-
+SNE; van der Maaten & Hinton 2008) to visualize the clus-
+tering results in a two-dimensional space derived from the
+high-dimensional feature space. t-SNE effectively preserves
+local data structures in high dimensions, enabling clear visu-
+alization of distribution relationships between categories in
+low dimensions. Additionally, this paper compares t-SNE
+visualizations obtained using a single clustering algorithm,
+a single clustering algorithm combined with UMAP dimen-
+sionality reduction, and the complete framework (incorporat-
+ing UMAP dimensionality reduction and the Bagging multi-
+voting strategy). The results are shown in Figure 8. Visu-
+alizations under different configurations demonstrate that in-
+corporating UMAP dimensionality reduction and ensemble
+clustering strategies significantly enhances category separa-
+bility and clustering compactness, validating the proposed
+method’s effectiveness in feature representation and classi-
+fication stability.
+4.3.Comparisons with Galaxy Properties
+To assess the consistency between the classification results
+and the known structural properties of galaxies, we examine
+the morphological classifications in relation to key physical
+parameters, as shown in Figure 9. The analysis is restricted
+to massive galaxies with stellar massesM ∗ >10 9 M⊙ to
+ensure robust and reliable parameter measurements. UNC
+galaxies are excluded from this analysis since their low S/Ns
+hinder accurate determination of morphological parameters.
+In Figure 9, galaxies are color-coded by class: SPH in green,
+ETD in purple, LTD in orange, and IRR in blue.
+Panel(a)shows the Gini coefficient (G) distribution of
+four morphological classes: SPH, ETD, LTD, and IRR. The
+Gini coefficient quantifies the non-uniformity of the sur-
+face brightness distribution, with higher values indicating
+stronger concentration or clumpiness of light (Lotz et al.
+2004, 2008). SPH galaxies exhibit the highestGvalues, con-
+sistent with their compact bulge-dominated structures, while
+IRR galaxies show lowerGvalues due to their irregular, dif-
+fuse morphologies.
+Panel(b)presents the distribution of theM 20 parameter,
+which measures the normalized second-order moment of the
+brightest 20% of a galaxy’s flux (Lotz et al. 2004, 2008).
+More negativeM 20 values correspond to a higher central
+light concentration. The distribution shows that SPH galax-
+ies have the most negativeM20 values, indicating higher con-
+centration. In contrast, LTD and IRR galaxies tend to have
+higherM 20, reflecting less concentrated light distributions.
+Panel(c)displays raincloud plots of the S ´ersic index (n),
+which characterizes the steepness of the galaxy’s radial sur-
+face brightness profile (Zhou et al. 2022; Song et al. 2024).
+Highernvalues signify a more prominent bulge component,
+whereas lowernvalues correspond to disk-dominated or ir-
+regular systems. The mediannincreases systematically from
+IRR to SPH galaxies, revealing a clear morphological se-
+quence.
+Panel(d)shows the distribution of the effective radius (re),
+defined as the physical radius enclosing half of the galaxy’s
+total light. SPH galaxies generally possess smallerr e, corre-
+sponding to compact, centrally concentrated structures, while
+LTD and IRR galaxies display largerr e values, which are
+consistent with their more extended morphologies.
+All parameters in Figure 9 demonstrate that our morpho-
+logical classification aligns with the expected morphological
+sequence: from IRR to SPH galaxies, (a) the light distribu-
+tion becomes increasingly concentrated, (b)M 20 decreases,
+(c) S´ersicnrises, and (d)r e shrinks, indicating a transition
+from extended star-forming systems to compact, quiescent
+spheroids.
+5.SUMMARY AND OUTLOOKS
+This paper presents a systematic analysis of the robustness
+of the unsupervised machine learning (UML) component
+within the hybrid frameworkUSmorph, which is designed
+for the automated morphology classification of galaxies in
+large-scale surveys. The framework has been validated on a
+sample of nearly 100,000 I-band galaxies (0.2< z <1.2,
+Imag <25) from the COSMOS field, demonstrating its ef-
+fectiveness and reliability in morphological characterization.
+We test different configurations of key components within
+theUSmorphframework to reach an optimal performance:
+(1) In terms of feature extraction, we compare the five
+mainstream encoders and find that the AlexNet archi-
+tecture is best at capturing hierarchical morphological
+features from galaxy images.
+(2) For dimensionality reduction, UMAP is identified as
+the optimal method, effectively preserving both local
+and global structures of the high-dimensional feature
+space while balancing computational efficiency and
+clustering accuracy.
+(3) Regarding clustering algorithms, K-means, Birch, and
+Agg exhibit consistent stability and strong perfor-
+mance across multiple experiments, making them the
+preferred choices within our framework. A Bagging-
+based multi-clustering ensemble strategy is further em-
+ployed, which significantly enhances label purity and
+
+12 FANG. ET AL
+/uni00000036/uni00000033/uni0000002b/uni00000028/uni00000037/uni00000027/uni0000002f/uni00000037/uni00000027/uni0000002c/uni00000035/uni00000035/uni00000038/uni00000031/uni00000026
+/uni00000037/uni00000055/uni00000058/uni00000048/uni00000003/uni0000002f/uni00000044/uni00000045/uni00000048/uni0000004f
+/uni00000036/uni00000033/uni0000002b
+/uni00000028/uni00000037/uni00000027
+/uni0000002f/uni00000037/uni00000027
+/uni0000002c/uni00000035/uni00000035
+/uni00000038/uni00000031/uni00000026/uni00000033/uni00000055/uni00000048/uni00000047/uni0000004c/uni00000046/uni00000057/uni00000048/uni00000047/uni00000003/uni0000002f/uni00000044/uni00000045/uni00000048/uni0000004f
+/uni0000001a/uni00000015/uni00000013
+/uni0000001c/uni0000001b/uni00000011/uni00000019/uni00000016/uni00000008
+/uni00000014/uni00000013
+/uni00000014/uni00000011/uni00000016/uni0000001a/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000019
+/uni00000013/uni00000011/uni0000001a/uni00000017/uni00000008
+/uni0000001a/uni0000001b/uni00000018
+/uni0000001c/uni0000001a/uni00000011/uni00000016/uni0000001c/uni00000008
+/uni00000018
+/uni00000013/uni00000011/uni00000019/uni00000015/uni00000008
+/uni0000001c
+/uni00000014/uni00000011/uni00000014/uni00000015/uni00000008
+/uni00000014
+/uni00000013/uni00000011/uni00000014/uni00000015/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000016
+/uni00000013/uni00000011/uni00000016/uni00000019/uni00000008
+/uni0000001b/uni00000014/uni00000016
+/uni0000001c/uni0000001b/uni00000011/uni0000001c/uni00000014/uni00000008
+/uni00000019
+/uni00000013/uni00000011/uni0000001a/uni00000016/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000014
+/uni00000013/uni00000011/uni00000013/uni0000001a/uni00000008
+/uni0000001c
+/uni00000013/uni00000011/uni00000018/uni0000001c/uni00000008
+/uni00000018
+/uni00000013/uni00000011/uni00000016/uni00000016/uni00000008
+/uni00000014/uni00000017/uni00000019/uni00000015
+/uni0000001c/uni00000018/uni00000011/uni0000001a/uni00000017/uni00000008
+/uni00000018/uni00000013
+/uni00000016/uni00000011/uni00000015/uni0000001a/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000015
+/uni00000013/uni00000011/uni00000014/uni00000013/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000017/uni0000001b
+/uni00000015/uni00000011/uni00000016/uni00000015/uni00000008
+/uni00000015/uni00000013/uni00000014/uni00000019
+/uni0000001c/uni0000001a/uni00000011/uni00000018/uni0000001b/uni00000008
+/uni00000035/uni00000048/uni00000046/uni00000044/uni0000004f/uni0000004f
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000036/uni00000033/uni0000002b/uni00000028/uni00000037/uni00000027/uni0000002f/uni00000037/uni00000027/uni0000002c/uni00000035/uni00000035/uni00000038/uni00000031/uni00000026
+/uni00000037/uni00000055/uni00000058/uni00000048/uni00000003/uni0000002f/uni00000044/uni00000045/uni00000048/uni0000004f
+/uni00000036/uni00000033/uni0000002b
+/uni00000028/uni00000037/uni00000027
+/uni0000002f/uni00000037/uni00000027
+/uni0000002c/uni00000035/uni00000035
+/uni00000038/uni00000031/uni00000026/uni00000033/uni00000055/uni00000048/uni00000047/uni0000004c/uni00000046/uni00000057/uni00000048/uni00000047/uni00000003/uni0000002f/uni00000044/uni00000045/uni00000048/uni0000004f
+/uni0000001a/uni00000015/uni00000013
+/uni0000001c/uni0000001c/uni00000011/uni00000013/uni00000017/uni00000008
+/uni00000014/uni00000013
+/uni00000014/uni00000011/uni00000015/uni00000017/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000019
+/uni00000013/uni00000011/uni0000001b/uni00000016/uni00000008
+/uni0000001a/uni0000001b/uni00000018
+/uni0000001c/uni0000001a/uni00000011/uni00000013/uni00000016/uni00000008
+/uni00000018
+/uni00000013/uni00000011/uni00000019/uni00000014/uni00000008
+/uni0000001c
+/uni00000013/uni00000011/uni00000018/uni0000001c/uni00000008
+/uni00000014
+/uni00000013/uni00000011/uni00000013/uni00000018/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000016
+/uni00000013/uni00000011/uni00000016/uni0000001a/uni00000008
+/uni0000001b/uni00000014/uni00000016
+/uni0000001c/uni0000001b/uni00000011/uni0000001a/uni0000001b/uni00000008
+/uni00000019
+/uni00000013/uni00000011/uni00000016/uni0000001c/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000014
+/uni00000013/uni00000011/uni00000014/uni00000017/uni00000008
+/uni0000001c
+/uni00000014/uni00000011/uni00000014/uni00000014/uni00000008
+/uni00000018
+/uni00000013/uni00000011/uni00000019/uni00000014/uni00000008
+/uni00000014/uni00000017/uni00000019/uni00000015
+/uni0000001c/uni00000018/uni00000011/uni0000001b/uni0000001a/uni00000008
+/uni00000018/uni00000013
+/uni00000015/uni00000011/uni00000017/uni00000015/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000015
+/uni00000013/uni00000011/uni00000015/uni00000018/uni00000008
+/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000008
+/uni00000017/uni0000001b
+/uni00000016/uni00000011/uni00000014/uni00000018/uni00000008
+/uni00000015/uni00000013/uni00000014/uni00000019
+/uni0000001c/uni0000001a/uni00000011/uni00000018/uni00000016/uni00000008
+/uni00000033/uni00000055/uni00000048/uni00000046/uni0000004c/uni00000056/uni0000004c/uni00000052/uni00000051
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000036/uni00000033/uni0000002b
+/uni00000028/uni00000037/uni00000027
+/uni0000002f/uni00000037/uni00000027
+/uni0000002c/uni00000035/uni00000035
+/uni00000038/uni00000031/uni00000026/uni00000026/uni0000004f/uni00000044/uni00000056/uni00000056
+/uni0000001c/uni0000001b/uni00000011/uni0000001b/uni00000016/uni00000008
+/uni0000001c/uni0000001a/uni00000011/uni00000015/uni00000014/uni00000008
+/uni0000001c/uni0000001b/uni00000011/uni0000001b/uni00000017/uni00000008
+/uni0000001c/uni00000018/uni00000011/uni0000001b/uni00000014/uni00000008
+/uni0000001c/uni0000001a/uni00000011/uni00000018/uni00000019/uni00000008
+/uni00000029/uni00000014/uni00000003/uni00000036/uni00000046/uni00000052/uni00000055/uni00000048
+Figure 7.Theleftandmiddlepanels display the recall and precision rates for five galaxy classes, with overall recall and precision exceeding
+97%. Therightpanel presents the F1 scores for each galaxy class, demonstrating the UML framework’s effectiveness in distinguishing between
+different galaxy types.
+AlexNet
+ AlexNet+Bagging
+ AlexNet+UMAP+Bagging
+SPH
+ETD
+LTD
+IRR
+UNC
+Figure 8.Visualization of galaxy morphological classification results in the reduced feature space using different deep learning frameworks.
+From left to right, we show the results of: (1) AlexNet alone, (2) AlexNet combined with Bagging, and (3) AlexNet integrated with UMAP
+dimensionality reduction and Bagging. Each color represents a distinct morphological class: green for SPH, purple for ETD, orange for LTD,
+blue for IRR, and gray for UNC. The better separation between classes in the third panel indicates enhanced clustering performance through
+dimensionality reduction and ensemble methods.
+the robustness of consensus clustering compared to
+single clustering approaches.
+(4) The number of clusters in the Bagging-based multi-
+clustering step is set toK= 16, achieving a practical
+balance between classification granularity and annota-
+tion efficiency.
+This configuration enables clear separation of major galaxy
+morphologies. We further confirm that the morphology clas-
+sification results align with galaxy evolution theory, show-
+ing physically plausible distributions of different types in the
+parameter space. Therefore,USmorphprovides a scalable
+foundation for fine-grained identification and further investi-
+gation of rare or peculiar objects, such as tidal tails, gravita-
+tional lenses, and little red dots.
+In future work, we aim to enhance the scalability and gen-
+eralization of the automated galaxy morphology classifica-
+tion framework by integrating advanced deep representation
+learning with domain adaptation techniques. We will explore
+self-supervised and contrastive learning paradigms to learn
+robust morphological representations from large-scale unla-
+beled imaging data. Furthermore, we will investigate un-
+supervised domain adaptation (UDA) and domain-invariant
+feature learning to mitigate distribution shifts across differ-
+ent surveys, such as those arising from variations in reso-
+lution, depth, and point-spread function. This is crucial for
+ensuring that models trained on data from one telescope or
+bandpass can be reliably transferred to another. Our ultimate
+goal is to develop morphology-aware models that general-
+ize across observational depth, spatial resolution, and wave-
+
+CLASSIFICATION OFCOSMOS 13
+/uni00000036/uni00000033/uni0000002b/uni00000028/uni00000037/uni00000027/uni0000002f/uni00000037/uni00000027/uni0000002c/uni00000035/uni00000035/uni00000013/uni00000011/uni00000016/uni00000013
+/uni00000013/uni00000011/uni00000016/uni00000018
+/uni00000013/uni00000011/uni00000017/uni00000013
+/uni00000013/uni00000011/uni00000017/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni00000018/uni00000018
+/uni00000013/uni00000011/uni00000019/uni00000013
+/uni00000013/uni00000011/uni00000019/uni00000018
+/uni00000013/uni00000011/uni0000001a/uni00000013G
+/uni0000000b/uni00000044/uni0000000c
+/uni00000036/uni00000033/uni0000002b/uni00000028/uni00000037/uni00000027/uni0000002f/uni00000037/uni00000027/uni0000002c/uni00000035/uni00000035
+/uni00000015/uni00000011/uni00000018
+/uni00000015/uni00000011/uni00000013
+/uni00000014/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+M20
+/uni0000000b/uni00000045/uni0000000c
+/uni00000013/uni00000015/uni00000017/uni00000019/uni0000001b/uni00000014/uni00000013
+n
+/uni00000036/uni00000033/uni0000002b
+/uni00000028/uni00000037/uni00000027
+/uni0000002f/uni00000037/uni00000027
+/uni0000002c/uni00000035/uni00000035
+/uni0000000b/uni00000046/uni0000000c
+/uni00000014/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+log (re/kpc)
+/uni00000036/uni00000033/uni0000002b
+/uni00000028/uni00000037/uni00000027
+/uni0000002f/uni00000037/uni00000027
+/uni0000002c/uni00000035/uni00000035
+/uni0000000b/uni00000047/uni0000000c
+Figure 9.Distribution of key morphological parameters for different galaxy classes identified by the unsupervised classification pipeline.
+Panels show the results of:(a)Gini coefficientG,(b)concentration indexM 20,(c)S ´ersic indexn, and(d)effective radiusr e. Each panel
+includes violin plots with overlaid boxplots, where the black solid line represents the median, the thick black bar indicates the interquartile
+range (IQR), and the thin whiskers extend to 1.5×IQR. Galaxy types are color-coded as follows: SPH in green, ETD in purple, LTD in orange,
+and IRR in blue. The distributions reveal distinct trends among galaxy types, supporting the physical coherence of the classification.
+length. The enhanced framework will be applied to upcom-
+ing multi-band deep-field surveys, particularly the imaging
+data from the Chinese Space Station Telescope (CSST). This
+application is anticipated to enable large-sample morpholog-
+ical analysis with high statistical precision and facilitate the
+identification and detailed characterization of rare or pecu-
+liar structural features in galaxy evolution, such as tidal tails,
+stellar shells, and merger remnants.
+DATA A V AILABILITY
+Our code, dataset, and trained model weights can be
+found at https://github.com/IAAA-246011/USmorph 2.0.
+This work is supported by the National Natural Science
+Foundation of China (NSFC) (grant Nos. 12233008 and
+12573012), the National Key R&D Program of China (grant
+No. 2023YFA1608100), the Strategic Priority Research
+Program of the Chinese Academy of Sciences (grant No.
+XDB0550200), the Cyrus Chun Ying Tang Foundations, and
+the 111 Project for “Observational and Theoretical Research
+on Dark Matter and Dark Energy” (B23042), and the China
+Manned Space Program with grant No. CMS-CSST-2025-
+A04. The numerical calculations in this paper have been
+done on the platform of the High Performance Computing
+of Anqing Normal University.
+
+14 FANG. ET AL
+REFERENCES
+Aggarwal, C. C., Hinneburg, A., & Keim, D. A. 2001, in
+International conference on database theory, Springer, 420–434
+Balcells, M., Graham, A. W., Dom´ınguez-Palmero, L., & Peletier,
+R. F. 2002, The Astrophysical Journal, 582, L79,
+doi: 10.1086/367783
+Bingham, E., & Mannila, H. 2001, in Proceedings of the seventh
+ACM SIGKDD international conference on Knowledge
+discovery and data mining, 245–250
+Boureau, Y .-L., Ponce, J., & LeCun, Y . 2010, in Proceedings of the
+27th international conference on machine learning (ICML-10),
+111–118
+Brammer, G. B., van Dokkum, P. G., & Coppi, P. 2008, The
+Astrophysical Journal, 686, 1503, doi: 10.1086/591786
+Calzetti, D., Armus, L., Bohlin, R. C., et al. 2000, The
+Astrophysical Journal, 533, 682, doi: 10.1086/308692
+Campello, R. J. G. B., Moulavi, D., & Sander, J. 2013, in Advances
+in Knowledge Discovery and Data Mining, ed. J. Pei, V . S.
+Tseng, L. Cao, H. Motoda, & G. Xu (Berlin, Heidelberg:
+Springer Berlin Heidelberg), 160–172
+Chabrier, G. 2003, Publications of the Astronomical Society of the
+Pacific, 115, 763, doi: 10.1086/376392
+Cheng, T.-Y ., Huertas-Company, M., Conselice, C. J., et al. 2021,
+Monthly Notices of the Royal Astronomical Society, 503, 4446,
+doi: 10.1093/mnras/stab734
+Cheng, T.-Y ., Li, N., Conselice, C. J., et al. 2020, Monthly Notices
+of the Royal Astronomical Society, 494, 3750,
+doi: 10.1093/mnras/staa1015
+Conselice, C. J. 2003, ApJS, 147, 1, doi: 10.1086/375001
+Conselice, C. J. 2014, Annual Review of Astronomy and
+Astrophysics, 52, 291,
+doi: 10.1146/annurev-astro-081913-040037
+Conselice, C. J., Bershady, M. A., & Jangren, A. 2000, The
+Astrophysical Journal, 529, 886, doi: 10.1086/308300
+Davies, D. L., & Bouldin, D. W. 1979, IEEE Transactions on
+Pattern Analysis and Machine Intelligence, PAMI-1, 224,
+doi: 10.1109/TPAMI.1979.4766909
+Deng, J., Dong, W., Socher, R., et al. 2009, in 2009 IEEE
+Conference on Computer Vision and Pattern Recognition,
+248–255, doi: 10.1109/CVPR.2009.5206848
+Dickinson, H., Fortson, L., Lintott, C., et al. 2018, The
+Astrophysical Journal, 853, 194,
+doi: 10.3847/1538-4357/aaa250
+Dieleman, S., Willett, K. W., & Dambre, J. 2015, Monthly Notices
+of the Royal Astronomical Society, 450, 1441–1459,
+doi: 10.1093/mnras/stv632
+Dom´ınguez S´anchez, H., Huertas-Company, M., Bernardi, M.,
+Tuccillo, D., & Fischer, J. L. 2018, Monthly Notices of the Royal
+Astronomical Society, 476, 3661, doi: 10.1093/mnras/sty338
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., et al. 2020, ArXiv,
+abs/2010.11929.
+https://api.semanticscholar.org/CorpusID:225039882
+Ester, M., Kriegel, H.-P., Sander, J., Xu, X., et al. 1996, in kdd,
+226–231
+Euclid Collaboration, Mellier, Y ., Abdurro’uf, et al. 2025, A&A,
+697, A1, doi: 10.1051/0004-6361/202450810
+Fang, G., Zhu, S., Xu, J., et al. 2026, The Astronomical Journal,
+171, 59
+Fang, G., Ba, S., Gu, Y ., et al. 2023, The Astronomical Journal,
+165, 35, doi: 10.3847/1538-3881/aca1a6
+Freeman, P. E., Izbicki, R., Lee, A. B., et al. 2013, Monthly
+Notices of the Royal Astronomical Society, 434, 282,
+doi: 10.1093/mnras/stt1016
+Gan, J., & Tao, Y . 2015, in Proceedings of the 2015 ACM
+SIGMOD international conference on management of data,
+519–530
+Girshick, R., Donahue, J., Darrell, T., & Malik, J. 2014, in
+Proceedings of the IEEE conference on computer vision and
+pattern recognition, 580–587
+Gong, Y ., Miao, H., Zhan, H., et al. 2026, Science China Physics,
+Mechanics & Astronomy, 69, 239501,
+doi: 10.1007/s11433-025-2809-0
+Gu, Y ., Fang, G., Yuan, Q., Cai, Z., & Wang, T. 2018, The
+Astrophysical Journal, 855, 10, doi: 10.3847/1538-4357/aaad0b
+Halkidi, M., Batistakis, Y ., & Vazirgiannis, M. 2001, Journal of
+Intelligent Information Systems, 17, 107,
+doi: 10.1023/A:1012801612483
+Hartigan, J. A., & Wong, M. A. 1979, Journal of the Royal
+Statistical Society. Series C (Applied Statistics), 28, 100.
+http://www.jstor.org/stable/2346830
+He, K., Fan, H., Wu, Y ., Xie, S., & Girshick, R. 2020, in 2020
+IEEE/CVF Conference on Computer Vision and Pattern
+Recognition (CVPR), 9726–9735,
+doi: 10.1109/CVPR42600.2020.00975
+He, K., Zhang, X., Ren, S., & Sun, J. 2016, in Proceedings of the
+IEEE conference on computer vision and pattern recognition,
+770–778
+Hocking, A., Geach, J. E., Sun, Y ., & Davey, N. 2018, MNRAS,
+473, 1108, doi: 10.1093/mnras/stx2351
+Hubble, E. P. 1926, ApJ, 64, 321, doi: 10.1086/143018
+Huertas-Company, M., & Lanusse, F. 2023, Publications of the
+Astronomical Society of Australia, 40, e001,
+doi: 10.1017/pasa.2022.55
+Ilbert, O., Arnouts, S., McCracken, H. J., et al. 2006, A&A, 457,
+841, doi: 10.1051/0004-6361:20065138
+Kauffmann, G., White, S. D. M., Heckman, T. M., et al. 2004,
+Monthly Notices of the Royal Astronomical Society, 353, 713,
+doi: 10.1111/j.1365-2966.2004.08117.x
+
+CLASSIFICATION OFCOSMOS 15
+Kawinwanichakij, L., Papovich, C., Quadri, R. F., et al. 2017, The
+Astrophysical Journal, 847, 134,
+doi: 10.3847/1538-4357/aa8b75
+Koekemoer, A. M., Fruchter, A. S., Hook, R. N., & Hack, W. 2003,
+in HST Calibration Workshop : Hubble after the Installation of
+the ACS and the NICMOS Cooling System, 337
+Kriegel, H.-P., Kr¨oger, P., & Zimek, A. 2009, Acm transactions on
+knowledge discovery from data (tkdd), 3, 1
+Krizhevsky, A., Sutskever, I., & Hinton, G. E. 2012, Advances in
+neural information processing systems, 25
+Laigle, C., McCracken, H. J., Ilbert, O., et al. 2016, The
+Astrophysical Journal Supplement Series, 224, 24
+Lintott, C., Schawinski, K., Bamford, S., et al. 2011, MNRAS,
+410, 166, doi: 10.1111/j.1365-2966.2010.17432.x
+Lintott, C. J., Schawinski, K., Slosar, A., et al. 2008, Monthly
+Notices of the Royal Astronomical Society, 389, 1179,
+doi: 10.1111/j.1365-2966.2008.13689.x
+Litjens, G., Kooi, T., Bejnordi, B. E., et al. 2017, Medical image
+analysis, 42, 60
+Liu, Z., Mao, H., Wu, C.-Y ., et al. 2022, in 2022 IEEE/CVF
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 11966–11976, doi: 10.1109/CVPR52688.2022.01167
+Lotz, J. M., Primack, J., & Madau, P. 2004, The Astronomical
+Journal, 128, 163, doi: 10.1086/421849
+Lotz, J. M., Davis, M., Faber, S. M., et al. 2008, The Astrophysical
+Journal, 672, 177, doi: 10.1086/523659
+Martin, G., Kaviraj, S., Hocking, A., Read, S. C., & Geach, J. E.
+2020, MNRAS, 491, 1408, doi: 10.1093/mnras/stz3006
+Massey, R., Stoughton, C., Leauthaud, A., et al. 2009, Monthly
+Notices of the Royal Astronomical Society, 401, 371,
+doi: 10.1111/j.1365-2966.2009.15638.x
+Massey, R., Stoughton, C., Leauthaud, A., et al. 2010, MNRAS,
+401, 371, doi: 10.1111/j.1365-2966.2009.15638.x
+Ma´ckiewicz, A., & Ratajczak, W. 1993, Computers & Geosciences,
+19, 303, doi: https://doi.org/10.1016/0098-3004(93)90090-R
+McInnes, L., & Healy, J. 2018, ArXiv, abs/1802.03426.
+https://api.semanticscholar.org/CorpusID:3641284
+Murtagh, F. 1983, The Computer Journal, 26, 354,
+doi: 10.1093/comjnl/26.4.354
+Murtagh, F., & Legendre, P. 2014, Journal of Classification, 31,
+274–295, doi: 10.1007/s00357-014-9161-z
+Ng, A., Jordan, M., & Weiss, Y . 2001, Advances in neural
+information processing systems, 14
+Odewahn, S. C., Cohen, S. H., Windhorst, R. A., & Philip, N. S.
+2002, ApJ, 568, 539, doi: 10.1086/339036
+Oke, J. B., & Gunn, J. E. 1983, ApJ, 266, 713, doi: 10.1086/160817
+Omand, C. M. B., Balogh, M. L., & Poggianti, B. M. 2014,
+Monthly Notices of the Royal Astronomical Society, 440, 843,
+doi: 10.1093/mnras/stu331
+Prevot, M. L., Lequeux, J., Maurice, E., Prevot, L., &
+Rocca-V olmerange, B. 1984, Astronomy & Astrophysics, 132,
+389
+Qu, W., Xiu, X., Chen, H., & Kong, L. 2023, Mathematics, 11,
+doi: 10.3390/math11020436
+Rodriguez-Gomez, V ., Snyder, G. F., Lotz, J. M., et al. 2018,
+Monthly Notices of the Royal Astronomical Society, 483,
+4140–4159, doi: 10.1093/mnras/sty3345
+Russakovsky, O., Deng, J., Su, H., et al. 2015, Int. J. Comput.
+Vision, 115, 211–252, doi: 10.1007/s11263-015-0816-y
+Schawinski, K., Urry, C. M., Simmons, B. D., et al. 2014, Monthly
+Notices of the Royal Astronomical Society, 440, 889,
+doi: 10.1093/mnras/stu327
+Scoville, N., Aussel, H., Brusa, M., et al. 2007, The Astrophysical
+Journal Supplement Series, 172, 1–8, doi: 10.1086/516585
+S´ersic, J. L. 1963, Boletin de la Asociacion Argentina de
+Astronomia La Plata Argentina, 6, 41
+Song, J., Fang, G., Ba, S., et al. 2024, The Astrophysical Journal
+Supplement Series, 272, 42, doi: 10.3847/1538-4365/ad434f
+Stoughton, C., Lupton, R. H., Bernardi, M., et al. 2002, AJ, 123,
+485, doi: 10.1086/324741
+Su, Y ., Fang, G., Lu, S., & Lin, Z. 2025, A&A, 699, A184,
+doi: 10.1051/0004-6361/202553693
+Sun, C., Shrivastava, A., Singh, S., & Gupta, A. 2017, in
+Proceedings of the IEEE international conference on computer
+vision, 843–852
+Szegedy, C., Liu, W., Jia, Y ., et al. 2015, in 2015 IEEE Conference
+on Computer Vision and Pattern Recognition (CVPR), 1–9,
+doi: 10.1109/CVPR.2015.7298594
+Tan, M., & Le, Q. 2019, in Proceedings of Machine Learning
+Research, V ol. 97, Proceedings of the 36th International
+Conference on Machine Learning, ed. K. Chaudhuri &
+R. Salakhutdinov (PMLR), 6105–6114.
+https://proceedings.mlr.press/v97/tan19a.html
+Tohill, C., Bamford, S. P., Conselice, C. J., et al. 2024, ApJ, 962,
+164, doi: 10.3847/1538-4357/ad17b8
+van den Bergh, S. 1976, The Astrophysical Journal, 206, 883.
+https://api.semanticscholar.org/CorpusID:122319125
+van der Maaten, L., & Hinton, G. 2008, Journal of Machine
+Learning Research, 9, 2579
+V on Luxburg, U. 2007, Statistics and computing, 17, 395
+Walmsley, M., Lintott, C., G´eron, T., et al. 2022, Monthly Notices
+of the Royal Astronomical Society, 509, 3966
+Weaver, J. R., Kauffmann, O. B., Ilbert, O., et al. 2022, The
+Astrophysical Journal Supplement Series, 258, 11,
+doi: 10.3847/1538-4365/ac3078
+Yang, H., Shi, C., Cai, J., et al. 2022, Monthly Notices of the Royal
+Astronomical Society, 517, 5496
+
+16 FANG. ET AL
+Yao, X., Feng, X., Cheng, G., Han, J., & Guo, L. 2019, in IGARSS
+2019 - 2019 IEEE International Geoscience and Remote Sensing
+Symposium, 1382–1385, doi: 10.1109/IGARSS.2019.8899285
+Yin, X., Fang, G., Lu, S., et al. 2025, Astronomy & Astrophysics,
+703, A13
+Yosinski, J., Clune, J., Bengio, Y ., & Lipson, H. 2014, Advances in
+neural information processing systems, 27
+Yu, H., & Hou, X. 2022, Astronomy and Computing, 41, 100662
+Zeiler, M. D., & Fergus, R. 2014, in Computer Vision – ECCV
+2014, ed. D. Fleet, T. Pajdla, B. Schiele, & T. Tuytelaars (Cham:
+Springer International Publishing), 818–833
+Zhang, T., Ramakrishnan, R., & Livny, M. 1996, SIGMOD Rec.,
+25, 103–114, doi: 10.1145/235968.233324
+Zhou, C., Gu, Y ., Fang, G., & Lin, Z. 2022, The Astronomical
+Journal, 163, 86, doi: 10.3847/1538-3881/ac4245
+Zhu, S., Fang, G., Dai, Y ., et al. 2025, The Astrophysical Journal,
+995, 168, doi: 10.3847/1538-4357/ae1979
+´Ciprijanovi´c, A., Lewis, A., Pedro, K., et al. 2023, Machine
+Learning: Science and Technology, 4, 025013,
+doi: 10.1088/2632-2153/acca5f

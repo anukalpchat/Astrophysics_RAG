@@ -1,0 +1,1931 @@
+Title: Field-level multi-tracers simulation-based inference of cosmological parameters from 3D maps
+Authors: Giulio Scelfo, Satvik Mishra, Mauro Rigo, Roberto Trotta, Matteo Viel
+Published: 2026-05-25
+Categories: astro-ph.CO, gr-qc
+
+Prepared for submission to JCAP
+Field-level multi-tracers
+simulation-based inference of
+cosmological parameters from 3D
+maps
+Giulio Scelfo a,b Satvik Mishra a Mauro Rigo a Roberto T rottaa,d,e
+Matteo Viel a,b,c,d
+aSISSA, Via Bonomea 265, 34136 Trieste, Italy & INFN Sezione di Trieste
+bINFN - National Institute for Nuclear Physics, Via Valerio 2, I-34127 Trieste, Italy
+cIFPU - Institute for Fundamental Physics of the Universe, Via Beirut 2, 34014 Trieste, Italy
+dICSC – Centro Nazionale di Ricerca in High Performance Computing, Big Data e Quantum
+Computing, Via Magnanelli 2, Bologna, Italy
+ePhysics Department, Blackett Lab, Imperial College London, Prince Consort Road, London
+SW7 2AZ, UK
+E-mail: gscelfo@sissa.it
+Abstract.Extracting maximum cosmological information from current and upcoming large-
+scale structure data requires going beyond summary statistics as currently used in likelihood-
+based inference. Simulation-Based Inference (SBI) promises to enable the exploitation of
+field-level information and the rich physics of modern hydrodynamical simulations. We de-
+velop a proof-of-concept SBI pipeline to explore its potential to constrain the cosmological
+parameters{Ω m, σ8}from galaxy number counts, neutral hydrogen (HI) intensity mapping
+and their combination. We use neural emulators trained on full hydrodynamical simulations
+to generate galaxy and HI maps from fast, approximate dark matter simulations. Combined
+with neural posterior estimation, this enables the estimation of cosmological parameters while
+marginalizing over astrophysical effects. We perform inference both on the power spectrum
+and on representations derived from field-level 2D or 3D maps, comparing results from each
+probe and the combination of both tracers, and assessing the impact of data compression and
+multi-tracers information on cosmological constraints.
+Combining galaxy and HI fields improves constraints with respect to single-tracer cases
+by a factor 2 to 7 in terms of a Figure of Merit describing the joint precision on cosmological
+parameters, depending on the tracer/configuration. Moving from summary statistics to field-
+level inference leads to a consistent gain in constraining power of about a factor 3, with
+3D maps providing the most precise and well-calibrated posteriors. This gain in precision
+is robust even when astrophysical parameters are marginalized over. Further developments
+(including realistic survey effects and improvements in emulators’ faithfulness) will enable the
+application of this analysis pipeline to upcoming surveys.
+arXiv:2605.26210v1  [astro-ph.CO]  25 May 2026
+
+Contents
+1 Introduction 1
+2 Methodology 4
+2.1 Overview of pipeline 4
+2.2 Dark matter approximate maps 6
+2.3 Galaxies and HI maps 6
+2.4 Simulation-Based Inference with Neural Posterior Estimation 8
+2.4.1 CaseP: SBI on Power Spectrum 9
+2.4.2 CaseM: SBI on latent representations from maps 10
+3 Results 11
+3.1 Statistical precision 11
+3.2 Bias and calibration 13
+3.3 Overall remarks 14
+4 Discussion and conclusions 14
+A Emulator 27
+A.1 Emulator architecture 27
+A.2 Emulator training 29
+1 Introduction
+Thecurrentandupcominggenerationoflarge-scalestructure(LSS)surveys, suchasEuclid[1],
+the Vera Rubin Observatory [2], SKAO [3] and DESI [4], will deliver data that encode valu-
+able cosmological information in the full non-Gaussian structure of observable fields, beyond
+what can be extracted from compressed, hand-crafted summaries like two-point statistics.
+Due to the volume of such data sets, statistical uncertainties will become increasingly sub-
+dominant, while systematic effects and modeling accuracy will become the dominant limiting
+factors. In this context, extracting cosmological information from observables such as galaxy
+clustering and neutral hydrogen (HI) intensity mapping requires an accurate forward mod-
+eling of baryonic observables in highly non-linear structures across a wide range of scales.
+This is challenging: the mapping between cosmological and astrophysical parameters and the
+resulting observables is governed by complex, non-linear gravitational dynamics and baryonic
+processes, which can only be fully captured through numerical simulations. The development
+of open cosmological simulations suites such as, e.g.,CAMELS[5], Quijote [6] and DREAMS [7]
+aims at building a solid foundation towards this goal.
+High-fidelity simulations, particularly full hydrodynamical ones, are computationally
+expensive, often requiring millions of CPU hours to run, and therefore it is unfeasible to
+run them in sufficient numbers across the high-dimensional parameter space relevant for
+modern cosmology. This poses a fundamental obstacle for traditional inference pipelines, in
+which a Markov Chain Monte Carlo approach [8, 9] requires the evaluation of a likelihood
+function at every sampled point in parameter space. Given the impossibility of obtaining full
+hydrodynamical simulations covering the whole parameter space, the standard approach is
+– 1 –
+
+to adopt approximate likelihoods, typically assumed to be Gaussian, defined in terms of a
+summary statistics, which are often limited to the power spectrum. While computationally
+tractable [10], these approaches are known to discard a significant fraction of the cosmological
+information encoded in the non-Gaussian features of the matter and tracer fields, especially
+on small and intermediate scales. For example, [11] shows that, on a simplified analytic
+model based on lognormal fields, often used as an approximation to the late-time cosmological
+density field, standard approximations adopted to model a likelihood for correlation functions
+can cause significant biases, whereas field-level inference gives more accurate and precise
+posteriors, with gains increasing with non-Gaussianity. Similar conclusions have been reached
+by [12] in regards of cosmic shear data. However, the exact magnitude of the gain of full-
+field analyses with respect to Gaussian summary-statistics likelihoods is context-dependent:
+crucial factors include the degree of non-Gaussianity and the scale considered [11, 13], the
+characteristics of the instrument adopted and whether the summary statistic is actually close
+to sufficient (see e.g., [14, 15]).
+In the last few years, Simulation-Based Inference (SBI) has emerged as a powerful frame-
+work that circumvents the need for an explicit likelihood function (see e.g. [16, 17] for re-
+views). Instead of specifying a likelihood, SBI relies on forward simulations and machine
+learning methods to learn the posterior distribution, the likelihood function or the likelihood-
+to-evidence ratio of parametersθgiven the datax. This makes SBI particularly well-suited
+for cosmology, where numerical simulations are already central to modeling the non-linear
+regime of structure formation [18], but where analytical likelihoods are often intractable.
+Early applications to weak-lensing maps showed that likelihood-free inference can combine
+forward modeling, realistic survey masks and noise, and neural compression of summary
+statistics [19].
+SBI has already been demonstrated to be a powerful approach to inference in a range
+of cosmological and astrophysical applications. For example, [20] used neural classification
+for Bayesian model comparison in Type Ia supernova analyses, demonstrating that SBI can
+marginalize over thousands of latent variables. In cosmological field reconstruction, [21] in-
+troduced an SBI-based Bayesian framework applicable to generic non-differentiable forward
+simulators, enabling sampling from the posterior of the underlying field. In 21-cm cosmol-
+ogy, [22] applied truncated marginal neural ratio estimation to mock observations, showing
+that SBI can effectively handle complex foreground, beam, and noise effects while target-
+ing marginal posteriors efficiently. In studies of galactic binaries with gravitational wave
+data, [23] demonstrated that SBI can recover population-level parameters bypassing individ-
+ual sources’ fits. In exoplanetary atmospheric retrieval, [24] obtained orders-of-magnitude
+efficiency increase with respect to nested sampling methods, enabling large-scale model com-
+parison studies. More broadly, SBI is flexible enough to operate both on summary statistics,
+such as the traditional power spectrum and bispectrum (see e.g. [25]) or more advanced ones
+(see e.g. [26]), and on full field-level data using realistic forward models (see e.g. [27, 28]).
+Complementarily, recent field-level SBI methods have also targeted the reconstruction and
+fast posterior sampling of cosmological initial conditions [29, 30].
+Despite its appeal, SBI requires a large number of simulations to in order to train
+the inference model. Recent weak-lensing studies have benchmarked full-field approaches,
+emphasizing both the potential optimality of field-level inference and the large simulation
+budgets required to achieve sufficient generalization performance [31]. This issue has also been
+studied in [32], which showed that the number of simulations needed for neural information
+extraction can be substantially larger than in currently available simulation suites. To address
+– 2 –
+
+this bottleneck, emulators have become an essential component of modern inference pipelines.
+Emulators make use of machine learning techniques like deep neural networks to learn the
+mapping from input parameters and/or intermediate representations such as dark matter
+fields to target observables, enabling the generation of realistic simulations at a fraction
+of the computational cost. In recent years, emulators have become a powerful shortcut in
+producing high-fidelity simulation of cosmological and astrophysical fields (see e.g. [33–51]),
+aiming at bridging the gap between dark matter simulations and baryonic observables.
+Earlywork[34]useddeepgenerativemodelssuchasGANsandVAEstomapdarkmatter
+fields to baryonic quantities in the context of the thermal Sunyaev–Zel’dovich effect, reproduc-
+ing summary statistics but not addressing field-level inference. Later studies [36, 37] applied
+conditional VAEs and U-Nets to reconstruct hydrodynamical fields from N-body simulations,
+though only for fixed cosmological and astrophysical parameters, and a high redshift, relevant
+for the Lyman-αforest signal. More recent emulators [45] extended these approaches across
+cosmic time and multiple baryonic fields, using more sophisticated CNN architectures, aiming
+at lower-dimensional projected fields, although still without generalizing over the physical pa-
+rameters space. Recent work [49] has introduced conditional generative models that map fast
+particle-mesh simulations to full 3D baryonic fields while conditioning on both cosmological
+and astrophysical parameters, demonstrating accurate recovery of high redshift Lyα-relevant
+statistics. Further work has been carried out in the development of generative diffusion mod-
+els [52]; in this context, [47] introduces an algorithm to generate arbitrarily large 21 cm
+intensity fields, conditional on dark matter halo fields. In a parallel direction, some authors
+have also recently investigated physics-inspired particle-level approaches [53, 54] to generate
+fast and accurate dark matter and baryonic fields using a small set of model parameters.
+The authors of [55] highlight a critical challenge for SBI, namely its sensitivity to dis-
+tributional shifts between different simulation codes using the same parameters and initial
+conditions (even just in the pure N-body regime). In particular, discrepancies arising from
+numerical schemes of cosmological N-body simulations and effective resolution can lead to
+out-of-distribution (OOD) behaviors and hence biased parameter inference. These effects
+appear to be driven by small-scale differences, to which neural networks are especially sensi-
+tive, and can sometimes be mitigated by applying appropriate smoothing to restore statistical
+consistency between datasets, although this comes at the expense of constraining power.
+Finally, one last key aspect of modern LSS analyses relevant to this work is the joint
+exploitation of multiple tracers of the underlying matter distribution. Different observables
+probe the same large-scale structures while being affected by distinct astrophysical processes
+and observational systematics. As a result, their combination through cross-correlations pro-
+vides a promising path to enhance the overall constraining power by reducing such system-
+atics [56, 57]. Previous work includes the cross-correlation of different LSS tracers [58–61],
+LSS with the Cosmic Microwave Background [62–71], the IM of different lines [72–84], neutri-
+nos [85], Gravitational Waves [86–104], or machine learning based multi-field analysis directly
+from simulations [105].
+The goal of this work is to develop a proof-of-concept exploration of an SBI approach
+to multi-field LSS analysis, by developing a blueprint for a scalable SBI pipeline capable of
+inferring marginal posterior distributions for cosmological parameters, namelyΩm andσ 8.
+We focus on two complementary observational probes: galaxy number density fields and
+the mean brightness temperature of neutral hydrogen. By analyzing these tracers either
+individually or in combination, we aim to assess the gain in information when moving from
+single-tracer to joint analyses. We also investigate the information gain that can be expected
+– 3 –
+
+from overcoming standard compression schemes like the power spectrum to machine-learning
+derived representations of full-field 3D inference. Emulators play a key role in this work, since
+they allow us to efficiently generate large numbers of galaxy and HI maps starting from dark
+matter-only simulations, thus bypassing the need for large numbers of hydrodynamical runs.
+Our approach thus combines (i) fast approximate dark matter simulations, (ii) emulators to
+generate galaxy and HI fields, and (iii) SBI techniques to perform inference either on summary
+statistics or on latent representation of 3D fields. This allows us to systematically investigate
+the trade-offs between computational cost, data compression, and information retention, and
+to quantify gains and challenges of moving towards full-field 3D inference and multi-tracers
+analyses.
+The manuscript is organized as follows. In section 2 we present the methodology, break-
+ing it down in an overall overview (section 2.1), the generation of dark matter simulations
+(section 2.2) and the SBI framework (2.4). In section 3 we describe our results (on validation
+simulations) for SBI inference from the power spectrum alone and from the full 3D field,
+either for one or a combination of tracers. We draw our conclusions in section 4.
+2 Methodology
+Thissectionoutlinesthemethodologyofthispipeline, aimingtodevelopaflexibleSBIpipeline
+capable of extracting cosmological information directly from large-scale structure fields and
+assess the advantages and limitations of field-level SBI on multiple tracers.
+We adopt a controlled and idealized setup that allows us to isolate the cosmological
+information content of the simulated fields. In particular, we account for cosmic variance
+by considering multiple realizations and using an averaging procedure over initial conditions,
+thus ensuring that inference is not driven by specific initial conditions. At the same time,
+we deliberately do not include additional sources of observational uncertainty—such as in-
+strumental noise, survey systematics, or foreground contamination—in order to establish a
+clear and robust baseline of an idealized scenario for the performance of the pipeline. Our
+training, validation and testing sets are all self-consistently based on emulated maps, given
+that thoroughly testing the validity of transfer learning to the original suite (or to differ-
+ent ones) would require a full OOD analysis that go beyond the scope of this idealized setup
+work. In this sense, our analysis should be regarded as a proof-of-concept, designed to demon-
+strate the feasibility, potential and limitations of the proposed SBI framework, especially in
+the field-level and multi-tracers approaches. Building on these results, a natural next step
+will be to incorporate increasingly realistic observational effects and to tailor the analysis to
+the characteristics of ongoing and future surveys, further enhancing the applicability of our
+methodology.
+2.1 Overview of pipeline
+Before detailing each component of our method, here we provide a high-level description:
+1. InordertoobtainobservablepredictionsforLSS,westartfromapproximatedarkmatter
+(DM)-only 3D maps, evolved from high redshift down toz= 0withFastPM[106]. Maps
+feature a box size of either 25 or 50h−1Mpc; additional details are given in section 2.2.
+2. We train a modified version of the the U-Net [107] emulator presented in [47],HALOgen,
+to generate, conditioned on the DM maps, 3D maps of two different observables: galaxy
+number counts density and mean brightness temperatureTb of neutral hydrogen. We
+– 4 –
+
+SBI on power spectra
+Norm. ﬂow 
+SBI
+gal-only
+HI-only
+gal  HI×
+(
+( )
+( )
+OR
+OR
+Cosmological
+parameters
+posteriors
+Training
+OR OR
+),θ
+,θ
+,θ Inference
+SBI on maps
+( ,θ
+CNN
+ Latent 
+repr.
+Norm. ﬂow 
+SBI
+Cosmological
+parameters
+posteriors
+gal-only
+HI-only
+gal  HI×
+Joint training
+)
+( )
+( )
+OR
+OR
+Training
+Inference
+OR
+ OR
+,θ
+,θ
+Figure 1:Top: sketch of the SBI on power spectra pipeline. Power spectra are extracted
+from the emulated galaxy and/or HI maps, so that pairs of power spectra and cosmological
+parametersθ C ={Ω m, σ8}constitute the SBI training set (observables fields are reduced to
+power spectra). Once trained, the SBI flow is able to produce posteriors onθC for validation
+power spectra.Bottom: sketch for SBI on maps pipeline. Pairs of emulated full maps and
+θC are passed for joint training to a Convolutional Neural Network (CNN) which extracts a
+latent representation of the data, which is then used to train the SBI normalizing flow.
+refer to such emulator asHGL(HALOgen-like). For emulator training, this work takes
+advantage of the hydrodynamical simulations from the Latin Hypercube (LH) suite of
+theCAMELSSimulation Project [5] with prescriptions from theIllustrisTNG[108, 109]
+suite. Such simulations are available for a different combination of cosmological pa-
+rameters (Ωm,σ 8) and astrophysical ones (ASN1,A AGN1,A SN2,A AGN2), describing the
+relative strength and efficiency of feedback processes from Supernovae and Active Galac-
+tic Nuclei. More details on observables construction are provided in section 2.3, while
+for details on the emulator training and architecture we refer the reader to appendix A.
+3. We perform SBI on emulated galaxy/HI maps to infer (marginal) posterior distributions
+– 5 –
+
+on cosmological parameters. We investigate two approaches: first, we perform SBI on
+a summary statistic of the full field, the power spectrumP(k)(see top panel of figure
+1); second, we perform SBI on a machine learning representation of the full field (see
+bottom panel of figure 1). Within each, we compare the constraints on cosmology that
+can be achieved from one single tracer (galaxy or HI) or from simultaneously considering
+both (different input lines in figure 1, bottom). See section 2.4 for full details.
+Figure 1 provides a schematic overview of our pipeline, with each step described in
+detail below. In this work, all observables are considered at redshiftz=0, working in the
+plane-parallel approximation and assuming the box redshift to be constant. Extending the
+analysis to higherzis planned for future works.
+2.2 Dark matter approximate maps
+We train theHGLemulator to produce 3D galaxy/HI fields starting from an approximate,
+z= 03D DM map. For the purpose of constructing a suitable training set for the emulator,
+we make use ofFastPMto generate approximate DM maps at small computational cost, and
+we pair them with galaxy/HI 3D maps obtained from full hydro simulations fromCAMELSfor
+the same cosmological parameters and initial conditions (further details on galaxy emulator
+train/validation sets in appendix A).FastPMtakes as inputs the cosmological parameters
+{Ωm, σ8}(the latter in the form of the normalization of the input power spectrum), the linear
+total matter power spectrum, and a seed for the generation of the linear density map at high
+redshift.
+TheFastPMrandom number generator is compatible with the one used forCAMELS(part
+ofN-GENIC[110]), therefore, for the training set, we simply feedFastPMthe seeds provided
+in theCAMELSdataset, as well as the linear power spectrum also provided in theCAMELS
+simulation suite data. On the contrary, when emulating observables from new DM maps (i.e.
+when training and testing the SBI model), we generate the linear power spectrum using the
+Boltzmann solverCLASS[111] and we feedFastPMarbitrary seeds.
+We generate DM cubes with bothL= 25h−1Mpc andL= 50h −1Mpc sides (we discuss
+this choice more in detail below), with the following properties:
+•L= 25h −1Mpc:FastPMis run with128 3 particles on a1283 mesh and maps are saved
+with a mesh size of643;
+•L= 50h −1Mpc:FastPMis run with256 3 particles on a2563 mesh and maps are saved
+with a mesh size of1283.
+With these specifications, maps of different sizes have the same resolution. In each case, we
+generate a linear density map with twice the resolution of the mesh used for the simulator in
+order to improve the accuracy on small scales. We then generate initial conditions at redshift
+z= 9using2LPT[112] and run 10FastPMsteps down toz= 0using a force resolutionB= 2,
+with an overall compute time of∼0.3CPU hours per simulation (∼35seconds on one node
+of the Leonardo cluster of CINECA).
+2.3 Galaxies and HI maps
+The first tracer we consider consists of galaxy number counts density maps. To generate
+these maps, we carry out the following steps: we choose the full hydrodynamical snapshots
+from theCAMELSLH suite with comoving volumeL 3 = (25h −1Mpc)3 andN part = 2563 DM
+– 6 –
+
+particles and gas elements, atz= 0. We apply a mask selecting sub-halos with mass larger
+than a threshold1 of10 9M⊙/hand non-zero stellar mass, and generate the density field with
+the cloud-in-cell (CIC) mass-assignment scheme on a grid of sizeNgrid = 64, further applying
+a smoothing with a Gaussian kernel of radiusR= 0.2h−1Mpc (following [47]) and, to help
+training, clipping low values of the density field to a minimum of10−4.
+Maps of the second tracer, HI temperature, are obtained from the correspoding full
+hydrodynamic snapshots with the sameL3 andN part values, atz= 0. We extract the neutral
+hydrogen fractionxHI,i and gas massmg,i [M⊙]for each gas particleiin the simulation. The
+corresponding neutral hydrogen density is calculated as
+ρHI,i =m g,iXx HI,i
+ Npart
+a×L
+3kg
+m3
+
+,(2.1)
+whereX= 0.76is the hydrogen mass fraction as set inCAMELSandais the scale factor. We set
+xHI,i = 1for particles with non-zero star formation rate, following the prescription adopted
+inCAMELS[114]. This approximation assumes complete self-shielding and reproduces key
+observational constraints, including the HI abundance and the column density distribution of
+damped Lyman-αsystems [113]. We then interpolateρHI,i onto a continuous fieldρHI using
+the CIC scheme andNgrid = 64. The 21cm brightness temperature in the post-reionization
+regime is approximated as [113]
+Tb(x) = 189h
+ H0(1 +z) 2
+H(z)
+ ρHI(x)
+ρc
+[mK],(2.2)
+whereρ HI(x)is the interpolated neutral hydrogen density at positionx,H(z)is the Hubble–
+Lemaître parameter,h= 0.6711is the dimensionless Hubble–Lemaître constant (fixed at
+CAMELSfiducial value) andρ c = 9.47·10 −27kg/m3 is the critical density. This field is also
+smoothed with aR= 0.2h −1Mpc Gaussian kernel.
+The process of predicting such 3D galaxy and HI fields from their approximate DM coun-
+terpart can be thought of an image to image translation task. To achieve this while preserving
+spatial correlations and structure we make use ofHGL. While the originalHALOgen[47] was
+designed to work for fixed cosmological parameters, here we introduce structural modifica-
+tions to generalize emulated fields for different cosmologicalθC ={Ω m, σ8}and astrophysical
+θA ={A SN1,A AGN1,A SN2,A AGN2}parameters (defined as inCAMELS).
+One limitation of using relatively small boxes is the power spectrum sensitivity to cosmic
+variance and finite-volume effects. Indeed, we found that, for25h−1Mpcboxes, realizations
+at fixed physical parameters and generated with different random seeds can yield noticeably
+different power spectra (creating a degeneracy between cosmology and the particular realiza-
+tion of the density field); for this reason, we adopt boxes of size50h−1Mpcto mitigate this
+effect and improve the sampling of large-scale modes. However, trainingHGLfor 50h−1Mpc
+boxes is not feasible for the purpose of this work within theCAMELSsimulations, since the
+LH set is not available for a box size of 50h−1Mpc, and the available SB35 set for such box
+size varies 30 astrophysical parameters at the same time (instead of 4), making the emulation
+task significantly more difficult. For these reasons, we trainHGLusing the LH simulations
+at 25h−1Mpc, and then use it to emulate maps at 50h−1Mpc. Note that emulating maps
+1This threshold is chosen for two reasons: first, we would like to have numerically resolved haloes and this
+lower limit guarantees at least 100 dark matter particles per halo; second, we would like to use all the haloes
+which are likely to host HI according to more sophisticated hydro sims like [113].
+– 7 –
+
+of different size is correct only wheen keeping the same resolution, motivating the choice of
+number of particles and grid size for theFastPMsimulations mentioned above. Details about
+the emulator architecture and training are provided in appendix A.
+2.4 Simulation-Based Inference with Neural Posterior Estimation
+We use the galaxy and HI emulated maps to perform SBI in order to obtain posterior dis-
+tributions of the cosmological parametersθC; this is done by either fixing the 4 astrophysical
+parametersθ A to fiducial values {ASN1 = AAGN1 = ASN2 = AAGN2 = 1} or by marginalizing
+over them. SBI is trained on newly generated maps, in terms of both seeds and parameters
+values, obtained via the emulator from uniform priors as follows:Ωm ∈[0.2,0.4]andσ 8 ∈
+[0.7,0.9]and, for the free astrophysics scenario,A SN1 ∈[0.7,1.5],A AGN1 ∈[0.7,1.5],A SN2 ∈
+[0.5,2.0],A AGN2 ∈[0.5,2.0].
+We perform SBI with Neural Posterior Estimation (NPE) [115–118], in which a neural
+density estimator is trained to approximate the conditional posterior distributionp(θ|d)
+directly from simulated parameters-data pairs,(θ,d). In this work, the posterior is modeled
+using a normalizing flow [119], i.e. an expressive, invertible transformation that maps a
+simple base distribution (typically a multivariate Gaussian) into a complex target distribution
+through a sequence of learned bijective transformations. NPE training maximizes the log-
+probability of sampled parameters given simulated data, i.e. minimizing the negative log-
+likelihoodL(ϕ) =−E p(θ,d)[logq ϕ(θ|d)], whereq ϕ(θ|d)denotes a parametric approximation
+of the true posterior andϕare the normalizing flow parameters (see e.g. [115, 117] for further
+details).
+Specifically, we adopt a Masked Autoregressive Flow (MAF) [120], a type of normalizing
+flow that uses autoregressive neural networks to transform a simple probability distribution
+into a complex one by masking weights to ensure each dimension only depends on previous
+ones. The main advantage of MAFs is that they provide highly efficient density estimation,
+allowing for relatively quick training.
+As anticipated in section 2.1, we perform SBI on two different types of data:
+•SBI on power spectrum(caseP): we perform SBI on the power spectraP(k)
+extracted from the emulated galaxy/HI maps, as a baseline case of the achievable con-
+straints within an SBI framework with this summary statistic alone. Firstly, we perform
+SBI looking only at one tracer (either galaxy or HI); then we take into account the full
+cross-correlation g×HI information, given by both the auto-correlation power spectra
+P g
+k andP HI
+k and the cross-correlation power spectrumPg×HI
+k . For the sake of simplify-
+ing the notation, in what follows these three cases are referred to as, respectively,Pg,
+PHI andP g×HI. Full details on the methodology are provided in section 2.4.1.
+•SBI on latent representations of full maps(caseM): the entire density field is
+used here, to inform a latent representation of the full galaxy/HI maps, extracted by a
+Convolutional Neural Network (CNN) attached to the SBI flow for joint training. As
+in the previous scenario, we first work on one single field and then feed both of them to
+the network jointly. Such cases are referred to asMg,M HI andM g×HI. We explore
+both the case where maps are flattened (2DM) by averaging along a third axis, and
+a full three-dimensional scenario (3DM), which is more challenging from a memory
+and training perspective, while providing in principle more information. Full details are
+provided in section 2.4.2.
+– 8 –
+
+T able 1: Summary of the different SBI setups explored in this work grouped by category,
+and corresponding abbreviations. For example: SBI on power spectrum performed with fixed
+astrophysics and galaxies as single tracer is referred to asPg
+fixedA and SBI on maps performed
+on 3D cubes of both observables, with free astrophysics is referred to as3DMg×HI.
+CA TEGOR Y OPTIONS
+Data representation P(k):Prepresentation of full-field maps: 2DMor 3DM
+Astrophysics fixed: subscript “fixedA” free: no subscript
+tracers gal-only: apex “g” HI-only: apex “HI” galaxies×HI: apex “g×HI”
+Table 1 details the different SBI setups explored and summarizes the nomenclature that
+identifies each configuration.
+The inference pipeline is implemented using thesbilibrary [121]. We test different
+hyper-parameters configurations; the chosen values are specified in each corresponding sub-
+section.
+2.4.1 CaseP: SBI on Power Spectrum
+FortheSBIanalysisperformedonpowerspectrum(caseP), wecompressthethree-dimensional
+information of the emulated galaxy/HI field into its isotropic power spectrumP(k)X, with
+X∈ {g,HI}. We compute it by means of thePylianslibrary [122]: starting from the
+density field defined on a regular grid, we perform a Fast Fourier Transform to obtain the
+Fourier modes and estimate the spherically-averaged power spectrum, binning modes in shells
+of constant wavenumberk:P(k) X =⟨|δ X(k)|2⟩, whereδ X(k)is the Fourier transform of
+the galaxy number density/HI mean brightness temperature field (both normalized by their
+mean). Similarly, for the cross-correlation case we computeP(k)X,Y =⟨δ X(k)δY∗
+(k)⟩with
+X̸= Y. Computations are performed over the range of scales allowed by the box size and
+grid resolution.
+We consider power spectra extracted from boxes of size50h−1Mpc, in the scales range
+k∈[0.18,4.7]h/Mpc. For each combination of physical parameters we average the power
+spectra obtained from 10 independent realizations with different initial seeds. This procedure
+reduces the impact of realization-to-realization fluctuations and is effectively equivalent to
+probing a larger survey volume, as it increases the number of independent modes contributing
+to the estimated power spectrum. We remind the reader that in our simplified setup no
+measurement noise is added to the simulated data. In this regard, the power-spectrum-
+related uncertainties treatment includes only the aforementioned contribution from cosmic
+variance.
+To build the SBI training set for thePcase, we emulate8×104 galaxy/HI maps drawing
+physical parameters from their prior ranges and producing 10 emulations (each with different
+initial conditions) for each parameter set value, over which we average the power spectra. This
+produces8×10 3 averaged power spectra. The validation set is obtained as 20% of the training
+set, randomly sampled (after averaging over initial conditions). The SBI test set is made of
+200 averaged (each over 10 initial conditions) power spectra, all drawn from the fiducial
+ΛCDM scenario withθ C ={Ω m = 0.315, σ 8 = 0.811}from Planck fiducial values [123] and
+either withθ A ={A SN1 = AAGN1 = ASN2 = AAGN2 = 1}(for the fixed astrophysics baseline
+case) or marginalizing over different astrophysics values within their uniform priors. After
+– 9 –
+
+the averaging and before passing the power spectra to the SBI flow, we move tolog10 space
+and normalize the sets with standard scaling.
+For the cross-correlation cases,Pg×HI
+fixedA andP g×HI, we pass to the SBI flow a concatena-
+tion of both the auto-spectra and the cross-spectrum, after they have been re-normalized all
+together:{P(k) g, P(k) HI, P(k) g,HI}.
+The MAF network adopted to model the posterior distribution is configured with 5
+transforms and 128 hidden features per layer. Training is performed with a batch size of 128
+and a learning rate of10−3. We train with early stopping applied if the validation loss does
+not improve for 120 consecutive epochs. Such hyper-parameters configuration are chosen after
+exploring several different combinations.
+Section 3 provides results for posteriors on{Ωm, σ8}and calibration plots both fixing
+the astrophysics to fiducial values and letting it free, marginalizing over the four astrophysical
+parameters.
+2.4.2 CaseM: SBI on latent representations from maps
+Field-level SBI relies on a CNN to compress the input emulated maps into a one dimensional
+latent space, which is then passed to the normalizing flow. The CNN encoder and the flow
+are trained jointly in order to obtain a physically informative latent space. Compressing
+the maps by means of a separate autoencoder guided by a reconstruction loss would not
+necessarily preserve the most informative features for the physical parameters of interest.
+In a computationally less demanding configuration, we flatten the full maps to 2 dimen-
+sions by averaging over the third axis, and extract the latent space from them. We refer
+to this scenario as 2DMcase. We also explore the increase of information provided by the
+entire three-dimensional map. This scenario, referred to as 3DMcase, is ideally expected to
+provide the highest amount of information, but at a significantly higher computational cost.
+The SBI train set is here composed of8×10 4 (3×10 4) maps of box size 50h−1Mpc
+andN grid = 128for the 2D (3D) case, the 3D set being smaller for computational costs
+reasons. To account for cosmic variance and finite box effects, 10 different initial conditions
+are adopted for each parameter value, as was done in thePcase. The test set is instead made
+of 200ΛCDM-Planck realizations, with different never-seen-before seeds, same cosmology
+θC ={Ω m = 0.315, σ 8 = 0.811}[123] and either with fixed astrophysics (θ A ={A SN1 =
+AAGN1 = ASN2 = AAGN2 = 1}) or marginalizing over astrophysical effects within their priors.
+The CNN encoder is implemented in either 2D or 3D depending on the dimensionality
+of the input maps, with the same architecture applied in both cases. It is composed of two
+layers with 32 and 64 filters, respectively, using kernel size 3 and stride 2 in each layer and
+a ReLU activation function. We adopt group normalization, with 4 and 8 groups in the
+first and second layers, respectively. In the single tracer cases,Mg andM HI, the network
+is characterized by only one channel, whereas in the cross-correlation case,Mg×HI, we have
+one channel for each tracer, for a total of two. The final latent space is obtained via average
+pooling over the spatial dimensions and has a single dimension of length 64 for all cases.
+Similarly to thePcase, we model the posterior using a MAF with 5 transforms and
+128 hidden features per layer. The network is trained with a learning rate of10−3, a batch
+size of 128 (16) with early stopping if the validation loss does not improve for 120 (35)
+epochs for the 2D (3D) case. We reserve 20% of the simulations for validation. Due to the
+extreme computational costs of full-field SBI, especially for the 3D case, we could not perform
+parameters tuning as extensively as in thePcase. We chose, instead, configurations analogue
+to the bestPcase ones. Table 2 summarizes the architecture for theMcases.
+– 10 –
+
+T able 2: Architecture of the SBI model for 3D field-level inference (model 3DM). The input
+maps are compressed into a 64-dimensional latent representation via a convolutional encoder,
+and the posterior over parameters is inferred using NPE with a MAF. Note thatd= 2(3)
+for 2D (3D) field-level inference.
+Stage Representation Channels Operation
+Input128 d maps 1 or 2 Input fields
+Encoder(128/2) d 32 Conv (k=3, s=2) + GN (g=4) + ReLU
+(128/4)d 64 Conv (k=3, s=2) + GN (g=8) + ReLU
+LatentR 64 – Global mean pooling
+FlowR 64 – MAF (5 transforms, 128 hidden features)
+Outputp(θ|d)– Approximate posterior distribution
+To generate the results below, thePcases were trained for around2minutes on a Apple
+McBookPro M4 CPU, the 2DMtook about 40 minutes on a single A100 GPU whereas
+training the 3DMcases required one full week on the same single A100 GPU (although
+preliminary posteriors near convergence were already available after a runtime of∼2days).
+In all cases, inference requires only a few seconds on the Apple McBookPro M4 CPU. In
+terms of disc usage for the 50h−1Mpc case, the full train set for thePg×HI scenario occupies
+a mere∼1MB (8×10 3 ×3average power spectra), the one for the 2DMg×HI case∼10GB
+(8×10 4 ×2maps) and finally∼470GB for 3DM g×HI (3×10 4 ×2cubes).
+3 Results
+3.1 Statistical precision
+Figure 3 shows posteriors on{Ω m, σ8}for the 200 realizations in the test set (at fixed
+ΛCDMPlanckgroundtruthparameters)forthebaselinefixed-astrophysicsscenario, givingan
+overview of the gains reachable with field-level SBI. The following cases are shown:Pg×HI
+fixedA,
+2DMg×HI
+fixedA and 3DMg×HI
+fixedA. The light lines indicate contours for each test set realization,
+whereas solid lines provide the mean posterior, averaged overall all realizations. Although
+the 2DMg×HI
+fixedA case does not significantly improve constraining power, the 3DMg×HI
+fixedA case
+provides a significant gain, especially forσ8. An even clearer improvement can be seen when
+marginalizing over the astrophysical parameters: figure 4 displays significant improvements
+on both{Ω m, σ8}when moving to 3D field-level (case 3DMg×HI). In figure 5 we display
+posteriors for the free astrophysics 3DMg×HI case, comparing it with the baseline 3DMg×HI
+fixedA
+scenario. Although marginalization over astrophysical parameters reduces the precision of
+marginal posteriors by about a factor∼2for bothΩ m andσ 8, additional cosmological infor-
+mation is still clearly retained in the field-level approach. This is different for thePg×HI case
+previously shown in figure 4, where it can be noticed that limiting the analysis to the power
+spectrum provides very wide posteriors, especially onσ8 where the posterior spans nearly the
+whole prior range. Including information beyond the power spectrum seems therefore crucial
+to retain cosmological information while marginalizing over astrophysics. Figure 6 (fixed as-
+trophysics) and figure 7 (free astrophysics) also help highlighting the improvement obtainable
+in terms of posteriors predictivity when moving from single tracer to multi-tracers analysis.
+In particular, we notice how including HI information produces a dramatic improvement in
+constraints compared to galaxy tracers only.
+– 11 –
+
+For each combination of tracers and choice of data summary, we quantify the resulting
+statistical precision on the two cosmological parameters of interest by means of a Figure of
+Merit (FoM) defined as FoM =1/A68, whereA 68 is the area within the68%joint credible
+region forσ 8 andΩ m (marginalized over astrophysical parameters where appropriate). Table
+3 shows the median Figure of Merit (FoMm) computed from the the 200 posteriors in the
+test set. When moving fromPg×HI to 3DMg×HI,FoM m increases by a factor∼3for both
+the fixed and free astrophysics configurations, giving a first indication of the gains achievable
+by a 3D field-level analysis. Comparison with the 2DMg×HI cases shows that flatteninig the
+cubes to 2D maps does not yield comparable increase. Furthermore, both in thePandM
+scenarios, the multi-tracers cases are those yielding the highestFoMm, which increases with
+respecttothesingle-tracercasesbyfactorsbetween∼2andupto7. Thisdemonstratesanon-
+negligible improvement in the precision achievable by the multi-tracers approach. Accuracy
+and calibration of the posteriors are addressed below.
+Data
+summary T racer F oMm
+(Fixed A.)
+F oMm
+(F ree A.)
+Pg0.65 0.33
+PHI2.5 0.27
+Pg×HI4.7 1.0
+2DMg×HI5.2 1.2
+3DMg2.4 0.47
+3DMHI5.5 2.2
+3DMg×HI12 3.4
+T able 3: Median Figure of MeritFoM m
+across test sets, for the explored SBI scenar-
+ios. Values are normalized by3.23×102, cor-
+responding to theFoMm ofP g×HI case.
+Pk 2D maps 3D maps
+0
+2
+4
+6
+8
+10
+12Normalized FoMm
+g
+HI
+g×HI
+Fixed astrophysics
+Free astrophysics Figure 2: Visualization of table 3 data.
+To further investigate the constraining power of the various scenarios, we show in figures
+8, 9, 10 and 11 the distribution of marginal posterior means over the 200 test realizations
+(top panel) and their median widths (bottom panel). Figures 8 and 9 display the results
+for fixed astrophysics forΩ m andσ 8, respectively: the 3DM g×HI
+fixedA case delivers unbiased
+and narrower posteriors with respect to thePg×HI
+fixedA case. This is especially prominent for
+σ8, whose constraints improve by a factor∼2(whileΩ m is improved only mildly). It is
+worth noticing that the 2DMg×HI
+fixedA case, instead, does not yield a significant improvement,
+especially forΩ m, where in fact we observe a degradation of constraints with respect to the
+Pg×HI
+fixedA case. This indicates that, at least under the current setup for the latent representation,
+the three-dimensionality of the field-level maps is required to retain additional cosmological
+information.
+Focusing the attention on the improvements from combining both tracers, figures 8 and 9
+alsoshowthatposteriorsforthe3DM g×HI
+fixedA casearenarrowerbyafactor∼4forΩ m and∼4−
+5forσ 8 with respect to the 3DMg
+fixedA case and narrower by about∼40%forΩm with respect
+to the 3DMHI
+fixedA case, indicating a clear advantage from multi-tracer combination. This is
+most likely due to the fact that galaxy maps are significantly sparser, thereby affected by shot-
+– 12 –
+
+noise, and built from halos spanning a wide range of masses, each with different bias factors,
+which effectively mixes objects tracing the underlying DM distribution in different ways.
+In contrast, HI intensity maps trace the matter field as a smoother continuous observable
+with a more straightforward dependence on the underlying matter density. Furthermore the
+relatively small box size used in this study prevents us to fully exploit the capabilities of
+galaxy clustering at linear scales. The main message of the exercise performed in this work is
+that the HI field retains more information, at non-linear level, compared to the galaxy field,
+and our SBI-based framework is able to extract this information. Indeed, this should not be
+interpreted as a limitation of galaxy clustering analyses per se, nor as a contradiction with
+the success of traditional large-scale structure cosmology based on it, since they typically rely
+on physically motivated bias models (e.g. within the effective field theory framework), large
+survey volumes, and additional observables such as redshift-space distortions or higher-order
+statistics, all of which help break degeneracies and recover cosmological information. A more
+thorough assessment of the relative merits of each tracer would require consideration of the
+different noise properties of the observations and systematic effects, whose impact depends
+on the specific modeling assumptions and observational context, which are beyond the scope
+of this work. Figures 10 and 11 show the same analysis but in the case where astrophysical
+parameters are marginalized over. In this case, the case 3DMg×HI yields less biased posteriors
+with respect toP g×HI, and clearly narrower for both cosmological parameters: a∼30%
+improvement forΩ m and∼50%forσ 8, confirming the trends just discussed for the fixed
+astrophysics scenario.
+Using of 200 independent test realizations allows us to assess the stability of the inference
+across different initial conditions. The dispersion of posterior means (figures 8, 9, 10, 11)
+indicates that the 3DMapproach not only yields tighter constraints than thePscenario, but
+also reduces realization-to-realization scatter, suggesting that this method is less sensitive to
+cosmic variance, effectively extracting more robust information from each individual map.
+3.2 Bias and calibration
+In order to quantify the bias in the posterior inference of theΛCDM-Planck test set, in table
+4 we provide relative percentage values of the distance between the ground truth value and
+the median value of posterior samples from all realizations in the test set (obtained from
+1000 samples for each of the 200 realizations, for fixedΛCDM fiducial parameters values),
+for the scenarios explored in this work. The scenarios presenting the smallest bias are, most
+of the times, the 3DMcases. Nonetheless, bias trends are less extreme than theFoM m
+trends reported in table 3 with bias values never exceeding∼1.5%, well below statistical
+uncertainties.
+Figure 13 displays the same PP-plots for theΛCDM-Planck test set under the free as-
+trophysics scenario, where we observe a marked improvement in calibration for the 2DMg×HI
+scenario but a worsening for the 3DMg×HI case with respect to the fixed astrophysics setting.
+Finally, to check the calibration of our SBI pipeline across parameter space, we illustrate,
+in figure 14, the true versus marginally inferred values of cosmological parameters for the free
+astrophysics case 3DMg×HI, for value ofθA andθ C sampled from their priors. We also display
+the PP plots for this same set – this is a Bayesian PP plot, i.e., showing calibration when
+parameters are sampled from their respective priors. We note that the calibration in this case
+is compatible with the 95% binomial uncertainty essentially across the whole range, showing
+good calibration.
+– 13 –
+
+Ωm bias [%] σ8 bias [%]
+Data
+summary T racer Fixed A. F ree A. Fixed A. F ree A.
+Pg 1.5 0.98 0.21 1.0
+PHI -0.23 1.0 0.64 -0.42
+Pg×HI 0.042 -0.19 1.0 0.23
+2DMg×HI -0.72 0.75 0.73 -0.15
+3DMg 0.19 -1.1 -0.49 0.48
+3DMHI -0.38 0.23 -0.25 -0.79
+3DMg×HI 0.084 -0.38 -0.076 0.25
+T able 4: Bias onΩ m andσ 8 across test sets in [%], for the explored SBI scenarios. We
+report the percentage difference between ground truth value and median value of the posterior
+samples across the test set.
+3.3 Overall remarks
+Overall, these results indicate two main trends. First, the transition from power spectrum-
+based inference (modelP) to field-level representation produces the largest gains in precision
+when exploiting the full 3-dimensionality of the data (model 3DM). Combining the two trac-
+ers at the power spectrum level (modelPg×HI) captures only part of the available informa-
+tion, while the 3DMconfigurations recover a substantially larger fraction of the cosmological
+information, retaining well-calibrated constraining power even when marginalizing over as-
+trophysical uncertainties. Such gain can be interpreted in terms of the additional information
+encoded in higher-order, non-Gaussian statistics: while the power spectrum captures only
+two-point statistics, the latent space representations of the full field retains non-Gaussian
+features generated by non-linear gravitational evolution and tracers bias. These features are
+particularly sensitive toσ 8, which controls the amplitude of fluctuations and therefore the
+strength of mode coupling. The CNN-based compression is able to extract part of this infor-
+mation, whereas it is irreversibly lost when reducing the data to the power spectrum. The
+lack of improvement observed in the 2DMcase also suggests that simple dimensionality re-
+duction through projection leads to a substantial loss of information: collapsing along one axis
+removes line-of-sight structures which appear to carry significant cosmological information.
+Once again, this highlights that the gain of field-level SBI is specifically due to preserving the
+full three-dimensional structure, although this comes at the expense of computational cost.
+Second, moving from single tracer to multi-tracers analysis yields tighter and less biased con-
+straints. This gain can be interpreted as a combination of increased effective signal-to-noise
+and partial breaking of degeneracies, as the two tracers probe the same underlying mat-
+ter distribution with different biases and realization noise: the inclusion of cross-correlation
+information helps disentangle cosmological parameters from tracer-specific effects.
+4 Discussion and conclusions
+We have developed an SBI pipeline combining fast dark matter simulations, neural emula-
+tors for galaxy and HI fields, and neural density estimators to perform inference on both the
+– 14 –
+
+power spectrum and latent representations of field-level data. This setup allows us to system-
+atically assess the impact of data compression and multi-tracer information on cosmological
+constraints in an idealized setting.
+We find that combining tracers through cross-correlations leads to a clear improvement
+in constraining power. Joint galaxy–HI analyses consistently outperform single-tracer cases,
+with a significant reduction of parameter degeneracies. This confirms the advantage of multi-
+tracer approaches in extracting complementary information from the same underlying matter
+distribution. Moving from power spectra to field-level inference yields an additional and
+substantial gain. While SBI on the power spectrum provides a useful baseline, it does not
+capture the full information content of the data, especially when marginalizing over astro-
+physical effects. In contrast, SBI analysis of latent representations of the 3D fields leads
+to more precise and accurate posteriors, especially forσ8. We also find that flattening the
+3-dimensional structure of the field-level data into 2-dimensional projected maps does not pro-
+vide the same gains, thus indicating that the improvement is linked to the three-dimensional
+structure of the fields. This increased constraining power comes, however, at a significantly
+higher computational cost.
+Astrophysical uncertainties play a critical role. When marginalizing over astrophysical
+parameters, the constraining power of the power spectra degrades substantially, in some cases
+leading to uninformative posteriors. By contrast, field-level inference retains a significant frac-
+tion of the cosmological information, suggesting that non-Gaussian features help disentangle
+cosmology from astrophysics.
+Our analysis is performed in an idealized proof-of-concept setting, neglecting observa-
+tional effects such as instrumental noise, survey systematics, and foregrounds. While this
+allows for a clean assessment of the intrinsic information content, it also means that our
+current results represent an optimistic, best-case scenario. Incorporating more realistic noise
+modeling and moving towards survey-like simulations is necessary to assess the applicability
+of this approach to realistic data. For example, one would have to to apply the beam effect
+and thermal noise of the instrument for an SKA-like observation to HI maps (e.g. [124]), and
+consider the important impact of foregrounds [125]. Our approach should also be compared
+with existing likelihood-based pipelines [126]. For application to realistic galaxy surveys, it
+will be crucial to include selection functions, as well as either spectroscopic or photometric
+redshift errors to the mock sample. All of these improvements require a dedicated set of
+simulations on which to re-train our models, and we thus defer this investigation to a future
+work.
+Finally, we emphasize that in this work we limited ourselves to a self-consistent proof-of-
+concept setup, where both training and inference are performed on emulated maps generated
+within the same framework. We did not attempt to perform a transfer learning analysis
+to the different simulation suites (e.g., applying SBI trained on emulated maps to original
+CAMELSmaps or to other suites), since previous studies [55] have highlighted the sensitivity
+of field-level SBI methods to out-of-distribution effects and small-scale discrepancies between
+simulations, even just for pure N-body codes. This mean that transfer learning between
+emulated and simulated maps (and even more, real observations) remains challenging in
+the absence of dedicated mitigation strategies. Addressing these important issue requires
+a separate investigation, beyond the scope of the present work, whose goal was instead to
+establish and validate the proposed field-level multi-tracer SBI framework within the context
+of a given emulated suited of simulations.
+Overall, our results highlight the combined impact of multi-tracer analyses and field-level
+– 15 –
+
+SBI in unlocking the information content of large-scale structure. Extending these methods
+to more realistic settings and improving their computational efficiency will be key for their
+application to upcoming cosmological surveys.
+Acknowledgments
+We thank Daniela Breitman, Gabriella Contardo, Kosio Karchev, François Lanusse, An-
+dre Scaffidi, Christoph Weniger for useful discussions. We thank Shy Genel and Francisco
+Villaescusa-Navarro for sharing with us the second generation 50h−1MpcCAMELSsuites, from
+which theCVset was used for figures 18 and 19 of this manuscript.
+GS is partially supported by Next Generation EU programme (PNRR). SM is supported
+by the National Recovery and Resilience Plan (PNRR), Dottorati Green/Innovazione under
+DM 351. SM and MR acknowledge support from the SISSA-Flatiron Exchange Programme.
+RT acknowledges co-funding from Next Generation EU, in the context of the National Recov-
+ery and Resilience Plan, Investment PE1 – Project FAIR “Future Artificial Intelligence Re-
+search”. Thisresourcewasco-financedbytheNextGenerationEU[DM1555del11.10.22]. RT
+and MV are partially supported by the Fondazione ICSC, Spoke 3 “Astrophysics and Cosmos
+Observations”, Piano Nazionale di Ripresa e Resilienza Project ID CN00000013 “Italian Re-
+search Center on High-Performance Computing, Big Data and Quantum Computing” funded
+by MUR Missione 4 Componente 2 Investimento 1.4: Potenziamento strutture di ricerca e
+creazione di “campioni nazionali di R&S (M4C2-19)” - Next Generation EU (NGEU). GS, MV
+and RT are also partially supported by INFN INDARK grant. MV is also supported by the
+INAF Theory Grant “Cosmological Investigation of the Cosmic Web” and the SISSA-IDEAS
+grant. Part of the computations for this work were performed on the Leonardo cluster of
+CINECA.
+– 16 –
+
+0.24 0.30 0.36
+m
+0.70
+0.75
+0.80
+0.85
+0.908
+0.72 0.78 0.84 0.90
+8
+Truth
+3D maps
+2D maps
+Pk
+gal×HI: FIXED ASTROPHYSICS
+Figure 3: Posteriors on{Ω m, σ8}forP g×HI
+fixedA (red) vsM g×HI
+fixedA (2D, light blue, and 3D, blue)
+for 200ΛCDM-Planck realizations test set (ground truth in black). Performing inference on
+the full 3D maps significantly improves precision. Dots in the lower left plot represent the
+median values computed from all the posteriors samples.
+– 17 –
+
+0.24 0.30 0.36
+m
+0.70
+0.75
+0.80
+0.85
+0.908
+0.72 0.78 0.84 0.90
+8
+Truth
+3D maps
+2D maps
+Pk
+gal×HI: FREE ASTROPHYSICS
+Figure 4: As in figure 3, but for the free astrophysics scenario, with astrophysical parameters
+marginalized over.
+– 18 –
+
+0.24 0.30 0.36
+m
+0.70
+0.75
+0.80
+0.85
+0.908
+0.72 0.78 0.84 0.90
+8
+Truth
+3D maps, fixed astrophysics
+3D maps, free astrophysics
+gal×HI
+Figure 5: Posteriors on{Ω m, σ8}marginalizing over the free astrophysics case 3DMg×HI
+versus fixed astrophysics 3DMg×HI
+fixedA for 200 validation datasets (ground truth in black). Fix-
+ing astrophysics shows smaller uncertainties as expected, but marginalized constraints retain
+cosmological information while being agnostic to the details of baryonic processes.
+– 19 –
+
+0.24 0.30 0.36
+m
+0.70
+0.75
+0.80
+0.85
+0.908
+0.72 0.78 0.84 0.90
+8
+Truth
+gal-only
+HI-only
+gal×HI
+SBI on 3D maps (FIXED ASTROPHYSICS)
+Figure 6: Posteriors on{Ω m, σ8}(fixed astrophysics) comparing single-tracers cases
+3DMg
+fixedA (purple) and 3DMHI
+fixedA (orange) with multi-tracer case 3DMg×HI
+fixedA (blue).
+– 20 –
+
+0.24 0.30 0.36
+m
+0.70
+0.75
+0.80
+0.85
+0.908
+0.72 0.78 0.84 0.90
+8
+Truth
+gal-only
+HI-only
+gal×HI
+SBI on 3D maps (FREE ASTROPHYSICS)
+Figure 7: As in figure 6, but for the free astrophysics scenario.
+– 21 –
+
+0.26
+0.28
+0.30
+0.32
+0.34
+0.36Posteriors means ( m)
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+FIXED ASTROPHYSICS
+Median Truth
+Pk gal×HI
+2D maps gal×HI
+3D maps gal-only 3D maps HI-only 3D maps gal×HI
+0.01
+0.02
+0.03
+0.04
+0.05
+0.06
+0.07
+0.08Median posteriors width ( m)
+68%
+95%
+Figure 8: Distribution of marginal posterior summaries forΩ m (fixed astrophysics case).
+Top: violin plots showing the distribution of the posterior mean across 200 realization of the
+ΛCDM-Planck test set (1,000 samples for each posterior). The distance between the solid
+line (the median of the all posteriors samples) and the dashed line (the ground truth) can
+be interpreted as the bias of the inference. Bottom: median value of the marginal posteriors
+widths of theΛCDM-Planck test set for 68-95% credible intervals; smaller values indicate
+higher precision levels.
+– 22 –
+
+0.72
+0.74
+0.76
+0.78
+0.80
+0.82
+0.84
+0.86
+0.88Posteriors means ( 8)
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+FIXED ASTROPHYSICS
+Median Truth
+Pk gal×HI
+2D maps gal×HI
+3D maps gal-only 3D maps HI-only 3D maps gal×HI
+0.02
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14
+0.16Median posteriors width ( 8)
+68%
+95%
+Figure 9: As in figure 8, but forσ8.
+– 23 –
+
+0.26
+0.28
+0.30
+0.32
+0.34
+0.36Posteriors means ( m)
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+FREE ASTROPHYSICS
+Median Truth
+Pk gal×HI
+2D maps gal×HI
+3D maps gal-only 3D maps HI-only 3D maps gal×HI
+0.02
+0.04
+0.06
+0.08
+0.10
+0.12Median posteriors width ( m)
+68%
+95%
+Figure 10: As in figure 8, but for the free astrophysics scenario.
+– 24 –
+
+0.72
+0.74
+0.76
+0.78
+0.80
+0.82
+0.84
+0.86
+0.88Posteriors means ( 8)
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+FREE ASTROPHYSICS
+Median Truth
+Pk gal×HI
+2D maps gal×HI
+3D maps gal-only 3D maps HI-only 3D maps gal×HI
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14
+0.16Median posteriors width ( 8)
+68%
+95%
+Figure 11: As in figure 10, but forσ8.
+– 25 –
+
+0.0 0.2 0.4 0.6 0.8 1.0
+Nominal Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Empirical Percentile
+m
+0.0 0.2 0.4 0.6 0.8 1.0
+Nominal Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Empirical Percentile
+8
+FIDEX ASTROPHYSICS
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+Figure 12: PP plots for the different data configurations for the fixed astrophysics scenario.
+Deviations within the gray bands are consistent with random sampling noise from a binomial
+distribution with 68-95% confidence level. Left panel:Ωm. Right panel:σ 8.
+0.0 0.2 0.4 0.6 0.8 1.0
+Nominal Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Empirical Percentile
+m
+0.0 0.2 0.4 0.6 0.8 1.0
+Nominal Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Empirical Percentile
+8
+FREE ASTROPHYSICS
+Pk gal×HI 2D maps gal×HI 3D maps gal-only 3D maps HI-only 3D maps gal×HI
+Figure 13: As in figure 12 but for the free astrophysics scenario.
+– 26 –
+
+0.200 0.225 0.250 0.275 0.300 0.325 0.350 0.375 0.400
+True
+0.200
+0.225
+0.250
+0.275
+0.300
+0.325
+0.350
+0.375
+0.400Predicted
+m
+0.700 0.725 0.750 0.775 0.800 0.825 0.850 0.875 0.900
+True
+0.700
+0.725
+0.750
+0.775
+0.800
+0.825
+0.850
+0.875
+0.900
+8
+0.0 0.2 0.4 0.6 0.8 1.0
+Predicted Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Empirical Percentile
+m
+0.0 0.2 0.4 0.6 0.8 1.0
+Predicted Percentile
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0 8
+Figure 14: Free astrophysics case 3DMg×HI, for an emulated test set of 80 maps with true
+parameters drawn from their priors for both cosmology and astrophysics.Top:each blue
+point shows the median of 1000 (marginal) posterior samples for a single realization, with
+ground truth value given by the horizontal axis. Error-bars show the 68% credible interval
+of the corresponding posterior.Bottom:PP plots with parameters drawn from their prior
+ranges (i.e., Bayesian PP plots, averaging over prior distributions). Deviations within the
+gray bands are consistent with random sampling noise from a binomial distribution with 68-
+95% confidence level.
+A Emulator
+Here we describe the neural network-based technique we use as a surrogate model to re-
+place full hydrodynamic simulations, and generate accurate 3 dimensional fields rapidly when
+trained on reference simulations.
+A.1 Emulator architecture
+The whole emulation pipeline is sketched in figure 15 and theHGLemulator architecture is
+summarized in table 5. Following the network architecture of [47], the model is based on
+a 3D U-Net architecture comprising four encoding and four decoding residual convolutional
+blocks. Each encoding block consists of two 3D convolutional layers, each followed by Group
+Normalization and a non-linear activation, and is followed by a downsampling operation
+implemented via max pooling. The decoder mirrors this structure, with each block consisting
+of two convolutional layers and Group Normalization layers, and spatial resolution is restored
+via upsampling, using trilinear interpolation.
+– 27 –
+
+Ωm,σ8
+Attention 
+U-Net
+Astrophysical
+parameters
+Galaxy box
+(z=0)
+HI box
+(z=0)
+DM box
+(z=0)
+Linear density ﬁeld
+(high )z 2LPT + FastPM
+Approximate N-body simulator
+Total matter P(k)
++
+Figure 15: Schematics of the emulation pipeline, from the generation of fast DM maps to
+theHGLemulator, adapted from [47]. DM maps, generated by means ofFastPM, are passed
+to the U-net to generate galaxies or HI, conditioning on astrophysics prescriptions.
+T able 5: Architecture of theHGLemulator. All convolutions (Conv3D) are3×3×3with
+circular padding. Group Normalization (GN) is used throughout, with FiLM conditioning
+applied within each residual block, as can be seen in the flow diagram in the last row. For
+stable learning, the second convolutional layer in each ResNet block is initialized to zero.
+Stage Spatial dims Channels (in→out; groups) Operation
+InputL 3 1Input field
+Encoder(L/2) 3 1→16 (g=1)ResNet block + MaxPool
+(L/4)3 16→32 (g=4)ResNet block + MaxPool
+(L/8)3 32→64 (g=4)ResNet block + MaxPool
+(L/8)3 64→128 (g=4)ResNet block
+Bottleneck(L/8) 3 128→128 (g=4)Self-attention
+Decoder(L/4) 3 128→64 (g=4)Upsample + ResNet block
+(L/2)3 64→32 (g=4)Upsample + ResNet block
+L3 32→16 (g=4)Upsample + ResNet block
+OutputL 3 16→1 (g=1)ResNet block
+ResNet block:x→GN→FiLM→Conv3D→GN→FiLM→Conv3D +x
+Furthermore, to encode the cosmological and astrophysical parameters in this network,
+we use the FiLM (Feature-wise Linear Modulation) technique [127], which allows to condition
+the output of the neural network on said parameters. Letx∈RC×D 3
+denote a feature layer
+within the residual block withCchannels andD3 dimensions, andc∈R dc denote the vector
+ofd c simulation parameters. Then the FiLM transformation is defined as:
+FiLM(x,c) =γ(c)⊙x+β(c),(A.1)
+whereβ,γ∈R C are the channel wise scaling and shift parameters of the transformation, and
+⊙denotes element wise multiplication across channels. In each ResNet block, two of these
+affine transformations are applied to feature layers, with one pair ofγ, βfor each channel
+output at each convolution layer. For example, at the spatial dimension(L/2)3 in the Unet,
+there are 16 pairs of FiLM transformations, as there are 16 channels in that ResNet block. The
+FiLM parameters are generated from the conditioning vector via a Multi-Layer Perceptron
+(MLP)f θ:
+[γ(c),β(c)] =f θ(c).(A.2)
+– 28 –
+
+The conditioning vectorcconsists of both cosmological and astrophysical parameters,
+concatenated into a single vectorc= [θ C, θ A]∈R dc (for our workchas a dimension of
+6). This combined vector is passed through a shared MLP to produce the FiLM modulation
+parameters. This design replaces fixed affine transformations in normalization layers with
+conditioning-dependent transformations, allowing the network to adapt its feature represen-
+tations dynamically based on the input parameters.
+Given a DM mapFDM
+i (Ωmi, σ8i)characterized by a cosmologyi, the emulator is able
+to provide the corresponding galaxy/HI map for that same cosmologyiand any astrophysics
+jof choice:
+FDM
+i (Ωmi, σ8i) U-Net− − − − → Fgal/HI
+i (Ωmi, σ8i,A SN1j,A AGN1j,A SN2j,A AGN2j)(A.3)
+It is important to stress that, although the emulator is able to paint galaxies/HI for any
+reasonable astrophysical parameters, the cosmology between input and output must stay the
+same. In other words, the following emulation process is not possible:
+FDM
+i (Ωmi, σ8i) ZZ− → Fgal/HI
+i (Ωmk̸=i , σ8k̸=i ,A SN1j,A AGN1j,A SN2j,A AGN2j)(A.4)
+To preserve spatial information across scales, skip connections are employed by con-
+catenating feature maps from each encoder block to the corresponding decoder block at the
+same resolution. This design significantly improves reconstruction fidelity by retaining high
+frequency information lost during downsampling.
+At the bottleneck, again following the previous work, we incorporate a self-attention
+modulethatenablesthenetworktocapturelongrangedependenciesandnonlocalcorrelations
+between voxels in the latent representation, thereby enhancing its ability to model large scale
+structure.
+A.2 Emulator training
+This section provides details on the emulator training. The inputFastPMDM maps (described
+in section 2.2) of size 25h−1Mpc are generated for the same ICs seeds of theCAMELSLH
+suite. The output (target) galaxy/HI maps (described in section 2.3) of same size are instead
+generated from the correspondingCAMELShydrodynamical simulations of the same suite.
+The train and validation set maps derive from splitting the 508 different seeds spanning
+differentvaluesofthecosmological(forDM)andcosmological+astrophysical(forgalaxies/HI)
+parameters within theCAMELSpriors 2, in such way to have similar distributions of parameters
+values between train+validation and test sets. To help training, cubes in train+validation
+sets are repeated for all 24 possible orientations. The train and validation sets combined
+are then composed by508×24 = 12,192cubes, which are then split in a75%and25%
+train and validation split. The test set is instead composed of 242 cubes without rotations.
+Train, validation and test sets are composed of only 1 channel, corresponding to the tracer
+considered. All maps are normalized with standard scaling, fitted on each respective train
+set.
+Following [47], the loss function used to train the emulator is a linear combination of
+multiple Quantile Losses (QL):
+L=
+3X
+i=1
+QL(y,ˆy;τi)(A.5)
+2CAMELSpriors for LH suite:Ω m ∈[0.1,0.5],σ 8 ∈[0.6,1.0],A SN1 ∈[0.25,4.0],A AGN1 ∈[0.25,4.0],
+ASN2 ∈[0.5,2.0],A AGN2 ∈[0.5,2.0].
+– 29 –
+
+where givenyandˆyas the target and predicted voxel value, the quantile loss is defined as:
+QL(y,ˆy;τ) = 1
+N
+NX
+j=1
+max
+ 
+τ(y j −ˆyj),(τ−1)(y j −ˆyj)
+
+(A.6)
+This allows the model to learn different regions of the conditional distribution of the
+target field, improving robustness to sparsity. We use three quantile levels given byτi ∈
+{0.45,0.60,0.75}for the prediction of HI fields andτ i ∈ {0.45,0.60,0.80}for the prediction
+of galaxy fields. These values are chosen from empirical experience. When training the
+emulator, we save models checkpoint every time loss is improved. This lets us identify a-
+posteriori the checkpoint which corresponds to the best prediction of the power spectrum
+(i.e. lowest residuals between the predicted Pk and the true one) and the best checkpoint in
+terms of minimum of the loss (i.e. best predicted maps at pixel level). These two checkpoints
+may not necessary coincide, as the case of the galaxy emulator, whereas we have one single
+best checkpoint for the HI emulator. Generating a643 voxels map takes∼10 −2 seconds on
+an A100 Nvidia GPU.
+Figures 16 and 17 show the emulator performances on 25h−1Mpcmaps for galaxies
+and HI respectively. The top row of each figure shows an exemplificative comparison of
+originalCAMELSmap from the LH suite and its corresponding emulated counterpart. The
+bottom row shows, on the left side, the average power spectrum residual∆Pk = (P TRUE
+k −
+P EMULATED
+k )/P TRUE
+k [%] on 242 test maps taken from the LH set, with 1-σshaded band,
+while on the right side the histograms of pixels values, for original and emulated test maps.
+Residuals are below 25% for most of the considered scales with well-centered average values,
+and good agreement at the histogram level.
+Figures 18 and 19 are the equivalent of figures 16 and 17 but for the 50h−1Mpcemulated
+maps with the same resolution, generated by adopting the same emulator trained on the
+25h −1Mpcones, as motivated in section 2.3. Given the absence of the LH set ofCAMELS
+simulations of this larger size, the test set for figures 18 and 19 is given by the CV suite
+(i.e. 27 seeds at same fiducial cosmology). Although the pixel-values histogram is still well
+calibrated, the power spectrum appears less accurately emulated than in the 25h−1Mpccase.
+This is likely due to the fact that larger modes (e.g., larger halos) present in the bigger boxes
+are never seen during training on the smaller box sizes. Nonetheless, given the impossibility
+to train an emulator on bigger boxes, as explained in section 2.3, we adopt this configuration
+for the SBI analysis. This is not problematic insofar as we are using test maps generated
+from the same emulator, as we do here. However, for the future this issue will need to be
+addressed in order to apply our framework to realistic maps.
+– 30 –
+
+0 5 10 15 20 25
+h 1 Mpc
+0
+5
+10
+15
+20
+25h 1 Mpc
+CAMELS
+0 5 10 15 20 25
+h 1 Mpc
+0
+5
+10
+15
+20
+25
+Emulated
+0.4 0.7 1 2 3 5
+k [h Mpc 1]
+1.5
+1.0
+0.5
+0.0
+0.5
+1.0
+1.5
+Pk
+Mean P(k) residual with 1  band
+mean P(k)
+±1
+0 2 4 6 8 10 12
+log ngal
+100
+101
+102
+103
+104
+Frequency
+log ngal distribution
+CAMELS
+Emulated
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+log ngal
+Figure 16: Emulator performance onCAMELSsimulations for 25h −1Mpc box size. The top
+row compares theCAMELSand emulated galaxy number count fields, for an exemplificative
+map. The bottom left compares the power spectrum residual∆Pk betweenCAMELSfrom the
+test set and emulated fields, and the bottom right compares the voxel-wise histogram.
+0 5 10 15 20 25
+h 1 Mpc
+0
+5
+10
+15
+20
+25h 1 Mpc
+CAMELS
+0 5 10 15 20 25
+h 1 Mpc
+0
+5
+10
+15
+20
+25
+Emulated
+0.4 0.7 1 2 3 5
+k [h Mpc 1]
+1.5
+1.0
+0.5
+0.0
+0.5
+1.0
+1.5
+Pk
+Mean P(k) residual with 1  band
+mean P(k)
+±1
+0 5 10 15 20 25 30
+log THI
+100
+101
+102
+103
+104
+105
+106
+Frequency
+log THI distribution
+CAMELS
+Emulated
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+1.75
+2.00
+log THI
+Figure 17: As in figure 16, but for the emulated HI temperature fields.
+– 31 –
+
+0 10 20 30 40 50
+h 1 Mpc
+0
+10
+20
+30
+40
+50h 1 Mpc
+CAMELS
+0 10 20 30 40 50
+h 1 Mpc
+0
+10
+20
+30
+40
+50
+Emulated
+0.4 0.7 1 2 3 5
+k [h Mpc 1]
+1.5
+1.0
+0.5
+0.0
+0.5
+1.0
+1.5
+Pk
+Mean P(k) residual with 1  band
+mean P(k)
+±1
+0 2 4 6 8 10 12
+log ngal
+100
+101
+102
+103
+104
+105
+106
+107
+108
+Frequency
+log ngal distribution
+CAMELS
+Emulated
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+1.75
+log ngal
+Figure 18: As in figure 16, but for (50h−1Mpc)3 maps, generated with the emulator trained
+on same resolution (25h−1Mpc)3 maps. Test set is the CVCAMELSsuite.
+0 10 20 30 40 50
+h 1 Mpc
+0
+10
+20
+30
+40
+50h 1 Mpc
+CAMELS
+0 10 20 30 40 50
+h 1 Mpc
+0
+10
+20
+30
+40
+50
+Emulated
+0.4 0.7 1 2 3 5
+k [h Mpc 1]
+1.5
+1.0
+0.5
+0.0
+0.5
+1.0
+1.5
+Pk
+Mean P(k) residual with 1  band
+mean P(k)
+±1
+0 5 10 15 20 25
+log THI
+100
+101
+102
+103
+104
+105
+106
+107
+108
+Frequency
+log THI distribution
+CAMELS
+Emulated
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+1.75
+log THI
+Figure 19: As in figure 17, but for (50h−1Mpc)3 maps, generated with the emulator trained
+on same resolution (25h−1Mpc)3 maps. Test set is the CVCAMELSsuite.
+– 32 –
+
+References
+[1] Y. Mellier, A. Abdurroúf, J. A. Barroso, A. Achúcarro, J. Adamek, R. Adam, G. E. Addison,
+N. Aghanim, M. Aguena, V. Ajani,et al., “Euclid. I. Overview of the Euclid mission”,
+Astronomy & Astrophysics (2025) .
+[2] Ž. Ivezićet al., “LSST: From Science Drivers to Reference Design and Anticipated Data
+Products”,The Astrophysical Journal873no. 2, (Mar, 2019) 111.
+[3] R. Braun, T. L. Bourke, J. A. Green, E. Keane, and J. Wagg, “Advancing astrophysics with
+the square kilometre array”, inAdvancing Astrophysics with the Square Kilometre Array,
+vol. 215, p. 174, SISSA Medialab. 2015.
+[4] A. Aghamousa, J. Aguilar, S. Ahlen, S. Alam, L. E. Allen, C. A. Prieto, J. Annis, S. Bailey,
+C. Balland, O. Ballester,et al., “The DESI experiment part I: Science, targeting, and survey
+design”,arXiv preprint arXiv:1611.00036 (2016) .
+[5] F. Villaescusa-Navarro, D. Anglés-Alcázar, S. Genel, D. N. Spergel, R. S. Somerville, R. Dave,
+A. Pillepich, L. Hernquist, D. Nelson, P. Torrey,et al., “The camels project: Cosmology and
+astrophysics with machine-learning simulations”,The Astrophysical Journal915no. 1, (2021)
+71.
+[6] F. Villaescusa-Navarro, C. Hahn, E. Massara, A. Banerjee, A. M. Delgado, D. K. Ramanah,
+T. Charnock, E. Giusarma, Y. Li, E. Allys, A. Brochard, C. Uhlemann, C.-T. Chiang, S. He,
+A. Pisani, A. Obuljen, Y. Feng, E. Castorina, G. Contardo, C. D. Kreisch, A. Nicola,
+J. Alsing, R. Scoccimarro, L. Verde, M. Viel, S. Ho, S. Mallat, B. Wandelt, and D. N. Spergel,
+“The Quijote Simulations”,ApJS250no. 1, (Sept., 2020) 2,arXiv:1909.05273
+[astro-ph.CO].
+[7] J. C. Roseet al., “The DREAMS Project: A New Suite of 1,024 Simulations to Contextualize
+the Milky Way and Assess Physics Uncertainties”,arXiv:2512.00148 [astro-ph.GA].
+[8] S. Brooks, A. Gelman, G. Jones, and X.-L. Meng,Handbook of markov chain monte carlo.
+CRC press, 2011.
+[9] R. Trotta, “Bayes in the sky: Bayesian inference and model selection in cosmology”,Contemp.
+Phys.49(2008) 71–104,arXiv:0803.4089 [astro-ph].
+[10] Bartlett, Deaglan J., Wandelt, Benjamin D., Zennaro, Matteo, Ferreira, Pedro G., and
+Desmond, Harry, “SYREN-HALOFIT: A fast, interpretable, high-precision formula for the
+nonlinear matter power spectrum”,A&A686(2024) A150.
+https://doi.org/10.1051/0004-6361/202449854.
+[11] F. Leclercq and A. Heavens, “On the accuracy and precision of correlation functions and
+field-level inference in cosmology”,Monthly Notices of the Royal Astronomical Society:
+Letters506no. 1, (09, 2021) L85–L90,
+https://academic.oup.com/mnrasl/article-pdf/506/1/L85/54638639/slab081.pdf.
+https://doi.org/10.1093/mnrasl/slab081.
+[12] N. Porqueres, A. Heavens, D. Mortlock, and G. Lavaux, “Lifting weak lensing degeneracies
+with a field-based likelihood”,Monthly Notices of the Royal Astronomical Society509no. 3,
+(01, 2022) 3194–3202,
+https://academic.oup.com/mnras/article-pdf/509/3/3194/41284875/stab3234.pdf.
+https://doi.org/10.1093/mnras/stab3234.
+[13] C. Hahn, F. Beutler, M. Sinha, A. Berlind, S. Ho, and D. W. Hogg, “Likelihood
+non-Gaussianity in large-scale structure analyses”,Monthly Notices of the Royal Astronomical
+Society485no. 2, (05, 2019) 2956–2969,
+https://academic.oup.com/mnras/article-pdf/485/2/2956/28078854/stz558.pdf.
+https://doi.org/10.1093/mnras/stz558.
+– 33 –
+
+[14] R. E. Upham, M. L. Brown, and L. Whittaker, “Sufficiency of a Gaussian power spectrum
+likelihood for accurate cosmology from upcoming weak lensing surveys”,Monthly Notices of
+the Royal Astronomical Society503no. 2, (05, 2021) 1999–2013,
+https://academic.oup.com/mnras/article-pdf/503/2/1999/36678227/stab522.pdf.
+https://doi.org/10.1093/mnras/stab522.
+[15] S. Brieden, H. Gil-Marín, and L. Verde, “ShapeFit: extracting the power spectrum shape
+information in galaxy surveys beyond BAO and RSD”,Journal of Cosmology and
+Astroparticle Physics2021no. 12, (Dec, 2021) 054.
+https://doi.org/10.1088/1475-7516/2021/12/054.
+[16] K. Cranmer, J. Brehmer, and G. Louppe, “The frontier of simulation-based inference”,
+Proceedings of the National Academy of Sciences117no. 48, (2020) 30055–30062,
+https://www.pnas.org/doi/pdf/10.1073/pnas.1912789117.
+https://www.pnas.org/doi/abs/10.1073/pnas.1912789117.
+[17] J.-M. Lueckmann, J. Boelts, D. Greenberg, P. Goncalves, and J. Macke, “Benchmarking
+Simulation-Based Inference”, inProceedings of The 24th International Conference on
+Artificial Intelligence and Statistics, A. Banerjee and K. Fukumizu, eds., vol. 130 of
+Proceedings of Machine Learning Research, pp. 343–351. PMLR, 13–15 apr, 2021.
+https://proceedings.mlr.press/v130/lueckmann21a.html.
+[18] R. E. Angulo and O. Hahn, “Large-scale dark matter simulations”,Living Reviews in
+Computational Astrophysics8no. 1, (Dec., 2022) 1.http://arxiv.org/abs/2112.05165.
+arXiv:2112.05165 [astro-ph].
+[19] N. Jeffrey, J. Alsing, and F. Lanusse, “Likelihood-free inference with neural compression of
+DES SV weak lensing map statistics”,Monthly Notices of the Royal Astronomical Society501
+no. 1, (Dec., 2020) 954–969.http://arxiv.org/abs/2009.08459. arXiv:2009.08459
+[astro-ph].
+[20] K. Karchev, R. Trotta, and C. Weniger, “SimSIMS: Simulation-based Supernova Ia Model
+Selection with thousands of latent variables”, 2023.https://arxiv.org/abs/2311.15650.
+[21] F. List, N. A. Montel, and C. Weniger, “Bayesian simulation-based inference for cosmological
+initial conditions”,arXiv preprint arXiv:2310.19910 (2023) .
+[22] A. Saxena, P. D. Meerburg, C. Weniger, E. d. L. Acedo, and W. Handley, “Simulation-based
+inference of the sky-averaged 21-cm signal from CD-EoR with REACH”,RAS Techniquesand
+Instruments3no. 1, (Jan., 2024) 724–736.http://dx.doi.org/10.1093/rasti/rzae047.
+[23] R. Srinivasan, E. Barausse, N. Korsakova, and R. Trotta, “Simulation-based population
+inference of LISA’s Galactic binaries: Bypassing the global fit”,Phys. Rev. D112no. 10,
+(2025) 103043,arXiv:2506.22543 [astro-ph.GA].
+[24] A. Lueber, K. Karchev, C. Fisher, M. Heim, R. Trotta, and K. Heng, “Near-instantaneous
+Atmospheric Retrievals and Model Comparison with FASTER”,The Astrophysical Journal
+Letters984no. 1, (Apr, 2025) L32.https://doi.org/10.3847/2041-8213/adc7aa.
+[25] F. Sinigaglia, P. Iglesias-Navarro, and M. Viel, “Simulation-based inference from the
+Lyman-alpha forest 1D power spectrum with CAMELS”,arXiv preprint arXiv:2603.13011
+(2026) .
+[26] P. Gorbatchev, J.-L. Starck, S. Camera, and M. Spinelli, “Beyond power spectrum to unveil
+systematics on Hi intensity maps”,arXiv preprint arXiv:2605.08895 (2026) .
+[27] P. Lemos, L. Parker, C. Hahn, S. Ho, M. Eickenberg, J. Hou, E. Massara, C. Modi, A. M.
+Dizgah, B. R.-S. Blancard,et al., “Simbig: Field-level simulation-based inference of galaxy
+clustering”,arXiv preprint arXiv:2310.15256 (2023) .
+[28] B. Tucci and F. Schmidt, “EFTofLSS meets simulation-based inference:σ8 from biased
+tracers”,JCAP2024no. 5, (May, 2024) 063,arXiv:2310.03741 [astro-ph.CO].
+– 34 –
+
+[29] O. Savchenko, F. List, G. F. Abellán, N. A. Montel, and C. Weniger, “Mean-Field
+Simulation-Based Inference for Cosmological Initial Conditions”,arXiv preprint
+arXiv:2410.15808 (2024) .
+[30] O. Savchenko, G. F. Abellán, F. List, N. A. Montel, and C. Weniger, “Fast sampling of
+cosmological initial conditions with Gaussian neural posterior estimation”,arXiv preprint
+arXiv:2502.03139 (2025) .
+[31] J. Zeghal, D. Lanzieri, F. Lanusse, A. Boucaud, G. Louppe, E. Aubourg, and A. E. Bayer,
+“Simulation-based inference benchmark for weak lensing cosmology”,Astronomy &
+Astrophysics699(July, 2025) A327.http://dx.doi.org/10.1051/0004-6361/202452410.
+[32] A. Bairagi, B. Wandelt, and F. Villaescusa-Navarro, “How many simulations do we need for
+simulation-based inference in cosmology?”, 2025.https://arxiv.org/abs/2503.13755.
+[33] N. Perraudin, A. Srivastava, A. Lucchi, T. Kacprzak, T. Hofmann, and A. Réfrégier,
+“Cosmological N-body simulations: a challenge for scalable generative models”, 2019.
+https://arxiv.org/abs/1908.05519.
+[34] T. Tröster, C. Ferguson, J. Harnois-Déraps, and I. G. McCarthy, “Painting with baryons:
+augmenting N-body simulations with gas using deep generative models”,Monthly Notices of
+the Royal Astronomical Society: Letters487no. 1, (07, 2019) L24–L29.
+https://doi.org/10.1093/mnrasl/slz075.
+[35] Y. Li, Y. Ni, R. A. C. Croft, T. Di Matteo, S. Bird, and Y. Feng, “AI-assisted superresolution
+cosmological simulations”,Proceedings of the National Academy of Sciences118no. 19, (May,
+2021) .http://dx.doi.org/10.1073/pnas.2022038118.
+[36] P. Harrington, M. Mustafa, M. Dornfest, B. Horowitz, and Z. Lukić, “Fast, High-fidelity Lyα
+Forests with Convolutional Neural Networks”,The Astrophysical Journal929no. 2, (Apr,
+2022) 160.https://doi.org/10.3847/1538-4357/ac5faa.
+[37] B. Horowitz, M. Dornfest, Z. Lukić, and P. Harrington, “hyphy: Deep Generative Conditional
+Posterior Mapping of Hydrodynamical Physics”,The Astrophysical Journal941no. 1, (Dec,
+2022) 42.https://doi.org/10.3847/1538-4357/ac9ea7.
+[38] N. Mudur, C. Cuesta-Lazaro, and D. P. Finkbeiner, “Cosmological field emulation and
+parameter inference with diffusion models”,arXiv preprint arXiv:2312.07534 (2023) .
+[39] D. Jamieson, Y. Li, R. A. d. Oliveira, F. Villaescusa-Navarro, S. Ho, and D. N. Spergel,
+“Field-level Neural Network Emulator for Cosmological N-body Simulations”,The
+Astrophysical Journal952no. 2, (July, 2023) 145.
+https://dx.doi.org/10.3847/1538-4357/acdb6c. Publisher: The American Astronomical
+Society.
+[40] D. Breitman, A. Mesinger, S. G. Murray, D. Prelogović, Y. Qin, and R. Trotta,
+“<scp>21cmemu</scp>: an emulator of <scp>21cmfast</scp> summary observables”,
+Monthly Notices of the Royal Astronomical Society527no. 4, (Dec., 2023) 9833–9852.
+http://dx.doi.org/10.1093/mnras/stad3849.
+[41] M. Rigo, R. Trotta, and M. Viel, “<scp>jerald</scp>: high-fidelity dark matter, stellar
+mass, and neutral hydrogen maps from fast N-body simulations”,Monthly Notices of the
+Royal Astronomical Society541no. 1, (June, 2025) 166–178.
+http://dx.doi.org/10.1093/mnras/staf948.
+[42] S. Hassan, F. Villaescusa-Navarro, B. Wandelt, D. N. Spergel, D. Anglés-Alcázar, S. Genel,
+M. Cranmer, G. L. Bryan, R. Davé, R. S. Somerville, M. Eickenberg, D. Narayanan, S. Ho,
+and S. Andrianomena, “HIFlow: Generating Diverse HI Maps and Inferring Cosmology while
+Marginalizing over Astrophysics using Normalizing Flows”,The Astrophysical Journal937
+no. 2, (Oct., 2022) 83.http://arxiv.org/abs/2110.02983. arXiv:2110.02983 [astro-ph].
+– 35 –
+
+[43] S. Andrianomena, F. Villaescusa-Navarro, and S. Hassan, “Emulating cosmological multifields
+with generative adversarial networks”, Nov., 2022.
+https://ui.adsabs.harvard.edu/abs/2022arXiv221105000A. Publication Title: arXiv
+e-prints ADS Bibcode: 2022arXiv221105000A.
+[44] D. Sharma, B. Dai, F. Villaescusa-Navarro, and U. Seljak, “A field-level emulator for
+modelling baryonic effects across hydrodynamic simulations”,MNRAS538no. 3, (Apr., 2025)
+1415–1426,arXiv:2401.15891 [astro-ph.CO].
+[45] M. Bernardini, R. Feldmann, J. Gensior, D. Anglés-Alcázar, L. Bassini, R. Bieri, E. Cenci,
+L. Tortora, and C.-A. Faucher-Giguère, “EMBER-2: emulating baryons from dark matter
+across cosmic time with deep modulation networks”,Monthly Notices of the Royal
+Astronomical Society538no. 2, (02, 2025) 1201–1215,
+https://academic.oup.com/mnras/article-pdf/538/2/1201/62200619/staf341.pdf.
+https://doi.org/10.1093/mnras/staf341.
+[46] S. Andrianomena, S. Hassan, and F. Villaescusa-Navarro, “Cosmological multifield emulator”,
+2024.https://arxiv.org/abs/2402.10997.
+[47] S. Mishra, R. Trotta, and M. Viel, “Large, fast, and accurate HI intensity maps with latent
+overlap diffusion”,Monthly Notices of the Royal Astronomical Society545no. 3, (11, 2025)
+staf2071.https://api.semanticscholar.org/CorpusID:279261186.
+[48] J. K. Riveros, P. A. Saavedra, H. J. Hortúa, J. E. García-Farieta, and I. Olier, “Conditional
+Diffusion-Flow models for generating 3D cosmic density fields: applications to f(R)
+cosmologies”,Machine Learning: Science and Technology6no. 3, (Aug, 2025) 035031.
+https://doi.org/10.1088/2632-2153/adf8b1.
+[49] B. Horowitz, C. Cuesta-Lazaro, and O. Yehia, “BaryonBridge: Stochastic Interpolant Model
+for Fast Hydrodynamical Simulations”,arXiv preprint arXiv:2510.19224 (2025) .
+[50] S. Mishra, R. Trotta, and M. Viel, “Cosmo-FOLD: Fast generation and upscaling of field-level
+cosmological maps with overlap latent diffusion”,arXiv preprint arXiv:2601.14377 (2026) .
+[51] J. Chacón-Lavanderos, I. Gómez-Vargas, R. Menchaca-Mendez, and J. A. Vázquez,
+“Variational autoencoder for generating realisticN-body simulations for dark matter halos”,
+Phys. Rev. D113(Mar, 2026) 063520.https://link.aps.org/doi/10.1103/b6lj-rlff.
+[52] A. Rouhiainen, M. Münchmeyer, G. Shiu, M. Gira, and K. Lee, “Superresolution emulation of
+large cosmological fields with a 3D conditional diffusion model”,Phys. Rev. D109(Jun,
+2024) 123536.https://link.aps.org/doi/10.1103/PhysRevD.109.123536.
+[53] B. Dai and U. Seljak, “Learning effective physical laws for generating cosmological
+hydrodynamics with Lagrangian deep learning”,Proceedings of the National Academy of
+Sciences118no. 16, (2021) e2020324118.
+https://www.pnas.org/doi/abs/10.1073/pnas.2020324118.
+[54] M. Rigo, R. Trotta, and M. Viel, “jerald: high-fidelity dark matter, stellar mass, and neutral
+hydrogen maps from fast N-body simulations”,Monthly Notices of the Royal Astronomical
+Society541no. 1, (07, 2025) 166–178,
+https://academic.oup.com/mnras/article-pdf/541/1/166/63478802/staf948.pdf.
+https://doi.org/10.1093/mnras/staf948.
+[55] A. E. Bayer, F. Villaescusa-Navarro, S. Sharief, R. Teyssier, L. H. Garrison,
+L. Perreault-Levasseur, G. L. Bryan, M. Gatti, and E. Visbal, “Field-level Comparison and
+Robustness Analysis of Cosmological N-body Simulations”,The Astrophysical Journal989
+no. 2, (Aug, 2025) 207.https://doi.org/10.3847/1538-4357/adef4e.
+[56] A. Bonaldi, I. Harrison, S. Camera, and M. L. Brown, “SKA weak lensing– II. Simulated
+performance and survey design considerations”,Monthly Notices of the Royal Astronomical
+Society463no. 4, (08, 2016) 3686–3698.
+– 36 –
+
+[57] S. Camera, I. Harrison, A. Bonaldi, and M. L. Brown, “SKA weak lensing – III. Added value
+of multiwavelength synergies for the mitigation of systematics”,Monthly Notices of the Royal
+Astronomical Society464no. 4, (10, 2016) 4747–4760,
+https://academic.oup.com/mnras/article-pdf/464/4/4747/8313242/stw2688.pdf.
+https://doi.org/10.1093/mnras/stw2688.
+[58] H. J. Martínez, M. E. Merchán, C. A. Valotto, and D. G. Lambas, “Quasar-galaxy and
+AGN-galaxy cross-correlations”,The Astrophysical Journal514no. 2, (1999) 558.
+[59] B. Jain, R. Scranton, and R. K. Sheth, “Quasar—galaxy and galaxy—galaxy
+cross-correlations: model predictions with realistic galaxies”,Monthly Notices of the Royal
+Astronomical Society345no. 1, (10, 2003) 62–70.
+[60] X. Yang, H. J. Mo, F. C. van den Bosch, S. M. Weinmann, C. Li, and Y. P. Jing, “The
+cross-correlation between galaxies and groups: probing the galaxy distribution in and around
+dark matter haloes”,Monthly Notices of the Royal Astronomical Society362no. 2, (09, 2005)
+711–726.
+[61] K. Paech, N. Hamaus, B. Hoyle, M. Costanzi, T. Giannantonio, S. Hagstotz, G. Sauerwein,
+and J. Weller, “Cross-correlation of galaxies and galaxy clusters in the Sloan Digital Sky
+Survey and the importance of non-Poissonian shot noise”,Monthly Notices of the Royal
+Astronomical Society470no. 3, (06, 2017) 2566–2577.
+[62] M. R. Nolta, E. Wright, L. Page, C. Bennett, M. Halpern, G. Hinshaw, N. Jarosik, A. Kogut,
+M. Limon, S. Meyer,et al., “First year Wilkinson microwave anisotropy probe observations:
+dark energy induced correlation with radio sources”,The Astrophysical Journal608no. 1,
+(2004) 10.
+[63] S. Ho, C. Hirata, N. Padmanabhan, U. Seljak, and N. Bahcall, “Correlation of CMB with
+large-scale structure. I. Integrated Sachs-Wolfe tomography and cosmological implications”,
+Physical Review D78no. 4, (2008) 043519.
+[64] C. M. Hirata, S. Ho, N. Padmanabhan, U. Seljak, and N. A. Bahcall, “Correlation of CMB
+with large-scale structure. II. Weak lensing”,Physical Review D78no. 4, (2008) 043520.
+[65] A. Raccanelli, A. Bonaldi, M. Negrello, S. Matarrese, G. Tormen, and G. De Zotti, “A
+reassessment of the evidence of the Integrated Sachs-Wolfe effect through the WMAP-NVSS
+correlation”,Monthly Notices of the Royal Astronomical Society386no. 4, (2008) 2161–2166,
+arXiv:0802.0084.
+[66] A. Raccanelli, G.-B. Zhao, D. J. Bacon, M. J. Jarvis, W. J. Percival, R. P. Norris,
+H. Röttgering, F. B. Abdalla, C. M. Cress, J.-C. Kubwimana, S. Lindsay, R. C. Nichol, M. G.
+Santos, and D. J. Schwarz, “Cosmological measurements with forthcoming radio continuum
+surveys”,Monthly Notices of the Royal Astronomical Society424no. 2, (Aug., 2012) 801–819,
+arXiv:1108.0930 [astro-ph.CO].
+[67] A. Raccanelli, O. Doré, D. J. Bacon, R. Maartens, M. G. Santos, S. Camera, T. M. Davis,
+M. J. Drinkwater, M. Jarvis, R. Norris, and D. Parkinson, “Probing primordial
+non-Gaussianity via iSW measurements with SKA continuum surveys”,Journal of Cosmology
+and Astroparticle Physics2015no. 1, (Jan., 2015) 042,arXiv:1406.0010 [astro-ph.CO].
+[68] TheHerschel A TLAS, F. Bianchiniet al., “Cross-correlation between the CMB lensing
+potential measured by Planck and high-z sub-mm galaxies detected by the Herschel-ATLAS
+survey”,Astrophys. J.802no. 1, (2015) 64,arXiv:1410.4502 [astro-ph.CO].
+[69] F. Bianchini and A. Lapi, “Cross-correlation between cosmological and astrophysical datasets:
+the Planck and Herschel case”,IAU Symp.306(2014) 202–205.
+[70] F. Bianchiniet al., “Toward a tomographic analysis of the cross-correlation between Planck
+CMB lensing and H-ATLAS galaxies”,Astrophys. J.825no. 1, (2016) 24,arXiv:1511.05116
+[astro-ph.CO].
+– 37 –
+
+[71] S. Mukherjee, B. D. Wandelt, and J. Silk, “Multimessenger tests of gravity with weakly lensed
+gravitational waves”,Phys. Rev. D101(May, 2020) 103509.
+[72] S. J. Schmidt, B. Ménard, R. Scranton, C. Morrison, and C. K. McBride, “Recovering redshift
+distributions with cross-correlations: pushing the boundaries”,Monthly Notices of the Royal
+Astronomical Society431no. 4, (04, 2013) 3307–3318.
+[73] D. Alonso and P. G. Ferreira, “Constraining ultralarge-scale cosmology with multiple tracers
+in optical and radio surveys”,Phys. Rev. D92(Sep, 2015) 063525.
+[74] E. D. Kovetz, A. Raccanelli, and M. Rahman, “Cosmological constraints with clustering-based
+redshifts”,Monthly Notices of the Royal Astronomical Society468no. 3, (03, 2017)
+3650–3656.
+[75] D. Alonso and P. G. Ferreira, “Constraining ultralarge-scale cosmology with multiple tracers
+in optical and radio surveys”,Phys. Rev. D92(Sep, 2015) 063525.
+[76] L. Wolz, C. Tonini, C. Blake, and J. S. B. Wyithe, “Intensity mapping cross-correlations:
+connecting the largest scales to galaxy evolution”,Monthly Notices of the Royal Astronomical
+Society458no. 3, (03, 2016) 3399–3410.
+[77] A. Pourtsidou, D. Bacon, R. Crittenden, and R. B. Metcalf, “Prospects for clustering and
+lensing measurements with forthcoming intensity mapping and optical surveys”,Monthly
+Notices of the Royal Astronomical Society459no. 1, (03, 2016) 863–870.
+[78] A. Pourtsidou, “Testing gravity at large scales with HI intensity mapping”,Monthly Notices of
+the Royal Astronomical Society461no. 2, (06, 2016) 1457–1464.
+[79] A. Raccanelli, E. Kovetz, L. Dai, and M. Kamionkowski, “Detecting the integrated
+Sachs-Wolfe effect with high-redshift 21-cm surveys”,Phys. Rev. D93(Apr, 2016) 083512.
+https://link.aps.org/doi/10.1103/PhysRevD.93.083512.
+[80] A. Pourtsidou, D. Bacon, and R. Crittenden, “HI and cosmological constraints from intensity
+mapping, optical and CMB surveys”,Monthly Notices of the Royal Astronomical Society470
+no. 4, (06, 2017) 4251–4260.
+[81] L. Wolz, C. Blake, and J. S. B. Wyithe, “Determining the HI content of galaxies via intensity
+mapping cross-correlations”,Monthly Notices of the Royal Astronomical Society470no. 3,
+(06, 2017) 3220–3226.
+[82] D. Alonso, P. G. Ferreira, M. J. Jarvis, and K. Moodley, “Calibrating photometric redshifts
+with intensity mapping observations”,Phys. Rev. D96(Aug, 2017) 043515.
+[83] L. Wolz, S. G. Murray, C. Blake, and J. S. Wyithe, “Intensity mapping cross-correlations II:
+HI halo models including shot noise”,Monthly Notices of the Royal Astronomical Society484
+no. 1, (11, 2018) 1007–1020.
+[84] S. Cunnington, I. Harrison, A. Pourtsidou, and D. Bacon, “HI intensity mapping for
+clustering-based redshift estimation”,Monthly Notices of the Royal Astronomical Society482
+no. 3, (10, 2018) 3341–3355.
+[85] K. Fang, A. Banerjee, E. Charles, and Y. Omori, “A Cross-Correlation Study of High-energy
+Neutrinos and Tracers of Large-Scale Structure”,The Astrophysical Journal894no. 2, (2020)
+112.
+[86] M. Oguri, “Measuring the distance-redshift relation with the cross-correlation of gravitational
+wave standard sirens and galaxies”,Physical Review D93no. 8, (Apr., 2016) 083511,
+arXiv:1603.02356 [astro-ph.CO].
+[87] A. Raccanelli, E. D. Kovetz, S. Bird, I. Cholis, and J. B. Muñoz, “Determining the progenitors
+of merging black-hole binaries”,Phys. Rev. D94(Jul, 2016) 023516,arXiv:1605.01405.
+– 38 –
+
+[88] G. Scelfo, N. Bellomo, A. Raccanelli, S. Matarrese, and L. Verde, “GW×LSS: chasing the
+progenitors of merging binary black holes”,JCAP2018no. 09, (Sep, 2018) 039–039,
+arXiv:1809.03528v1.
+[89] G. Scelfo, L. Boco, A. Lapi, and M. Viel, “Exploring galaxies-gravitational waves
+cross-correlations as an astrophysical probe”,Journal of Cosmology and Astroparticle Physics
+2020no. 10, (Oct, 2020) 045–045.
+[90] T. Namikawa, A. Nishizawa, and A. Taruya, “Anisotropies of gravitational-wave standard
+sirens as a new cosmological probe without redshift information”,Physical review letters116
+no. 12, (2016) 121302.
+[91] D. Alonso, G. Cusin, P. G. Ferreira, and C. Pitrou, “Detecting the anisotropic astrophysical
+gravitational wave background in the presence of shot noise through cross-correlations”,
+arXiv:2002.02888.
+[92] G. Cañas Herrera, O. Contigiani, and V. Vardanyan, “Cross-correlation of the astrophysical
+gravitational-wave background with galaxy clustering”,Phys. Rev. D102(Aug, 2020) 043513.
+[93] F. Calore, A. Cuoco, T. Regimbau, S. Sachdev, and P. D. Serpico, “Cross-correlating galaxy
+catalogs and gravitational waves: a tomographic approach”,Physical Review Research2
+no. 2, (2020) 023314.
+[94] S. Camera and A. Nishizawa, “Beyond Concordance Cosmology with Magnification of
+Gravitational-Wave Standard Sirens”,Phys. Rev. Lett.110(Apr, 2013) 151103,
+arXiv:1303.5446.
+[95] S. Libanore, M. C. Artale, D. Karagiannis, M. Liguori, N. Bartolo, Y. Bouffanais,
+N. Giacobbo, M. Mapelli, and S. Matarrese, “Gravitational Wave mergers as tracers of Large
+Scale Structures”,Journal of Cosmology and Astroparticle Physics2021no. 02, (Feb, 2021)
+035–035.https://doi.org/10.1088/1475-7516/2021/02/035.
+[96] S. Mukherjee, B. D. Wandelt, and J. Silk, “Probing the theory of gravity with gravitational
+lensing of gravitational waves and galaxy surveys”,Monthly Notices of the Royal
+Astronomical Society494no. 2, (03, 2020) 1956–1970.
+[97] S. Mukherjee, B. D. Wandelt, S. M. Nissanke, and A. Silvestri, “Accurate precision cosmology
+with redshift unknown gravitational wave sources”,Phys. Rev. D103(Feb, 2021) 043520.
+[98] S. Mukherjee and J. Silk, “Time dependence of the astrophysical stochastic gravitational wave
+background”,Monthly Notices of the Royal Astronomical Society491no. 4, (11, 2019)
+4690–4701.
+[99] G. Cañas-Herrera, O. Contigiani, and V. Vardanyan, “Learning How to Surf: Reconstructing
+the Propagation and Origin of Gravitational Waves with Gaussian Processes”,The
+Astrophysical Journal918no. 1, (Aug, 2021) 20.
+https://doi.org/10.3847/1538-4357/ac09e3.
+[100] C. Cigarrán Díaz and S. Mukherjee, “Mapping the cosmic expansion history from
+LIGO-Virgo-KAGRA in synergy with DESI and SPHEREx”,Monthly Notices of the Royal
+Astronomical Society511no. 2, (01, 2022) 2782–2795.
+[101] G. Scelfo, M. Spinelli, A. Raccanelli, L. Boco, A. Lapi, and M. Viel, “Gravitational waves×
+HI intensity mapping: cosmological and astrophysical applications”,Journal of Cosmology
+and Astroparticle Physics2022no. 01, (Jan, 2022) 004.
+[102] G. Scelfo, M. Berti, A. Silvestri, and M. Viel, “Testing gravity with gravitational waves×
+electromagnetic probes cross-correlations”,Journal of Cosmology and Astroparticle Physics
+2023no. 02, (Feb, 2023) 010.https://doi.org/10.1088/1475-7516/2023/02/010.
+[103] M. Bosi, N. Bellomo, and A. Raccanelli, “Constraining extended cosmologies with GW×LSS
+– 39 –
+
+cross-correlations”,Journal of Cosmology and Astroparticle Physics2023no. 11, (Nov, 2023)
+086.https://doi.org/10.1088/1475-7516/2023/11/086.
+[104] F. Semenzato, J. A. Casey-Clyde, C. M. Mingarelli, A. Raccanelli, N. Bellomo, N. Bartolo,
+and D. Bertacca, “Cross-Correlating the Universe: The Gravitational Wave Background and
+Large-Scale Structure”,arXiv preprint arXiv:2411.00532 (2024) .
+[105] F. Villaescusa-Navarro, D. Anglés-Alcázar, S. Genel, D. N. Spergel, Y. Li, B. Wandelt,
+A. Nicola, L. Thiele, S. Hassan, J. M. Z. Matilla,et al., “Multifield cosmology with artificial
+intelligence”,arXiv preprint arXiv:2109.09747 (2021) .
+[106] Y. Feng, M.-Y. Chu, U. Seljak, and P. McDonald, “FastPM: a new scheme for fast simulations
+of dark matter and haloes”,Monthly Notices of the Royal Astronomical Society463no. 3,
+(08, 2016) 2273–2286.
+[107] O. Ronneberger, P. Fischer, and T. Brox, “U-Net: Convolutional Networks for Biomedical
+Image Segmentation”, 2015.https://arxiv.org/abs/1505.04597.
+[108] D. Nelson, V. Springel, A. Pillepich, V. Rodriguez-Gomez, P. Torrey, S. Genel,
+M. Vogelsberger, R. Pakmor, F. Marinacci, R. Weinberger, L. Kelley, M. Lovell, B. Diemer,
+and L. Hernquist, “The IllustrisTNG Simulations: Public Data Release”, 2021.
+https://arxiv.org/abs/1812.05609.
+[109] A. Pillepich, D. Nelson, L. Hernquist, V. Springel, R. Pakmor, P. Torrey, R. Weinberger,
+S. Genel, J. P. Naiman, F. Marinacci, and M. Vogelsberger, “First results from the
+IllustrisTNG simulations: the stellar mass content of groups and clusters of galaxies”,
+Monthly Notices of the Royal Astronomical Society475no. 1, (Dec., 2017) 648–675.
+http://dx.doi.org/10.1093/mnras/stx3112.
+[110] V. Springel, “The cosmological simulation code gadget-2”,Monthly Notices of the Royal
+Astronomical Society364no. 4, (12, 2005) 1105–1134,
+https://academic.oup.com/mnras/article-pdf/364/4/1105/18657201/364-4-1105.pdf.
+https://doi.org/10.1111/j.1365-2966.2005.09655.x.
+[111] D. Blas, J. Lesgourgues, and T. Tram, “The Cosmic Linear Anisotropy Solving System
+(CLASS)”,JCAP (2011) ,arXiv:1104.2933.
+[112] M. Crocce, S. Pueblas, and R. Scoccimarro, “Transients from initial conditions in cosmological
+simulations”,MonthlyNotices of the RoyalAstronomical Society373no. 1, (10, 2006) 369–381,
+https://academic.oup.com/mnras/article-pdf/373/1/369/4187617/mnras0373-0369.pdf.
+https://doi.org/10.1111/j.1365-2966.2006.11040.x.
+[113] F. Villaescusa-Navarro, S. Genel, E. Castorina, A. Obuljen, D. N. Spergel, L. Hernquist,
+D. Nelson, I. P. Carucci, A. Pillepich, F. Marinacci, B. Diemer, M. Vogelsberger,
+R. Weinberger, and R. Pakmor, “Ingredients for 21 cm Intensity Mapping”,The Astrophysical
+Journal866no. 2, (Oct., 2018) 135.https://dx.doi.org/10.3847/1538-4357/aadba0.
+Publisher: The American Astronomical Society.
+[114] F. Villaescusa-Navarro, S. Genel, D. Angles-Alcazar, L. Thiele, R. Dave, D. Narayanan,
+A. Nicola, Y. Li, P. Villanueva-Domingo, B. Wandelt, D. N. Spergel, R. S. Somerville,
+J. M. Z. Matilla, F. G. Mohammad, S. Hassan, H. Shao, D. Wadekar, M. Eickenberg,
+K. W. K. Wong, G. Contardo, Y. Jo, E. Moser, E. T. Lau, L. F. M. P. Valle, L. A. Perez,
+D. Nagai, N. Battaglia, and M. Vogelsberger, “The CAMELS Multifield Dataset: Learning the
+Universe’s Fundamental Parameters with Artificial Intelligence”,The Astrophysical Journal
+Supplement Series259no. 2, (Apr., 2022) 61.http://arxiv.org/abs/2109.10915.
+arXiv:2109.10915 [astro-ph].
+[115] G. Papamakarios and I. Murray, “Fastϵ-free Inference of Simulation Models with Bayesian
+Conditional Density Estimation”,arXiv e-prints (May, 2016) arXiv:1605.06376,
+arXiv:1605.06376 [stat.ML].
+– 40 –
+
+[116] J.-M. Lueckmann, P. J. Goncalves, G. Bassetto, K. Öcal, M. Nonnenmacher, and J. H.
+Macke, “Flexible statistical inference for mechanistic models of neural dynamics”,arXiv
+e-prints (Nov., 2017) arXiv:1711.01861,arXiv:1711.01861 [stat.ML].
+[117] D. S. Greenberg, M. Nonnenmacher, and J. H. Macke, “Automatic Posterior Transformation
+for Likelihood-Free Inference”,arXiv e-prints (May, 2019) arXiv:1905.07488,
+arXiv:1905.07488 [cs.LG].
+[118] M. Deistler, P. J. Goncalves, and J. H. Macke, “Truncated proposals for scalable and
+hassle-free simulation-based inference”,arXiv e-prints (Oct., 2022) arXiv:2210.04815,
+arXiv:2210.04815 [stat.ML].
+[119] I. Kobyzev, S. J. Prince, and M. A. Brubaker, “Normalizing Flows: An Introduction and
+Review of Current Methods”,IEEE Transactions on Pattern Analysis and Machine
+Intelligence43no. 11, (2021) 3964–3979.
+[120] G. Papamakarios, T. Pavlakou, and I. Murray, “Masked autoregressive flow for density
+estimation”,Advances in neural information processing systems30(2017) .
+[121] “sbi reloaded: a toolkit for simulation-based inference workflows”,Journal of Open Source
+Software10no. 108, (2025) 7754.https://doi.org/10.21105/joss.07754.
+[122] F. Villaescusa-Navarro, “Pylians: Python libraries for the analysis of numerical simulations.”
+Astrophysics source code library, record ascl:1811.008, Nov., 2018.
+[123] N. Aghanimet al., “Planck 2018 results. VI. Cosmological parameters”,Astron. Astrophys
+641(2020) A6.
+[124] G. Autieri, M. Berti, M. Spinelli, B. S. Haridasu, and M. Viel, “Weighing neutrinos with 21cm
+intensity mapping at the SKAO”,JCAP2026no. 1, (Jan., 2026) 050,arXiv:2504.18625
+[astro-ph.CO].
+[125] I. P. Carucci, J. L. Bernal, S. Cunnington, M. G. Santos, J. Wang, J. Fonseca, K. Grainge,
+M. O. Irfan, Y. Li, A. Pourtsidou, M. Spinelli, and L. Wolz, “Hydrogen intensity mapping
+with MeerKAT: Preserving cosmological signal by optimising contaminant separation”,A&A
+703(Nov., 2025) A222,arXiv:2412.06750 [astro-ph.CO].
+[126] M. Berti, M. Spinelli, and M. Viel, “21 cm intensity mapping cross-correlation with galaxy
+surveys: Current and forecasted cosmological parameters estimation for the SKAO”,MNRAS
+529no. 4, (Apr., 2024) 4803–4817,arXiv:2309.00710 [astro-ph.CO].
+[127] E. Perez, F. Strub, H. de Vries, V. Dumoulin, and A. Courville, “FiLM: Visual Reasoning
+with a General Conditioning Layer”, 2017.https://arxiv.org/abs/1709.07871.
+– 41 –

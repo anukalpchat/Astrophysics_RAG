@@ -1,0 +1,908 @@
+Title: Physics Is All You Need? A Case Study in Physicist-Supervised AI Development of Scientific Software
+Authors: Nhat-Minh Nguyen
+Published: 2026-05-28
+Categories: cs.AI, astro-ph.CO, cs.HC, cs.SE
+
+Physics Is All You Need? A Case Study in Physicist-Supervised
+AI Development of Scientific Software
+Nhat-Minh Nguyen 1 2 3
+Abstract
+Are AI agents tools, co-authors, or researchers?
+We present a quantified case study ( N= 1 ): a
+physicist supervising an AI coding agent (Claude
+Code, Sonnet and Opus models) over 12 work
+days and 57 sessions to build a differentiable
+one-loop perturbation theory (a next-to-leading-
+order calculation for predicting galaxy clustering)
+module in JAX,CLAX-PT /github(∼2,100 lines, val-
+idated to ≲1% accuracy against the established
+C referenceCLASS-PT). We documented 15 su-
+pervision events during the v0.1.0 development
+window and classified each by intervention level
+(Appendix A).
+The agent resolved ten autonomously (conven-
+tion errors, algorithm transcription, numerical co-
+efficients) by iterating against oracle test suites.
+Two more were accelerated by the physicist spot-
+ting magnitude discrepancies invisible to shape-
+based comparisons. The three it could not—all
+evaded oracle detection—share a common prop-
+erty: the agent treated symptom reduction as
+equivalent to root-cause resolution. It spent 33
+of the 57 sessions adjusting coefficients within a
+code architecture that could not represent the tar-
+get physics, and could not re-evaluate its choice of
+CLASS-PTbranch even when the physicist explic-
+itly prompted reconsideration; only an injected
+physics concept (anisotropic BAO damping) trig-
+gered the redesign. Separately, the agent com-
+mitted a calibrated scalar correction that passed
+all oracle tests, but the value corresponded to no
+quantity in the reference theory and would pro-
+duce wrong predictions at any other cosmology.
+1Kavli IPMU (WPI), UTIAS, The University of Tokyo, 5-1-
+5 Kashiwanoha, Kashiwa, Chiba 277-8583, Japan 2Center for
+Data-Driven Discovery, Kavli IPMU (WPI), UTIAS, The Uni-
+versity of Tokyo, Kashiwa, Chiba 277-8583, Japan 3Institute For
+Interdisciplinary Research in Science and Education, ICISE, Quy
+Nhon, 55121, Vietnam. Correspondence to: Nhat-Minh Nguyen
+<nhat.minh.nguyen@ipmu.jp>.
+Accepted by ICML 2026 AI for Science Workshop.Copyright 2026
+by the author.
+The fudge factor was caught and replaced within
+the same session. Three supervision practices,
+developed iteratively, proved critical for catch-
+ing what oracle tests missed: testing at diverse
+parameter points beyond the fiducial calibra-
+tion; shared changelogs that surfaced stalled ex-
+ploration across sessions; and an explicit rule
+against unphysical numerical patches. In this case
+study, the design of these supervision protocols,
+not model capability, was the primary factor in
+whether the agent’s output was trustworthy. Clos-
+ing the gap we observed would require agents that
+can propose architectural alternatives rather than
+optimize within a given structure, and distinguish
+predictive adequacy from explanatory correctness.
+The agent in this case study did not exhibit these
+capabilities, and they are not obviously addressed
+by scaling alone.
+1. Introduction
+Most empirical evidence on AI coding agents in science
+comes from one of two regimes: standardized coding bench-
+marks and large-scale software projects where automated
+testing fully captures correctness (Carlini, 2026), or fully
+autonomous multi-agent systems that generate manuscripts
+without sustained human oversight (Villaescusa-Navarro
+et al., 2025). Neither captures the reality of scientific soft-
+ware development, where correctness is defined by agree-
+ment with physical law rather than by compilation or test
+passage, and where physicists work with AI agents to pro-
+duce and validate a scientific software.
+We present a detailed case study of exactly this scenario.
+Over 12 work days and 57 sessions, a physicist supervised
+an AI coding agent (Claude Code, Sonnet and Opus models)
+to buildCLAX-PT /github, a differentiable one-loop perturbation
+theory module (computing next-to-leading-order predictions
+for galaxy clustering) inJAX. The module computes nine
+output power spectra validated to ≲1% accuracy against
+the established reference codeCLASS-PT(Chudaykin et al.,
+2021). The resulting implementation comprises approxi-
+mately 2,100 lines of code. The contribution of this paper
+1
+arXiv:2605.30353v1  [cs.AI]  28 May 2026
+
+Physics Is All You Need? A Case Study
+is not the code itself (described in a companion paper) but
+the empirical supervision record: what the human did, what
+the agent did, and where the boundary between their roles
+became load-bearing.
+Our central claim is that the supervision protocol—not
+model capability—was the primary factor determining
+whether the agent’s output was trustworthy scientific soft-
+ware. The agent autonomously resolved 10 of the 15 doc-
+umented issues by iterating against oracle test suites. Two
+more were accelerated by the physicist’s domain knowledge
+input. The three it could not resolve were invisible to oracle
+testing and required human physics judgment to diagnose.
+These three bugs consumed a disproportionate fraction of
+the project: 33 of 57 sessions were spent within a fundamen-
+tally wrong code architecture that the agent could not rec-
+ognize as wrong because it passed local consistency checks.
+The physicist’s interventions—an architectural redesign and
+the rejection of a physically unmotivated numerical patch—
+were the decisive acts that produced correct code. Both
+share a common cognitive structure. The physicist assessed
+not whether the code produced right numbers, but whether
+it produced themfor the right reasons.
+2. The Project
+2.1. What Was Built
+We compute predictions for the gravitational clustering
+of galaxies, the three-dimensional distribution mapped by
+galaxy redshift surveys. The calculation involves loop in-
+tegrals (analogous to next-to-leading-order corrections in
+quantum field theory) that are expensive to evaluate and
+sensitive to subtle physical effects: bulk motions of matter
+and oscillation features imprinted by sound waves in the
+early universe. Getting these effects wrong by even 1%
+can bias the cosmological parameters (the parameters of
+the standard model of cosmology) inferred from the galaxy
+power spectrum.
+One-loop perturbation theory (the next-to-leading-order cor-
+rection beyond the linear approximation) extends the linear
+matter power spectrum to mildly nonlinear scales by com-
+puting correction terms from second- and third-order density
+fields, producing predictions for galaxy clustering that are
+essential for extracting cosmological parameters from spec-
+troscopic surveys (Ivanov et al., 2020; D’Amico et al., 2020).
+CLAX-PTimplements this calculation inJAX: it takes a lin-
+ear power spectrum and cosmological parameters as input,
+evaluates the tree-level and one-loop terms (the latter via
+FFTLog decomposition (Simonovi´c et al., 2018; Fang et al.,
+2017)), applies infrared (IR) resummation (Senatore & Zal-
+darriaga, 2015; Vlah et al., 2015), and adds ultraviolet (UV)
+counterterms that absorb sensitivity to small-scale physics
+outside the perturbative regime (Baumann et al., 2012; Car-
+Table 1.Accuracy ofCLAX-PTvs.CLASS-PTat Planck 2018
+fiducial cosmology, z= 0.38 , k <0.3h/ Mpc. Hexadecapole
+uses|∆|/max(|ref|)due to zero crossings.
+Spectrum Max error Mean error
+Pmm, Pgg , Pgm (real-space) 0.31% 0.04%
+Monopole (ℓ= 0) 0.59% 0.40%
+Quadrupole (ℓ= 2) 0.89% 0.50%
+Hexadecapole (ℓ= 4) 1.43% 0.37%
+rasco et al., 2012; Carroll et al., 2014). IR resummation
+corrects for large-scale bulk flows which, if unaccounted for,
+artificially smear the baryon acoustic oscillation (BAO) fea-
+ture, the standard-ruler imprint of primordial sound waves.
+The code returns nine validated output spectra (Table 1).
+The implementation is approximately 2,100 lines ofJAX
+code, end-to-end differentiable, and validated to ≲1% accu-
+racy againstCLASS-PT(Chudaykin et al., 2021). Technical
+details are described in a companion paper.
+2.2. The Supervision Protocol
+Before any code was written, the physicist established a
+supervision protocol adapted from the methodology of An-
+thropic’s C-compiler agent project (Carlini, 2026), which
+used 16 parallel agents over 2,000 sessions to build a com-
+piler that successfully builds the Linux kernel. Four infras-
+tructure elements structured every session:
+1. CLASS-PTas oracle.Every function was tested
+against reference data generated by the established C
+implementation. Tests were written before code—the
+agent knew what the correct output looked like before
+attempting to produce it.
+2. CHANGELOG as shared memory.Because each
+agent session starts with no memory of previous ses-
+sions, a structured log recorded what was attempted,
+what failed, and what succeeded. This prevented later
+sessions from re-exploring dead ends (e.g., a discrete
+sine transform (DST) grid bug that was solved on day
+3 was never re-investigated).
+3. A --fast flag for context-window hygiene.Tests
+printed at most 10 lines on success and 20 on failure.
+Verbose diagnostics were written to log files. This dis-
+cipline (drawn directly from Carlini (2026)) prevented
+the agent’s finite context window from being consumed
+by noise.
+4. Parallel agent sessions via git worktrees.Multiple
+sessions explored competing hypotheses simultane-
+ously. When a bug had multiple plausible causes, the
+physicist spawned parallel investigations rather than
+serializing them.
+2
+
+Physics Is All You Need? A Case Study
+M22 symmetry (Hermitian → bilinear)
+LAPACK column-major packing format
+Discrete sine transform linear k-grid
+Odd/even spline mode removal
+Incomplete M22 redshift-space kernels
+Incomplete M13 redshift-space kernels
+Ultraviolet counterterm coeﬃcients
+Galaxy quadrupole tree formula
+Galaxy hexadecapole tree formula
+Hexadecapole accuracy metric
+Spurious h3 unit factor
+b4 ﬁnger-of-god k-exponent
+Numerical integration redesign
+F udge factor rejection
+Anisotropic BAO damping formula
+↪→ Unblocked 6/6 redshift-space multipoles (86% → 1.4%)
+↪→ Refused to merge code with empirical correction factor
+↪→ Identiﬁed correct physics (zero tuned parameters)
+Agent
+autonomous
+Human
+accelerated
+Human
+essential
+10/15
+2/15
+3/15
+15 issues resolved · 12 days · 57 agent sessions
+Figure 1.Issue taxonomy for theCLAX-PTv0.1.0 development. Of
+15 documented supervision events, 10 were resolved autonomously
+by the agent iterating against oracle tests; 2 were accelerated by the
+physicist’s domain knowledge (unit-magnitude and dimensional
+discrepancies invisible to shape-based comparisons); 3 required
+essential human judgment (an architectural redesign, a calibration-
+patch rejection, and identification of the correct anisotropic damp-
+ing formula). Bug-level classification with confidence flags and
+independent cross-check provenance is provided in Appendix A.
+Two rules proved critical beyond this infrastructure. First,
+“no fudge factors”: if a test failed at 0.2% error, there was a
+real bug to find—a multiplicative correction tuned to make
+the test pass would be rejected at review. Second, “test at
+multiple parameter points”: the oracle compared not just
+at the fiducial Planck 2018 cosmology but at varied cosmo-
+logical parameters, to prevent solutions that were calibrated
+to a single point. The supervision protocol—not individual
+code edits—was the physicist’s primary contribution to the
+project.
+3. Bug Taxonomy: The Autonomy Spectrum
+We documented 15 issues over 57 agent sessions and clas-
+sified each by whether autonomous resolution was possi-
+ble (Figure 1). The taxonomy that emerged is not a clean
+binary—it is a spectrum ranging from bugs the agent re-
+solved in minutes to bugs that resisted 33 sessions of au-
+tonomous effort and required human physics judgment to
+diagnose.
+3.1. Autonomous and Human-Accelerated Issues
+The agent resolved 10 bugs without human intervention by
+iterating against the oracle test suite. Two more (the h3 unit
+factor and b4 k-exponent) were accelerated by the physicist
+spotting magnitude discrepancies invisible to shape-based
+comparisons. These fell into three categories. First, conven-
+tion and unit errors: the FFTLog matrix (used to decompose
+loop integrals) M22 required Hermitian rather than sym-
+metric packing (bug 1), LAPACK column-major ordering
+differed from the row-major layout the agent initially pro-
+duced (bug 2), and a spurious h3 factor multiplied all bias
+functions (bug 5). Second, algorithm implementation errors:
+a DST grid used linear rather than logarithmic spacing (bug
+3), odd/even spline interpolation for separating the BAO
+oscillation feature used the wrong parity assignment (bug 4),
+and three redshift-space distortion (RSD) kernel matrices
+were incomplete (bugs 7–9). Third, numerical coefficient er-
+rors in UV counterterms required matching specific rational
+prefactors from the 14,000-line C reference source.
+In all these cases, the pattern was the same: the oracle test
+produced a clear numerical discrepancy, the agent compared
+intermediate quantities against reference data to localize the
+error, and the fix was a direct transcription correction.
+Beyond bug-fixing, the agent performed codebase recon-
+naissance the supervisor had not directed. During the first
+sessions of bring-up, the agent mapped the structure of
+theCLASS-PTreference source on its own, identifying that
+the effective field theory calculation lives in two parallel
+code paths with different treatments of the redshift-space
+integrals, without being told to look for this distinction or
+given a guide to the source layout. This survey was com-
+plete enough that, once the physicist later supplied the con-
+ceptual hint about anisotropic damping (Section 3.2), the
+agent could re-target its implementation to the previously-
+surveyed second branch without further retrieval. The code-
+base scan, then, was not the limitation in this case; the
+limitation was the agent’s inability to re-evaluate which of
+the two mapped branches its failing tests implicated.
+3.2. Case Study: The Redshift-Space Multipoles
+The accuracy wall.After the first 24 sessions resolved
+bugs 1–9, all three real-space power spectra passed at sub-
+percent accuracy. The six RSD multipoles (monopole,
+quadrupole, and hexadecapole for both matter and galax-
+ies) did not. Errors ranged from 8% to 86% depending on
+the multipole and varied erratically as the agent adjusted
+individual terms (Figure 2).
+Over the next 33 sessions (sessions 24–56 of 57 total), the
+agent attempted to fix the RSD multipoles within the exist-
+ing code architecture. This architecture computed analytic
+Legendre projections of the one-loop integrands: for each
+multipole ℓ and each component (velocity-velocity, velocity-
+density, density-density), a pre-derived kernel matrix en-
+coded the angular projection. The approach is correct when
+the infrared resummation factor (the exponential damping
+at BAO scales) is isotropic, meaning it depends only on
+wavenumber k and not on the angle µ between the wavevec-
+tor and the line of sight.
+Over these 33 sessions, the agent worked coherently within
+this architecture: adjusting kernel coefficients, adding angu-
+3
+
+Physics Is All You Need? A Case Study
+lar terms, swapping quadrature rules, and comparing matrix
+elements against the reference source term by term. Each
+fix improved one multipole while degrading another. The
+error surface was non-convex within this model: no com-
+bination of coefficient adjustments could make all six mul-
+tipoles pass simultaneously, because the architecture itself
+was structurally incompatible with the physics.
+The physicist diagnosed the structural issue by recognizing
+what the agent could not: the BAO damping in redshift space
+isanisotropic. Peculiar velocities along the line of sight
+enhance the displacement field. The damping factor depends
+on the angle µ between the wavevector and the line of sight:
+Σ2
+tot(µ) = (1 +f(2 +f)µ 2)σ2
+v +f 2µ2(µ2 −1)σ 2
+BAO,
+where f is the linear growth rate of structure (how fast
+density perturbations amplify over time). This µ-dependent
+exponential cannot be absorbed into a polynomial kernel
+matrix—it couples to the RSD Kaiser factor (1 +f µ 2)2
+(the leading-order enhancement of clustering along the line
+of sight due to galaxy peculiar velocities) in a way that no
+finite set of pre-computed analytic projections can represent
+exactly.
+The physicist proposed a redesign1: abandon per-multipole
+analytic kernels entirely, assemble the full anisotropic power
+spectrum P(k, µ) at each of N Gauss–Legendre quadrature
+nodes in µ, and integrate numerically against Legendre
+polynomials to extract multipoles. The agent implemented
+this redesign in a single session. Errors for all six RSD
+multipoles dropped from 8–86% to the 1–2% range, with
+four of six passing sub-percent immediately. The remaining
+two quadrupoles required an additional correction.
+Why could the agent not find this itself? The agent had
+autonomously surveyed bothCLASS-PTcode paths during
+initial exploration: the simpler path (isotropic damping with
+analytic Legendre projections) and the more complex path
+(anisotropic damping handling geometric distortion correc-
+tions). It selected the simpler path as its implementation
+target—a reasonable choice given the test configuration
+did not require geometric distortion—and proceeded to im-
+plement it. What it could not do, across 33 sessions of
+unsuccessful coefficient adjustment, wasre-evaluatethat
+selection: ask whether the path it had not chosen might be
+the relevant one for the failing tests. The physicist explic-
+itly attempted process scaffolding (a generic, domain-free
+reconsider-the-architecture prompt: “the current architec-
+ture may be the wrong frame; please reconsider whether
+your existing kernel-matrix structure can represent the tar-
+get physics, rather than tuning coefficients within it”); the
+1Physicist-side authorship of this redesign is independently
+corroborated by a parallel Codex CLI session the day before the
+GL-redesign commit, in which the same author asked the Mathe-
+matica side of the analysis to parallelize the multipole computation
+over µ samples—the architectural move that landed inCLAX-PT
+next. See supervision log.
+agent reaffirmed its design and continued coefficient ad-
+justments. The architectural redesign was triggered only
+when the physicist supplied the relevant physics concept
+(anisotropic BAO damping in redshift space). Given that
+concept, the agent recognized the previously-surveyed sec-
+ond branch as the appropriate implementation target.
+Codebase retrieval was already complete in this case, so
+we did not run a controlled ablation isolating the concep-
+tual injection from a hypothetical navigational-pointer-only
+intervention. We therefore cannot rule out that aggressive
+retrieval over the fullCLASS-PTcodebase, delivered to a dif-
+ferent agent without our reconsider-the-architecture prompt,
+might have surfaced the anisotropic branch unprompted.
+Within this case, the gap was in generating the physics
+question that selects between mapped alternatives—not in
+scanning the codebase.
+The fudge factor.After the Gauss–Legendre redesign,
+seven of nine spectra passed. Two quadrupole spectra
+(Pmm,ℓ=2 and Pgg,ℓ=2) failed at scales near the BAO peak
+with errors of ∼1–2%. The agent traced the discrepancy to
+the resummed tree-level spectrum, where the BAO damping
+factor enters multiplied by a polynomial correction:
+Ptree(k) =P nw(k) +e −Σ2k2
+(1 + Σ2k2)P w(k),
+with Pnw and Pw the no-wiggle and wiggle components and
+Σ2 the BAO damping scale.
+The agent then grid-searched a scalar correction parame-
+ter α∈[0,1] multiplying the (1 + Σ2k2) counter-term,
+and found that α= 0.27 minimized the worst-case error
+to below 1% across all nine spectra simultaneously. The
+agent committed this fix with a passing test suite. The “no
+fudge factors” rule had been part of the written supervision
+protocol from the start of the project. The agent did not
+flag α= 0.27 as a violation, framing α as a free parameter
+inside an existing physics formula rather than as a tuned
+correction. The literal rule was followed; the principle was
+missed.
+This solution is wrong, despite passing every oracle test.
+The value α= 0.27 has no physical derivation. It is not a
+parameter inCLASS-PT, and not derived from any perturba-
+tion theory calculation. The EFT bias coefficients and UV
+counterterms of the same calculation are also free param-
+eters, but each absorbs a specific physical effect within a
+controlled perturbative expansion; α has no such derivation.
+It is a numerical calibration to the fiducial Planck 2018 cos-
+mology at a single redshift, and would produce predictions
+wrong at any other cosmology by an amount invisible to a
+test suite that only checks the fiducial point.
+The physicist diagnosed the fudge factor by asking a ques-
+tion the agent could not formulate: “what doesα correspond
+to in the perturbation theory derivation, or did you just copy
+4
+
+Physics Is All You Need? A Case Study
+1 11 20 30 40 50 57
+Cumulative agent sessions
+0.1%
+1%
+10%
+100%
+Max |P clax/P CLASS-PT − 1|
+1% target
+∼33 agent sessions, no convergence
+Pmm converges
+in ∼10 sessions
+Pmm real-space (autonomous) Worst redshift-space multipole Dead end / fudge factor
+Human: algorithm
+redesign
+Human: fudge
+factor rejected
+Human: correct
+BAO damping
+Agent: switch FFTLog
+basis (made it worse)
+Fudge α=0.27 (tests pass!)
+Final: 0 tuned parameters
+Figure 2.Accuracy convergence over 57 agent sessions. Blue: real-space matter power spectrum (autonomous, converges in∼10 sessions).
+Red: worst redshift-space multipole (stuck at 8–86% for ∼33 sessions). Vertical gold lines mark human interventions. The agent’s error
+plateaued because the code architecture was structurally incompatible with anisotropic BAO damping—no coefficient adjustment within
+that architecture could make all multipoles pass simultaneously. After the physicist directed a Gauss–Legendre quadrature redesign, errors
+dropped to the 1–2% range. A subsequent fudge factor ( α= 0.27 , purple cross) passed all tests but was rejected by the physicist as
+physically unmotivated. The correct formula required zero tuned parameters.
+it from theCLASS-PTsource?” The agent confirmed neither:
+α appears nowhere in the reference, and no derivation pro-
+duces it. The physicist then pointed out that the tree-level
+spectrum Ptree (the building block of the one-loop calcu-
+lation) should carry the same anisotropic damping Σ2
+tot(µ)
+around the BAO scale that already appeared in the Gauss–
+Legendre loop, rather than the isotropic form the agent had
+inherited from the simplerCLASS-PTbranch. The fix was to
+move the tree-level computation inside the existing quadra-
+ture loop—three lines of code, replacing the committed
+fudge factor with the correct anisotropic formula. After this
+fix, all nine spectra passed with zero tuned parameters.
+The fudge factor illustrates a failure mode specific to oracle-
+tested scientific software. A numerically adequate but phys-
+ically meaningless solution passes all existing tests. The
+agent cannot distinguish between “this works because it is
+correct” and “this works because it is calibrated to the test
+data.” The physicist could, because the physicist knew that
+α= 0.27 must correspond tosomethingin the theory—and
+when it corresponded to nothing, the solution was suspect
+regardless of its numerical performance.
+The three human-essential interventions were thus: (i) the
+Gauss–Legendre architectural redesign that unblocked all
+six redshift-space multipoles (Section 3.2), (ii) the rejection
+of the fudge factor α= 0.27 as physically unmotivated, and
+(iii) the identification of the correct anisotropic tree-level
+formula. Items (ii) and (iii) occurred in the same debugging
+episode but represent distinct cognitive acts: rejecting a
+wrong answer versus finding the right one.
+4. Lessons and Limitations
+The case study suggests three patterns observed in this
+project, each grounded in a specific failure mode we en-
+countered. We organize them around the failure mode and
+the supervision practice that emerged in response; we do
+not claim these are universal principles.
+4.1. Managing Autonomy in Scientific Software
+P1: Oracle testing verifies what, not why.An oracle
+test compares numerical output at fixed input parameters.
+It answers the question “does the code produce the right
+numbers here?” but not “does the code produce the right
+numbersfor the right reasons?” The fudge factor α=
+0.27 passed every oracle test (nine spectra, hundreds of k-
+modes, relative errors below 1%) because it was calibrated
+to the same fiducial cosmology used for testing. The oracle
+5
+
+Physics Is All You Need? A Case Study
+provides no signal that the underlying model is wrong when
+the calibration point happens to coincide with the test point.
+Multi-cosmology testing was active from project inception,
+but it was not what caught α= 0.27 . The catch came
+from a limiting-case stress test: setting the tuned coeffi-
+cient to α= 0 and observing that real-space errors ex-
+ceeded 1%, which exposed the calibration as compensating
+for a structural defect rather than encoding a physical cor-
+rection. The fix was a re-derivation from theCLASS-PT
+source code, implementing anisotropic damping Σ2
+tot(µ)
+inside the existing Gauss–Legendre loop and dropping α
+entirely (Section 3.2). The short interval between the fudge-
+factor commit and its replacement shows that the supervi-
+sion practice—operationalizing “no fudge factors” into a
+parameter-boundary probe—worked in this instance, but as
+an ad-hoc check rather than as an automated pre-commit
+gate. Two complementary defenses follow: test at diverse
+parameter points beyond the fiducial calibration so single-
+point calibrations are exposed when parameters shift, and
+automate limiting-case probes (set each tuned coefficient
+to a boundary value, re-run the oracle) as a mandatory pre-
+commit step so the fudge-rejection mechanism does not
+depend on a supervisor noticing.
+P2: Shared memory prevents re-exploration but not
+architectural loops.The CHANGELOG protocol suc-
+cessfully prevented the agent from re-exploring solved bugs
+across sessions. When the DST k-grid issue (logarithmic
+vs. linear spacing) was resolved on day 3, no subsequent
+session revisited it—the CHANGELOG entry served as
+shared memory. However, the same protocol did not prevent
+33 sessions of coherent but futile work within the wrong
+architecture. Sessions during the RSD crisis logged their
+attempts faithfully, showing no contradiction or repetition—
+only incremental, methodical exploration within a space that
+contained no solution.
+The shared memory preventedliteralre-exploration (try-
+ing the same coefficient twice) but could not surfacestruc-
+turalstagnation (trying different coefficients within the
+same doomed architecture). The defense we adopted was
+a session-count trigger. When progress stalls for approxi-
+mately 5–10 sessions with no monotonic improvement in
+the target metric, escalate to human review. This heuristic
+would have caught the RSD crisis at session 30 rather than
+session 56.
+P3: The irreducible human role is architectural and
+physical judgment.The agent excelled at tasks with
+clear specifications and verifiable outputs: transcribing
+equations from a reference source, comparing intermedi-
+ate numerical values to localize discrepancies, adjusting
+coefficients to match a known target, implementing a well-
+specified algorithm. These tasks, which constituted the
+bulk of the project’s session-time, the agent performed au-
+tonomously and correctly (10 of 15 documented issues; see
+Appendix A).
+The agent failed at two specific tasks. First, recognizing
+when a code architecture is fundamentally incompatible
+with the target physics rather than merely mis-parameterized.
+This requires understanding what the physicsshould look
+like—not just what numbers it should produce, but what
+structural properties must hold (isotropy vs. anisotropy, poly-
+nomial vs. exponential dependence, which variables are cou-
+pled). Second, detecting physically unmotivated patches
+that happen to improve numerical agreement. This requires
+knowing what the theoryallows—that a scalar correction
+α must derive from some identifiable physical mechanism,
+and that its absence from the reference implementation is
+evidence against its validity rather than evidence of a novel
+improvement.
+Both reduce to a single underlying skill that we termex-
+planatory agency: evaluating explanations, not just predic-
+tions. The agent evaluates whether the output matches the
+target. The physicist evaluates whether the mechanism pro-
+ducing that output is physically coherent. When these two
+criteria diverge—when a wrong mechanism produces right
+numbers—only the physicist can detect the error.
+Two interventions, complementary to scaling, could nar-
+row the gap between autonomous and human-required bugs
+observed here. Retrieval-augmented reasoning over the
+full reference codebase could in principle surface relevant
+physics without human guidance, though as noted above
+retrieval was already complete in our case. Explicit “physics
+audit” prompting—systematically asking the agent whether
+every tuned parameter corresponds to a physical quantity
+in the reference theory—would operationalize the diagnos-
+tic question that caught the fudge factor. The physicist’s
+intervention reduced to a single query (“does α= 0.27 ap-
+pear anywhere inCLASS-PT?”), which the agent answered
+correctly once asked but could not generate unprompted.
+Embedding such queries as mandatory checkpoints after
+any parameter introduction would convert an ad hoc hu-
+man insight into a reproducible protocol step. The open
+question—whether agents with greater capacity than current
+LLMs would spontaneously generate the diagnostic ques-
+tion without prompting—is the future-research direction
+this case study suggests but cannot itself answer.
+4.2. Credit, Attribution, and Responsibility
+The division of labor raises an unavoidable question about
+credit. The agent performed the bulk of session-time (im-
+plementation, debugging, transcription); the physicist per-
+formed a small fraction but supplied 100% of the decisive
+architectural and physical judgments. Contribution weight
+should reflectirreplaceability, not volume: the three load-
+6
+
+Physics Is All You Need? A Case Study
+bearing interventions (the architectural redesign, the rejec-
+tion of the calibration patch, and the identification of the
+correct anisotropic formula) were not substitutable by any
+agent in this study, while the autonomous bug fixes could
+have been done by any sufficiently capable coding agent
+against the same oracle.
+The physicist’s interventions resembled advising a graduate
+student. What separates the agent from a graduate student
+in this work is not the volume of code produced but the ab-
+sence ofexplanatory agency: the capacity to spontaneously
+generate questions about whether the current solution frame
+is correct, and to defend the answers under scrutiny. A stu-
+dent who discovered α= 0.27 would acquire discomfort
+with an unphysical parameter and eventually formulate the
+diagnostic question without prompting; the agent could not.
+Until agents develop this capacity, authorship and intellec-
+tual responsibility for AI-assisted scientific software should
+remain with the supervising human, and AI-assisted scien-
+tific software should ship with a supervision log as prove-
+nance documentation, analogous to a lab notebook. The
+supervision log for this work is publicly available alongside
+the code (see Section 7).
+4.3. What This Case Study Cannot Show
+This case study is bounded in four specific ways readers
+should hold against any generalization.
+Counterexamples not observed.The supervisor adopted
+a hands-off approach, intervening only after multiple ses-
+sions without progress; the agent reviewed and confirmed
+which dead ends were its own explorations. We observed
+no cases in which the supervisor’s intuition was wrong,
+misleading, or less efficient than the agent’s autonomous
+trajectory. This is selection bias—the supervisor intervened
+when the agent was stuck, not when it was on-track. A
+symmetric study—one in which the agent’s autonomous
+decisions are independently judged against the supervisor’s
+interventions—would be required to characterize the relative
+error rates of human and agent in this domain.
+Inference cost not recoverable.Inference cost over the
+v0.1.0 window cannot be reported. The development host
+was identified retrospectively through preserved develop-
+ment records and system logs, but the agent session tran-
+scripts had been deleted from disk by the time of audit.
+Session-level cost aggregation at the time of work, not af-
+ter, would have made this recoverable; we flag this as a
+methodological gap for future case studies.
+Retrieval-vs-agency limitation.The architectural diag-
+nosis (Section 3.2) was triggered by injecting a physics
+concept (anisotropic damping). We did not run a con-
+trolled ablation isolating the conceptual injection from a
+hypothetical navigational pointer with no physics content.
+The agent’s codebase mapping was already complete in
+this case (Section 3), so the relevant retrieval was already
+done—but we cannot rule out that a sufficiently aggressive
+retrieval system, delivered to a different agent that had not
+yet built our agent’s prior survey, might have surfaced the
+anisotropic branch unprompted. Controlled ablations across
+multiple stuck-agent cases—separating process scaffold-
+ing (a generic reconsider-the-architecture prompt with no
+physics content), conceptual injection (a physics concept
+with no code pointer), and retrieval augmentation (a code
+pointer with no physics content), with retrieval state held
+constant—are a natural follow-up.
+Single case study ( N= 1 ).This is a single case study
+(N= 1 ): one agent architecture, one domain (cosmolog-
+ical perturbation theory), one supervising physicist. The
+intervention-level classification was reviewed by the agent,
+which confirmed which dead ends were its own work; this
+is a documented second-pass check, not an independent hu-
+man inter-rater study. Row-level bug data with confidence
+flags and a separate independent reconstruction from the
+development log is provided in Appendix A; readers can
+disagree with individual rows.
+5. Related Work
+Carlini (2026) reported on building a C compiler using 16
+parallel Claude agent sessions over approximately 2,000
+sessions, producing a 100,000-line Rust implementation
+that compiles the Linux kernel. Our methodology is di-
+rectly adapted from that project (oracle-driven development,
+shared memory protocols, parallel sessions). The key dif-
+ference is that the C compiler domain requires syntactic
+and semantic correctness (fully captured by oracle tests,
+GCC output) but notphysicalcorrectness. Indeed, the com-
+piler setting is precisely the case where oracle testingis
+sufficient—the absence of a gap between predictive and
+explanatory correctness is what made fully autonomous
+development feasible there. Our case study extends the Car-
+lini methodology to a domain where this gap exists and is
+load-bearing.
+Villaescusa-Navarro et al. (2025) describe Denario, a multi-
+agent system that autonomously generates scientific anal-
+yses and manuscripts in astrophysics. Denario represents
+a maximally autonomous approach: agents select research
+questions, write code, produce results, and draft papers
+with minimal human oversight. Our case study illustrates
+why domain-supervised approaches may be preferable for
+validated scientific software: the fudge factor ( α= 0.27 )
+that our agent committed, which passed all automated tests,
+would have been published without question in a fully au-
+7
+
+Physics Is All You Need? A Case Study
+tonomous pipeline. The supervision protocol catches errors
+that autonomy cannot.
+The fudge factor failure mode connects to a broader phe-
+nomenon in AI alignment: specification gaming, where an
+agent optimizes a proxy metric until it ceases to measure the
+intended objective (Krakovna et al., 2020). The α= 0.27
+correction is a domain-specific instance—the agent opti-
+mized test-suite error (the proxy) at the expense of physical
+correctness (the true objective). Our “no fudge factors” rule
+operationalizes the general defense: constrain optimization
+to exclude solutions that game the metric.
+Not all AI-for-science applications require this level of do-
+main supervision. In protein structure prediction (Jumper
+et al., 2021) and materials discovery (Merchant et al., 2023),
+the oracle (experimental structures or density-functional-
+theory calculations from first principles) captures the full
+correctness criterion. There is no gap between “right num-
+bers” and “right physics” because the targetisthe numbers.
+Our case study applies specifically to domains where cor-
+rectness requires agreement with physical theory, and where
+the theory admits multiple numerically adequate but physi-
+cally distinct implementations.
+6. Conclusion
+In this case study, the AI agent functioned as a highly capa-
+ble tool—not a co-author and certainly not an independent
+researcher. It could implement, debug, and validate sci-
+entific software at speed and scale impractical for a solo
+physicist, but it lacked the capacity to spontaneously gen-
+erate the meta-question of whether its solution frame was
+correct. The supervision practices applied here—oracle test-
+ing against an established reference, shared session memory,
+the explicit “no fudge factors” rule operationalized into a
+limiting-case parameter probe, and supervisor-led escala-
+tion when sessions stalled—were the mechanism that trans-
+formed raw agent output into trustworthy scientific code.
+Improving this protocol, rather than solely improving model
+capability, was the more direct path to reliability in our case;
+whether the same holds beyond this one project, supervisor,
+and domain is a question our evidence does not settle.
+7. Code and Data Availability
+TheCLAX-PTsource code, the full CHANGELOG.md de-
+velopment log, the per-session intervention classification
+underlying Appendix A, and the commit history covering
+the v0.1.0 development window are publicly available at /github
+MinhMPA/clax-pt. The benchmark validation data used in
+Table 1 (CLASS-PTreference power spectra at the Planck
+2018 fiducial cosmology and at the cosmology variations
+referenced in Section 2.2) is released alongside the code.
+Acknowledgments
+I am grateful to Siddharth Mishra-Sharma for sharing about
+his work and for his collaboration onCLAX, the building
+block ofCLAX-PT. I thank Ben Horowitz and Kazuyuki Ak-
+itsu for helpful discussions, and the two anonymous referees
+for useful, constructive feedback. I acknowledge support
+from the Japan Foundation for Promotion of Astronomy
+Research Grant and the JSPS KAKENHI Grant Numbers
+25K23373 and 26H00404. This work was supported by
+World Premier International Research Center Initiative (WPI
+Initiative), MEXT, Japan.
+References
+Baumann, D., Nicolis, A., Senatore, L., and Zaldarriaga,
+M. Cosmological Non-Linearities as an Effective Fluid.
+JCAP, 07:051, 2012. doi: 10.1088/1475-7516/2012/07/
+051.
+Carlini, N. Building a C compiler with a team
+of parallel Claudes. Anthropic Engineering
+Blog, https://www.anthropic.com/
+engineering/building-c-compiler, 2026.
+Carrasco, J. J. M., Hertzberg, M. P., and Senatore, L. The Ef-
+fective Field Theory of Cosmological Large Scale Struc-
+tures.JHEP, 09:082, 2012. doi: 10.1007/JHEP09(2012)
+082.
+Carroll, S. M., Leichenauer, S., and Pollack, J. Consis-
+tent effective theory of long-wavelength cosmological
+perturbations.Phys. Rev. D, 90(2):023518, 2014. doi:
+10.1103/PhysRevD.90.023518.
+Chudaykin, A., Ivanov, M. M., Philcox, O. H. E., and Si-
+monovi´c, M. Nonlinear perturbation theory extension of
+the boltzmann code CLASS.Phys. Rev. D, 103:023507,
+2021. doi: 10.1103/PhysRevD.103.023507. https://
+github.com/Michalychforever/CLASS-PT.
+D’Amico, G., Gleyzes, J., Kokron, N., Markovic, K., Sen-
+atore, L., Zhang, P., Beutler, F., and Gil-Mar´ın, H. The
+Cosmological Analysis of the SDSS/BOSS data from the
+Effective Field Theory of Large-Scale Structure.JCAP,
+05:005, 2020. doi: 10.1088/1475-7516/2020/05/005.
+Fang, X., Blazek, J. A., McEwen, J. E., and Hirata, C. M.
+FAST-PT II: an algorithm to calculate convolution inte-
+grals of general tensor quantities in cosmological pertur-
+bation theory.JCAP, 2017(02):030, 2017.
+Ivanov, M. M., Simonovi´c, M., and Zaldarriaga, M. Cosmo-
+logical Parameters from the BOSS Galaxy Power Spec-
+trum.JCAP, 05:042, 2020. doi: 10.1088/1475-7516/
+2020/05/042.
+8
+
+Physics Is All You Need? A Case Study
+Jumper, J. et al. Highly accurate protein structure prediction
+with AlphaFold.Nature, 596:583–589, 2021. doi: 10.
+1038/s41586-021-03819-2.
+Krakovna, V ., Uesato, J., Mikulik, V ., Rahtz, M., Everitt, T.,
+Kumar, R., Koop, Z., Lefrancq, A., and Legg, S. Specifi-
+cation gaming: the flip side of AI ingenuity. DeepMind
+Blog, 2020.
+Merchant, A. et al. Scaling deep learning for materials
+discovery.Nature, 624:80–85, 2023. doi: 10.1038/
+s41586-023-06735-9.
+Senatore, L. and Zaldarriaga, M. The IR-resummed effective
+field theory of large scale structures.JCAP, 2015(02):
+013, 2015. doi: 10.1088/1475-7516/2015/02/013.
+Simonovi´c, M., Baldauf, T., Zaldarriaga, M., Carrasco,
+J. J., and Kollmeier, J. A. Cosmological perturbation
+theory using the FFTLog: formalism and connection
+to QFT loop integrals.JCAP, 04:030, 2018. doi:
+10.1088/1475-7516/2018/04/030.
+Villaescusa-Navarro, F. et al. The Denario project: Deep
+knowledge AI agents for scientific discovery.arXiv
+preprint arXiv:2510.26887, 2025.
+Vlah, Z., White, M., and Aviles, A. A Vlasov-Poisson
+approach to the large-scale structure, with applications
+to the EFT.JCAP, 2015(09):014, 2015. doi: 10.1088/
+1475-7516/2015/09/014.
+A. Issue-Level Classification
+This appendix lists the 15 supervision events documented
+during theCLAX-PTv0.1.0 development window. Each
+row is one event; the count itself involves a judgment call
+(a defensible range of 13–15 depending on whether a test-
+metric correction and the architectural redesign are counted
+separately—see scope note below). The classification was
+reviewed by a second pass that independently reconstructed
+the table from the same development log without seeing the
+original classification; rows where the two passes agreed
+are marked confidence = high, rows where intervention-
+level attribution required interpretation are marked medium
+or low. The development log records technical fixes but
+does not record which party (physicist or agent) proposed
+each fix; intervention-level attribution therefore rests on the
+supervisor’s recall, cross-checked against the agent’s own
+session-log review.
+Scope note.The following items are intentionally ex-
+cluded from the count: (i) test-script typos that affected
+test runs but not the implementation module; (ii) caveats
+acknowledged in the development log but never escalated
+to bug status (e.g., a hardcoded fallback value for the sound
+horizon resolved after v0.1.0; the σ2
+v FFTLog-grid integra-
+tion with ∼0.1% accuracy cost); (iii) post-v0.1.0 fixes (a
+numerical integration API update; AD-correctness gradient
+fixes that landed after the v0.1.0 milestone). The 12-day
+window closes at the v0.1.0 milestone; later work onCLAX-
+PTextends the public record but is not part of this case
+study’s evidence base.
+The two classification passes agreed on category for all
+15 rows and on intervention level for 12 rows; the three
+rows with intervention-level disagreement (#6 between A
+and HA; #9 between A and HA; #15 between RP–DH and
+DH-only) are marked confidence M to flag this. Bug #12
+is classified as a test-methodology change rather than an
+implementation defect; readers preferring a stricter count
+may exclude it, yielding 14 rows. Bugs #13 and #14 repre-
+sent the same parameter (α) added and then removed within
+a single session 50 minutes apart; we count them as sep-
+arate events because the fix was a structural re-derivation,
+not a numerical adjustment. Reasonable taxonomies could
+collapse these into one row, yielding 13 rows. The text
+of Section 3 and the abstract report the upper bound (15);
+readers preferring a stricter count of 13 or 14 should reach
+equivalent conclusions about the qualitative pattern.
+Across the 15 events the intervention-level distribution is:
+10 autonomous (A); 2 human-accelerated (HA); 1 architec-
+tural with explicit reconsider-prompt-failed-then-domain-
+hint (#15); 1 physicist-rejected-agent-solution (#14); 1 test-
+methodology correction (#12). Session-time was distributed
+unevenly: rows 1–12 collectively consumed substantially
+fewer sessions than rows 13–15 alone, which together
+spanned the architectural-wall window described in Sec-
+tion 3.2.
+9
+
+Physics Is All You Need? A Case Study
+Table 2.Issue-level classification forCLAX-PTv0.1.0 development. Categories: convention/unit (CV), algorithm transcription (AT),
+numerical coefficient (NC), architectural mismatch (AM), calibration patch (CP), test methodology (TM). Intervention levels: autonomous
+(A), human-accelerated (HA, physicist supplied a magnitude/shape observation), reconsider-prompt-failed-then-domain-hint (RP–DH),
+physicist-rejected-agent-solution (PR). Confidence is high (H) where development-log evidence directly supports the assignment, medium
+(M) where category is clear but intervention required interpretation, low (L) where both passes disagreed or evidence is indirect.
+# Issue Discovered Category Intervention Confidence Log ref.
+1 FFTLogM 22 Hermitian vs symmetric packing 2026-04-02 AT A M L218
+2M 22 row-major vs LAPACK column-major 2026-04-02 CV A M L219
+3 IR resummation logk-grid 2026-04-03 AT A M L220
+4 IR resummation linear interpolation 2026-04-03 AT A M L221
+5 Spurioush 3 multiply in bias/multipole fns 2026-04-04 CV A M L274
+6b 4 k-factor(k h/h)2 →k 2
+h 2026-04-04 CV HA M L275
+7 IncompleteM 22 RSD kernels 2026-04-04 AT A M L276
+8 IncompleteM 13 RSD kernels 2026-04-04 AT A M L277
+9 UV counterterm coefficients (ℓ= 2,4) 2026-04-04 NC HA M L278
+10P gg,ℓ=2 tree used isotropic component 2026-04-09 AT A M L264
+11P gg,ℓ=4 tree had spuriousb 1 factors 2026-04-09 AT A M L265
+12 Hexadecapole zero-crossing test metric 2026-04-09 TM A M L266
+13α= 0.27calibration patch (introduction) 2026-04-09 CP A H L267
+14αrejection and anisotropic re-derivation 2026-04-09 AM PR H L268
+15 RSD architectural redesign (GLP(k, µ)assembly) 2026-04-08 AM RP–DH M L294–L336
+10

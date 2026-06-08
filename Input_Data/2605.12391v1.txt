@@ -1,0 +1,2064 @@
+Title: Trajectory-Agnostic Asteroid Detection in TESS with Deep Learning
+Authors: Brian P. Powell, Jorge Martinez-Palomera, Amy Tuson, Christina Hedges, Jessie Dotson, Jordan Caraballo-Vega
+Published: 2026-05-12
+Categories: astro-ph.EP, astro-ph.SR, cs.LG
+
+Draft version May 13, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX7.0.1
+T rajectory-Agnostic Asteroid Detection in TESS with Deep Learning
+Brian P. Powell
+ ,1 Jorge Martinez-Palomera
+ ,2, 1 Amy Tuson
+ ,2, 1 Christina Hedges
+ ,2, 1 Jessie Dotson
+ ,3
+and Jordan Caraballo-Vega
+ 1
+1NASA Goddard Space Flight Center, 8800 Greenbelt Road, Greenbelt, MD 20771, USA
+2University of Maryland, Baltimore County, 1000 Hilltop Circle, Baltimore, MD 21250, USA
+3NASA Ames Research Center, Moffett Field, CA 94035, USA
+(Received 24 February 2026; Revised 13 April 2026; Accepted 11 May 2026)
+ABSTRACT
+We present a novel method for extracting moving objects from TESS data using machine learning.
+Our approach uses two stacked 3D U-Nets with skip connections, which we call a W-Net, to filter back-
+ground and identify pixels containing moving objects in TESS image time-series data. By augmenting
+the training data through rotation of the image cubes, our method is robust to differences in speed
+and direction of asteroids, requiring no assumptions for either parameter range which are typically
+required in “shift-and-stack” type algorithms. We also developed a novel method for learned data scal-
+ing that we call Adaptive Normalization, which allows the neural network to learn the ideal range and
+scaling distribution required for optimal data processing. We built a code for creating TESS training
+data with asteroid masks that served as the foundation of our effort (tess-asteroid-ml), which we
+publicly released for the benefit of the community. Our method is not limited to TESS, but applicable
+for implementation in other similar time-domain surveys, making it of particular interest for use with
+data from upcoming missions such as the Nancy Grace Roman Space Telescope and NEOSurveyor.
+Keywords:Time domain astronomy (2109) — Neural networks (1933) — Asteroids (72) — Small Solar
+System bodies (1469)
+1.INTRODUCTION
+NASA’s Transiting Exoplanet Survey Satellite (TESS,
+G. R. Ricker et al. 2015) is a space-based all-sky photo-
+metric survey that has been active since 2018. Although
+its primary science goal is to detect exoplanets via the
+transit method, its unique instrumental characteristics
+and observation schedule enable numerous other scien-
+tific investigations. Thanks to its large field of view, high
+cadence, and fixed-pointing observations, TESS has ob-
+served many thousands of solar system asteroids, par-
+ticularly near the ecliptic plane. In the optical band,
+asteroid detection is limited by the amount of reflected
+sunlight, which is determined by the asteroid’s size and
+albedo. Systematic optical searches for asteroids have
+been mainly conducted by LINEAR (G. H. Stokes et al.
+2000), the Catalina Real-Time Transient Survey (A. J.
+Drake et al. 2009), Pan-STARRS (L. Denneau et al.
+2013), the Asteroid Terrestrial-impact Last Alert Sys-
+Corresponding author: Brian P. Powell
+Email: brian.p.powell@nasa.gov
+tem (ATLAS; J. L. Tonry et al. 2018), and recently
+by the NSF-DOE Vera C. Rubin Observatory ( ˇZ. Ivezi´ c
+et al. 2019). In contrast, detection in the infrared is due
+to the asteroid’s thermal emission. Most infrared dis-
+coveries were made by NASA’s WISE and NEOWISE
+missions (J. R. Masiero et al. 2011; A. Mainzer et al.
+2011), which concluded in 2024. This effort will continue
+with NASA’s upcoming NEO Surveyor mission (A. K.
+Mainzer et al. 2023), expected to launch no later than
+2027, which is tasked with finding at least two-thirds
+of near-Earth objects (NEOs) larger than 140 meters,
+including potentially hazardous asteroids (PHAs).
+A. P´ al et al. (2018) discussed the prospects for so-
+lar system science using TESS data, comparing its ex-
+pected photometric precision to the previous Kepler/K2
+mission and analyzing phased light curves for asteroid
+rotations. Systematic time-series analyses of known as-
+teroids have been performed mostly with TESS data
+from Years 1 and 2. A. P´ al et al. (2020) analyzed and
+published light curves from almost 10,000 main-belt and
+Trojan asteroids observed during Year 1. A. McNeill
+et al. (2023) systematically extracted light curves for
+arXiv:2605.12391v1  [astro-ph.EP]  12 May 2026
+
+2
+more than 37,000 asteroids using data from Years 1
+and 2. Both works performed rotational period estima-
+tions for multiple asteroid families, and A. McNeill et al.
+(2023) used multi-sector light curves to study asteroid
+spin and derive object shapes. Past work has focused
+mostly on the 30-minute cadence data from the TESS
+prime mission, which enables fainter detections. In sub-
+sequent extended missions, observations have been made
+at higher cadences (10-minute and 200-second). This de-
+creases the detection limit for single frames but enables
+analyzing shorter periods of variability. Furthermore,
+during its extended missions, TESS observed sectors
+that cover gaps left by the prime mission, particularly
+over the ecliptic plane. With the third extended mis-
+sion, TESS has covered nearly the entire sky, enabling
+survey data without selection biases. A complete aster-
+oid time-series analysis using all available TESS data
+remains to be done.
+Image-based detection algorithms often rely on stack-
+ing methods to increase the signal-to-noise ratio (SNR)
+for faint objects (e.g. C. Zhai et al. 2014). These al-
+gorithms—often referred to as shift-and-stack, digital
+tracking, or track-before-detect—operate on two main
+assumptions: (1) the asteroid’s motion is approximately
+linear over short timescales relative to the survey ca-
+dence, and (2) the asteroid’s direction and speed are
+within a predefined range of parameters. In these algo-
+rithms, consecutive image frames are shifted by a certain
+number of pixels given by a proposed speed in a tra-
+jectory given by a proposed direction of motion. The
+shifted images are then stacked, increasing the SNR
+for objects whose projected tracks match the proposed
+parameters, while background stars are blurred. Al-
+though these assumptions lead to efficient algorithms
+and fainter detections, they are inherently limited by
+the defined parameter range. This can lead to missing
+objects on peculiar trajectories, such as those in high-
+inclination orbits, those exhibiting apparent changes in
+direction, or other fast-moving objects.
+The detection of faint moving objects in TESS data
+has been explored through a range of approaches with
+varying goals, methods, and constraints, making direct
+comparison between them inherently challenging. The
+application of digital tracking to TESS data was first
+proposed by M. J. Holman et al. (2019), who suggested a
+50% detection efficiency at magnitudeI c = 22.0 (despite
+a wider bandbass, TESS is centered on theIc band, mak-
+ing the comparison approximately equivalent). This was
+later revised by M. J. Payne et al. (2019) toIc = 21.5 af-
+ter modeling stray light and stellar contamination. The
+first study to apply shift-and-stack to TESS was con-
+ducted by M. Rice & G. Laughlin (2020), who applied
+the method in TESS sectors 18 and 19 in a search for
+the hypothesized orbit of Planet Nine.
+D. F. Woods et al. (2021) developed a single-frame
+detection pipeline for asteroids in TESS full-frame im-
+ages. Rather than employing shift-and-stack techniques,
+their approach detects point sources in individual differ-
+ence images then links per-frame detections into tracks.
+Comprehensively applying their method to all TESS
+data from Years 1-2, the authors discovered thousands
+of new new asteroid tracks reported to the Minor Planet
+Center (MPC). Since the D. F. Woods et al. (2021)
+pipeline operates on individual frames, its sensitivity
+limit (90% complete atV≈19) demonstrates the
+single-frame detection threshold of the TESS instrument
+and is not directly comparable to higher limits achiev-
+able through multi-frame detection, which improves the
+signal-to-noise ratio in proportion to the square root of
+the combined number of frames.
+More recently, T. Nguyen et al. (2024) introduced
+a more computationally-efficient implementation of the
+shift-and-stack method using the fast discrete X-ray
+transform (FaXT). This algorithmic improvement re-
+duced the number of operations fromO(N 5) toO(N 4),
+whereNrepresents the approximate size of each dimen-
+sion (image size, number of frames, and tested veloci-
+ties). The authors applied the FaXT pipeline to a sub-
+set of TESS Sector 5 data with a 128-frame stack and
+achieved 40% completeness atV≈21, broadly consis-
+tent with the predictions of M. J. Payne et al. (2019),
+while differences in stack depth, search volume, and
+noise conditions make precise comparisons difficult. P.
+Zhang et al. (2025) proposed an improvement to multi-
+frame shift-and-stack whereby a gradient-based algo-
+rithm can increase the SNR of a stacked image by itera-
+tively changing the velocity hypothesis in the direction
+of a higher SNR, reducing the need for comprehensive
+velocity hypotheses in the initial search.
+In this work, we develop an image-based detection ap-
+proach free from the constraints of speed or trajectory
+hypotheses. To accomplish this, we use a machine learn-
+ing (ML) method to identify moving objects in TESS
+data. ML has previously been used for asteroid detec-
+tion purposes, although not at the pixel-level. For exam-
+ple, A. Chyba Rabeendran & L. Denneau (2021) devel-
+oped a convolutional neural network to classify whether
+four consecutive Asteroid Terrestrial-impact Last Alert
+System (ATLAS) images contained an asteroid track.
+P. Cowan et al. (2023) used a similar technique to clas-
+sify image stacks from the Microlensing Observations in
+Astrophysics (MOA) survey.
+Our model uses a 3D Convolutional Neural Network
+(CNN), an architecture naturally suited for this task
+
+3
+as it can learn spatio-temporal features simultaneously,
+identifying motion patterns in a sequence of images
+without prior assumptions about direction or speed.
+The model outputs a probability map indicating where
+an asteroid is located in both image and time dimen-
+sions. TESS Full Frame Images (FFIs) provide the per-
+fect proving grounds for this method, though this ap-
+proach could be adapted to other time-domain surveys,
+such as NASA’s upcoming Nancy Grace Roman Space
+Telescope (Roman) and NEO Surveyor missions.
+The arrangement of this paper is as follows: in Sec-
+tion 2, we discuss the TESS and JPL Horizons data and
+detail the development of our publicly-available code for
+data preparation. We then discuss the structure of the
+neural network in Section 3, with our Adaptive Nor-
+malization method detailed in Section 4. Section 5 de-
+scribes our model loss function, while Section 6 outlines
+the model training procedure. Our results are shown in
+Section 7, followed by a discussion in Section 8. Finally,
+we summarize and provide our conclusions in Section 9.
+2.DATA PREPARATION
+In this section, we detail our efforts to build the
+training data. This led to the development of
+tess-asteroid-ml(J. Mart´ ınez-Palomera 2026) – a
+publicly available Python package to assist the com-
+munity with further investigations of ML methods for
+detecting asteroids in TESS data.
+2.1.TESS Data
+TESS observes the sky with four cameras, creating
+a combined field of view (FOV) of 96×24 deg. Each
+camera has a 24×24 deg FOV and contains 4 CCDs
+arranged in a 2×2 layout. The science portion of each
+CCD has an array of 2048×2048 pixels with a pixel
+scale of 21 ′′/pix.
+During its primary mission, TESS observed the south-
+ern hemisphere (Year 1, Sectors 1-13) and the north-
+ern hemisphere (Year 2, Sectors 14-26). In each sector,
+the spacecraft maintained a stable pointing for approx-
+imately 27 days. The observing strategy was designed
+to place Camera 1 near the ecliptic plane, with the oth-
+ers vertically stacked towards the ecliptic pole. Some
+sectors in the northern hemisphere were offset from the
+ecliptic to reduce stray light. Figure 1 shows the TESS
+sector map in ecliptic coordinates. FFIs from the pri-
+mary mission were collected at a 30-minute cadence,
+producing roughly 1300 frames per sector.
+We used the calibrated TESS FFIs ( TESS Team
+2022), which are publicly available through the Mikul-
+ski Archive for Space Telescopes (MAST). They can
+be accessed as single-frame FITS files or as data cubes
+(Nt ×2048×2048) on Amazon Web Services (AWS). We
+accessed the data usingtess-cube(C. Hedges & TESS
+Science Support Center 2023a), which enables efficient
+retrieval of specific sections of the FFI cubes from the
+cloud without requiring local copies of the entire dataset.
+The latter is important, as a single FFI cube for a given
+sector, camera, and CCD is about 50 GB, making bulk
+storage difficult.
+Figure 1.TESS Year 1 (top) and 2 (bottom) sky cov-
+erage from https://tess.mit.edu/observations/. The figure
+is projected in ecliptic coordinates with the Galactic plane
+highlighted in bold gray. Sector numbers are noted in each
+pointing. The instrument cameras are highlighted with dif-
+ferent colors, camera 1 in red, camera 2 in purple, camera 3
+in blue, and camera 4 in green. Sectors 14-16 and 24-26 are
+shifted away from the ecliptic plane to reduce strong scat-
+tered light.
+2.2.Asteroid Catalog and Ephemeris
+To build a training set, we needed ground-truth labels
+of known asteroid trajectories visible in the TESS data.
+A natural starting point for creating these labels was
+the NASA Jet Propulsion Laboratory (JPL) Horizons
+system, which provides ephemerides for over 1.3 million
+asteroids and other solar system bodies.
+Using the Small-Body Database API, we first obtained
+a preliminary list of asteroids and comets down to mag-
+nitudeV= 25 potentially visible in each TESS sec-
+tor. Then, for each object, we used the Horizons API
+to generate precise ephemeris data using TESS space-
+craft time and state vectors (position and velocity) as
+the observer in order to account for parallax effects. We
+
+4
+converted the resulting Right Ascension (R.A.) and Dec-
+lination (Decl.) coordinates to pixel row and column
+positions using the World Coordinate Solution (WCS)
+from the FFI headers. We only retained asteroid tra-
+jectories with an expected mean apparent magnitude
+brighter thanV <24. This limiting magnitude was se-
+lected to ensure our label set is complete well beyond the
+known TESS detection limit ofV≈21 (K. G. Stassun
+et al. 2019), which prevents biasing our training data
+and provides flexibility for experimenting with different
+magnitude limits. Figure 2 shows the joint distribution
+of orbital elements for the resulting asteroids.
+0.0
+0.1
+0.2
+0.3Density
+0.00
+0.25
+0.50
+0.75
+1.00Eccentricity
+0
+50
+100
+150Inclination [deg]
+10 20
+V magnitude
+10 1
+100
+101
+102
+Perihelion [AU]
+0.0 0.5 1.0
+Eccentricity
+0 100
+Inclination [deg]
+100 102
+Perihelion [AU]
+Figure 2.Joint distribution of known asteroids observed
+during TESS Years 1 and 2. The magnitude range reflects
+the limiting magnitude ofV <24 used when querying JPL
+Horizons. The orbit inclination values are dominated by as-
+teroids near the ecliptic plane. The peak in the distribution
+of perihelion values correspond to main-belt asteroids.
+From our queries, a typical TESS sector contains
+∼30,000 unique asteroid tracks. Figure 3 shows the
+projected tracks in Sector 6. Due to the TESS instru-
+ment layout, Camera 1, which is closest to the eclip-
+tic plane, contains over 90% of the observable asteroids
+in a sector. Camera 2 typically contains∼8%, while
+Cameras 3 and 4 account for the remaining∼2% of
+asteroids. This follows the characteristic distribution of
+minor bodies away from the ecliptic plane. The majority
+of these asteroids have low-inclination orbits, appearing
+as horizontal tracks. Minor bodies with higher inclina-
+tions project as diagonal or vertical tracks and are more
+common in Cameras 3 and 4.
+Across the southern hemisphere (Sectors 1-13), we
+cataloged 259,602 asteroid tracks. For the northern
+hemisphere (Sectors 14-26), we found 150,865 tracks.
+The lower count in the north is due to the six sectors
+that were pointed away from the ecliptic plane (see Fig-
+ure 1). Combining both hemispheres, we account for
+401,467 tracks from 364,036 unique asteroids.
+2.3.Data Preprocessing
+We developed thetess-asteroid-mlPython package
+to process the TESS FFIs and asteroid tracks into a for-
+mat suitable for training our neural network model. The
+pipeline produces four data products for each processed
+region of the sky:
+1.Image cutout: A 64×64 pixel cutout of the FFI
+cube shaped into a 3D data array with the flux
+image for every observed cadence. We subtracted
+each frame with a median-frame computed from
+the same 64-size cubes. The image cutouts con-
+tain flux values in units ofe −/sand the shape is
+[Ncadences,64,64].
+2.Asteroid mask: A corresponding 3D boolean
+mask of shape [N cadences,64,64] marking the pix-
+els where an asteroid is present according to its
+ephemeris. To create a mask for each asteroid,
+we generated elliptical apertures around the pro-
+jected ephemeris for each frame. The ellipse shape
+is proportional to the object’s projected speed,
+and its size is scaled by a power-law function of
+the object’s expected magnitude. The mask has a
+value of 1 inside the aperture and 0 elsewhere. We
+then combined each individual mask to create the
+global asteroid mask.
+3.Asteroid Catalog: A table listing the asteroids
+within the cutout and their metadata (e.g., mag-
+nitude, orbital elements).
+4.Metadata: A file containing time values, cadence
+numbers, and the reference pixel coordinates of the
+cutout on the full CCD.
+We acknowledge two minor simplifications in our coor-
+dinate conversions when creating the asteroid masks: we
+did not account for spacecraft velocity aberration or the
+full barycentric time correction for pixels far from the
+camera center. These effects introduce small positional
+offsets, resulting in label noise (i.e., mask pixels not per-
+fectly aligned with flux). However, during development,
+we found that the network successfully generalizes over
+this noise (see Section 7.2), so we omitted these correc-
+tions to simplify the data pipeline.
+
+5
+TESS Sector 6
+Camera 1Camera 2Camera 3Camera 4
+Figure 3.Tracks of asteroids observed during TESS Sector
+6 (2018/12/11 - 2019/01/07). Each panel shows a TESS
+FFI from one of the 16 CCDs. The colored lines represent
+the asteroid tracks, where the colors have no meaning other
+than representing different asteroids. The higher density of
+tracks in camera 1 (top two rows) is due to its proximity to
+the ecliptic plane, where most of the Solar System’s minor
+bodies orbit. Asteroids with highly inclined orbits are visible
+towards polar latitudes.
+To process an entire FFI cube, we generated a grid of
+64×64 pixel cutouts, with a 4-pixel overlap to mitigate
+edge effects, and 64 frames in the time axis. At a 30-
+minute cadence, 64 frames cover 32 hours, long enough
+to establish motion but short enough to keep memory re-
+quirements manageable. This temporal slicing accounts
+for data gaps (e.g., downlinks) and allows the model
+to make multiple predictions for each part of an aster-
+oid’s track, enhancing robustness. This results in 1,156
+cutout/mask pairs per CCD. These 64-size minicubes
+with the image cutouts and asteroid masks are the data
+used for model training.
+We built these 64-size data cubes for all of TESS Years
+1-2 (Sectors 1-26), including all known asteroid tracks
+from JPL Horizons brighter thanV <22 mag. We dis-
+cuss the selection of this magnitude cut further in Sec-
+tion 6.4. Construction time for this data is variable and
+depends linearly on the number of asteroid tracks. On
+average, all the data cubes for a single sector/camer-
+a/CCD combination will take 2-3 hours to build on a
+single CPU, with particularly dense or sparse CCDs tak-
+ing slightly longer or shorter, respectively. The Python
+package used to build this training set is publicly avail-
+able astess-asteroid-ml 4 to ensure the reproducibil-
+ity of our results. Thetess-asteroid-mlcode is dis-
+cretized at the CCD level, so this process is easily par-
+allelizable.
+3.MODEL DEVELOPMENT
+Our model needed to transform input data (the flux
+cubes described in Section 2) into a mask that indicated
+the per-pixel probability of the presence of an asteroid.
+Broadly speaking, the problem of providing input data
+to a neural network and creating an output mask is
+known as semantic segmentation. In semantic segmen-
+tation, the neural network learns to identify characteris-
+tics of an object in an image. In the simplest form with
+a single class of object, the mask created by the neural
+network is then a map of those pixels containing the tar-
+get object (with a score of 1) and pixels not containing
+the target object (with a score of 0). The most common
+type of neural network used to accomplish the task of se-
+mantic segmentation is called a U-Net (O. Ronneberger
+et al. 2015).
+The name of the U-Net is derived from its appear-
+ance as a “U”. That is, an input image is decomposed
+through multiple layers and then reconstructed. Gen-
+erally, such a progression is associated with an autoen-
+coder type neural network, originally proposed by Y.
+LeCun (1987). However, the key characteristic making
+a U-Net distinct from an autoencoder is the existence of
+“skip connections.” These connections pass information
+directly across from one branch of the “U” to the other,
+providing alternative paths for the flow of the gradient
+4 Code, documentation, and tutorials available at https://
+github.com/jorgemarpa/tess-asteroid-ml
+
+6
+during training and for the preservation of structural
+information about the image, which would otherwise be
+lost in the dimensional reduction of the innermost lay-
+ers. See Figure 1 of O. Ronneberger et al. (2015) for a
+diagram of a typical U-Net.
+U-Nets have been successfully employed in a variety of
+applications (e.g. H. Lan et al. 2020; X. Tong et al. 2021;
+T.-H. Vu et al. 2021; A. Jlassi et al. 2023; T.-A. Nguyen
+2024). As in their original development for biomedical
+image segmentation by O. Ronneberger et al. (2015),
+much of the development and innovation has taken place
+in this field, such as the combination of U-Nets with vi-
+sion transformers (J. Chen et al. 2024). U-Nets have also
+driven substantial progress in stable diffusion models (R.
+Rombach et al. 2022), which originally used U-Nets as
+an internal denoising mechanism.
+3.1.Neural Network Architecture
+We started our examination of the TESS data cubes
+using the concept of the U-Net. Our task, however, had
+the additional difficulty of the added temporal dimen-
+sion. To accommodate the temporal dimension, the U-
+Net needed a structure with 3D convolutions rather than
+traditional U-Net structures with 2D convolutions. The
+convolutional filters would then need to learn to iden-
+tify temporal differences in the position of a light source.
+The filters would also need to develop a means to ex-
+press that stationary light sources are unimportant to
+the classification.
+As we developed the network structure using theten-
+sorflow(M. Abadi et al. 2015) andkeras(F. Chollet
+et al. 2015) python libraries and began to test perfor-
+mance, we noticed that our 3D U-Net was only poorly
+able to identify asteroids. In order to remedy the poor
+performance, we progressively made the network deeper.
+Ultimately, rather than continuing to make the U-Net
+itself deeper, we stacked two U-Nets and created addi-
+tional skip connections between the upward arm of the
+first “U” and the downward arm of the second “U,” ef-
+fectively making a “W-Net.” The W-Net proved to be
+effective and so we moved forward with this structure.
+See Figures 4 and 5 for a more thorough description of
+the structure. We did not conduct a sensitivity analysis
+of different structures as we considered this to be beyond
+the scope of our initial study.
+3.2.Model Scope
+To evaluate our model against the entirety of TESS
+data from Years 1-2, we needed to train a minimum of
+two distinct models. Data that was used for training
+cannot be considered in evaluating the performance of
+the model, that is, we needed to ensure that the model
+had no specific knowledge of the data which was used
+for inference, either in training or validation. 5 Another
+consideration was that maximizing the variety of data
+used for training improves model generalizability.
+We decided to create two models: one which would be
+trained and validated on the Southern sectors of TESS
+Year 1 (Sectors 1-13) and one which would be trained
+and validated on the Northern sectors of TESS Year 2
+(Sectors 14-26). The former (hereafter called the “ST”
+model, for “South-Trained”) would be used for infer-
+ence on the Northern sectors, while the latter (hereafter
+called the “NT” model, for “North-Trained”) would be
+used for inference on the Southern sectors. In this man-
+ner, we ensure that the models were not given any infor-
+mation which could positively skew their performance.
+Specifically, the ST model was trained on data from
+TESS Sectors 1, 2, 3, 5, 6, 7, 9, 10, 11, and 13, and
+validated against Sectors 4, 8, and 12. The NT model
+was trained on data from TESS Sectors 14, 15, 16, 18,
+19, 20, 22, 23, 24 and 26, and validated against Sectors
+17, 21, and 25. These choices for training and validation
+sets were arbitrary and we expect, but did not evaluate,
+that different selections would have no substantial effect
+on model performance. The quantity of available data
+samples for training and validation are given in Table 1.
+Given the wide variety of noise and systematics in
+TESS data, which is often highly specific, not using data
+from the same sector/camera/CCD for training/testing
+and inference presented a substantial challenge for the
+generalizability of the model. We could have used, for
+example, different row/column sections of the same sec-
+tor/camera/CCD combination for training, validation,
+and inference. In this manner, the model would be
+trained in the noise or systematics specific to a sector/-
+camera/CCD combination and, as such, performance of
+the model would likely be improved. However, in order
+to demonstrate the potential of our method in widely
+varied conditions, we opted to ensure that the model had
+no knowledge in training of the entire sector in which it
+would be used for inference.
+5 To avoid confusion, we define three terms as we use them; train-
+ing, validation, and inference. (i) Training: The process of
+teaching the model to learn the prediction mask correspond-
+ing to respective input samples by providing the truth (the
+ephemeris mask) – data used for training cannot be used for
+validation or inference, since the model will inherently know
+the output corresponding to the input. (ii) Validation: The
+process of evaluating performance of the model (via the loss
+function described in Section 5) – data used for validation can-
+not have been used for training. (iii) Inference: The process
+of using the trained model to predict outputs – inference can-
+not be performed on data with which it has been trained or
+validated.
+
+7
+Adaptive Normalization
+32x32x32x16 CB16x16x16x32CB8x8x8x64 CB4x4x4x128 CB2x2x2x256 CB1x1x1x512 CB
+64x64x64x1 CB32x32x32x16 CB16x16x16x32 CB8x8x8x64 CB4x4x4x128 CB2x2x2x256 CB1x1x1x512 CB
+64x64x64 Data Sample
+32x32x32x16 CB16x16x16x32 CB8x8x8x64 CB4x4x4x128 CB2x2x2x256 CB1x1x1x512 CB
+64x64x64 Prediction
+32x32x32x16 CB16x16x16x32 CB8x8x8x64 CB4x4x4x128 CB2x2x2x256 CB1x1x1x512 CB
+64x64x64x1 Reshape64x64x64x1 Conv
+Figure 4.W-Net structure. A 64×64×64 sample of median-subtracted TESS data built using the process described in Section
+2 is the input to the neural network. The data undergoes our custom Adaptive Normalization process, described in Section 4,
+where the model learns the parameters of a mixture of Logistic cumulative distribution functions (CDFs) that provide a learned
+transformation of the input data to the [0,1] range. Convolutional blocks (CBs) are given by their output dimensions and
+described further in Figure 5. Activations internal to the convolutional blocks use the Exponential Linear Unit (ELU) function
+(D.-A. Clevert et al. 2016), while the final and innermost 64×64×64×1 convolutions are activated with the sigmoid function.
+Figure 5.Structure of a convolutional block from the
+W-Net. Each convolutional block of dimension N with C
+channels contains six 3×3 convolutional layers alternated
+with dropout, followed by a max pooling layer with a 2×2×2
+kernel to reduce the dimensionality, finishing with a batch
+normalization layer. Dropout fractions are 0.1 for the 16,
+32, and 64 channel convolutional layers, 0.2 for the 128 and
+256 channel convolutional layers, and 0.3 for the 512 chan-
+nel convolutional layers. Concatenations for skip connections
+are made in the channel dimension.
+3.3.Data Scaling
+Our early attempts at model development included us-
+ing normalization of the data cubes to [0,1] as input to
+the neural network, which failed to converge. TESS FFI
+flux data can have an enormous range, varying from neg-
+ligible to fully saturated pixels, numerically from∼0 to
+∼105. Although median subtraction reduces that range,
+the neural network was unable to effectively extract the
+relevant values. The need for a better type of scaling
+was evident.
+Data scaling can be essential to ML applications, par-
+ticularly neural networks. Keeping data within a limited
+range allows a neural network to focus on finding pat-
+terns rather than on mitigating the effects of irrelevant
+numerical interrelationships. Although there are many
+different methods for scaling data, we chose to proceed
+with quantile transformation, which uses a nonlinear
+transformation to map the probability density distribu-
+tion to a Uniform Distribution. This scaling method has
+proven effective in previous ML applications with TESS
+data, such as finding eclipses in TESS light curves (see
+e.g., B. P. Powell et al. 2021a,b, 2022, 2025; V. B. Kostov
+et al. 2022, 2024, 2025, 2026).
+Quantile transformation of the input data cubes al-
+lowed our model to successfully converge. However, this
+step was a substantial bottleneck in our process. Quan-
+tile transformation was effective but computationally
+slow and, perhaps more importantly, is something of a
+blunt instrument as there is no guarantee of an optimal
+data distribution. We wanted to scale the data effec-
+tively such that all the convolutional operations could
+focus on extracting the asteroids rather than data nor-
+malization.
+4.ADAPTIVE NORMALIZATION
+In order to address this problem, we sought to create
+alearned scalingmechanism internal to the neural net-
+
+8
+Model Sector Typea Samples
+ST
+1 T 21 070 427
+2 T 19 790 720
+3 T 17 811 648
+4 V 15 474 216
+5 T 19 386 120
+6 T 15 800 208
+7 T 17 756 160
+8 V 14 165 624
+9 T 18 581 544
+10 T 18 344 564
+11 T 18 610 444
+12 V 20 051 976
+13 T 21 235 720
+NT
+14 T 20 549 056
+15 T 19 679 744
+16 T 18 348 032
+17 V 18 105 272
+18 T 17 604 724
+19 T 18 939 904
+20 T 19 489 004
+21 V 20 876 204
+22 T 20 515 532
+23 T 19 810 372
+24 T 20 308 608
+25 V 19 254 336
+26 T 18 865 920
+ST Training total 188 387 555
+Validation total 49 691 816
+NT Training total 194 110 896
+Validation total 58 235 812
+T able 1.Number of 64×64×64 samples per sector, with
+training and validation totals. Notes: (a) T = Training, V
+= Validation.
+work that could adapt to the data distribution. This
+operation would be conducted in the initial layer of the
+neural network, performing the role of data scaling that
+would otherwise be performed as a pre-processing step,
+but in a learned capacity.
+Normalization layers are not a new concept for neural
+networks. Batch normalization (S. Ioffe & C. Szegedy
+2015), which is commonly used as means of scaling ac-
+tivations of convolutional layers to control the gradi-
+ent flow, is ubiquitous in CNNs. Layer Normalization
+(J. L. Ba et al. 2016) normalizes across the feature di-
+mension rather than the batch dimension, finding utility
+in transformer architectures (A. Vaswani et al. 2017).
+Our method is substantially different, however, in that
+we fundamentally transform the data itself as theinitial
+layer. In this manner, we perform a step usually done in
+data pre-processing as part of the neural network and,
+rather than a one-size-fits-all transformation of common
+scaling methods, welearna nonlinear transformation to
+intelligently optimize the data distribution for follow-on
+processing by the W-Net. In this role, our normaliza-
+tion layer is perhaps more similar to the concept of at-
+tention (D. Bahdanau et al. 2015; M.-T. Luong et al.
+2015), in which features of the data are emphasized or
+de-emphasized through a learned process. However, our
+concept is much different from attention in that it em-
+phasizes regions of a distribution rather than individual
+elements of the data.
+Our initial scaling layer needed to (i) input the raw
+data, (ii) learn a transformation, and (iii) output the
+transformed data in the range [0,1]. The requirement of
+an output range of [0,1] is not a necessity for the neural
+network, but rather our own imposition after seeing the
+initial success of the neural network with quantile-scaled
+data in the same range. However, this also guided our
+selection of the process of transforming the data as a
+weighted mixture of cumulative distribution functions
+(CDFs). We specifically chose the CDF of the Logistic
+Distribution. We do not assert that this distribution
+would perform any better or worse than another CDF
+with the same input range, as we chose it only for its sim-
+plicity. The role of the CDF in our case is simply as the
+basis for a transformation function through a weighted
+combination. For our learned transformation, then, for
+each CDF, the neural network needed to learn three pa-
+rameters: location (µ), scale (s), and weight (w).
+We initialized these parameters for each respective
+CDF as a learnable weight. That is, each as a variable
+of lengthN distributions, the user-defined number of Lo-
+gistic CDFs in the mixture. Each of the parameters was
+learnable on an unlimited range. Distribution weights
+were activated using the softmax function, i.e.
+w(x)i = exi
+PK
+j=1 exj
+,(1)
+wherex i is an individual learned parameter andw(x) i is
+the activated distribution weight, such that the sum of
+the weights is equal to unity. Also, since thesvalue of
+the Logistic Distribution is strictly positive, they were
+activated using the softplus function, i.e.
+s(x) = ln(1 +e x),(2)
+wherexis the learned parameter andsis the activated
+scale, such that all scale values are positive. Locations,
+µ, were not activated in order forµto have the ability
+to be positive or negative and adapt to the data distri-
+bution as needed (for clarity, we remind the reader that
+
+9
+the input to the neural network is the median-subtracted
+flux image, so can be negative). A loss term was added
+to encourageµto be different for each distribution, im-
+proving the richness of the representation. We called
+this loss term the “variance loss,”L v, given by
+Lv(µ) =w µ
+1
+1 +e −σ2(µ) ,(3)
+which is the sigmoid activated variance of the vector
+µmultiplied by an arbitrary weight,w µ. The sigmoid
+activation function is on the scale (0,1), so the user-
+defined weight determines the importance of the term
+to the overall model loss function, which we will discuss
+further in Section 5.
+To demonstrate the functionality of this layer, we show
+the transformation of randomly selected data samples
+for both the NT and ST models in Figure 6, described in
+detail in the figure caption. The learned parameters for
+the Logistic CDFs comprising the transformation func-
+tions are shown in Table 2. Rather arbitrarily, we chose
+to have our transformation functions constructed by ten
+of the weighted Logistic CDFs. Greater or fewer CDFs
+can be chosen as desired, and we make no assertions as
+to an optimal number. In testing, however, we noticed
+that regardless of the number of CDFs selected for the
+transformation, the model tended to learn one or two as
+the dominant distributions, with progressively smaller
+contributions from others. In Figure 6, we see that the
+model learned one dominant CDF for the NT model and
+two almost equally dominant CDFs for the ST model.
+We compare the learned transformation functions for
+the ST and NT models in the top panel of Figure 7, with
+the difference between them shown in the bottom panel.
+Despite the variety in the distribution parameters, the
+difference is rather slight, reaching a maximum absolute
+difference of∼0.018 in the transformed output value.
+Interestingly, it can be seen from both this figure and
+the parameters themselves in Table 2 that the learned
+locations,µ, of the Logistic CDFs were all substantially
+positive. As discussed earlier in this section, positiveµ
+was not a requirement of the model. We can consider
+the transformation function to be expanding the range of
+input flux nearµ, while contracting the range of input
+flux further away. In effect, it is allowing the neural
+network to intelligently select the ranges of the input
+flux which are most useful to determining the output.
+Given that the input flux is median-subtracted and
+the learnedµare all positive, this indicates that the
+model has learned a preference for greater detail in flux
+values slightly larger than the median. Logically, this is
+clearly intelligent behavior because an asteroid passing
+through a pixel will cause the flux from that pixel dur-
+Figure 6.Example transformations from the Adaptive Nor-
+malization layer for the NT model (top) and the ST model
+(bottom). The histogram of the input data (median-sub-
+tracted flux of a randomly-selected sample) is shown in red,
+with density corresponding to the y-axis on the right side.
+Each of the ten weighted Logistic CDFs are shown as dashed
+lines, with the weighted sum shown in blue, all corresponding
+to the y-axis on the left side. The parameters of the Logistic
+CDFs are shown in Table 2.
+ing the asteroid passage to be larger than the temporal
+median, barring other variability effects. This behav-
+ior inherently validates that our learned normalization
+technique performs as desired.
+5.LOSS FUNCTION
+Semantic segmentation tasks have used a number of
+loss functions, each in consideration of a particular pur-
+pose. Generally, these loss functions focus on identi-
+fying particular pixels, regions, or boundaries between
+regions. Although it is beyond the scope of our ef-
+fort to investigate each of them, we note that semantic
+segmentation loss functions, together with their various
+strengths and weaknesses, are nicely summarized by R.
+Azad et al. (2023). Although many semantic segmenta-
+tion problems have multiple classes in the same image
+data, we have only two classes: (i) pixels containing as-
+
+10
+Model Param. Value
+1 2 3 4 5 6 7 8 9 10
+NT
+µ 1.0156 1.0668 1.0730 1.0595 1.0243 1.0388 0.6247 1.0060 1.0225 1.0526
+s 1.1713 1.4406 1.4086 1.6195 1.1923 1.5156 0.4919 0.9800 1.6163 1.2180
+w 0.0432 0.1218 0.1354 0.1000 0.0626 0.0698 0.2207 0.0830 0.0389 0.1246
+ST
+µ 0.7804 0.9204 0.9154 0.9059 0.9201 0.9152 0.8493 0.9189 0.9091 0.9185
+s 0.6976 1.3089 1.4217 1.1051 1.5383 1.4734 0.8559 1.4186 1.2675 1.3183
+w 0.1722 0.1044 0.0725 0.0878 0.0823 0.0682 0.1699 0.0859 0.0616 0.0952
+T able 2.Location (µ), scale (s), and weight (w) parameters for the NT and ST models for each of the ten Logistic CDFs.
+Figure 7.(top) The learned transformation functions of
+the NT model (red) and the ST model (blue). (bottom) The
+difference between the transformation functions (NT-ST).
+teroids and (ii) pixels not containing asteroids, identified
+respectively in a binary mask as 1 and 0. The data set
+is heavily weighted toward the latter.
+We initially started our effort with the intent of pixel-
+level segmentation given that we faced only a binary
+problem, correctable with inverse weighting of the pix-
+els, but we quickly found that the imbalance between the
+classes was far too cumbersome to be overcome by an in-
+verse weighting scheme. In fact,∼75% of our data sam-
+ples contained no asteroids at all (see Figure 8, which
+shows a histogram of the fraction of pixels containing
+asteroids in each sample). In consideration of the loss
+function, the sparsity of the data simply implied that a
+pixel-based loss function was not feasible for the prob-
+lem, but it also presented additional challenges for train-
+ing the model, which we will discuss later in Section 6.2.
+Due to the rather extreme class disparity, we needed
+to use a region-based loss function rather than a pixel-
+based loss function. We selected the generalized Dice
+loss function because it inherently manages class im-
+balance by effectively measuring the overlap between
+Figure 8.Histogram showing the fraction of pixels contain-
+ing asteroids in all 64×64×64 data samples. Note that the
+y-axis is on a log scale and, as indicated by the large initial
+bin,∼75.4% of the data samples do not contain any aster-
+oids.
+regions without consideration of class size. The Dice-
+Sørensen coefficient was originally developed by L. R.
+Dice (1945) and T. J. Sørensen (1948) as a measure of
+similarity between disparate samples,AandB, given by
+D= 2|A∩B|
+|A|+|B| .(4)
+The coefficient was originally proposed as a score of
+measuring overlap by W. Crum et al. (2006), then first
+implemented as a loss function by C. H. Sudre et al.
+(2017) by subtracting the coefficient from unity. The
+Dice loss,L D, is given by
+LD = 1− 2 PN
+n=1 pnyn
+PN
+n=1 p2n + PN
+n=1 y2n
+,(5)
+whereNis the total number of pixels,pis the true value
+of the pixel (0 or 1),yis the predicted value of the pixel
+in the range [0,1]. Including the additional term from
+Eqn. 3, the model loss,L, becomes
+L=L D −L v =
+1− 2 PN
+n=1 pnyn
+PN
+n=1 p2n + PN
+n=1 y2n
+−w µ
+1
+1 +e −σ2(µ) .(6)
+
+11
+LD is limited in the range [0,1]. The range of theL v
+term is limited toL v ≤w µ and is therefore user-defined.
+In our case, we usedw µ = 0.01, mildly encouraging
+distinct distributions from the Adaptive Normalization
+layer without distracting the model from the overall goal
+of minimizing the Dice loss.
+6.MODEL TRAINING
+Training the neural network required several cus-
+tomizations. The data was not amenable to training
+in its raw form, nor was it conducive to a generalizable
+model. Here, we describe several challenges we encoun-
+tered in the process of training and how they were over-
+come.
+6.1.Data Augmentation
+Referring back to our motivations discussed in Section
+1, we wanted to avoid any dependency on asteroid tra-
+jectory in our method. By building a model equally
+capable of identifying asteroids moving in any direc-
+tion through the FFIs, we could find asteroids which
+have been missed by traditional shift-and-stack searches
+dependent on high-probability direction and speed hy-
+potheses. Since the capabilities of a ML model are, in
+large part, dictated by the nature of the training data,
+we needed to intervene in the training process by pro-
+viding artificial data to the model.
+Artificial, for our purposes, meant altering the config-
+uration of the original data. Each 64×64×64 data cube
+provided as training or testing data to the model was
+randomly selected to be in one of 16 equally probable
+configurations: a 50% chance of flipping the time axis,
+followed by one of eight possible rotations or flips on the
+positional axes. By training in this manner, the model
+became equally capable of identifying asteroids moving
+right-to-left as left-to-right, top-to-bottom as bottom-
+to-top, or any combination thereof.
+We also note that shift-and-stack methods are gener-
+ally limited to finding moving objects with tracks start-
+ing at a fixed initial time step, whether the first time step
+of the image stack or a later time step set by padding.
+Our method suffers no such limitation as it is trained
+over a multitude of different asteroid tracks without any
+defined start or end point.
+6.2.Batch Construction
+We initially trained the neural network with a random
+selection of data cubes, but quickly found that the model
+was not capable of identifying asteroids, regardless of
+the batch size, structure, optimizer selection, or hyper-
+parameter modifications. This was due to the fact that
+>75% of cubes did not contain any asteroids, and the
+samples that did contain asteroids tended to be sparse.
+Since we were training to the objective of a binary mask,
+the neural network compensated for the lack of asteroids
+in the training data by having a tendency to output pre-
+dictions containing all zeros.
+In order to overcome this problem, we modified our
+batch construction to be careful to ensure that both our
+training and validation batches contained asteroids. We
+established an arbitrary minimum threshold of at least
+100 pixels (0.04%) of a data cube needing to contain an
+asteroid in order to be used for training or validation.
+The nature of the Dice loss function (previously dis-
+cussed in Section 5) allows it to compensate for class
+imbalance in the data. However, in the case where the
+true mask consists of entirely zeros, the numerator of the
+second term of Equation 5 is zero and thus the sample
+contributes no information of value to the loss function.
+Our arbitrary threshold ensured that each sample con-
+tributed to the loss, and therefore allowed for successful
+convergence of the model. The NT and ST model train-
+ing and validation losses over 600 epochs, demonstrating
+convergence, are shown in Figure 9. We attribute any
+differences between the model losses to differences in the
+data, as they are trained and validated on entirely dif-
+ferent data sets.
+6.3.Data Completeness and Accuracy
+We learned in the process of model development that
+the use of ML for asteroid detection is particularly prob-
+lematic in that the “truth” data is fundamentally in-
+complete. In most image classification problems or even
+semantic segmentation problems, the truth is known. In
+our case, the truth is partial. By this we mean that, the
+dimmer our asteroid threshold, the greater the chance
+that an asteroid is not included in our truth data.
+New asteroids are being found every day. 6 Recent ef-
+forts (e.g. D. F. Woods et al. 2021; T. Nguyen et al.
+2024) have added thousands of new asteroids to existing
+databases. That the “truth” data on which we trained
+our model is incomplete is not in question, just the ex-
+tent to which it is incomplete.
+The impact this has on our model is effectively self-
+limitation. That is, the dimmer the object, the greater
+the chance we are training a pixel as a negative which
+is in reality a positive (i.e. an asteroid exists in a given
+pixel but has not yet been identified).
+It is also possible that an asteroid in the database
+no longer exists on its recorded orbit or has diverged
+even slightly from the projected track indicated by the
+6 See the tallies updated daily by MPC on https://www.
+minorplanetcenter.net/
+
+12
+Figure 9.(left) Training loss (blue) and validation loss (red) of the ST model over 600 epochs. (right) The same for the NT
+model.
+JPL Horizons ephemeris. In this case, we are rather
+severely impairing the training of the model, as we are
+both training as a positive what is in reality a negative
+and vice versa along the entire length of a track. This
+could amount to thousands of pixels for a single track
+which are being provided to the model with the wrong
+label.
+The effect of both the fundamental incompleteness
+and inaccuracy of the data is that we are “counter-
+training” a non-trivial fraction of the data. That is,
+the neural network will be attempting to numerically
+justify why some pixels it understands as positives are
+actually negatives and vice versa. As such, the perfor-
+mance of our model, or any model attempting the same
+task, will be inherently limited by the completeness and
+accuracy of the asteroid data used for training. As can
+be expected (and will be discussed further in Section
+7), these limitations also hinder a proper quantitative
+evaluation of the results of the model.
+We also note that, although they are provided by
+JPL Horizons, we did not use comets in the training
+data. Comets temporarily brighten pixels in their tails,
+which are not a characteristic of asteroids. The tails
+can be rather large and cover a substantial pixel region,
+creating a confusing effect for the neural network. As
+such, we chose to exclude comets from the training data
+by explicitly not training or validating with any data
+sample containing a comet, which is a flag provided by
+tess-asteroid-ml. This of course does not preclude
+the model from finding comets, as they are moving ob-
+jects just like asteroids, but it does prevent poor training
+of the model in the presence of comet tails.
+6.4.Magnitude Limitations
+As with data completeness, inherent limits of the
+TESS data and our model cause the same counter-
+training. In Section 7, we will discuss the detection
+magnitude limits of our model. Briefly, there exists a
+boundary atV≈21 where any asteroid fainter than this
+value is effectively invisible to the model. We trained
+our model with asteroids down to a magnitude limit of
+V≈22 in order to allow it to push the boundary as far
+as possible.
+This was a calculated trade-off. If we did not train
+the model to find asteroids dimmer thanV≈21, then
+we effectively guarantee that the model will not be able
+to find asteroids dimmer thanV≈21. Training the
+model with asteroids to a limit ofV≈22 allows for this
+possibility, but also assumes the risk of counter-training,
+which in this case manifests as training pixels as posi-
+tives that the model cannot perceive due to fundamental
+limitations of the data. We accepted the risk to up to
+this magnitude limit.
+7.RESULTS
+We performed inference on the entirety of our data
+set, using the NT model to evaluate every 64×64×64
+sample of data from the Southern sectors and the ST
+model to evaluate every 64×64×64 sample of data
+from the Northern sectors. Referring back to Table 1,
+this amounted to∼490 million samples. Utilizing the
+PRISM GPU Cluster at the NASA Center for Climate
+Simulation (NCCS) 7, we employed 4 GPUs per sector
+of TESS data, which required an average of∼2.5 days
+to complete. Over 26 sectors, the full inference process
+required∼6,000 GPU-hours. This is a perfectly paral-
+lelizable process, so will scale directly with the number
+of GPUs.
+7 https://www.nccs.nasa.gov/systems/ADAPT/Prism
+
+13
+The outputs of the model are 64×64×64 arrays in
+the range [0,1] indicating the likelihood of an asteroid
+in any given pixel as predicted by the model. Rather
+than evaluate the performance of the model on 64-
+timestep subsections of the data, we used one-timestep
+increments and averaged the model outputs on overlap-
+ping timesteps. For framenin an image stack withN
+timesteps, the number of predictions averaged into the
+output,p(n), is given by
+p(n) =
+
+
+
+nifn≤64
+64 if 64< n < N−63
+N−nifn≥N−63.
+While more computationally expensive (running infer-
+ence on 64-timestep subsections would have required less
+than one day for the entire data set), this process made
+our predictions more robust and continuous, emphasiz-
+ing true detections and minimizing spurious detections.
+With these aggregated model outputs, we were able
+to compare our results directly to the projected JPL
+Horizons tracks. We provide an example of the aggre-
+gated outputs for our model for Sector 3, Camera 2,
+CCD 4 in Figure 10. The left panel contains the JPL
+Horizons tracks as projected onto the TESS data, the
+middle panel shows the temporal maximum value of our
+aggregated model outputs, and the right panel shows the
+difference of the JPL Horizons tracks subtracted from
+the model outputs in order to show tracks found by our
+model that were not present in the training data. While
+our model certainly does not find all the tracks from JPL
+Horizons (to be discussed in Section 7.2), especially of
+dimmer asteroids, it does indeed find some that are not
+present in the training data.
+To inspect the veracity of these detections we com-
+puted their locations at each frame by averaging pixel
+rows and columns using the detection probabilities as
+weights. We fit b-spline third order polynomials to the
+detections to obtain the source tracks. Figure 11 shows
+six example detections, including three known aster-
+oids recovered from the labeled set and three new de-
+tections. These TESS FFI cutouts were created using
+tess-asteroids8 – an open-source python package to
+create image cutouts and lightcurves for asteroids ob-
+served by TESS (A. Tuson et al. 2025).
+None of the new objects can be visually detected
+in the single-frame images, but after median-stacking
+the images using the detected tracks we obtain detec-
+tions with SNR>8 and TESS magnitudes between
+19.7< T <20.5. The three examples of known asteroids
+8 https://github.com/altuson/tess-asteroids
+are included to exemplify how brighter asteroids are de-
+tectable even in single-frame images. This indicates that
+our model effectively learns the shift-and-stack method
+to detect sources fainter than the single-frame detec-
+tion limit of the data. While shift-and-stack requires
+users to input a finite number of velocity vectors on
+which to stack, our model implicitly stacks in any and
+all directions through the filters of the neural network.
+This means that while shift-and-stack may be biased to-
+wards or under represent certain directions, our model
+is unbiased, comprehensive, and efficient. Although out
+of scope for this paper, additional vetting is currently
+underway to confirm or deny our “new” tracks as gen-
+uine newly discovered tracks, which we plan to elaborate
+upon in future work.
+7.1.Quantitative Comparison
+In the previous section, we discussed the challenges
+posed by the inexact nature of our data in the process
+of training. Here, we face the same challenges with re-
+gard to quantifying the performance of our model. We
+re-emphasize that there is no guarantee that our “truth”
+data is actually true. Hereafter, we will refer to the pro-
+jections of the JPL Horizons tracks as truth data (with-
+out the quotes), but we remind the reader to understand
+the nature of this data as we previously described.
+First, we will discuss the distribution of our predic-
+tions, combined for all of TESS Sectors 1-26. Figure 12
+shows the per-pixel distributions (binned at width 0.001)
+of our prediction scores corresponding to positive and
+negative pixels from the truth data. Note that only 0.2%
+of the truth data are positives, hence the disparity in the
+number counts. Both the positive and negative distribu-
+tions have a similar shape in that the model predictions
+are either strongly positive (1) or strongly negative (0),
+with relatively few predictions in the intermediate range.
+The distribution of negatives is more weighted toward
+lower predictions, but still has a substantial number of
+strong positives. Indeed, there are more true negatives
+predicted as positives than there are true positives pre-
+dicted as positives. We will be specific here about the
+prediction counts in the extreme ends, because they will
+heavily influence the analysis moving forward. In the
+prediction range [0, 0.001] there were∼5.7×10 11 neg-
+atives and∼3.5×10 8 positives, while in the predic-
+tion range [0.999, 1] there were∼2.7×10 11 negatives
+and∼1.9×10 8 positives. An ideal model evaluation,
+of course, would have the negatives strongly weighted
+toward zero and the positives strongly weighted toward
+unity. In our case, the model is nearly certain that many
+pixels that are negatives in the truth data are actually
+positives and vice versa. In fact, in each case, the model
+
+14
+Figure 10.Temporal maximum aggregated results for Sector 3, Camera 2, CCD 4. (left) JPL tracks of known asteroids,
+(middle) our model prediction, and (right) the difference between the two (indicating tracks not present in the training data).
+The JPL Horizons track plots are binary (0 for no asteroid, 1 for asteroid), whereas our model outputs are in the range [0,1].
+The longer tracks in the right panel are very clear detections over multiple data cubes, which are certainly real tracks. The
+short-length detections in the same panel are either (i) detections of asteroids not present in the training data, (ii) residuals
+between the detected tracks and the JPL Horizons tracks, or (iii) false positives. In follow-on processing, we do not consider a
+track to be valid unless it spans more than one data cube (i.e.>64 pixels).
+20
+10
+0
+10
+20
+Pixel Row
+A892 XCSingle Frame
+T = 12.06
+Median-stacked
+ Single Frame
+T = 19.68
+Median-stacked
+20
+10
+0
+10
+20
+Pixel Row
+1999 RN20
+T = 15.66
+ T = 20.33
+20
+ 0 20
+Pixel Column
+20
+10
+0
+10
+20
+Pixel Row
+1998 HT12
+20
+ 0 20
+Pixel Column
+T = 17.07
+20
+ 0 20
+Pixel Column
+20
+ 0 20
+Pixel Column
+T = 20.48
+0.5
+0.0
+0.5
+TESS Flux [e-/s]
+0.0
+0.1
+0.2
+TESS Flux [e-/s]
+1.0
+0.5
+0.0
+0.5
+1.0
+TESS Flux [e-/s]
+ 0.00
+0.05
+0.10
+0.15
+TESS Flux [e-/s]
+0.5
+0.0
+0.5
+TESS Flux [e-/s]
+ 0.00
+0.05
+0.10
+TESS Flux [e-/s]
+0
+50
+100
+150
+200
+250
+TESS Flux [e-/s]
+0
+50
+100
+150
+TESS Flux [e-/s]
+0
+2
+4
+6
+8
+TESS Flux [e-/s]
+0
+2
+4
+6
+TESS Flux [e-/s]
+1
+0
+1
+2
+3
+TESS Flux [e-/s]
+0.0
+0.5
+1.0
+1.5
+2.0
+TESS Flux [e-/s]
+Asteroids in Labeled Set                                                         New Detections
+Figure 11.Examples of six detected sources in Sector 3, Camera 2, CCD 4 (from Figure 10). The left two columns show
+asteroids in the labeled set (names in panel titles) and recovered by our model. The right two columns show new detections
+(not in the labeled set). A comparison between single frame and median-stacked images are given for each source to highlight
+the signal at different TESS magnitudes (top right legends).
+
+15
+Figure 12.Distribution of per-pixel prediction scores ac-
+cording to the truth data positives (blue) and negatives (red).
+The counts represent binned data at a width of 0.001. Note
+that, although the domain of the distributions is [0,1], we
+extend the x-axis on both ends for visual purposes as much
+of the distributions are close to the limits.
+is near-certain that approximately half of the total num-
+ber of pixels are contrary to their labels. This is the ini-
+tial indication of the difficulty in quantifying our results
+given the nature of the truth data. These distributions
+will heavily influence subsequent results.
+Because of the data imbalance (again, only 0.2% of
+the pixels are positives in the truth data), model accu-
+racy is not a valid metric. As such, the results are better
+demonstrated using precision-recall (PR) curves or re-
+ceiver operating characteristic (ROC) curves. We will
+show both for clarity.
+Both PR curves and ROC curves evaluate the results
+at prediction thresholds, such that given labeled posi-
+tivesPand labeled negativesN, for prediction scoreq
+in the range [0,1],
+TP =
+X
+P:P i>q
+Pi (7)
+FP =
+X
+P:P i<q
+Pi (8)
+TN =
+X
+N:N i<q
+Ni (9)
+and
+FN =
+X
+N:N i>q
+Ni.(10)
+Precision and recall are defined as
+Precision = TP
+TP + FP (11)
+and
+Recall = TP
+TP + FN (12)
+It is important to emphasize that, with precision, we
+are mixing a quantity derived from the labeled positives
+(TP) with a quantity derived from the labeled nega-
+tives (FP), which will lead to lower precision values for
+brighter asteroids since there is a smaller quantity. We
+will show precision and recall for all asteroids less than
+a given magnitude, but we will compensate for this mis-
+match by inverse weighting the FP term of precision by
+the number of positive pixels for each magnitude level
+divided by the number forV≤22. The full model per-
+formance should be considered as the performance for
+V≤22.
+In Figure 13, we show the PR curve of the full results
+in the top left panel, stratified by magnitude (V <19:
+blue,V <20: green,V <21: red,V <22: purple).
+The solid lines are the PR curves, and the dashed lines
+are the baseline, i.e. the performance of a “junk” model
+with no discriminative ability. The precision baseline
+is the fraction of all the data which are the minority
+class, which in our case are the positives. This number is
+different for each magnitude threshold, with a maximum
+at the previously mentioned value of 0.2% forV≤22. A
+model with a PR curve above the baseline demonstrates
+validity, otherwise not.
+If we accept the PR curve from the upper left panel of
+Figure 13 as our quantitative model performance, then
+our outlook would be rather grim. The PR curve can
+be evaluated using the area under the curve (AUC) as a
+model performance metric. The AUCs (noted in the leg-
+end) are tiny, and the portion of the curve below the junk
+model baseline is also troubling. However, we need to
+consider our results in the context discussed in Section
+6. Specifically, there is no guarantee that our labeled
+positives are actually positive or that our labeled neg-
+atives are actually negative. Therefore, we re-evaluate
+our results with a simple assumption: when our model is
+very certain of a prediction, regardless of the truth data
+label, it is correct. To this end, we will be extremely
+conservative in assuming that model predictions greater
+than 0.999 are, in fact, positive, and model predictions
+less than 0.001 are, in fact, negative. Rather than reas-
+signing them as true positives and true negatives, if we
+simply ignore the extreme bins on either end, we produce
+the PR curve shown in the upper right panel of Figure
+13. The AUCs (noted in the legend) are much improved.
+The performance of the full model, since all magnitudes
+comprise a single class, is best understood as the AUC
+forV≤22, which, at∼0.32, is quite promising. The PR
+AUC needs to be considered in reference to the baseline,
+
+16
+which, for our highly imbalanced data, is at Precision =
+0.002, reflecting the 0.2% of pixels containing asteroids.
+This value would be the PR AUC of a model with no
+discriminative ability. With a PR AUC of∼0.32, our
+model outperforms a random selection model by more
+than 150×. We also suggest that the PR AUC is actu-
+ally much better than we show here, as the right panels
+of Figure 13 only exclude the extreme bins as an attempt
+to mitigate the effects of mislabeling in our evaluation.
+The lower right panel again shows the precision (solid
+lines) and recall (dashed lines) against the threshold pre-
+diction value. Compared to the same plot in the lower
+left panel (which contains the extreme threshold bins)
+we can easily the improvement in precision which drives
+the improvement in the PR curve.
+The ROC curve is a measure of the False Positive Rate
+(FPR) versus the True Positive Rate (TPR). These are
+defined as
+TPR = TP
+TP + FN (13)
+and
+FPR = FP
+FP + TN.(14)
+Note that TPR is identical to recall, just named differ-
+ently in this context. We emphasize that, in the case of
+imbalanced data, the ROC curve is a much less reliable
+metric for model evaluation than the PR curve due to
+the FPR term. In our dataset, the number of TN will
+always be dramatically higher than FP, making the FPR
+appear artificially low even in the case of a dispropor-
+tionately large number of FP. With this caveat, we note
+that we show the ROC curve for completeness, but the
+PR curve is more informative.
+The ROC curve shows a continuous relationship be-
+tween the TPR and FPR at any given prediction score
+threshold and, like the PR curve, can be evaluated using
+the AUC as a model performance metric. In Figure 14
+we show the ROC curves accumulated for all asteroids
+less than a given magnitude (V <19: blue,V <20:
+green,V <21: red,V <22: purple). The black dashed
+diagonal line indicates FPR = TPR, so for any point
+beneath this line, FPR>TPR therefore the model has
+no predictive value. Consider first the upper left panel.
+The ROC curve shape is notably strange with the appar-
+ent discontinuity. So, again, we return to the uncertain
+nature of the truth data. To examine this behavior, in
+the lower left panel we show the TPRs for each mag-
+nitude (in the same colors as the upper panel) and the
+FPR (which is the same for all magnitudes, in black).
+The TPRs are as expected, decreasing gradually with
+increasing threshold. The FPR, however, quickly ap-
+proaches a rather large limiting value. This value is
+driven by the “U” shape of the distribution of nega-
+tives shown in Figure 12. Specifically, the far right of
+the distribution where the model is near-certain that a
+substantial portion of the data labeled as negatives are
+actually positives.
+We followed the same process as with the PR curves
+and re-evaluated the ROC curves, removing consider-
+ation of the bins for either extreme due to the inher-
+ent ambiguity of the data. This change resulted in the
+much-improved ROC curve shown in the upper right
+panel of Figure 14. The AUCs (noted in the legend)
+are substantially higher, with the AUCs forV≤19 and
+V≤20 near unity. In the lower right panel of Figure
+14, the TPRs are very similar to the lower left panel,
+with the primary difference being in the reduction of
+the FPR.
+Additional methods are available for quantitative eval-
+uation of model performance on imbalanced data, e.g.
+a confusion matrix or sensitivity-specificity, among oth-
+ers. However, each of these would inevitably lead to the
+same conclusion: The model performance is extremely
+poor if the truth data is considered to be absolute, but
+quite good when assuming that the model frequently
+knows better than the truth data, especially in the case
+of near-certain “false” positives. As such, with substan-
+tial barriers to quantitative evaluation of our model per-
+formance, we proceed to measure completeness.
+7.2.Completeness
+In order to evaluate completeness of our model, we
+collected the per-pixel prediction scores of each pixel
+containing a given asteroid. For us to quantify our
+model detection threshold, the question arises of what
+prediction score comprises a detection. A decrease in
+the threshold will find more asteroids, but will also in-
+crease spurious detections. An increase in the threshold
+will decrease spurious detections, but will detect fewer
+asteroids. To address the ambiguity in threshold selec-
+tion, we report completeness in terms of fixed precision
+values of 10%, 20%, 30%, 40%, and 50% in Figure 15.
+The remarkable feature of this plot is the “wall” be-
+tweenV= 20 andV= 22 indicating the limit at which
+asteroids are capable of being detected in TESS data.
+The high amplitude, spatially varying TESS scattered
+background light causes an increase in photon noise in
+TESS images, which may contribute to this “wall” where
+detections are no longer possible. In this work we do
+not investigate whether particular times where TESS
+scattered light is lower in amplitude affect the detection
+magnitude limit. Interpolated 50% detection thresholds
+for each of these curves are given in Table 3 along with
+total pixel counts for TP and FP. We emphasize that
+
+17
+Figure 13.(top left) Solid lines show the PR curve for the labeled positives atV <19 (blue),V <20 (orange),V <21
+(green), andV <22 (red). The dashed horizontal lines show the value of precision at which the model has no discriminative
+ability for each magnitude threshold (i.e. the outputs are equivalent to randomly guessing). (top right) Same as top left, but
+without threshold bins>0.999 or<0.001. (bottom left) Threshold vs precision (solid lines) and recall (dashed lines). (bottom
+right) Same as bottom left, but without threshold bins>0.999 or<0.001.
+the counts represent individual pixels, not detections or
+tracks. A single asteroid track typically spans many
+thousands of pixels across multiple frames and, similarly,
+a single artifact or systematic features can contribute
+many contiguous false positive pixels. We also empha-
+size, again, that labeled FP are quite possibly TP. The
+pixel-level precision demonstrates that the model assigns
+high confidence preferentially to pixels containing as-
+teroids. The maximum achievable pixel-level precision
+within the evaluated threshold range (0.001 - 0.999) is
+∼59%. Higher precision is likely achievable, but cannot
+be reliably evaluated due to the label ambiguity.
+With the caveat that none of the models are directly
+comparable, examine our Figure 15 in the context of
+Figure 13 of D. F. Woods et al. (2021), Figure 5 of T.
+Nguyen et al. (2024), or Figure 6 of P. Zhang et al.
+(2025). We do not claim better or worse performance
+than any of these efforts, as the models are evaluated
+with substantially different methodologies. Both D. F.
+Woods et al. (2021) and T. Nguyen et al. (2024) fit their
+discovered tracks and compare the ephemerides directly
+to known tracks, which is superior to our pixel-level com-
+parison due to the errors involved in our method, dis-
+cussed previously. Although pixel-level comparison is
+suitable for our purposes in this initial study, we would
+
+18
+Figure 14.(top left) ROC curve for the labeled positives atV <19 (blue),V <20 (orange),V <21 (green), andV <22
+(red). The black dashed diagonal line is at FPR = TPR for reference. (top right) Same as top left, but without threshold bins
+>0.999 or<0.001. (bottom left) Threshold vs TPR and FPR rates, with colors the same as above for TPR. FPR is shown in
+black. (bottom right) Same as bottom left, but without threshold bins>0.999 or<0.001.
+plan to emulate D. F. Woods et al. (2021) and T. Nguyen
+et al. (2024) in future work with our method.
+7.3.Velocity and Inclination Considerations
+Referring back to our intent with this model develop-
+ment, discussed in Section 1, we wanted to create a ML
+model for asteroid detection free of the velocity and incli-
+nation assumptions required for shift-and-stack models.
+The most interesting asteroid orbits will be those that
+are substantially different from known asteroids, hence
+they will occupy a different part of the parameter space
+compared to where most asteroids are currently found.
+To that end, we provide an evaluation of our model’s
+performance relative to these parameters.
+Figure 16 shows a scatter plot of the inclination vs
+speed for each known asteroid, along with our median
+prediction for the pixels containing any given asteroid
+shown by the color. The low predictions dominating the
+plot of thresholdV≤22 (upper left panel) are reflective
+of the limiting magnitude shown in Figure 15. As the
+magnitude threshold is reduced, the predictions gener-
+ally improve as the color turns more red (i.e. toward
+unity). Examining theV≤19 plot (lower right panel),
+we can see that there does not appear to be any obvious
+trend in prediction score in the main distribution along
+the inclination axis.
+We do, however, note that very high speed asteroids
+(≳300′′/hr) have a tendency for low prediction scores.
+
+19
+T able 3.InterpolatedV 50% detection performance at fixed pixel-level
+precision for all labeled asteroids (V≤22), with TP and FP pixel counts
+reported at each threshold.
+Precision Threshold a TP FP b V50% (mag)
+10% 0.015 1,265,869,342 10,850,539,169 21.10
+20% 0.043 1,167,872,438 4,628,391,456 20.95
+30% 0.115 1,050,714,262 2,448,922,389 20.82
+40% 0.319 838,564,320 1,256,446,578 20.58
+50% 0.792 502,373,981 502,244,532 19.61
+aThe model prediction score threshold necessary to achieve the given
+precision level.
+b Many FP likely correspond to genuine asteroids not yet present in the
+JPL Horizons catalog or asteroids that have diverged from the JPL
+Horizons ephemeris, making the reported precision values lower bounds
+on the true precision.
+Figure 15.Detection fraction (or completeness) as a func-
+tion of asteroid visual magnitude at fixed pixel-level precision
+levels for all labeled asteroids (V≤22). Each curve corre-
+sponds to the prediction score threshold required to achieve
+the indicated precision (given in Table 3), where precision
+represents the fraction of all model-selected positive pixels
+that correspond to labeled positives. The horizontal gray
+dotted line marks 50% detection efficiency.
+The cause of the model’s difficulty with extremely fast
+asteroids is easily understood with ‘back of the envelope’
+calculations. A single TESS pixel has an edge length of
+21′′, meaning an asteroid moving at 300 ′′/hr will cover
+∼14 pixels/hr. At this rate, and with a 30-minute effec-
+tive exposure time, a single frame will show a blurred
+image about 7 pixels long. In the even more extreme
+case of an asteroid moving 10,000 ′′/hr, the object will
+cover∼240 pixels in a single cadence. Longer blurs also
+dilute the flux in any given pixel, lowering the SNR of
+the signal. These blurs are not entirely undetectable,
+but certainly not ideal for a model trained to find dif-
+ferences in nearby pixels by timestep. Rather than a
+weakness of the algorithm, we consider this a limitation
+of the training data. Since we trained the model on real
+data, it learned to optimize for the real distribution of
+asteroid speeds. As such, it did not learn well how to
+accommodate the long blurs of rare fast asteroids. In
+retrospect, synthetic injections of fast asteroids into the
+training data would likely improve the model’s ability
+to detect them.
+Given this understanding, we qualitatively evaluated
+the remainder of the data, where we would describe the
+performance of the algorithm on the speed axis to have
+a slight downward trend with increasing speed, as we
+note the transition from dark red to light red as speed
+increases through the main distribution in theV≤19
+plot. We again consider this trend to be a consequence
+of the asteroid speed distribution in the training data.
+In consideration of this analysis, we assert that the
+performance of the model is largely invariant to incli-
+nation, while only slightly sensitive to increased speed
+within the limitations of the instrument. As such, we
+consider our objective accomplished. We also expect
+that in subsequent years of TESS data with shorter ca-
+dences (or in other missions with shorter cadences), that
+faster asteroids will be easier to detect with our algo-
+rithm due to shorter length blurs in single cadences.
+Again, we also suggest that fast asteroids be injected
+into the training data in future applications in order to
+train the model to a more uniform distribution of aster-
+oid speeds.
+
+20
+Figure 16.Asteroid absolute inclination (deg) versus speed (deg/hr) for magnitude thresholds 22 (upper left), 21 (upper right),
+20 (lower left), and 19 (lower left). The color indicates the median prediction given by the colorbar on the right.
+8.DISCUSSION
+Our deep learning model, the W-Net, demonstrated
+clear success in detecting asteroids in TESS data, as
+shown by Figures 10 and 11. The right panels of Figures
+14 and 13 demonstrate this quantitatively as well with
+ROC and PR metrics, despite the inherent difficulties of
+the data. Our detection fraction, shown in Figure 15,
+is a similar result to the leading algorithms in the field,
+though differently evaluated by necessity.
+Although we developed the concept of our W-Net in-
+dependently, we later found that X. Xia & B. Kulis
+(2017) had developed a concatenated U-Net and first
+used the name W-Net. G. R. Gare et al. (2022) also
+used the name W-Net for a multi-input U-Net, concate-
+nating feature extraction at the network bottleneck. G.
+Liu et al. (2023) again used the name W-Net for a dual-
+path network involving a U-Net and a separate fully
+convolutional network bearing no resemblance to ours.
+So, while the name “W-Net” clearly does not have a
+standardized structure, we keep it for our implementa-
+tion since it is appropriate descriptively. We also note
+that our W-Net has a substantially different innovation
+in its skip connections between the two U-Nets, whereas
+X. Xia & B. Kulis (2017) connected the two U-Nets at
+the output of the first to the input of the second. We
+actually developed a similar W-Net structure to theirs
+in the course of our development, stacking 2, 3, 4, and
+even 5 U-Nets in sequence. Without dwelling on the de-
+tails of discarded models in our development process, we
+note that the multiple stacked U-Nets provided a very
+interesting sequence of background removal, essentially
+removing different general types of background (high-
+frequency, static, etc.) in stages. We found our W-Net
+to provide the more compact and effective solution in
+
+21
+our case, but we suggest that the stacked U-Net may
+have future astrophysical application as a background
+subtraction method.
+It is important to further discuss our development of
+the Adaptive Normalization method, which we consider
+to be a major innovation of our work. We noted in
+Section 3.3 that we found quantile transformation to be
+an effective method of scaling for TESS data, both in
+this and other work. It mutes the effect of the extreme
+flux values, generally caused by systematics or scattered
+light, and emphasizes the differences between fluxes in a
+range useful for predictive analysis, but it is not learn-
+able. In most applications, this is not a concern. In
+the case of asteroid detection, however, the relevant flux
+value range is highly sensitive. Referring back to Figure
+6, we note that the learned range of important values of
+the median-subtracted flux is approximately between -5
+and 5e −s−1. All other values approach zero or unity,
+with no discriminative capability as input to the W-
+Net, which will learn a rule something like “input values
+near zero or one have no utility and should be ignored.”
+In this manner, the Adaptive Normalization both em-
+phasizes the flux region of interest and masks what is
+essentially noise.
+We chose the Logistic CDF as the basis function for
+the Adaptive Normalization because of its simplicity.
+Two parameters define the distribution: The ‘location’
+(µ) and the ‘scale’ (s), to which we apply a learned
+weight (w). The learned values of these parameters (see
+Table 2) are instructive. Eachµvalue is strongly pos-
+itive, near 1e −s−1. Intuitively, this makes sense. An
+asteroid passing through a pixel increases the flux, usu-
+ally imperceptibly from a visual perspective, hence why
+stacking (as in shift-and-stack) sequential images cen-
+tered along an asteroid’s path is valuable in revealing a
+slight flux increase in the central pixel. The Adaptive
+Normalization learns this and emphasizes it for follow-
+on processing by the W-Net.
+In Section 4, we noted that the Adaptive Normaliza-
+tion tends to learn one or two dominant CDFs that are
+strongly weighted, while others are weakly weighted. We
+acknowledge that ten CDFs were probably more than
+required to properly learn the scaling. However, we
+wanted to ensure that the adaptive scaling had the abil-
+ity to learn its own distribution as needed, so we allowed
+for substantial flexibility. We take no stance on whether,
+in other potential applications of our Adaptive Normal-
+ization method, greater or fewer CDFs may be useful,
+and we suggest that this is highly dependent on the data
+and the problem to which it is being applied.
+The primary difficulty in our work was the proper la-
+beling of training data. While the labeling itself was
+cumbersome (Section 2), the downstream effects of la-
+beling in model development (Sections 3 and 5), train-
+ing (Section 6) and even in evaluation (Section 7), were
+decidedly nontrivial. We suspect that reliance on in-
+herently incorrect training data would detract from any
+pixel-level ML-based analysis of asteroids.
+With regard to positive pixel labels, they are both
+inherently uncertain (there exists uncertainty in the
+ephemeris which compounds with time since the last
+observation used in the ephemeris calculation as well as
+uncertainty in the TESS WCS solution) and subject to
+unexpected change (e.g. gravitational alteration of the
+track). Negative pixel labels are plagued by the conse-
+quence of uncertain positive pixels (i.e. a known aster-
+oid’s track has changed and it exists in negative-labeled
+pixels) as well as fundamental incompleteness (we have
+not identified nearly all asteroids, so there will be aster-
+oid tracks present where they are not known to be). As
+we discussed in Section 7.2, the net effect of these incor-
+rect labels is that we are “counter-training” the model
+for a nontrivial fraction of pixels, that is, training true
+negatives as positives and true positives as negatives.
+Considering quantitative evaluation of our perfor-
+mance, the labels present yet another challenge. Figures
+14 and 13 aptly tell this story. Succinctly, if we consider
+all labels to be true and evaluate the model predictions
+against them, then our model is without merit (the left
+panels of Figures 14 and 13). If we assume that the
+labels are incorrect when the model predicts a negative-
+labeled pixel with a score>0.999 or a positive-labeled
+pixel with a score<0.001 (i.e. the model is extremely
+certain one way or the other), then the model’s quan-
+titative performance is quite good (the right panels of
+Figures 14 and 13).
+Fortunately, we can assume that a substantial major-
+ity of our labels are correct, otherwise the model would
+not work. A neural network will always seek the best
+solution for the entirety of the training data, essentially
+overpowering a minority of incorrectly-labeled samples.
+This is not without harm, however. The incorrect labels
+create irregularities in the solution space that make it
+more difficult to train and harder to converge. So, while
+we achieved a successful result in spite of this obsta-
+cle, the model’s performance was almost certainly not
+as good as it could have been.
+As such, we have to wonder about the likelihood of
+improved model performance in the event that labels
+were perfect, or at least substantially improved. In
+retrospect, we suspect that a semi-supervised training
+scheme, whereby we alter the labels of the training
+data as training progresses, may have improved our out-
+comes. While we do not intend to repeat this exercise,
+
+22
+we will implement such a training methodology (and
+suggest the same for others) in any future work involv-
+ing this algorithm with asteroid data. Alternatively, us-
+ing synthetic data to train and validate separately from
+the real TESS data would have allowed for straightfor-
+ward training and quantitative evaluation. We suspect,
+however, that such a model would have struggled when
+applied to real data due to the difficulties of retrieving
+dim asteroid signals through the inherent TESS noise.
+Again, we leave this investigation for future work.
+While we examined the outputs of our model at the
+pixel level in Section 7, our analysis ends at this point.
+The next logical step after our pixel level detection is,
+of course, track extraction. Comparison of discovered
+tracks to existing tracks can allow us to determine if
+our method made any novel detections. Although out
+of scope for this paper, we did begin this process. We
+are currently working with MPC on prerequisites and
+submission procedures and we anticipate eventually be-
+ing able to evaluate newly discovered tracks and provide
+lightcurves and analysis in future work.
+9.SUMMARY & CONCLUSIONS
+We have presented the results of applying a custom
+neural network to the problem of asteroid detection in
+Years 1 and 2 of TESS data. To the best of our knowl-
+edge, this is the first pixel-level ML algorithm devel-
+oped for asteroid detection. We developed a method of
+learned Adaptive Normalization as the first layer of the
+neural network in order for the noisy data to be opti-
+mally prepared for processing by the full network. Our
+neural network, which we call a W-Net, is two stacked
+U-Nets with skip connections between the U-Nets. We
+found our method to be robust to the difficulties of de-
+tecting moving objects combined with the intrinsic dif-
+ficulty of TESS data itself.
+We developed the publicly availabletess-asteroid-ml
+package, for which we provide code, documentation, and
+tutorials. This code is the foundation of our work as it
+provides for the creation of training data by projecting
+all known ephemerides from the JPL Horizons database
+onto TESS FFIs. Subsequently, the code can divide
+stacked FFIs complete with asteroid track masks into
+memory-manageable pieces suitable for training ML
+algorithms.
+We trained and tested two separate instances of our
+model: one trained/tested entirely on northern TESS
+sectors (14-26) to be used for inference on southern
+TESS sectors (1-13) and vice versa for the other model.
+In this manner, we ensured that there was no cross-
+contamination. We made the model robust to uncom-
+mon asteroid trajectories by augmenting training sam-
+ples with all 16 possible rotations of the 3D data in equal
+probability.
+We evaluated the model on all Year 1 and 2 TESS
+data, creating prediction scores that we compared
+against the track masks created bytess-asteroid-ml.
+We found that our training labels, though mostly cor-
+rect, have a nontrivial fraction of incorrectly labeled
+pixels which are unavoidable due to the inherent uncer-
+tainty of the tracks, among other factors. Assuming our
+model was correct when it was extremely certain of the
+label, our model performance was excellent, attaining
+0.887 ROC AUC (0.319 PR AUC) for all asteroids with
+V <22, improving to 0.956 ROC AUC (0.477 PR AUC)
+for all asteroids withV <21, 0.987 ROC AUC (0.620
+PR AUC) for all asteroids withV <20, and 0.994 ROC
+AUC (0.661 PR AUC) for all asteroids withV <19.
+We measured the completeness of our results with re-
+spect to the JPL Horizons asteroid database. Our de-
+tection results, though difficult to quantify at the pixel
+level, are similar to the results of D. F. Woods et al.
+(2021) and T. Nguyen et al. (2024). The model’s 50%
+detection magnitude is in the range 19.6 - 21.1, depend-
+ing on the chosen prediction score threshold.
+Most importantly, we demonstrated that a ML model
+can be developed for asteroid detection that does not re-
+quire speed or trajectory assumptions. All the work of
+filtering static background and finding moving objects
+in three dimensions at different speeds and trajectories
+is accomplished implicitly through the convolutional fil-
+ters of the deep W-Net. Unlike shift-and-stack methods,
+our model is unbiased towards inclination and velocity
+vectors (besides the inherent bias of the training data,
+which can be corrected synthetically), meaning that we
+are able to identify an unbiased sample of asteroids.
+This will enable the study of asteroid populations us-
+ing TESS with reduced observation bias, allowing us to
+understand the fundamental properties of asteroids in
+our solar system. While we designed this method for
+TESS data, it is certainly adaptable to any similar sur-
+vey data.
+The TESS dataset provides a valuable input sample
+of large, stable images with high cadence, uniform sam-
+pling. In this work we focused on early TESS data, but
+our model could be utilized on the more recent, fast
+cadence FFIs to find objects moving faster. Using our
+model on this dataset is likely to yield more information
+on asteroids nearer to the Earth. TESS observes large
+portions of the sky for a month at a time, making it
+an underutilized workhorse for observing asteroids and
+NEOs. Using our model, TESS’s survey can support
+our understanding and identification of asteroids. Our
+model could be used with any TESS-like data to support
+
+23
+future endeavors to identify and track NEOs. While the
+model would require training data, a similar architec-
+ture could be use to support missions such as Roman
+and NEO Surveyor.
+ACKNOWLEDGMENTS
+This paper includes data collected by the TESS mis-
+sion, which are publicly available from the Mikulski
+Archive for Space Telescopes (MAST). Funding for the
+TESS mission is provided by NASA’s Science Mission
+directorate. Resources supporting this work were pro-
+vided by the NASA High-End Computing (HEC) Pro-
+gram through the NASA Center for Climate Simula-
+tion (NCCS) at Goddard Space Flight Center. Funding
+for this work for J.M.P., A.T. and C.H. is provided by
+NASA grant 80NSSC20M0192. The material is based
+upon work supported by NASA under award number
+80GSFC24M0006.
+Facilities:TESS
+Software:Astrocut(C. E. Brasseur et al. 2019),
+Astropy( Astropy Collaboration et al. 2013, 2018, 2022),
+IPython(F. P´ erez & B. E. Granger 2007),Keras(F.
+Chollet et al. 2015),Lightkurve( Lightkurve Collab-
+oration et al. 2018),lkspacecraft(C. Hedges et al.
+2025),Matplotlib(J. D. Hunter 2007),NumPy(C. R.
+Harris et al. 2020),Pandas(W. McKinney 2010),SciPy
+(P. Virtanen et al. 2020),Tensorflow(M. Abadi et al.
+2015),tess-asteroid-ml(J. Mart´ ınez-Palomera 2026),
+tess-asteroids(A. Tuson et al. 2025),tess-ephem(G.
+Barentsen et al. 2020),tesscube(C. Hedges & TESS
+Science Support Center 2023a),tesswcs(C. Hedges &
+TESS Science Support Center 2023b)
+REFERENCES
+Abadi, M., Agarwal, A., Barham, P., et al. 2015,
+TensorFlow: Large-Scale Machine Learning on
+Heterogeneous Systems, https://www.tensorflow.org/
+Astropy Collaboration, Robitaille, T. P., Tollerud, E. J.,
+et al. 2013, A&A, 558, A33,
+doi: 10.1051/0004-6361/201322068
+Astropy Collaboration, Price-Whelan, A. M., Sip˝ ocz, B. M.,
+et al. 2018, AJ, 156, 123, doi: 10.3847/1538-3881/aabc4f
+Astropy Collaboration, Price-Whelan, A. M., Lim, P. L.,
+et al. 2022, ApJ, 935, 167, doi: 10.3847/1538-4357/ac7c74
+Azad, R., Heidary, M., Yilmaz, K., et al. 2023, Loss
+Functions in the Era of Semantic Segmentation: A
+Survey and Outlook, https://arxiv.org/abs/2312.05391
+Ba, J. L., Kiros, J. R., & Hinton, G. E. 2016, arXiv preprint
+arXiv:1607.06450, doi: 10.48550/arXiv.1607.06450
+Bahdanau, D., Cho, K., & Bengio, Y. 2015, in International
+Conference on Learning Representations (ICLR),
+doi: 10.48550/arXiv.1409.0473
+Barentsen, G., Hedges, C., Dotson, J., & TESS Science
+Support Center. 2020, tess-ephem,
+https://github.com/SSDataLab/tess-ephem
+Brasseur, C. E., Phillip, C., Fleming, S. W., Mullally, S. E.,
+& White, R. L. 2019, Astrocut: Tools for creating cutouts
+of TESS images, http://ascl.net/1905.007
+Chen, J., Mei, J., Li, X., et al. 2024, Medical Image
+Analysis, 97, 103280,
+doi: https://doi.org/10.1016/j.media.2024.103280
+Chollet, F., et al. 2015, Keras,, https://keras.io
+Chyba Rabeendran, A., & Denneau, L. 2021, PASP, 133,
+034501, doi: 10.1088/1538-3873/abc900
+Clevert, D.-A., Unterthiner, T., & Hochreiter, S. 2016, in
+International Conference on Learning Representations
+(ICLR). https://arxiv.org/abs/1511.07289
+Cowan, P., Bond, I., & Reyes, N. 2023, Astronomy and
+Computing, 42, 100693,
+doi: https://doi.org/10.1016/j.ascom.2023.100693
+Crum, W., Camara, O., & Hill, D. 2006, IEEE Transactions
+on Medical Imaging, 25, 1451,
+doi: 10.1109/TMI.2006.880587
+Denneau, L., Jedicke, R., Grav, T., et al. 2013, PASP, 125,
+357, doi: 10.1086/670337
+Dice, L. R. 1945, Ecology, 26, 297.
+http://www.jstor.org/pss/1932409
+Drake, A. J., Djorgovski, S. G., Mahabal, A., et al. 2009,
+ApJ, 696, 870, doi: 10.1088/0004-637X/696/1/870
+Gare, G. R., Li, J., Joshi, R., et al. 2022, Medical Image
+Analysis, 76, 102326,
+doi: https://doi.org/10.1016/j.media.2021.102326
+Harris, C. R., Millman, K. J., van der Walt, S. J., et al.
+2020, Nature, 585, 357, doi: 10.1038/s41586-020-2649-2
+Hedges, C., Mart´ ınez-Palomera, J., Tuson, A., et al. 2025,
+Research Notes of the AAS, 9, 186,
+doi: 10.3847/2515-5172/adef3a
+Hedges, C., & TESS Science Support Center. 2023a,
+tesscube, 1.2.1 https://github.com/tessgi/tesscube
+Hedges, C., & TESS Science Support Center. 2023b,
+tesswcs, https://github.com/tessgi/tesswcs
+Holman, M. J., Payne, M. J., & P´ al, A. 2019, Research
+Notes of the American Astronomical Society, 3, 160,
+doi: 10.3847/2515-5172/ab4ea6
+
+24
+Hunter, J. D. 2007, Computing in science & engineering, 9,
+90
+Ioffe, S., & Szegedy, C. 2015, in International Conference
+on Machine Learning (ICML), PMLR, 448–456
+Ivezi´ c,ˇZ., Kahn, S. M., Tyson, J. A., et al. 2019, ApJ, 873,
+111, doi: 10.3847/1538-4357/ab042c
+Jlassi, A., ElBedoui, K., & Barhoumi, W. 2023, in
+Proceedings of the 15th International Conference on
+Agents and Artificial Intelligence - Volume 2: ICAART,
+INSTICC (SciTePress), 454–465,
+doi: 10.5220/0011895900003393
+Kostov, V. B., Powell, B. P., Rappaport, S. A., et al. 2022,
+ApJS, 259, 66, doi: 10.3847/1538-4365/ac5458
+Kostov, V. B., Powell, B. P., Rappaport, S. A., et al. 2024,
+MNRAS, 527, 3995, doi: 10.1093/mnras/stad2947
+Kostov, V. B., Powell, B. P., Fornear, A. U., et al. 2025,
+ApJS, 279, 50, doi: 10.3847/1538-4365/ade2d8
+Kostov, V. B., Powell, B. P., Rappaport, S. A., et al. 2026,
+AJ, 171, 29, doi: 10.3847/1538-3881/ae1b8a
+Lan, H., Jiang, D., Yang, C., Gao, F., & Gao, F. 2020,
+Photoacoustics, 20, 100197,
+doi: https://doi.org/10.1016/j.pacs.2020.100197
+LeCun, Y. 1987, PhD thesis, Universit´ e P. et M. Curie
+(Paris 6)
+Lightkurve Collaboration, Cardoso, J. V. d. M., Hedges, C.,
+et al. 2018, Lightkurve: Kepler and TESS time series
+analysis in Python,, Astrophysics Source Code Library
+http://ascl.net/1812.013
+Liu, G., Wang, Q., Zhu, J., & Hong, H. 2023, PLOS ONE,
+18, e0288311, doi: 10.1371/journal.pone.0288311
+Luong, M.-T., Pham, H., & Manning, C. D. 2015, in
+Proceedings of the 2015 Conference on Empirical
+Methods in Natural Language Processing (EMNLP),
+1412–1421, doi: 10.18653/v1/D15-1166
+Mainzer, A., Grav, T., Bauer, J., et al. 2011, ApJ, 743, 156,
+doi: 10.1088/0004-637X/743/2/156
+Mainzer, A. K., Masiero, J. R., Abell, P. A., et al. 2023,
+PSJ, 4, 224, doi: 10.3847/PSJ/ad0468
+Mart´ ınez-Palomera, J. 2026, jorgemarpa/tess-asteroid-ml:
+v0.2.0, v0.2.0 Zenodo, doi: 10.5281/zenodo.19558224
+Masiero, J. R., Mainzer, A. K., Grav, T., et al. 2011, ApJ,
+741, 68, doi: 10.1088/0004-637X/741/2/68
+McKinney, W. 2010, in Proceedings of the 9th Python in
+Science Conference, ed. S. van der Walt & J. Millman, 51
+– 56
+McNeill, A., Gowanlock, M., Mommert, M., et al. 2023, AJ,
+166, 152, doi: 10.3847/1538-3881/acf194
+Nguyen, T., Woods, D. F., Ruprecht, J., & Birge, J. 2024,
+AJ, 167, 113, doi: 10.3847/1538-3881/ad20e0
+Nguyen, T.-A. 2024, in Proceedings of the 2024 9th
+International Conference on Intelligent Information
+Technology, ICIIT ’24 (New York, NY, USA: Association
+for Computing Machinery), 197–202,
+doi: 10.1145/3654522.3654573
+P´ al, A., Moln´ ar, L., & Kiss, C. 2018, PASP, 130, 114503,
+doi: 10.1088/1538-3873/aae2aa
+P´ al, A., Szak´ ats, R., Kiss, C., et al. 2020, ApJS, 247, 26,
+doi: 10.3847/1538-4365/ab64f0
+Payne, M. J., Holman, M. J., & P´ al, A. 2019, Research
+Notes of the American Astronomical Society, 3, 172,
+doi: 10.3847/2515-5172/ab5641
+P´ erez, F., & Granger, B. E. 2007, Computing in Science
+and Engineering, 9, 21, doi: 10.1109/MCSE.2007.53
+Powell, B. P., Kostov, V. B., Rappaport, S. A., et al. 2021a,
+AJ, 161, 162, doi: 10.3847/1538-3881/abddb5
+Powell, B. P., Kostov, V. B., Rappaport, S. A., et al. 2021b,
+AJ, 162, 299, doi: 10.3847/1538-3881/ac2c81
+Powell, B. P., Rappaport, S. A., Borkovits, T., et al. 2022,
+ApJ, 938, 133, doi: 10.3847/1538-4357/ac8934
+Powell, B. P., Torres, G., Kostov, V. B., et al. 2025, ApJ,
+985, 213, doi: 10.3847/1538-4357/adcece
+Rice, M., & Laughlin, G. 2020, PSJ, 1, 81,
+doi: 10.3847/PSJ/abc42c
+Ricker, G. R., Winn, J. N., Vanderspek, R., et al. 2015,
+Journal of Astronomical Telescopes, Instruments, and
+Systems, 1, 014003, doi: 10.1117/1.JATIS.1.1.014003
+Rombach, R., Blattmann, A., Lorenz, D., Esser, P., &
+Ommer, B. 2022, in 2022 IEEE/CVF Conference on
+Computer Vision and Pattern Recognition (CVPR) (Los
+Alamitos, CA, USA: IEEE Computer Society),
+10674–10685, doi: 10.1109/CVPR52688.2022.01042
+Ronneberger, O., Fischer, P., & Brox, T. 2015, in Medical
+Image Computing and Computer-Assisted Intervention –
+MICCAI 2015, ed. N. Navab, J. Hornegger, W. M. Wells,
+& A. F. Frangi (Cham: Springer International
+Publishing), 234–241
+Sørensen, T. J. 1948, A method of establishing groups of
+equal amplitude in plant sociology based on similarity of
+species content and its application to analyses of the
+vegetation on Danish commons (I kommission hos E.
+Munksgaard)
+Stassun, K. G., Oelkers, R. J., Paegert, M., et al. 2019, AJ,
+158, 138, doi: 10.3847/1538-3881/ab3467
+Stokes, G. H., Evans, J. B., Viggh, H. E. M., Shelly, F. C.,
+& Pearce, E. C. 2000, Icarus, 148, 21,
+doi: 10.1006/icar.2000.6493
+Sudre, C. H., Li, W., Vercauteren, T., Ourselin, S., &
+Cardoso, M. J. 2017, arXiv e-prints, arXiv:1707.03237,
+doi: 10.48550/arXiv.1707.03237
+
+25
+TESS Team. 2022, TESS Calibrated Full Frame Images: All
+Sectors, STScI/MAST, doi: 10.17909/0cp4-2j79
+Tong, X., Wei, J., Sun, B., et al. 2021, Diagnostics, 11,
+doi: 10.3390/diagnostics11030501
+Tonry, J. L., Denneau, L., Heinze, A. N., et al. 2018, PASP,
+130, 064505, doi: 10.1088/1538-3873/aabadf
+Tuson, A., Mart´ ınez-Palomera, J., & Hedges, C. 2025,
+altuson/tess-asteroids: v1.2.6, v1.2.6 Zenodo,
+doi: 10.5281/zenodo.16332750
+Vaswani, A., Shazeer, N., Parmar, N., et al. 2017, in
+Advances in Neural Information Processing Systems
+(NeurIPS), Vol. 30, doi: 10.48550/arXiv.1706.03762
+Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020,
+Nature Methods,
+doi: https://doi.org/10.1038/s41592-019-0686-2
+Vu, T.-H., Boonaert, J., Ambellouis, S., & Taleb-Ahmed,
+A. 2021, Sensors, 21, doi: 10.3390/s21093179
+Woods, D. F., Ruprecht, J. D., Kotson, M. C., et al. 2021,
+PASP, 133, 014503, doi: 10.1088/1538-3873/abc761
+Xia, X., & Kulis, B. 2017, arXiv preprint arXiv:1711.08506.
+https://arxiv.org/abs/1711.08506
+Zhai, C., Shao, M., Nemati, B., et al. 2014, ApJ, 792, 60,
+doi: 10.1088/0004-637X/792/1/60
+Zhang, P., Luo, R., & Chen, M. 2025, AJ, 170, 187,
+doi: 10.3847/1538-3881/adea3c

@@ -1,0 +1,1601 @@
+Title: A Fast Method to Compute Scalar Induced Gravitational Waves on a Lattice with Primordial Non-Gaussianities
+Authors: Giovanni Piccoli
+Published: 2026-05-26
+Categories: astro-ph.CO, gr-qc, physics.comp-ph
+
+A Fast Method to Compute Scalar Induced Gravitational Waves on a Lattice with
+Primordial Non-Gaussianities
+Giovanni Piccoli 1,∗
+1University of Zurich, Department of Astrophysics
+(Dated: May 27, 2026)
+Scalar Induced Gravitational Waves (SIGW) are generated at second order in perturbation theory
+and to achieve observational relevance, inflationary dynamics must evade the standard slow-roll
+scenario at small scales, generating large curvature perturbations following strongly non-Gaussian
+statistics. We propose a method to efficiently compute the SIGW spectrum including arbitrary
+non-Gaussianities. First, we solve the wave equation adopting semi-analytic methods; this results in
+an expression involving integrals in Fourier space which are impossible to solve directly on a lattice.
+We overcome this bottleneck by recasting these integrals as a sum of∼50 convolutions, each of
+which can be computed efficiently with FFT methods. Finally, the power spectrum is measured
+directly from the lattice realization. We implement this inFLAN-SIGW, a GPU-accelerated code
+capable of computing fully non-perturbative, non-Gaussian SIGW spectra in seconds with an error
+within∼10% with modest computational resources. The code is made public on GitHub. In
+this first implementation, in order to assess the performance of the method, we adopt a standard
+radiation-dominated background withw= 1/3.
+Gravitational wave astronomy is a promising avenue
+to obtain information about the evolution of the earliest
+phase of the Universe. During a period of cosmic Infla-
+tion [1], quantum fluctuations would be responsible not
+only for generating the seeds of the Large Scale Struc-
+ture [2, 3], but also primordial gravitational waves. The
+amplitude of the primordial curvature power spectrum
+is constrained to ∆ 2
+ζ ∼10 −9 on large scales (k∼0.05
+Mpc−1), while its spectral tilt is slightly red (n s ≲1) [4];
+these highly Gaussian fluctuations align precisely with
+standard single-field slow-roll predictions. Due to the
+non-linear nature of Einstein’s equations, a quadratic
+combination of first-order scalar perturbations sources
+second-order tensor modes [5–10], known as Scalar In-
+duced Gravitational Waves (SIGW). For a detailed re-
+view, we refer to [11]. Primary tensor modes, which
+would imprint in the B-modes of the polarization of the
+Cosmic Microwave Background, remain undetected [12],
+and the secondary SIGW contribution on these cosmo-
+logical scales is subdominant; moreover, an extrapola-
+tion of the slow-roll power spectrum to smaller scales
+yields a negligible SIGW amplitude. However, while
+the scalar power spectrum is well known on large scales
+(k≲1 Mpc −1), on smaller scales it remains largely un-
+constrained, apart from upper bounds coming from the
+non-observations of Spectral Distortions [13–15], Acous-
+tic Reheating [16–21], Primordial Black Holes [22] and
+signatures of Ultra-Compact Mini-Halos [23]. A tran-
+sient deviation from the slow-roll attractor such as a
+phase of ultra-slow-roll [24] could lead to a large enhance-
+ment in the scalar power spectrum at scales which are
+observationally reachable as the nanohertz band, probed
+by Pulsar Timing Arrays (PTA) [25–29], or the milli-
+hertz band, probed by the Laser Interferometer Space
+∗ giovanni.piccoli@uzh.ch
+Antenna (LISA) [30, 31]. Interestingly, a deviation from
+the slow-roll attractor not only translates into a boost
+in the amplitude of the perturbation, but also into a
+deviation from the approximate Gaussianity typical of
+perturbations produced during a slow-roll phase. Due
+to their non-linear origin, the two-point function of the
+SIGW is given in terms of the four-point function of
+the scalar modes,⟨hh⟩ ⊃ ⟨ζζζζ⟩; the computation of
+this four-point function adopting Wick’s theorem [32]
+has been performed semi-analytically assuming the non-
+Gaussianities to be amenable to a local, perturbative
+treatment [33, 34]. An interesting possibility is that such
+a perturbative expansion may not be possible [35]; un-
+der such circumstance, a full numerical simulation would
+be needed [36, 37]. Moreover, there is evidence for the
+failure of the leading order separate universe approxima-
+tion [38] for sudden transitions to a non-attractor phase,
+which points to the requirement of laplacian corrections,
+jeopardizing the validity of the local expansion. Nu-
+merical simulations have also been employed for mixed
+adiabatic-isocurvature initial conditions [39]. A measure-
+ment of the power spectrum from a lattice realization
+of a given field is completely agnostic of the underly-
+ing statistics; the computational overload is therefore
+the same as in the Gaussian case, as opposed to semi-
+analytic methods, where the number of n-point functions
+needed to account for local type non-Gaussianities and
+the dimensionality of the correspondent momentum in-
+tegrals grows very quickly. In this work, we present a
+novel method with which the induced gravitational wave
+spectrum Ω gw(k) can be computed for a given realiza-
+tion of the primordial comoving curvatureζ. Our ap-
+proach amounts to two steps. First, the oscillating part
+of the strain is separated from its slowly varying ampli-
+tude, whose asymptotic value can be obtained via a direct
+integration in conformal time. This leads to expressions
+for the amplitudes already known from analytic studies
+in the Gaussian case. While formally exact and amenable
+arXiv:2605.27231v1  [astro-ph.CO]  26 May 2026
+
+2
+to be simplified taking Wick’s contractions (when the sta-
+tistical properties of the scalar modes make it possible),
+the resulting expressions are numerically intractable, be-
+ing integrals in Fourier space which cannot be recast as
+convolutions. The second step, which is the truly new
+contribution of this work, consists of identifying a con-
+venient way to decompose the integrands so to be able
+to apply the convolution theorem term by term. Once a
+model for the non-Gaussian scalar perturbation is speci-
+fied, this approach allows for very efficient simulations of
+the induced gravitational wave background, from which
+the power spectrum can be directly measured with no
+assumption whatsoever on the underlying statistics.
+The paper is organized as follows. In Sec. I we briefly
+summarize the basics of SIGW, mostly for the purpose of
+establishing the notation. In Sec. II we derive the equa-
+tions satisfied by the slowly-varying amplitudes, while in
+Sec. III we show how to connect their power spectra
+to the quantity of observable interest, Ω gw. In Sec. IV
+we present the detailed algorithm with which the SIGW
+spectrum can be computed assuming that the decompo-
+sition of the integrand exists, while in Sec. V we show ex-
+plicitly how to build said decomposition. Finally, in Sec.
+VI we benchmark the validity of our method in the sim-
+plest Gaussian case, comparing the resulting spectrum
+with the semi-analytic result, and in Sec. VII we draw
+our conclusions, remarking the limitations of this work
+and establishing future directions.
+I. SCALAR INDUCED GRA VIT A TIONAL
+W A VES
+In this section we review the standard formalism of
+SIGW for the sake of establishing the notation and
+paving the way to the subsequent numerical implementa-
+tions. Neglecting first order tensors, we write the metric
+in the Poisson Gauge as follows:
+ds2 =a 2(η)
+h
+−(1+2Φ)dη 2 +
+h
+(1+2Ψ)δ ij +h ij
+i
+dxαdxβ
+i
+,
+whereηis the conformal time anda(η) the scale-factor.
+hij is a transverse (∂ ihij = 0), trace-less (h i
+i = 0) tensor
+which we consider to contain only the second-order grav-
+itational waves sourced by the scalar modes. We focus
+on such gauge for simplicity and concreteness, minding
+the possibility of gauge ambiguities, which are however
+unimportant in the sub-Horizon regime [40]. We fur-
+ther neglect scalar anisotropic stress, so that Ψ =−Φ
+[41]; to second order in perturbation theory, extracting
+the transverse traceless components of Einstein equations
+gives the wave equation governing the evolution of the
+second-order tensors:
+h′′
+ij + 2Hh′
+ij − ∇2hij =−4 ˆT lm
+ij Slm.(1)
+the un-projected source reads, to second order [9, 10]:
+Sij =∂ iΦ∂jΦ + 2
+3(1 +w) ∂i(Φ +H −1Φ′)∂j(Φ +H −1Φ′),
+(2)
+whereH=aHis the conformal Hubble factor,wis the
+equation of state of the background, and we neglected a
+total divergence∼∂ i(Φ∂jΦ) which does not survive the
+transverse-traceless projector ˆT lm
+ij , a non-local operator
+given in Fourier space as follows:
+[ ˆT lm
+ij Slm]k =
+X
+λ
+eλ
+ij(ˆk)elm
+λ (ˆk)Slm(k).(3)
+The polarization tensorse λ(ˆk) can be written in terms
+of two unit vectors ˆu, ˆvforming an orthonormal basis
+together with ˆk:
+e+(ˆk) = 1√
+2
+h
+ˆu⊗ ˆu− ˆv⊗ ˆv
+i
+,
+e×(ˆk) = 1√
+2
+h
+ˆu⊗ ˆv+ ˆv⊗ ˆu
+i
+; (4)
+for each wavenumberk, the polarization tensors can be
+build first by picking a unit vector ˆuorthogonal to ˆk(for
+instance, by considering ˆu= ˆk× ˆx/|ˆk× ˆx|for ˆk̸= ˆx),
+and then forming the third one by means of the cross
+product ˆv= ˆk× ˆu. We remark that the map ˆk→ ˆuis
+necessarily discontinuous because of the impossibility to
+define a continuous, non-vanishing tangent vector field
+on a sphere 1. Finally, to linear order, the potential Φ
+evolves according to the following equation [42]:
+Φ′′+3H(1+c 2
+s)Φ′+(2H′+(1+3c 2
+s)H2−c2
+s∇2)Φ = 0,(5)
+where the sound speed readsc 2
+s =P ′/ρ′. In Fourier
+space, this equation can be solved in terms of a transfer
+function Φ k(η) =T(η, k)Φ k,i, where the initial condi-
+tion Φk,i is linked to the comoving primordial curvature
+perturbationζas follows:
+Φk,i = 3(1 +w)
+5 + 3w ζk,(6)
+wherewhas to be evaluated at Horizon re-entry. The
+transfer functionTis the solution to Eq. 5 substituting
+∇2 → −k 2, subjected to the initial conditionsT= 1,
+T ′ = 0. Moving to Fourier space, we can write the wave
+equation for each polarization mode:
+h′′
+λ,k + 2Hh′
+λ,k +k 2hλ,k =S λ,k(η),(7)
+in terms of the source functionS λ,k (to lighten the nota-
+tion, from now on we will write the initial conditions for
+1 A topological obstruction colloquially known ashairy-ball theo-
+rem.
+
+3
+the potential simply as Φ q):
+Sλ,k(η) = 4eij
+λ (ˆk)
+Z d3q1
+(2π)3
+Z d3q2
+(2π)3 ×(8)
+×(2π)3δ(3)
+D (q1 +q 2 −k)q 1,iq2,jΦq1Φq2 f(η, q 1, q2).
+The kernel functionfreads:
+f(η, q 1, q2) =T(η, q 1)T(η, q 1)+
++ 2
+3(1 +w)
+
+T+H −1∂ηT
+
+q1
+
+T+H −1∂ηT
+
+q2
+.(9)
+From Eq. 7 it is clear that apart from the non-trivial
+evolution induced from the source term, the motion of
+each mode has both an oscillating and decaying compo-
+nent, respectively induced byk 2hλ,k and by 2Hh ′
+λ,k. In
+the following section we will proceed to factor out these
+components, so to be able to focus on the slowly varying
+amplitudes, whose evolution carries the non-trivial im-
+print of the source term. This is the preliminary step of
+our numerical implementation.
+II. ENVELOPE EQUA TIONS
+The scalars sourcing Eq. 7 decay rapidly as Φ k ∼
+1/(kη)2 shortly after horizon crossing. For this reason,
+forη≫1/k, the induced tensor modes behave as free
+waves, sinceS λ,k ≈0. Resolving these fast, free oscil-
+lations via a brute-force numerical integration on a 3D
+lattice is computationally heavy and yields little observa-
+tional information, given that fast oscillations inkspace
+have to be averaged out anyway (see Sec. III). Therefore,
+to efficiently solve Eq. 7, the first step is to separate the
+highly oscillatory behavior of each wave from the non-
+trivial evolution of its amplitude, which is induced while
+the source is active. To do so, we adopt the method
+of variation of constants [43] (equivalently, the Green’s
+function method). We first consider the two independent
+solutions to the homogeneous wave equation,y n(k, η):
+y′′
+n + 2Hy′
+n +k 2yn = 0, n= 1,2.(10)
+These solutions can be obtained numerically for any given
+thermal history encoded in the comoving Hubble factor
+H. By factoring out these homogeneous solutions, the
+computational burden is drastically reduced: numerical
+integration is only required once per wavenumber magni-
+tudek, completely bypassing the need to explicitly com-
+pute every orientation of the wave-vectorkon the lattice.
+With these functions, for each polarization modeλthe
+strain can be written by introducing two varying envelope
+functionsA,B:
+hλ,k(η) =A λ,k(η)y1(k, η) +B λ,k(η)y2(k, η).(11)
+At this point, the number of effective degrees of free-
+dom has been doubled; it is therefore necessary to add a
+constraint relating the two amplitudes, so to remove the
+spurious degree of freedom. Given the freedom we have
+in doing so, we can choose the most convenient:
+A′
+λ,ky1 +B ′
+λ,ky2 = 0.(12)
+We can insert the ansatz of Eq. 11 in Eq. 7; using Eq.
+12, we obtain the following dynamical equation:
+A′
+λ,ky′
+1 +B ′
+λ,ky′
+2 =S λ,k.(13)
+This last result can be combined with Eq. 12 to disen-
+tangle the evolution of each amplitude:
+A′
+λ,k =− y2Sλ,k
+W(η, k) , B ′
+λ,k = y1Sλ,k
+W(η, k) ,(14)
+written in terms of the Wronskian determinant:
+W(η, k) :=y 1(η, k)y ′
+2(η, k)−y ′
+1(η, k)y2(η, k).(15)
+Using the homogeneous wave equation it is straightfor-
+ward to see that the Wronskian satisfies the equation
+W ′ =−2HW, which can be readily solved:
+W(η, k) =W i(k)
+ a(η)
+ai
+−2
+,(16)
+a result known as Abel’s identity. We therefore obtain
+the final form of the equations governing the evolution of
+the envelopes:
+A′
+λ,k =−W −1
+i y2(k, η)Sλ,k(η)
+ a(η)
+ai
+2
+,
+B′
+λ,k =W −1
+i y1(k, η)Sλ,k(η)
+ a(η)
+ai
+2
+.(17)
+These equations are exact, and valid for a generic ex-
+pansion history. We remark that modes of interest to
+PTA and laser interferometers such as LISA entered the
+Horizon deep during radiation domination, respectively
+across the QCD [44] and Electroweak [45] crossovers.
+During phase transitions the equation of state decreases
+from the fiducial valuew <1/3, leading to a softer pres-
+sure and decreased suppression of perturbations, ulti-
+mately resulting in a boost in the amplitude of the scalar
+induced gravitational waves. However, to cleanly iso-
+late the performance of the proposed lattice algorithm
+from the effects of realistic expansion histories, we fix
+w= 1/3 in this work. This choice provides a mathe-
+matically tractable baseline that is firmly established in
+the literature and routinely used to confront current or
+upcoming observational data [25, 27]. The integration of
+more realistic thermal histories is deferred to future work.
+Within this choice, the transfer function is simply given
+in terms of the spherical Bessel function of first order:
+T(η, k) = 3j1(kη/
+√
+3)
+kη/
+√
+3 .(18)
+Moreover, the solutions to the homogeneous wave equa-
+tion are simply given by:
+y1(k, η) = coskη
+kη , y 2(k, η) = sinkη
+kη ,(19)
+
+4
+whileW(η, k) = 1/kη 2, anda(η)/a i =η. Therefore, the
+envelope equations simplify to the following form:
+A′
+λ,k =−ηsin(kη)S λ,k(η),
+B′
+λ,k =ηcos(kη)S λ,k(η).(20)
+Before presenting our novel approach for the solution of
+Eqs. 20, we briefly comment on how to connect the en-
+velope amplitudes to observables.
+III. CONNECTING THE ENVELOPES TO
+OBSER V A TIONS
+A crucial quantity adopted to characterize stochastic
+backgrounds is the gravitational wave spectrum Ωgw, de-
+fined as the amount of energy density carried by the
+modes in a given logarithmic bin compared to the critical
+density of the Universe:
+Ωgw(k) := 1
+ρc
+dρgw
+dlogk .(21)
+A standard computation links the expected value of the
+gravitational wave spectrum to the dimensionless power
+spectra of each polarization ∆ 2
+h,λ:
+Ωgw(η, k) = k2
+12H2
+X
+λ=+,×
+∆2
+h,λ(η, k),(22)
+We remark that for a stochastic fieldX, ∆ 2
+X is connected
+to the dimensionful power spectrumP X as follows:
+∆2
+X(k) := k3
+2π2 PX(k),(23)
+whileP X is defined in terms of the two-point function in
+Fourier space:
+⟨X ∗(k′)X(k)⟩= (2π) 3δ(3)
+D (k−k ′)PX(k).(24)
+For concreteness, we now consider the case of pure radi-
+ation domination, where Eq. 11 becomes:
+hλ,k(η) = 1
+kη
+h
+Aλ,k(η) coskη+B λ,k(η) sinkη
+i
+; (25)
+therefore, one has, at a given timeη:
+Ph,λ(η, k) = 1
+(kη)2
+h
+PA,λ(η, k) cos2 kη+ (26)
++PB,λ(η, k) sin2 kη+P AB,λ(η, k) sin(2kη)
+i
+;
+using Eq. 23 and using the fact that in radiation era
+H= 1/η, we can then write forη≫1/k:
+Ωgw(η, k) = k3
+24π2
+X
+λ=+,×
+h
+PA,λ(k) cos2 kη+ (27)
++P B,λ(k) sin2 kη+P AB,λ(k) sin(2kη)
+i
+;
+where now we consider the asymptotic values of
+PA, PB, PAB, considering that forη≫1/kthe envelopes
+become constant. Furthermore, we may consider that
+observations are not able to track fast oscillations taking
+place inkspace: as customary, we take the constant
+mode of the oscillating factors, which for cos 2 kηand
+sin2 kηis 1/2 and for sin 2kηis 0, which finally leaves
+us with the asymptotic value of the gravitational wave
+spectrum deep in radiation domination:
+Ω(RD)
+gw (η, k) = k3
+48π2
+X
+λ=+,×
+h
+PA,λ(k) +P B,λ(k)
+i
+.(28)
+Finally, in order to obtain the gravitational wave spec-
+trumtoday, it is possible to account for its dilution fol-
+lowing the end of radiation domination as follows [46]:
+Ωgw(k) = Ωr
+g∗(k)
+g⋆,0
+ gs,0
+gs(k)
+4/3
+Ω(RD)
+gw (k),(29)
+which is essentially a consequence of conservation of en-
+tropy. In the rest of the work, we factor out this factor
+for clarity.
+We can already see the convenience of the oscillation-
+envelope split, which focuses by construction on the
+quantities to which observations are sensitive. In the fol-
+lowing section we finally provide an efficient method with
+which the fieldsA λ,k, Bλ,k can be computed in practice,
+which is in fact the core result of this work.
+We conclude this section by presenting the well known
+analytic expression for Ω(RD)
+gw in the case of Gaussian ini-
+tial conditions (where the four-point function needed to
+compute the spectrum is obtained applying Wick’s the-
+orem):
+Ω(RD,Gauss)
+gw (k) =
+Z 1
+0
+dq
+Z ∞
+1
+ds T(q, s)×
+×∆ 2
+ζ
+ k
+2 (s+q)
+
+∆2
+ζ
+ k
+2 (s−q)
+
+,(30)
+where the integral kernelT(q, s) reads explicitly [47]:
+T(q, s) = 12(q2 +s 2 −6) 4
+(s2 −q 2)8 (q2 −1) 2(s2 −1) 2×(31)
+×
+h
+log
+
+3−q 2
+3−s 2
+ + 2(s2 −q 2)
+q2 +s 2 −6
+2
++π 2Θ(s−
+√
+3)
+i
+.
+We will adopt this formula to benchmark our numerical
+method, evaluating the integral in Eq. 30 numerically,
+remarking that it can be done straightforwardly adopting
+simple methods such as a trapezoidal scheme or Simpson
+method.
+IV. AN EFFICIENT LA TTICE EV ALUA TION
+OF THE AMPLITUDES
+The envelope equations can be formally integrated to
+obtain the asymptotic values to which the amplitudes
+
+5
+settle forη≫1/k, defining the dimensionless variable
+t=ηk, again focusing to the simplew= 1/3 case:
+Aλ,k =− 1
+k2
+Z ∞
+0
+dt tsintS λ,k(t),
+Bλ,k = 1
+k2
+Z ∞
+0
+dt tcostS λ,k(t); (32)
+in Fourier space, the source is computed as follows:
+Sλ,k(t) =−4k 5eij
+λ (ˆk)
+Z d3u
+(2π)3
+Z d3v
+(2π)3 ×
+×(2π)3δ(3)
+D (u+v− ˆk)uivjΦkuΦkvf(t, u, v),(33)
+in terms of the adimensional momentau=q 1/k,v=
+q2/k. The kernelf(t, u, v) reads:
+f(t, u, v) =T(ut)T(vt)
++1
+2
+
+T(ut) +t∂ tT(ut)
+
+T(vt) +t∂ tT(vt)
+
+.(34)
+therefore, inserting the expression of the source into the
+one of the asymptotic values of the envelopes, we obtain:
+Aλ,k = 4k3eij
+λ (ˆk)
+Z d3u
+(2π)3
+Z d3v
+(2π)3 ×
+×(2π)3δ(3)
+D (u+v− ˆk)uivjΦkuΦkvIs(u, v); (35)
+Bλ,k =−4k 3eij
+λ (ˆk)
+Z d3u
+(2π)3
+Z d3v
+(2π)3 ×
+×(2π)3δ(3)
+D (u+v− ˆk)uivjΦkuΦkvIc(u, v),(36)
+having defined the following symmetric kernels:
+Is(u, v) :=
+Z ∞
+0
+dt tsintf(t, u, v),
+Ic(u, v) :=
+Z ∞
+0
+dt tcostf(t, u, v); (37)
+remarkably, these integrals can be solved analytically; we
+adopt the results of [48], paying attention to a relative
+factor due to different conventions:
+Is(u, v) = 27π(u2 +v 2 −3) 2
+32u3v3 Θ(u+v−
+√
+3),
+Ic(u, v) = 27(u2 +v 2 −3)
+32u3v3
+
+−4uv+
++ (u2 +v 2 −3) log
+3−(u+v) 2
+3−(u−v) 2
+
+
+.(38)
+We show these kernels as heatmaps in Fig. 1. While
+the method of variation of constants is a well-established
+technique, we propose to include it in a lattice simu-
+lation as a way to overcome the costs associated to a
+direct time integration of the wave equation, with the
+direct advantage of focusing on the asymptotic value of
+the envelopesA,B, without the need to explicitly ac-
+count for fast oscillations, which are in any case of no
+observational relevance. The result of Eq. 38 is per-
+fectly fine as it is, provided that one is interested in
+semi-analytic methods involving local non-Gaussianities
+of the kindζ=ζ g +F NLζ2
+g +G NLζ3
+g +. . ., allowing to
+obtain a closed form of ∆ 2
+h in terms of a finite number of
+Wick’s contractions. For the sake of a lattice computa-
+tion, needed for instance if the non-Gaussianities under
+consideration don’t admit a perturbative expansion, this
+direct approach presents a severe computational bottle-
+neck. Given a lattice realization of Φ = 2ζ/3, the inte-
+grals connecting it to the asymptotic value of the enve-
+lope amplitudesA, Bare basically impossible to evaluate
+directly. In fact, the kernelsI s,c are not separable, in the
+sense that they cannot be written asI(u, v) =ϕ(u)ϕ(v),
+so that the Fourier integral cannot be expressed as a con-
+volution. This prevents us from integrating numerically
+the above equations. In fact, a brute force integration
+fk ∼
+R
+q Fq,kgqgk has aO(N 6) complexity, while a con-
+volutionf k ∼
+R
+q gqgk−q can be computed very efficiently
+applying the convolution theorem and computing numer-
+ically the needed direct and inverse Fourier Transforms
+adopting the Fast Fourier Transform (FFT) [49], whose
+complexity isO(N 3 logN). The simplest way to take
+advantage of this algorithmic simplification is to numeri-
+cally integrate Eq. 32, computing the source at each time
+by simply convolving the evolved potentials. The prob-
+lem is that whileAandBeventually settle to constant
+values, the source term oscillates and contains many time
+scales, all of which have to be resolved by the time step
+chosen in the numerical integration. For this reason, it is
+worth to investigate whether it may be possible to bypass
+the need to perform a numerical integration. While the
+resulting kernelsI c,I s posses no simple factorization, it
+may be possible to find a family of functionsϕ (m)
+α and
+normalization factorsσ (m)
+α (m=c, s) such that:
+Im(u, v) =
+X
+α
+σ(m)
+α ϕ(m)
+α (u)ϕ(m)
+α (v),(39)
+assuming to be able to approximate the original functions
+up to the wanted precision with a finite number of terms.
+For the moment, let us assume that such a decomposition
+is possible: we provide an explicit construction in Sec. V.
+Under such hypothesis we can write Eq. 35 as:
+Aλ,k = 4k3eij
+λ (ˆk)
+X
+α
+σα
+Z d3u
+(2π)3
+Z d3v
+(2π)3 (2π)3×(40)
+×δ(3)
+D (u+v− ˆk)
+h
+uiϕ(s)
+α (u)Φku
+ih
+vjϕ(s)
+α (v)Φkv
+i
+,
+and similarly forB λ,k. With a few more computations
+we can now rewrite this double integral in a manageable
+form. In fact, we need to go back to the old dimensionful
+
+6
+0.0 0.5 1.0 1.5 2.0 2.5 3.0
+u
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+v
+|Ic(u, v)|
+0.0 0.5 1.0 1.5 2.0 2.5 3.0
+u
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+v
+|Is(u, v)|
+5
+10
+15
+20
+25
+30
+0
+2
+4
+6
+8
+10
+12
+14
+16
+FIG. 1. We show the relevant dynamical range of the kernelsI m, restricting to the strip of the plane allowed by the condition
+|u±v|<1, arising because of the Dirac delta enforcingu+v= ˆkappearing in the Fourier integrals. We overlay the grid used
+to perform the decomposition into separable terms as explained in Sec. V, noticing that it is focused where each kernel varies
+the most, becoming progressively more coarse at larger values of the arguments. We remark that because of its (integrable)
+logarithmic divergence, the peak value ofI c appearing in the plot depends on the discretization scale.
+variablesq 1 =ku,q 2 =kv:
+Aλ,k = 4eij
+λ (ˆk)
+k2
+X
+α
+σα
+Z d3q1
+(2π)3
+Z d3q2
+(2π)3 ×(2π) 3×(41)
+×δ (3)
+D (q1 +q 2 −k)
+h
+q1,iϕ(s)
+α
+ q1
+k
+
+Φq1
+ih
+q2,jϕ(s)
+α
+ q2
+k
+
+Φq2
+i
+,
+Notice that the integral is scale dependent, in the sense
+that the auxiliary vectorsq jϕαΦqj depend onkthrough
+ϕα =ϕ α(qj/k). For this reason, this approach is not
+able to yield a complete realization ofA, Bon the whole
+grid with a single convolution. However, we can focus on
+a specifickbin and repeat the computation for each of
+them. In practice, for a fixedkwe define:
+V (m)
+α,q (k) :=ϕ (m)
+α
+ q
+k
+
+Φq,(42)
+in terms of which we can write
+Aλ,k = 4eij
+λ (ˆk)
+k2
+X
+α
+σα
+Z d3q1
+(2π)3
+Z d3q2
+(2π)3 ×(2π) 3×(43)
+×δ (3)
+D (q1 +q 2 −k)
+h
+q1,iV (s)
+α,q1(k)
+ih
+q2,jV (s)
+α,q2(k)
+i
+.
+We can define the real-space counterpartsV (m)
+α (k,x):
+V (m)
+α (k,x) =
+Z d3q
+(2π)3 eiq·xV (m)
+α,q (k),(44)
+in terms of which we can write the envelopes adopting
+the convolution theorem:
+Aλ,k =− 4eij
+λ (ˆk)
+k2
+hX
+α
+σα∂iV (s)
+α (k,x)∂ jV (s)
+α (k,x)
+i
+k
+,
+Bλ,k = 4eij
+λ (ˆk)
+k2
+hX
+α
+σα∂iV (c)
+α (k,x)∂ jV (c)
+α (k,x)
+i
+k
+.
+(45)
+where the gradients∂ iV (m)
+α (k,x) in real space corre-
+sponds to the factors ofq 1,q 2 in Fourier space:
+∂iV (m)
+α (k,x) =
+Z d3q
+(2π)3 iqieiq·xV (m)
+α,q (k).(46)
+The power spectrum of a given fieldX={A λ, Bλ}, at
+a given wavenumberk, can be obtained adopting an er-
+godic approach, averaging the squared amplitude of the
+Fourier modes within a narrow shell centered around the
+mode of interest, i.e. fork−∆k/2<|k|< k+ ∆k/2,
+with ∆kbeing the thickness of the shell:
+PX(k) = 1
+V Nk
+X
+|k|∈k±∆k/2
+|Xk|2; (47)
+whereN k is the number of modes within the shell and we
+choose ∆k=π/L, namely the fundamental mode. We
+remark that even in the case whereζ(and hence Φ) is
+Gaussian, the induced strain is not. Therefore, modes
+within the same shell ink-space are not independent. In
+
+7
+order to estimate the power spectrum at the modekand
+the associated error we employ the Jackknife resampling
+method [50]. To do so, we first transformX k to real
+space; the volume is then divided inM 3 sub-volumes.
+M3 power spectrum measurements{P (i)
+X }are obtained
+by leaving out one sub-volume at time. Finally, the Jack-
+knife error is obtained as follows:
+σ2
+PX(k) = M3 −1
+M3
+X
+i
+(P (i)
+X (k)− ¯PX(k))2,(48)
+where ¯PX is the average of the replica power spectra:
+¯PX(k) = 1
+M3
+X
+i
+P (i)
+X (k).(49)
+In our simulations, we chooseM= 4. The scale de-
+pendence of Eqs. 45 could appear problematic, since it
+requires to repeat all the lattice computations for each
+modes of interest; however, the procedure is so efficient
+that this is not a problem at all, especially considered
+that measurements are sensitive to a fairly narrow fre-
+quency band, so that only few values ofkare needed.
+Furthermore, concentrating on a scale at a time allows
+us to use fairly small grids: in fact, the nonlinearities re-
+sponsible for the generation of SIGW are fairly local in
+Fourier space, in the sense that vast majority of scalar
+modes contributing to a given tensor modekare concen-
+trated around the resonance occurring at∼
+√
+3k. For this
+reason, for every modes inside the band of observational
+interestk∈(k min, kmax), the corresponding simulation
+box just needs to capture the relevant modes that give
+rise tokand not the whole dynamical range (k min, kmax),
+as is required in standard methods.
+Eqs. 45 represent our main result on the analytic side.
+V. DECOMPOSING THE KERNEL AS A SUM
+OF SEP ARABLE FUNCTIONS
+In this section we explicitly construct a possible de-
+composition of the kernelsI m, (m=c, s) in the form
+delineated in Eq. 39. Before diving deep into the de-
+tails of the construction, we notice that the vectorsu,v
+are constrained to form a triangle together with ˆk. This
+means that it is possible to limit the reconstruction of the
+kernels inside the region of the (u, v) plane limited by the
+conditions|u+v|<1,|u−v|<1. We remark that re-
+constructing the kernels on the whole domain is not only
+unnecessary but computationally intractable. Indeed, in
+the allowed strip the kernels are quite ill-behaved; for in-
+stance, in the neighborhood of the origin, the kernelI s
+diverges rapidly. Attempting to reconstruct such diver-
+gence would introduce numerical instabilities. For this
+reason, the regions outside of the strip defined by the
+conditions|u±v|<1 has to be excluded by hand since
+the beginning. In the following we lighten the notation
+by dropping the denotationm. We start by considering
+0 50 100 150 200
+Mode Index α
+0.001
+0.01
+0.1
+1
+Relative Amplitude, |σα|/|σ0|
+Eigenvalues Hierarchy, N = 200
+sin
+cos
+FIG. 2. We show the absolute value of the eigenvalues (nor-
+malized to the largest one) relevant for the decomposition of
+the integral kernelsI s,I c (Eq. 52), computed adopting the
+meta-parametersu min = 10 −3,u max = 15,N modes = 200,
+up = 1,σ p = 0.5,A p = 10 and the grid-density function
+given by Eq. 59. The fall-off is very fast, and the inclusion of
+justN α ∼50−60 modes is needed to reconstruct the kernel
+functions to a good degree.
+a set of real basis functionsf i so that:
+I(u, v) =
+X
+i,j
+Cijfi(u)fj(v),(50)
+assuming them to be normalized so that it is possible to
+obtain the coefficients as follows:
+Cij =
+Z
+du
+Z
+dv f i(u)fj(v)I(u, v).(51)
+OnceC ij has been computed, it can always be diagonal-
+ized since it is a real symmetric matrix. Letq (α)
+i be the
+i-th component of theα-th eigenvector ofC ij, andσ (α)
+the associated eigenvalue. We can therefore write:
+Cij =
+X
+α
+σαq(α)
+i q(α)
+j ; (52)
+inserting this expression in Eq 50, we can rearrange the
+order of the sums to obtain:
+I(u, v) =
+X
+α
+σα
+X
+i
+q(α)
+i fi(u)
+X
+j
+q(α)
+j fj(v),(53)
+which can be brought in the form of Eq. 39 by defining
+ϕα(u) :=
+X
+i
+q(α)
+i fi(u).(54)
+
+8
+1
+u
+−15.0
+−12.5
+−10.0
+−7.5
+−5.0
+−2.5
+0.0
+2.5
+1
+u
+0
+2
+4
+6
+8
+10
+12
+14 u + v
+0.00
+0.23
+0.45
+0.68
+0.90
+Ic(u, v), Is(u, v) reconstruction ( N = 200, Nα = 50)
+FIG. 3. We compare the kernels with their reconstruction. We first adopted a grid built withN= 200 discretization points
+per side, covering the rangeu min = 10−3,u max = 15, with a density of points given by Eq. 59 and meta parametersu p = 1,
+σp = 0.5,A p = 10. The kernels are reconstructed using only the firstN α = 50 dominant modes in the eigenvalue decomposition
+ofC ij (see Sec. V for the details). The reconstruction is excellent in most of the dynamic range, apart on the edges (u+v≈1)
+for the sine kernel. However, since this function enters as an integral kernel, an error confined to a small part of the integration
+domain is forgivable.
+For instance, the basis could be taken to be a fam-
+ily of orthogonal polynomials (like Legendre, Laguerre,
+etcetera) or even plane waves. However, the kernels are
+quite ill-behaved functions, as they contain discontinu-
+ities and a logarithmic divergence. While these features
+pose no problem in a direct integration (like in the semi-
+analytic computation in the Gaussian case), they could
+lead to severe instabilities when expanded over a basis
+defined globally. For instance, if a Fourier expansion is
+chosen, the reconstruction of the Heaviside theta would
+present large oscillations at the boundary (the Gibbs phe-
+nomenon [51]). For these reasons, we opt for a localized
+basis. As a proof of principle, we choose eachf i to be
+non-zero only over a given interval centered aroundu i
+and with widthL i:
+fi(u) = 1 i(u)√Li
+,(55)
+where1 i(u) is the indicator function of thei-th interval.
+We leave the study of more sophisticated choices (such as
+B-splines) to future works. Different intervals are taken
+to be not overlapping and to cover the relevant dynam-
+ical range of the kernel, namely where it is significantly
+different from zero. These functions form an orthonormal
+set:
+Z
+dx f i(u)fj(u) =δ ij.(56)
+While being orthonormal, these functions forms a com-
+plete basis only approximately; in practice, they are
+nothing more than a discretized version of the position
+basis, which in the continuum limit is a continuously in-
+finite family of Dirac deltas. The accuracy of such a
+reconstruction is however under control and can be sys-
+tematically improved by choosing an appropriate grid, as
+we will see. Adopting the basis functions of Eq. 55, we
+then obtain:
+Cij =
+Z du√Li
+Z dvp
+Lj
+1 i(u)1 j(v)I(u, v); (57)
+assuming to have chosen the intervals so that the kernel
+varies slowly within them, this reduces to
+Cij ≈
+p
+LiLjI(u i, uj).(58)
+At face value, it could seem to be more convenient to
+adopt the exact form of Eq. 57; however, this is incon-
+
+9
+sistent with the discretized basis used eventually to re-
+construct the kernels, and in practice gives worse result
+than the adoption of Eq. 58.
+In order to improve the accuracy of this discretization
+procedure without using an unreasonable large number
+of discretization intervals, we can build the grid so to
+cover more finely the region of the plane where the ker-
+nels varies the most (see Fig. 1). To do so, we build
+the one-dimensional grid so that the density of points is
+distributed according to a Gaussian centered on a given
+upivot. We remark that the kernels vary mostly along the
+diagonal direction; therefore, it would be convenient, in
+principle, to adapt the grid to this feature. However, this
+is not possible; the 2D grid has to be a cartesian product
+of a discretization of theu-axis with itself in order for the
+decomposition to work. The reason is that a rotation of
+the coordinate (u, v) would completely destroy the hope
+of separating the integrand of equations such as Eqs. 35,
+36. We start by considering the (yet un-normalized) den-
+sity of points to be uniform plus a bump centered over a
+pivotal point of interestu p:
+ϱ(u) = dn
+du = 1 +A p exp
+
+− (u−u p)2
+2σ2p
+
+; (59)
+written in terms of an amplitudeA p controlling the
+enhancement in density of sampling points around the
+pivot, and the relative width of said enhancement,σ p.
+Ap = 0 simply leads toϱ= 1, which corresponds to a
+uniform discretization of theu−grid. LetN modes be the
+number of points in which we want to divide the range
+[umin, umax]; we can then find the normalized cumulative
+number of points:
+n(u) = NmodesR umax
+umin
+du′ ϱ(u′)
+Z u
+umin
+du′ ϱ(u′),(60)
+normalized so thatn(u max) =N modes indeed. Now, this
+function can be inverted; then the grid points computed
+asu n =u(n) forn= 1, . . . , N modes are distributed ac-
+cording to the wanted density. In Fig. 1 we overlay to
+the heatmaps representing the kernels a grid constructed
+according to the algorithm we just presented, choosing
+umin = 10 −3,u max = 15,N modes = 200,u p = 0.8,
+σp = 0.5,A p = 10. While this particular choice of meta-
+parameters is empirical, it is important to notice that
+the final result is not influenced by their precise value.
+In fact, a logarithmically spaced grid works as well, but
+it requires more discretization points. As a future im-
+provement, it would be interesting to develop an algo-
+rithm able to find the optimal grid, namely the one able
+to minimize the reconstruction error for a given choice of
+umin, umax, Nmodes. For the time being we restrict to the
+analytic prescription of Eq. 59 as a simple starting point,
+and we proceed to decompose the kernels. In Fig. 2 we
+show the eigenvalues ordered according to their absolute
+value. Their quick fall-off renders useless the inclusion
+of modes beyondN α ∼50−60. Notice that the kernels
+themselves are connected to the actual observables by
+an integral, which acts as a low-pass filter, desensitizing
+further the final result to the reconstruction errors. We
+show the kernels reconstructed by including only the first
+Nα = 50 dominant eigenvalues in Fig. 3. To plot each
+curve we fix a value ofu+v(the coordinate transverse to
+the diagonal in theu−vplane) and plot the projection
+of the surfaceI m(u, v) with respect to theu-direction.
+VI. NUMERICAL RESUL TS
+We implement numerically the algorithm described
+above using the Python libraryPyTorch[52], which en-
+ables to perform the computations both on a CPU and
+a GPU, the latter substantially accelerating the compu-
+tation; the core choke-point of this algorithm is the ne-
+cessity of performing many FFTs (one for each mode in
+which the kernels have been decomposed), which can be
+done in parallel with excellent performances on a GPUs,
+the only significant restriction being the memory needed
+to store the data. In all the benchmark we decompose
+the kernels over 200 modes, including in the subsequent
+reconstruction the first 50 dominant ones. Fixed the
+number of lattice spacing per sideN, we determine the
+length of the simulation box by inverting the definition
+of the Nyquist frequency,L=πN/k max, itself chosen as
+kmax = 3 max[k,¯k]. ¯kis a wavenumber defined as follows:
+R ¯k
+0 dlogk∆ 2
+ζ(k)R ∞
+0 dlogk∆ 2
+ζ(k) = 1−ε,(61)
+whereεis a predetermined tolerance. In our simula-
+tions, we chooseε= 0.1. This definition ofk max allows
+to include enough power so to reconstruct both modes
+below the peak (k≳k ∗, for which ¯kis the relevant cut-
+off) and the ones around and above the peak, to which
+wavenumbers larger thankitself do not contribute too
+much because of the sharp decline in the amplitude of the
+kernels after the resonant peaku+v=
+√
+3, translating
+intoq≈
+√
+3k/2. Notice that while in principle it would
+be tempting to further decreaseε, in practice it is not
+a good idea because that would lead to the exclusion of
+infrared modes ifNis not simultaneously increased.
+In all the following plots, the rescaling factor account-
+ing for the dilution after the end of radiation era (Eq.
+29) is omitted for clarity. All the lattice computations
+are performed decomposing each kernelN modes = 100,
+usingN α = 50 in the reconstruction step.
+A. Gaussian Initial Conditions
+As a first test, we consider the case where Φ i,k is a
+Gaussian field, to be able to compare the outcome of
+the numerical simulation with a relatively simple semi-
+analytic expression. As a model for the small-scale power
+
+10
+1
+k/k∗
+0.01
+0.1
+1
+GW Abundance, Ω gw/A2
+∗
+Gaussian Initial Conditions
+σ
+0.1
+0.5
+1.0
+N = 64
+N = 128
+Semi-analytic
+FIG. 4. Gravitational wave spectrum induced by a Gaus-
+sian primordial curvature perturbation with a log-normal di-
+mensionless power spectrum (Eq. 62), comparing the semi-
+analytic result (Eq. 30, plotted as a continuous black line)
+with the outcome of lattice computations performed on a box
+withN= 64,N= 128 points per side (respectively continu-
+ous and dashed).
+spectrum, we adopt the standard log-normal peak:
+∆2
+ζ(k) = A⋆√
+2πσ2 exp
+
+− log2(k/k⋆)
+2σ2
+
+(62)
+showing that a sub∼10% percent accuracy is reached us-
+ing a grid of justN= 64 per side, adoptingN α = 200 for
+the decomposition of the kernel, keeping theN (rec)
+α = 50
+with the largest eigenvalues for their subsequent recon-
+struction. In Fig. 4 we show the result forσ= 0.1,0.5,1
+adopted simulation boxes withN= 64,N= 128, com-
+paring the result of each simulation to the analytic result
+of Eq. 30.
+B. Local Non-Gaussianities
+We then move to the case where the primordial curva-
+ture perturbation is non-Gaussian, but can be expressed
+in terms of a Gaussian fieldζ g as follows:
+ζ=ζ g +F NLζ2
+g +G NLζ3
+g +. . . ,(63)
+such an expansion can be obtained, for instance, from the
+δNformalism; in this case,ζ g =−δϕ/H ˙¯ϕ, having decom-
+posed the inflaton field asϕ= ¯ϕ+δϕ. We generate the
+Gaussian fieldζ g adopting the log-normal peaked power
+spectrum (Eq. 62) as before. We consider separately the
+cases withF NL = 1,5,10,50,G NL = 0, andF NL = 0,
+GNL = 1,5,10,50, in both cases comparing the compu-
+tations performed usingN= 64,N= 128. The results
+are shown in Fig. 6, compared with the outcome of the
+semi-analytic computations performed in [34], for which
+we thank the authors. We remark that these results are
+not normalization-independent anymore; because of the
+non-linear relation betweenζandζ g, differentA ∗ dis-
+torts the overall shape. As known, a finiteF NL tends to
+flatten the peak structure present in the Gaussian case,
+while increasing the amplitude and the amount of power
+in the UV tail. For the pureG NL case, it can instead be
+appreciated how forG NL >1 it holds an approximated
+scaling relation, Ωgw ∼G NL, the shape being surprisingly
+similar across variations ofG NL.
+C. Non-Local Non-Gaussianities
+TheδNformalism is grounded on the separate Uni-
+verse approximation, which has been shown to fail during
+a sudden transition between slow-roll and ultra-slow-roll
+phases of the inflationary evolution [38, 53, 54]; in this
+circumstance, Laplacian corrections are relevant. There-
+fore, as a further application, we explore a simple model
+of perturbative non-Gaussianities beyond strict locality,
+considering the lowest possible non-Gaussian derivative
+terms:
+ζ=ζ g + αNL
+k2∗
+∇2ζ2
+g + βNL
+k2∗
+ζg∇2ζg +. . . ,(64)
+so that the value ofζat a given point not only depends
+on the value ofζ g at the same point but also on its im-
+mediate neighborhood. Such an expansion serves as a
+phenomenological approach to account for a derivative
+connection between the non-Gaussian curvatureζand an
+unspecified Gaussian fieldζ g. Once a specific model is es-
+tablished, its microphysics can be mapped onto the phe-
+nomenological coefficientsα NL andβ NL. Here the scale
+k∗ is introduced so to deal with dimensionless constants,
+and in this study is taken to coincide with the location
+of the log-normal peak used to model the power spec-
+trum of the Gaussian component. We show the results
+in Fig. 5. We observe a good match between the results
+obtained with different grid resolutions. On a numeri-
+cal level, this test is critical, as it proves the robustness
+of the code against the enhanced ultraviolet sensitivity
+introduced by the Laplacian operators.
+VII. CONCLUSIONS
+Inflationary scenarios able to yield enhancements in
+the amplitude of primordial perturbations such as a tran-
+sient phase of ultra-slow-roll evolution are characterized
+by strong non-Gaussianities, possibly scale-dependent, so
+
+11
+1
+k/k∗
+0.01
+0.1
+1
+10
+100
+1000GW Abundance, Ω gw/A2
+∗
+FNL ̸= 0, A∗ = 10 −2, σ = 0.1
+FNL
+0
+5
+10
+20
+N = 64
+N = 128
+Semi-analytic
+1
+k/k∗
+0.01
+0.1
+1
+10
+100
+GW Abundance, Ω gw/A2
+∗
+GNL ̸= 0, A∗ = 10 −2, σ = 0.1
+GNL
+0
+5
+10
+20
+N = 64
+N = 128
+FIG. 5. Gravitational wave spectrum induced by a non-Gaussian primordial curvature perturbation, expressed in terms of
+a Gaussian components by the local relationζ=ζ g +F NLζ 2
+g +G NLζ 3
+g; the Gaussian component is generated assuming the
+log-normal dimensionless power spectrum (Eq. 62) withσ= 0.1. We show the result of simulations performed adoptingN= 64
+(128) lattice points per sides as continuous (dashed) lines. In the case ofF NL ̸= 0 we compare them with the semi-analytic
+results of [34] (credits to Gabriele Perna for the numerical data).
+1
+k/k∗
+0.01
+0.1
+1
+10
+100
+1000GW Abundance, Ω gw/A2
+∗
+αNL ̸= 0, A∗ = 10 −2, σ = 0.1
+αNL
+1
+5
+10
+20
+N = 64
+N = 128
+1
+k/k∗
+0.01
+0.1
+1
+10
+100
+GW Abundance, Ω gw/A2
+∗
+βNL ̸= 0, A∗ = 10 −2, σ = 0.1
+βNL
+1
+5
+10
+20
+N = 64
+N = 128
+FIG. 6. Gravitational wave spectrum induced by a non-Gaussian primordial curvature perturbation, expressed in terms of a
+Gaussian components in terms of the a perturbatively non-local relation of Eq. 64; the Gaussian components is generated
+assuming the log-normal dimensionless power spectrum (Eq. 62) withσ= 0.1. We compare the results of lattice computations
+performed on boxes withN= 64 andN= 128 point per side, respectively shown as continuous and dashed lines.
+
+12
+that straightforward methods based on Wick’s contrac-
+tions may not be readily applicable. A convenient way to
+overcome such limitations are lattice simulations, based
+on a brute-force solution of the wave equation sourced
+by the effective stress-energy tensor sourced by nonlin-
+earities in the Einstein equations, namely Eqs. 1, 2.
+In this work, we presented an hybrid approach, com-
+bining a semi-analytic temporal integration (equivalent
+to an application of the Green’s function method) with
+a fully non-perturbative lattice evaluation of the ampli-
+tudes of the induced strain. Such a method is very com-
+pelling since it completely circumvents the need of nu-
+merically integrating the wave equation on the lattice,
+focusing only on the observational relevant part of the
+strain, namely its slowly varying components. While
+straightforward on paper, this operation leads to a pair
+of expressions (Eqs. 35 , 36) that are in practice impos-
+sible to compute, since they amount to computing for
+each point of the Fourier grid (N 3, ifNis the number
+of grid points per side) a Fourier integral that cannot
+be solved adopting FFT methods if left as it is. Thus,
+this apparent simplification results in a prohibitive com-
+plexity scaling ofO(N 6). The key point (which is the
+main contribution of this work) is that the original in-
+tegral, by itself impossible to evaluate directly, can be
+decomposed into a rather small number (N α ≲60) of
+convolutions, each efficiently computable using the con-
+volution theorem and the FFT algorithm, bringing the
+complexity down toO(N αN3 logN). ForN≲150 each
+FFT can be easily done even on a laptop, especially if
+GPU acceleration is available. For this reason, we imple-
+mented this method using the python libraryPyTorch,
+which allows to perform computations both on the CPU
+and the GPU.
+We then benchmarked our results against the semi-
+analytic results valid in the case of Gaussian initial
+conditions and in presence of local non-Gaussianities,
+parametrized byF NL. The method proves to converge
+very quickly, beingN= 64 already capable of yield an
+error consistently below 10% with justN α = 50 modes
+used for the reconstruction of the kernel. We remark
+that increasing such number wouldn’t lead to further im-
+provements, a behavior consistent with the fall-off of the
+eigenvalues amplitudes as shown in Fig. 2.
+We remark that these computations can be performed
+with modest computational resources. We performed the
+bulk of the development and the computations on a Sci-
+enceCloud virtual machine at the University of Zurich,
+equipped with a NVIDIA Tesla T4 GPU with 16 GB of
+RAM. The resulting wall-clock time is particularly short:
+1−2 seconds for 20 frequencies in theN= 64 case,∼10
+seconds forN= 128. We therefore reckon this method to
+be a very useful tool to compute the power spectrum of
+SIGW in a fully non-perturbative fashion, including non-
+Gaussianities at all orders and overcoming the need of a
+direct numerical integration of the full wave equation.
+It is necessary to point out that this work benefited
+from significant simplifications arising from the adoption
+ofw= 1/3, such as the availability of simple analytical
+forms for the solution of the homogeneous wave equa-
+tion, the transfer functions of the scalar potential, and
+ultimately the Fourier-space kernels. It is known that
+both in the PTA and LISA probe frequencies that en-
+tered the Horizon during a phase transition, respectively
+QCD and Electroweak; in both regimes the equation of
+state deviates from the simple case ofw= 1/3, decreas-
+ing because of the change in number of effective degrees
+of freedom. For this reason, our results are intrinsically
+of limited immediate application to realistic modeling of
+observables pertaining to both bands. However, an ex-
+tension of the method presented in this work to more
+realistic scenarios is in principle straightforward, apart
+from the complication of having to deal with numerical
+computations in order to obtain the quantities that were
+so far available in an analytic form.
+Another limitation of this work is the empirical choice
+of the meta-parameters defining the grid used to perform
+the kernel decomposition, namelyu pivot,A,N α etc. It
+would be interesting to find the optimal way to choose
+them in order to minimize the reconstruction error while
+keeping an economical number of modes, so to further
+decrease the computational weight. Such improvements
+are left to future works.
+ACKNOWLEDGMENTS
+I warmly thank Gabriele Perna and Sabino Matarrese
+for discussions and early feedback. Moreover, I’m grate-
+ful to Gabriele Perna also for providing numerical values
+of the gravitational wave spectrum in the case of local
+non-Gaussianities. Computations were in part performed
+on a ScienceCloud virtual machine at the University of
+Zurich, equipped with an NVIDIA Tesla T4 GPU with 16
+GB of RAM. The python codeFLAN-SIGW, together with
+notebooks with which the results and the plots presented
+in this paper can be reproduced, is made publicly avail-
+able under MIT license on Github. It is primarily built
+using the libraryPyTorch[52]. The plots have been gen-
+erated usingmatplotlib[55] together withsmplotlib
+[56].
+[1] A. H. Guth, Phys. Rev. D23, 347 (1981).
+[2] A. A. Starobinsky, Phys. Lett. B91, 99 (1980).
+[3] V. F. Mukhanov and G. V. Chibisov, JETP Lett.33, 532
+(1981).
+[4] E. Calabreseet al.(Atacama Cosmology Telescope),
+JCAP11, 063 (2025), arXiv:2503.14454 [astro-ph.CO].
+[5] K. Tomita, Prog. Theor. Phys.37, 831 (1967).
+[6] S. Matarrese, O. Pantano, and D. Saez, Phys. Rev. D
+
+13
+47, 1311 (1993).
+[7] S. Matarrese, O. Pantano, and D. Saez, Phys. Rev. Lett.
+72, 320 (1994), arXiv:astro-ph/9310036.
+[8] S. Matarrese, S. Mollerach, and M. Bruni, Phys. Rev. D
+58, 043504 (1998), arXiv:astro-ph/9707278.
+[9] K. N. Ananda, C. Clarkson, and D. Wands, Phys. Rev.
+D75, 123518 (2007), arXiv:gr-qc/0612013.
+[10] D. Baumann, K. Ichiki, P. J. Steinhardt, and K. Taka-
+hashi, Phys. Rev. D76, 084019 (2007), arXiv:hep-
+th/0703290.
+[11] G. Domenech, Universe7, 398 (2021), arXiv:2109.02581.
+[12] M. Tristramet al., Astron. Astrophys.647, A128 (2021),
+arXiv:2010.01139 [astro-ph.CO].
+[13] J. Chluba, A. L. Erickcek, and I. Ben-Dayan, Astrophys.
+J.758, 76 (2012), arXiv:1203.2681 [astro-ph.CO].
+[14] T. Nakama, J. Chluba, and M. Kamionkowski, Phys.
+Rev. D95, 121302 (2017), arXiv:1703.10559 [astro-
+ph.CO].
+[15] J. Chluba, in49th Rencontres de Moriond on Cosmology
+(2014) pp. 327–334, arXiv:1405.6938 [astro-ph.CO].
+[16] D. Jeong, J. Pradler, J. Chluba, and M. Kamionkowski,
+Phys. Rev. Lett.113, 061301 (2014), arXiv:1403.3697
+[astro-ph.CO].
+[17] A. Naruko, A. Ota, and M. Yamaguchi, JCAP05, 049
+(2015), arXiv:1503.03722 [astro-ph.CO].
+[18] K. Inomata, M. Kawasaki, and Y. Tada, Phys. Rev. D
+94, 043527 (2016), arXiv:1605.04646 [astro-ph.CO].
+[19] T. Nakama, T. Suyama, and J. Yokoyama, Phys. Rev.
+Lett.113, 061302 (2014).
+[20] G. Piccoli, S. Vagnozzi, and J. Silk, (2026),
+arXiv:2605.11956 [hep-ph].
+[21] A. Ota and M. Yamaguchi, JCAP06, 022 (2018),
+arXiv:1705.05196 [astro-ph.CO].
+[22] A. S. Josan, A. M. Green, and K. A. Malik, Phys. Rev.
+D79, 103520 (2009), arXiv:0903.3184 [astro-ph.CO].
+[23] T. Bringmann, P. Scott, and Y. Akrami, Phys. Rev. D
+85, 125027 (2012), arXiv:1110.2484 [astro-ph.CO].
+[24] K. Dimopoulos, Phys. Lett. B775, 262 (2017),
+arXiv:1707.05644 [hep-ph].
+[25] A. Afzalet al.(NANOGrav), Astrophys. J. Lett.
+951, L11 (2023), [Erratum: Astrophys.J.Lett. 971,
+L27 (2024), Erratum: Astrophys.J. 971, L27 (2024)],
+arXiv:2306.16219 [astro-ph.HE].
+[26] J. Antoniadiset al.(EPTA, InPTA), Astron. Astrophys.
+685, A94 (2024), arXiv:2306.16227 [astro-ph.CO].
+[27] J. Ellis, M. Fairbairn, G. Franciolini, G. H¨ utsi, A. Iovino,
+M. Lewicki, M. Raidal, J. Urrutia, V. Vaskonen,
+and H. Veerm¨ ae, Phys. Rev. D109, 023522 (2024),
+arXiv:2308.08546 [astro-ph.CO].
+[28] S. Balaji, G. Dom` enech, and G. Franciolini, JCAP10,
+041 (2023), arXiv:2307.08552 [gr-qc].
+[29] C. Cecchini, G. Franciolini, and M. Pieroni, Phys. Rev.
+D111, 123536 (2025), arXiv:2503.10805 [astro-ph.CO].
+[30] P. Auclairet al.(LISA Cosmology Working Group),
+Living Rev. Rel.26, 5 (2023), arXiv:2204.05434 [astro-
+ph.CO].
+[31] J. E. Gammalet al.(LISA Cosmology Working Group),
+JCAP05, 062 (2025), arXiv:2501.11320 [astro-ph.CO].
+[32] G. C. Wick, Phys. Rev.80, 268 (1950).
+[33] R.-g. Cai, S. Pi, and M. Sasaki, Phys. Rev. Lett.122,
+201101 (2019), arXiv:1810.11000 [astro-ph.CO].
+[34] G. Perna, C. Testini, A. Ricciardone, and S. Matarrese,
+JCAP05, 086 (2024), arXiv:2403.06962 [astro-ph.CO].
+[35] A. J. Iovino, S. Matarrese, G. Perna, A. Ricciardone,
+and A. Riotto, Phys. Lett. B872, 140039 (2026),
+arXiv:2412.06764 [astro-ph.CO].
+[36] X.-X. Zeng, Z. Ning, R.-G. Cai, and S.-J. Wang, (2025),
+arXiv:2508.10812 [astro-ph.CO].
+[37] A. Caravano, G. Franciolini, and S. Renaux-Petel,
+(2026), arXiv:2604.03628 [astro-ph.CO].
+[38] J. H. P. Jackson, H. Assadullahi, A. D. Gow, K. Koyama,
+V. Vennin, and D. Wands, JCAP05, 053 (2024),
+arXiv:2311.03281 [astro-ph.CO].
+[39] X.-X. Zeng, JCAP03, 065 (2026), arXiv:2510.02106
+[astro-ph.CO].
+[40] A. A. Kugarajh, Class. Quant. Grav.42, 127001 (2025),
+arXiv:2503.00083 [gr-qc].
+[41] S. Dodelson and F. Schmidt,Modern Cosmology(Aca-
+demic Press, 2020).
+[42] V. F. Mukhanov,Physical Foundations of Cosmology
+(Cambridge University Press, Oxford, 2005).
+[43] E. A. Coddington and N. Levinson,Theory of Ordi-
+nary Differential Equations(McGraw-Hill Book Com-
+pany, New York, 1955).
+[44] G. Franciolini, D. Racco, and F. Rompineve, Phys. Rev.
+Lett.132, 081001 (2024), [Erratum: Phys.Rev.Lett. 133,
+189901 (2024)], arXiv:2306.17136 [astro-ph.CO].
+[45] A. Escriv` a, R. Inui, Y. Tada, and C.-M. Yoo, Phys. Rev.
+D111, 023528 (2025), arXiv:2404.12591 [astro-ph.CO].
+[46] T. Kite, J. Chluba, A. Ravenni, and S. P. Patil,
+Mon. Not. Roy. Astron. Soc.509, 1366 (2021),
+arXiv:2107.13351 [astro-ph.CO].
+[47] L. T. Witkowski, (2022), arXiv:2209.05296 [astro-
+ph.CO].
+[48] K. Kohri and T. Terada, Phys. Rev. D97, 123532 (2018),
+arXiv:1804.08577.
+[49] J. W. Cooley, “Fast fourier transform (fft),” inEncyclo-
+pedia of Computer Science(John Wiley and Sons Ltd.,
+GBR, 2003) p. 695–698.
+[50] B. Efron,The Jackknife, the Bootstrap and Other Resam-
+pling Plans(Society for Industrial and Applied Mathe-
+matics, Philadelphia, PA, 1982).
+[51] J. W. Gibbs, Nature59, 200 (1898).
+[52] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury,
+G. Chanan, T. Killeen, Z. Lin, N. Gimelshein, L. Antiga,
+A. Desmaison, A. K¨ opf, E. Yang, Z. DeVito, M. Rai-
+son, A. Tejani, S. Chilamkurthy, B. Steiner, L. Fang,
+J. Bai, and S. Chintala, “Pytorch: An imperative
+style, high-performance deep learning library,” (2019),
+arXiv:1912.01703 [cs.LG].
+[53] V. Briaud, R. Kawaguchi, and V. Vennin, JCAP12, 024
+(2025), arXiv:2509.05124 [astro-ph.CO].
+[54] S. M. Ahmadi and N. Ahmadi, (2026), arXiv:2602.00902
+[gr-qc].
+[55] J. D. Hunter, Computing in Science & Engineering9, 90
+(2007).
+[56] Jiaxuan Li, “Astrojacobli/smplotlib: v0.0.9,” (2023).

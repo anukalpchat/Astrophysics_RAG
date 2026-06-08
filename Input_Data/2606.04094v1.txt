@@ -1,0 +1,2087 @@
+Title: Multifrequency Synthesis via CHIBI: Colorful Hierarchical Interferometric Bayesian Imaging
+Authors: Erandi Chavez, Paul Tiede, Sara Issaoun, Michael D. Johnson, Dominic Pesce, Yuh Tsunetoe, Daniel C. M. Palumbo
+Published: 2026-06-02
+Categories: astro-ph.IM, astro-ph.HE
+
+Draft version June 4, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX631
+Multifrequency Synthesis via CHIBI: Colorful Hierarchical Interferometric Bayesian Imaging
+Erandi Chavez, 1 Paul Tiede, 2, 1 Sara Issaoun, 1, 2 Michael D. Johnson, 1, 2 Dominic Pesce, 1, 2 Yuh Tsunetoe, 3, 4 and
+Daniel C. M. Palumbo 2, 1
+1Center for Astrophysics|Harvard & Smithsonian, 60 Garden St, Cambridge, MA 02138, USA
+2Black Hole Initiative, Harvard University, 20 Garden St, Cambridge, MA 02138, USA
+3Shanghai Astronomical Observatory, Chinese Academy of Sciences, Shanghai 200030, P. R. China
+4Center for Computational Sciences, University of Tsukuba, 1-1-1 Tennodai, Tsukuba, Ibaraki 305-8577, Japan
+ABSTRACT
+From magnetized plasma of relativistic jets to dust grains within protoplanetary disks, we study
+the emission mechanisms of radio sources via their rich spectral structure. Multifrequency Synthesis
+(MFS) is a technique in which interferometric data at multiple frequencies are imaged simultaneously,
+resulting in a denser sampling of spatial scales, higher imaging fidelity, and tighter constraints on the
+source’s spectral structure and evolution. We describe a new method of MFS imaging reconstruction
+in a hierarchical interferometric Bayesian inference framework, CHIBI. The model parametrization is
+based on the spectral behavior of synchrotron radiation, the emission mechanism dominating the radio
+emission observed from galactic nuclei. We show results of this method on observations of jet sources
+from the MOJAVE catalog with the Very Long Baseline Array, and showcase the prospects for MFS
+imaging of M87* with simulated data from the Event Horizon Telescope (EHT) and future expansions
+such as the next generation EHT and the Black Hole Explorer. These demonstrations highlight the
+benefit of MFS to reconstruct higher-fidelity images and spectral index maps, producing scientifically
+richer results in a statistically grounded framework, implemented inComrade.jl.
+Keywords:Supermassive black holes – Astronomical techniques – Astronomy image processing – Rel-
+ativistic jets – Very long baseline interferometry – Radio interferometry
+1.INTRODUCTION
+Following the serendipitous discovery of astronomi-
+cal radio emission by Jansky (1933), analysis by Whip-
+ple & Greenstein (1937) demonstrated that single fre-
+quency measurements were insufficient to constrain the
+physical origin of the observed emission—observations
+of the source’s spectral evolution were needed. This ar-
+gument is fundamental: astronomical sources are inher-
+ently chromatic, and understanding their spectral struc-
+ture is key to constraining the underlying physical mech-
+anisms powering the observed emission.
+Recent theoretical studies of supermassive black hole
+accretion flows, especially those with very low accretion
+rates, suggest an important role for spectral information
+in measurement of both plasma and spacetime prop-
+erties. For example, the strongly lensed light in the
+“photon ring” feature of optically thin accretion flow im-
+ages is notable for its higher synchrotron optical depth,
+causing a prominent feature in spectral index maps (Ri-
+carte et al. 2023) and an outsized contribution to image-
+integrated features at high frequencies (Palumbo et al.
+2024, 2025). Multifrequency observations are also crit-
+ical to teasing apart jet-launching structures in the in-
+ner accretion flow, where spectral hints at the under-
+lying electron heating mechanisms are most important
+(Tsunetoe et al. 2025).
+Following the decades of technological development
+since Jansky’s original discovery, multifrequency observ-
+ing has become a fundamental design choice for modern
+and next-generation instruments, thus shifting the ob-
+servational landscape to a multi-color view spanning or-
+ders of magnitude in frequency (see Figure 1). In pursuit
+of finer angular resolution at radio wavelengths, many
+of these facilities are interferometers: radio telescopes
+that combine simultaneous observations across arrays of
+radio dishes.
+Imaging radio data from very long baseline interfer-
+ometry (VLBI) is a classic, ill-posed problem. Radio
+interferometers measure visibilities (Vp,q), which are the
+complex cross-correlation of the electric fields (E) re-
+ceived at a baseline—formed by two different telescopes
+arXiv:2606.04094v1  [astro-ph.IM]  2 Jun 2026
+
+2
+Frequency (Hz)
+108 109 1010 1011 1012
+Facility
+wSMA
+SMA
+BHEX
+ngEHT
+EHT
+NOEMA
+ALMA
+KVN
+GMVA
+EAVN
+DSA
+VLBA
+SKA
+MeerKAT
+EVN
+ngVLA
+VLA
+Figure 1.Multifrequency capabilities of various current
+(unbolded text) and next-generation (bold text) radio and
+submillimeter observatories (NRAO 2025a, 2021; EHTC
+et al. 2019; Doeleman et al. 2023; Johnson et al. 2024; NRAO
+2025b; ESO 2025; de Villiers 2023; SKA 2025; Hallinan et al.
+2019; Krips 2025; Grimes et al. 2024). Multifrequency imag-
+ing is a powerful tool to fully utilize the wide frequency cov-
+erage of these facilities.
+{p, q}in the array—as a function of time (t) 1, frequency
+(ν), and polarization (P) (Thompson et al. 2017):
+Vp,q(t, ν, P) =⟨E p(t, ν, P)E ∗
+q (t, ν, P)⟩.(1)
+The true, uncorrupted interferometric visibility re-
+sponse,V(u, v), is related to the on-sky image via a
+Fourier Transform:
+V(u, v;t, ν, P) =
+ZZ
+I(x, y;t, ν, P)e −2πi(bxx+byy)ν/c dxdy
+=
+ZZ
+I(x, y;t, ν, P)e −2πi(ux+vy) dxdy.
+(2)
+Here,{b x, by}is the physical baseline vector for baseline
+{p, q}, projected orthogonal to the line of sight.
+For a given baseline, the relationship between the
+ideal, uncorrupted visibility (V p,q) and the actual mea-
+sured visibility (V p,q) is:
+Vp,q ≈g p g∗
+q Vp,q +ϵ pq.(3)
+Here,{g p, gq}are complex-valued gain factors at sta-
+tionspandq, respectively, which account for imperfec-
+1 Note that the times forE p andE q are shifted to give equal
+geometric delay to the source.
+tion in the telescope responses and atmospheric corrup-
+tion of the data.ϵ pq is the thermal noise.
+The goal of VLBI image reconstruction is to invert this
+Fourier relation to recoverI(x, y;t, ν, P) from limited
+measurements ofV p,q. The sampling of the on-sky im-
+age in the visibility domain, or (u, v) coverage, can be in-
+creased in multiple ways: making use of Earth-rotation
+synthesis, adding new stations to the interferometer, or
+increasing the range of observing frequencies via wider
+bandwidths and simultaneous receiver systems.
+We are interested in a multifrequency imaging frame-
+work that uses observations at a number of frequencies
+to reconstruct an image of a source along with its spec-
+tral characteristics. Our goal is to simultaneously re-
+construct multiple frequencies, enforcing physical rela-
+tionships between them, rather than separately recon-
+structing images and then comparing them to measure
+the spectral characteristics. The latter approach is stan-
+dard and faces a number of challenges, including issues
+with inhomogeneous baseline coverage and different an-
+gular resolution at different frequencies.
+In the simplest scenario, multifrequency parametriza-
+tion can be done in terms of an image 2 I0 at some refer-
+ence frequencyν 0 along with a spectral index imageα.
+The image at any other frequency is given by:
+I(x, y;ν) =I 0(x, y;ν 0)
+ ν
+ν0
+α(x,y)
+.(4)
+This simple parameterization is physically moti-
+vated: blackbody radiation in the Rayleigh-Jeans limit
+obeys a power law, and synchrotron radiation and
+bremsstrahlung both obey power laws in the optically
+thin and thick limits. With this prescription, the imag-
+ing problem becomes simultaneously reconstructingtwo
+images,I 0(x, y;ν 0) andα(x, y), subject to multifre-
+quency data constraints.
+CLEAN (H¨ ogbom 1974) is the standard imaging
+method for interferometric data. Traditional CLEAN is
+a deconvolutional method, in which the interferometer’s
+point spread function is deconvolved from the image by
+iteratively modeling the on-sky image as a collection of
+point sources. The final step is blurring the resulting
+image with a Gaussian kernel the size of the interfer-
+ometer’s resolution. There exist a number of CLEAN-
+based algorithms developed to simultaneously fit data
+at multiple observing frequencies and produce images
+and spectral index maps (Sault & Wieringa 1994; Rau
+& Cornwell 2011; Offringa & Smirnov 2017).
+2 From here onward, we proceed with all image reconstructions as
+static, total intensity images.
+
+3
+In contrast to CLEAN, an alternative approach to
+VLBI imaging is to forward model the visibility response
+given a pre-defined image model—typically a raster-
+ized image (Frieden 1972; Narayan & Nityananda 1986;
+Wiaux et al. 2009a,b). Regularized maximum likelihood
+(RML) is one such method, which forward-models the
+observed data from an underlying image model by max-
+imizing an objective function weighted by data and im-
+age prior constraints (e.g., Akiyama et al. 2016; Chael
+et al. 2018; Event Horizon Telescope Collaboration et al.
+2019). Recently, Chael et al. (2023) developed a multi-
+frequency extension of the RML imaging approach, si-
+multaneously fitting a reference frequency image, spec-
+tral index map, and potentially a spectral curvature
+map. The lack of a blurring step during imaging re-
+sults in a “super resolution” effect, in which structure
+on scales smaller than the instrument resolution is re-
+covered. Such an imaging approach however relies on
+finding a single maximum of the RML function. A quan-
+titative assessment of image fidelity with this method re-
+quires extensive and computationally expensive parame-
+ter surveys (e.g., Event Horizon Telescope Collaboration
+et al. 2019, 2022).
+Other algorithms have been developed to perform full
+Bayesian modeling of the image pixels, and therefore
+estimate full posterior probability distributions in the
+image fitting (Sutter et al. 2014; Junklewitz et al. 2016;
+Broderick et al. 2020; Tiede et al. 2025). Applications
+of Bayesian modeling with multifrequency fitting have
+already been published, such as the imaging of spectral
+components of theFermiLAT gamma-ray sky (Scheel-
+Platz et al. 2023), imaging of modest spectral variations
+in the M87* ring structure from Event Horizon Tele-
+scope (EHT) 2017 observations (Arras et al. 2022), and
+imaging of simulated observations expected from EHT
+instrument and telescope upgrades in the next decade
+(Roelofs et al. 2023). These Bayesian inference tech-
+niques also benefit from super-resolution and sample the
+full image posterior. The sampled posterior provides
+quantified uncertainties on the resulting image features,
+which is critical to evaluate imaging fidelity of recon-
+structions produced from sparse VLBI data.
+In this paper, we extend a hierarchical interferometric
+Bayesian imaging approach (HIBI; Tiede et al. 2025) to
+multifrequency synthesis, where the image prior is based
+on Markov random fields. By utilizing Markov random
+fields, our approach to Bayesian imaging is simpler than
+previous methods, e.g., Arras et al. (2022); Roelofs et al.
+(2023). Due to their simple hierarchical structure, HIBI
+and its multifrequency extension use Monte Carlo meth-
+ods for inference rather than Gaussian approximations,
+which can be inaccurate for sparse arrays such as the
+EHT or VLBA. Our associated code is implemented
+in theComrade.jlsoftware repository for HIBI (Tiede
+2022).
+2.METHOD DESCRIPTION
+2.1.Multifrequency Model
+Multifrequency synthesis requires a spectral distri-
+bution model that relates the image structure across
+different frequencies. We chose a model parametriza-
+tion grounded in the emission mechanism powering our
+sources of interest: synchrotron radiation.
+In the radio, synchrotron emitters commonly appear
+as power laws, where the slope of this power law in
+log(I)−log(ν) space is the spectral index. Explicitly
+modeling the spectral index is critical as it encodes the
+underlying electron distribution function of the emitting
+plasma. Modeling higher-order structure is also of in-
+terest because changes in the spectral slope can indicate
+either optical depth effects, or multiple electron popula-
+tions in the source (e.g., multiple emitting regions). This
+emission mechanism connects to past research (Conway
+et al. 1990; Junklewitz et al. 2015; Chael 2023) and moti-
+vates our choice of spectral model: a polynomial expan-
+sion in logI−logνspace about a reference imageI 0 at a
+frequencyν 0. We adopt the spectral model prescription
+from Chael et al. (2023):
+logI(x, y;ν) = logI 0(x, y;ν 0)
++
+NX
+n=1
+αn(x, y) logn
+ ν
+ν0
+
+.
+(5)
+We have implemented this model such that the expan-
+sion can be performed to an arbitrary order. The first
+and second-order coefficients,α≡α 1 andβ≡α 2, cor-
+respond to the spectral index 3 and spectral curvature,
+respectively (e.g. Kellermann 1964; Baars et al. 1977).
+Since different regions of the image can have different
+emitting populations, we make the coefficients of the ex-
+pansions, e.g., the spectral index and curvature, a func-
+tion of the image coordinates.
+For computational purposes, we rasterize our reference
+imageI 0 and the spectral coefficients (α,β, ...) on a grid
+of pixels (each of which has a tunable flux) of fixed size
+and dimensionN x×Ny with field of view (FOVx,FOV y).
+For the reference image, we use the decomposition
+I0(xi, yj) =F tot
+m(xi, yj)eδi,j
+P
+i,j m(xi, yj)eδi,j
+,(6)
+3 We define the sign of spectral index asα≡+ d logI(ν)
+d logν
+
+4
+Figure 2.Schematic outlining the full hierarchical forward model as implemented in CHIBI when fitting complex visibilities
+as the data product. Parameters in blue stars represent those fixed by the user in advance. The grid parameters (FOV x, FOVy,
+Nx, Ny), not shown here, are also fixed by the user.
+wheremencodes the a priori information (see Sec-
+tion 2.2 for our choice of image prior) about the image
+ande δi,j are the multiplicative fluctuations about the
+structurem.F tot parameterizes the total flux of the
+reference image, which can either be fixed a priori (e.g.
+in the case of existing total flux measurements) or fit
+as an additional model parameter. All image tests here
+have image models with fixed total flux. We parameter-
+izem(x, y) as a constant floor with an added Gaussian
+component of FWHMθ g:
+m(x, y) = (1−f)m g(x, y;θ g) + f
+NxNy
+,(7)
+wherefmodels the fraction of emission placed in a con-
+stant background flux, andm g is given by
+mg(x, y;θ g) = 4 log(2)
+πθ2g
+e−4 log(2)(x2+y2)/θ2
+g .(8)
+Our choice for the value ofθ g depends on whether or
+not we fit for instrumental gains. If we solely solve for
+the image structure (no instrument modeling), we use
+θg = max{FOV x,FOV y}/2. This places a slight pref-
+erence for concentrating flux towards the center of the
+image grid, but ultimately is not very informative re-
+garding specific source structure. When we do perform
+instrument modeling and fit for instrumental gains, the
+image structure can drift during the posterior sampling
+process (see Section 4.1 for more details on the under-
+lying degeneracy). In this case, we choose a smaller
+θg—typicallyθ g = max{FOVx,FOV y}/10 or smaller—
+to concentrate the flux in one location of the image.
+Although not completely eliminated, a more restrictive
+mean image structure greatly reduces drifting effects
+during the sampling process.
+We model the corresponding spectral maps,α n(x, y),
+as raster images with identical dimensions as the corre-
+sponding reference image. For the spectral maps we do
+not use the same parametrization as the reference im-
+age (Equation 6), instead our model parameters are the
+pixel values of the raster image:
+αn(xi, yj).(9)
+We also show an alternative parameterization in which
+we explicitly parameterize an offset in the spectral map
+(see Figure 13 for motivation and results):
+αn(xi, yj) =α n,0 +σ n,αα′
+n(xi, yj),(10)
+whereα ′
+n(xi, yj) are the gridded pixel values.
+We are capable of modeling the station-dependent
+gain factors in Equation 3 alongside the image structure.
+For stationp, we model the gain factor at frequencyν
+as
+gp(t;ν) =e lnA p(t;ν)+iϕp(t;ν),(11)
+where lnA p is the natural log of the gain amplitude,
+andϕ p is the gain phase. Fitting the natural log of
+the gain amplitude ensures the gaim amplitude itself
+always remains positive. We do not introduce any
+frequency-correlation between the gains, we assume that
+the gain behavior across frequencies is independent. We
+demonstrate tests with and without instrument model-
+ing within this paper.
+
+5
+2.2.Model Priors
+For the image fluctuationsδi,j and spectral map raster
+αn(xi, yj) we use a zero-mean Gaussian Markov random
+field (GMRF) prior
+p(r|Q) =
+r
+detQ
+2πK exp
+
+−1
+2 rT Q r
+
+, (12)
+whereris the random field realization andQis a sparse
+precision matrix (the inverse covariance matrix). We
+will denote samples from this distribution as
+δ∼GMRF(0,Q),(13)
+For our precision matrix, we follow Tiede et al. (2025)
+and use a first-order random field
+Q1 = 1
+σ2
+ 1
+ρ2 1+G
+
+,(14)
+where1denotes the identity matrix andGdenotes
+Gij,kl =
+
+
+
+4ij=kl
+−1ij∼kl
+0 otherwise
+,(15)
+whereij∼klmeans that on the image pixel gridijis
+adjacent tokl. Besag (1981) demonstrated that this is
+equivalent in the large raster limit to assuming that the
+stochastic field has the spectral density
+S(k)d 2k∝ d2k
+1 +ρ 2∥k∥2 ,(16)
+wherekis the spatial frequency.
+For large spatial scales (∥k∥ ≪1/ρ), the power spec-
+trum is constant and behaves like a white noise process.
+However, the power spectrum contains a break at∥k∥ ∼
+1/ρ. For spatial scales smaller thanρ, (∥k∥ ≫1/ρ), the
+power spectrum transitions into a power law:
+S(k)d 2k∝ ∥k∥ −2d2k,(17)
+which suppresses spatial structures belowρ. This sup-
+pression motivates the interpretation ofρas the GMRF
+correlation length, which we model as a hyperparameter.
+We use an inverse gamma distribution (IG) as the
+prior for the correlation length:
+ρ∼ IG[1,−log(0.01)λ beam],(18)
+whereλ beam = 1/max(∥u∥) is roughly the beam size of
+the telescope. This assigns only 1% of the prior mass
+onρto a correlation length below the telescope’s beam
+size. Super-resolved structure in our images is not pre-
+ferred by the prior, therefore must be driven by the
+likelihood—the data. For a deeper discussion of the
+GMRF prior and alternative image priors for Bayesian
+hierarchical imaging, see Tiede et al. (2025).
+The global standard deviationσfor the GMRF is also
+fit for as a hyperparameter. We use a half Normal dis-
+tribution (HN(0,0.2)) with mean 0, standard deviation
+0.2, and a lower bound of 0 for the prior on thisσpa-
+rameter.
+This GMRF prior is used for the image fluctuations
+applied to the reference imageδ i,j, and the spectral map
+raster grids,α n(xi, yj):
+δ∼GMRF(0,Q 1),
+αn ∼GMRF[0,Q 1(σ= 1)]. (19)
+For the total intensity and each spectral map, we fit
+a unique value ofρfor each map—no assumptions
+are made to correlate the valueρbetweenδ(x, y) and
+αn(x, y). However, for the spectral maps’ priors we no
+longer fit for the global standard deviationσand in-
+stead assume a value ofσ= 1. For the tests in this
+paper where only fit up to first order spectral struc-
+ture (α(x, y)), this places a preference of order∼1 val-
+ues for spectral index. This assumption is motivated
+by observational evidence of non-thermal radio sources
+(e.g. Kellermann 1964) and theoretical predictions of rel-
+ativistic AGN jets (Blandford & K¨ onigl 1979), accreting
+black hole systems (Ricarte et al. 2023), and shocks (Bell
+1978; Blandford & Ostriker 1978) in the radio.
+For all tests shown here, the prior for stationp’s log-
+gain amplitude (lnA p) is a Gaussian with mean 0 and
+standard deviation 0.2:
+lnAp(t;ν)∼ N(0,0.2).(20)
+We parameterize the station phase priors as a von Mises
+(VM) distribution with a mean of 0 and a concentration
+parameterκ= 1/π 2 ∼0.1:
+ϕp(t;ν)∼ VM(0,1/π 2).(21)
+This functions as a nearly-uniform, wrapped prior on
+the phases with a very slight preference forϕ p around
+0. We make no assumptions about the relations be-
+tween gain parameters (amplitude or phase) between
+different stations, or between different frequencies. This
+could be improved for arrays which observe multiple fre-
+quencies simultaneously, which are likely to have corre-
+lated, frequency-dependent gain behavior due to corre-
+lated atmospheric corruption across frequencies (which
+can be leveraged with instrumental techniques such as
+Frequency Phase Transfer, e.g. Rioja & Dodson 2020),
+
+6
+and similar instrument pathways. The full hierarchical
+forward model implemented in CHIBI is shown in Fig-
+ure 2.
+2.3.Initialization and Data Products
+All image tests shown here are initialized via a ran-
+dom draw from the priors. After initialization, we use
+a stochastic gradient descent algorithm (Adam; Kingma
+& Ba 2017) to traverse the parameter space to where
+the bulk of the posterior is located. This is necessary
+because random draws from the prior typically do not
+lie in high probability regions of parameter space. Af-
+ter reaching a region in the posterior whereχ 2 ∼1, we
+stop the optimization algorithm and switch to HMC—
+specifically the NUTS algorithm (Hoffman & Gelman
+2011)—which samples the posterior. Each sample from
+the posterior corresponds to a single image solution—
+sampling the posterior results in many possible image
+solutions to our data. Therefore, unless otherwise noted,
+all of our imaging results here are mean images from the
+posterior, where this mean is calculated by a pixel-by-
+pixel averaging of our samples in image-space.
+In the case of a multi-modal posterior (multiple, dis-
+tinct image structures consistent with the data e.g. two
+flipped versions of the same image structure, see Sec-
+tion 4.1 and Section 4.2 for more discussion) NUTS may
+fail to find these multiple modes during a single sam-
+pling run. Multiple, distinct initializations are typically
+necessary to identify these different modes.
+For all image tests in this paper, we fit complex visi-
+bilities as our data products. Other than for a limited
+number of validation runs, we fit for station gains (e.g.,
+instrumental and atmospheric corruptions) during all of
+the synthetic- and real-data imaging tests presented in
+this paper. Note that when we fit for instrumental gains,
+we use the more restrictive value ofθ g, the mean image
+structure, described in Section 2.1 and Section 4.1 (gaus-
+sian with a smaller FWHM) to minimize the impact of
+image drift.
+2.4.Method Validation
+To validate this multifrequency model, we constructed
+a synthetic data test comprised of a single Gaussian at
+two observing frequencies: 8.1 and 12.1 GHz. These are
+the two observing frequencies from the VLBA MOJAVE
+OJ287 dataset in this paper (see Section 3.1) which we
+used to generate the (u, v) sampling and noise parame-
+ters for this test. The image structure at each frequency
+is a circular gaussian of FWHM = 1.5 mas centered at
+the image origin. The total fluxes (F tot) of the Gaussian
+sources at each frequency are:
+8.1 GHz:F tot = 1.2 Jy,
+12.1 GHz:F tot = 1.6 Jy.
+We chose a Gaussian source as our image structure
+for ease of interpretation in the image and visibility
+domains. The spectral evolution of this source corre-
+sponds to a constant spectral spectral index ofα(x, y)≡
+log(1.6/1.2)/log(12.1/8.1)≃0.716.with no higher order
+spectral structureβ(x, y)≡0.
+For this dataset, we performed multifrequency and
+single frequency image tests for a direct comparison of
+the code performance with the established HIBI method.
+All these validation tests fit complex visibilities as the
+data products. For the multifrequency and single fre-
+quency fits, we performed two imaging tests: one where
+we solely model the image structure, and one where we
+model image structureandthe station-based gains. This
+is critical because real data typically contains residual
+calibration errors which can corrupt the image struc-
+ture. Joint image and instrument modeling allows for
+the model to correct for these residual errors and fold
+the corresponding calibration uncertainty into the sam-
+pled posterior. Therefore we validate the method’s per-
+formance with imaging alone and in the more appropri-
+ate regime for real data: image modeling in conjunction
+with instrument modeling.
+Here, we describe the imaging model we used for these
+various imaging tests. All four validation tests used the
+standard imaging model described in Section 2.1. All
+tests had an image field of view (FOV) of 10×10 mas and
+image dimensions of 64×64 pixels (∼3.8 pixels/beam).
+For the mean image structure parameterθ g, we use
+θg = 5 mas. For the multifrequency tests, we fit up
+to first order spectral structure{I 0(x, y),α(x, y)}with
+8.1 GHz as the reference frequency. For the tests where
+we performed joint image and instrument modeling, we
+use the instrument model described in Section 2.1 with
+the standard prior choices described in Section 2.2.
+The results from the validation test with and without
+joint instrument modeling are shown in Figure 3. We
+also show the results from the image-only tests in the
+visibility domain in Figure 4.
+Due to the loss of absolute position information in the
+imaging problem when performing instrument modeling
+(see Section 4 for more details), the image structure can
+drift during posterior sampling. To remove this drifting
+effect in single frequency imaging, we center each image
+of the posterior with respect to their centroids. In the
+case of multifrequency imaging, we center both the ref-
+erence image and the corresponding spectral index map
+with respect to thereference image’scentroid.
+
+7
+We also include “credibility contours” for each image
+test in this paper. These contours represent a credi-
+ble region within the image—structure within this con-
+tour is better constrained than the structure outside.
+Here, we will use
+
+I (s)	S
+s=1 to denote the collection of
+Ssamples ofIfrom the posterior. For total inten-
+sity images, the credibility contours are calculated by
+taking the pixel-wise standard deviation (std) of the
+logarithmically-scaledtotal intensity images:
+σlog10 I(x, y) = std
+n
+logI (s)(x, y)
+oS
+s=1
+
+.(22)
+Calculating the standard deviation in log-space is a nat-
+ural choice because the image fluctuationsδ i,j are also
+sampled in log-space (see Equation 6), and these fluc-
+tuations encode any image structure deviating from the
+mean image,m(x, y). For the spectral index maps, the
+credible contours are calculated from the pixel-wise stan-
+dard deviation of the spectral index posterior samples:
+σα(x, y) = std
+n
+α(s)(x, y)
+oS
+s=1
+
+.(23)
+For both our imaging scenarios (with or without mod-
+eling station-based gain factors), multifrequency imag-
+ing is able to recover the ground truth total intensity
+images and spectral index maps. In both scenarios,
+the multifrequency imaging results are superior to the
+single-frequency imaging. The improved (u, v) cover-
+age from combining multiple frequencies of data and
+the spectral index map prior improve the accuracy and
+precision of the multifrequency imaging results over the
+single frequency approach. The primary difference be-
+tween the imaging test without gains and with gains is
+that the imaging results appear to be smoothed in com-
+parison to the no-gains test. This is due to the image
+centering procedure described earlier; slight differences
+between posterior samples due to imperfect image cen-
+tering functions as a spatial-averaging over the image
+structure, which smoothens the image results.
+3.APPLICATIONS
+After validation, we applied CHIBI to four different
+imaging tests that represent different regimes of (u, v)
+coverage and VLBI observing modes. We perform a
+real data test on MOJAVE multifrequency observations
+of the blazars OJ287 (at 8.1 and 12.1 GHz) and PKS
+1424+240 (at 12, 23, and 43 GHz), then we perform a
+series of synthetic data tests of a GRMHD simulation
+of M87 with three different next-generation VLBI ar-
+rays. These three synthetic tests are with the current
+EHT, the next-generation EHT (ngEHT), and with a
+ground array combined with the Black Hole Explorer
+(BHEX) space telescope. Of these four tests, the real
+VLBA data and the current EHT tests represent a quasi-
+simultaneous multifrequency observing mode, while the
+ngEHT and BHEX data are generated with simultane-
+ous multifrequency observing capabilities (see Figure 5).
+The VLBA (u, v) coverage represents a dense over-
+lap between multiple frequencies. The EHT multifre-
+quency coverage is extremely sparse, and represents the
+scenario where imaging at one frequency is impossible
+with single frequency imaging (see Section 3.3). The
+ngEHT coverage represents dense, continuous multifre-
+quency coverage where one frequency’s coverage extends
+past the other frequency’s coverage significantly. BHEX
+represents the case of space VLBI, where the annuli of
+(u, v) coverage contributed by the ground-space base-
+lines cause very little to no overlap between the two
+frequencies’ sampling.
+3.1.MOJA VE: OJ287
+The BL Lacertae object OJ287 is known for its 12-year
+quasi-periodic optical outbursts (e.g., Sillanpaa et al.
+1988; Villata et al. 1998) and jet precession (Britzen
+et al. 2018), commonly interpreted as evidence for a su-
+permassive black hole binary (Lehto & Valtonen 1996;
+Valtaoja et al. 2000; Valtonen et al. 2008). This source
+has been regularly monitored with the VLBA for over
+two decades a part of the MOJAVE monitoring pro-
+gram (Lister et al. 2018). We chose OJ287 because
+its structure within the published MOJAVE results fits
+the classic core-jet theoretical radio emission prediction
+from Blandford & K¨ onigl (1979): an unresolved opti-
+cally thick core with positive spectral index, followed
+downstream by optically thin and diffuse jet emission
+with negative spectral index.
+The OJ287 observations shown were taken with the
+VLBA at 8.1 and 12.1 GHz on April 28, 2006 as part of
+the MOJAVE monitoring program (Lister et al. 2018).
+Note that 8.4 and 15 GHz data from this epoch are also
+available, but we did not analyze them here. CLEAN
+spectral index maps and total intensity images of these
+data sets were published in Hovatta et al. (2014) and
+Lister et al. (2018), respectively.
+Similar to our validation tests, we performed both sin-
+gle and multifrequency imaging tests to compare the
+performance of the multifrequency method. Our mul-
+tifrequency models and priors were the standard ones
+defined in Section 2.1 and Section 2.2. The image FOVs
+for the OJ287 tests were 20×20 mas with image dimen-
+sions of 256×256 pixels. For the multifrequency imaging,
+the reference frequency was chosen to be 8.1 GHz, and
+we fixed the total flux of the reference image to be 3.5
+Jy. For the single frequency imaging test, we fixed the
+
+8
+2 mas
+I (Jy/mas2)
+10−2 10− 1 100
+𝛼
+−2 −1 0 1 2
+𝜎I (Jy/mas2)
+0.3 0.4 0.5
+𝜎𝛼
+1 2 3 4
+log I8.1 GHz log I12.1 GHz Spectral Index
+Truth
+CHIBI M
+FS
+Single Freq.
+CH
+IBI MF
+S
+Single Freq.
+M
+ean Im
+ages
+Standard Deviation Im
+ages
+Re
+sid
+ual Im
+ages
+CH
+IBI MF
+S
+Single Freq.
+8.1 GHz 12.1 GHz Spectral Index
+2 mas
+I (Jy/mas2)
+10−2 10−1 100
+𝛼
+−2−1 0 1 2
+𝜎I (Jy/mas2)
+0.2 0.3 0.4
+𝜎𝛼
+1 2 3
+log I8.1 GHz log I12.1 GHz Spectral Index
+8.1 GHz D
+ynamic
+ Ran
+ge
+104
+103
+102
+101
+Trut
+h −
+ Me
+an
+−1.0
+−0.5
+0.0
+0.5
+1.0
+8.1 GHz 1 2.1 GHz Spectral Index
+No Gains Gains
+𝜎𝛼 = 0.6
+𝜎𝛼 = 2.5𝜎logI = 0.3
+𝜎𝛼 = 0.6
+𝜎𝛼 = 2.5𝜎logI = 0.3
+𝜎𝛼 = 0.6
+𝜎𝛼 = 2.5𝜎logI = 0.3
+𝜎𝛼 = 0.5
+𝜎𝛼 = 1.5𝜎logI = 0.2
+𝜎𝛼 = 0.5
+𝜎𝛼 = 1.5𝜎logI = 0.2
+𝜎𝛼 = 0.5
+𝜎𝛼 = 1.5𝜎logI = 0.2
+Ftot = 1.2 Jy
+Ftot = 1.2 Jy
+Ftot = 1.1 Jy
+Ftot = 1.6 Jy
+Ftot = 1.6 Jy
+Ftot = 1.59 Jy
+𝛼truth = 0.716 Ftot = 1.2 Jy
+Ftot = 1.1 Jy
+Ftot = 1.1 Jy
+Ftot = 1.6 Jy
+Ftot = 1.6 Jy
+Ftot = 1.59 Jy
+𝛼truth = 0.716
+Figure 3.A comparison between single frequency (HIBI) and multifrequency CHIBI imaging of a multifrequency Gaussian
+source. The (u, v) coverage for this test is the VLBA coverage for the MOJAVE OJ287 test (see Figure 5). The topmost row
+shows the ground truth images. Each subsequent grouping of rows shows the imaging results for each plotted quantity. The
+top grouping shows the posterior mean total intensity and spectral index images. The middle grouping shows the standard
+deviation of the log-scaled total intensityσ logI and the spectral indexσ α. The bottom grouping shows the residual images:
+Truth - Mean. From left to right, the columns represent the 8 GHz image, 12 GHz image, and spectral index results. The thin
+grayscale contours are identical across rows—they show the corresponding logarithmically spaced 8 GHz intensity contours. The
+bold lines on the total intensity (gold) and the spectral index (black) results are “credibility contours”: all regions within this
+contour have an uncertainty less than the indicated value. We overplot the 8.1 GHz beam and the reconstruction pixel size
+on the top left plot for comparison—note that no images shown here are blurred. As expected, the credibility contours are
+asymmetric because of asymmetric baseline coverage, with the major axis oriented roughly along the minor axis of the beam.
+
+9
+u (108𝜆)
+−4− 2 0 2 4
+v (108𝜆)
+−4
+−2
+0
+2
+4
+−1
+0
+1
+0.0
+0.1
+0.2
+0.3
+0.4
+Multifrequency S ingle Frequency
+Visibility Response Only Visibility Response + Data 
+Multifrequency Single  Frequency
+log10(|V12|/|V8|)
+Mean −  TruthStandard Dev.
+8.1 GHz
+12.1 GHz
+Figure 4.Results from the Gaussian synthetic data tests (without modeling station-based gains) in the visibility domain (see
+Figure 3 for the image-domain results). Here, we show the ratio between the visibility response at 12 GHz and 8 GHz in log-space:
+log10(|V12|/|V8|). This quantity traces the spectral evolution of this synthetic data test in visibility space—in the test shown this
+is purely driven by the spectral index because we do not fit for higher-order spectral structure. The top row shows the residuals
+between ground truth and the mean of log10(|V12|/|V8|) across the posterior. The left and right plot blocks are identical, the right
+plot block has the (u, v) coverage over-plotted to guide the eye. For each plot block, the left and right columns correspond to
+the multifrequency (CHIBI) and single frequency imaging results, respectively. CHIBI recovers the multifrequency structure at
+all scales more accurately. The regions of visibility space which show the most improvement in accuracy (e.g. smaller residuals)
+when moving to single frequency to MFS imaging are the regions which have multifrequency data coverage. The existence of
+an explicit spectral prior from the multifrequency fit results in a modest suppression of uncertainty in high-frequency structure
+beyond the VLBI sampling. However, between both methods the regions in visibility space with lowest residuals are whereboth
+frequenciesof data are present. MFS is transferring information between frequencies and produces more accurate results than
+single frequency imaging, however, it is not a substitute for overlapping (u, v) multifrequency coverage.
+
+10
+u (108 𝜆)
+−4−2 024
+v (108 𝜆)
+− 4
+− 2
+0
+2
+4
+u (109 𝜆)
+−10−5 0510
+v (109 𝜆)
+−10
+−5
+0
+5
+10
+u (109 𝜆)
+−10−5 05 10
+v (109 𝜆)
+− 10
+− 5
+0
+5
+10
+u (1010 𝜆)
+−3−1.5 01.5 3
+v (1010 𝜆)
+−3
+−1.5
+0
+1.5
+3
+VLBA ngEHT
+Current EHT BHEX
+Non-Simultaneous Simultaneous
+8.10 GHz
+12.11 GHz
+86.00 GHz
+230.00 GHz
+227.10 GHz
+337.60 GHz
+79.00 GHz
+230.50 GHz
+Figure 5.Multifrequency (u,v) plots for each of the
+four arrays featured in this paper. these represent four dif-
+ferent frequency-pair scenarios for multifrequency synthesis.
+The VLBA offers non-simultaneous multifrequency synthe-
+sis with very similar coverage. The ngEHT offers dense,
+multi-scale, and simultaneous frequency coverage. The cur-
+rent EHT multifrequency coverage is sparse, such that the
+coverage at the higher frequency is not imageable without
+multifrequency synthesis. BHEX offers simultaneous mul-
+tifrequency coverage, where the space-ground baselines are
+significantly longer than the ground array. All of these prop-
+erties lead to different challenges in multifrequency synthesis.
+total flux of the 8.1 and 12.1 GHz images to 3.5 and 5
+Jy, respectively. The imaging results are shown in Fig-
+ure 6 in comparison with the published CLEAN results
+(Hovatta et al. 2014; Lister et al. 2018).
+TheComrade.jlimaging results are consistent with
+the Blandford & K¨ onigl (1979) picture of a blazar jet: we
+recover a point-source core with positive spectral index,
+and an extended jet feature with negative spectral index.
+We gain a massive improvement in the quality of the re-
+covered spectral index map when utilizing MFS CHIBI
+imaging due to the spectral parameterization aligning
+the image structure across across frequencies. Another
+striking feature of the OJ287 (C)HIBI reconstructions
+is that they demonstrate significant super-resolution in
+comparison to the CLEAN images. Structure below the
+beam is allowed by the GMRF prior, but is heavily sup-
+pressed (see Section 2.1). Therefore, significant super-
+resolved structure with high certainty must be driven
+by the data. We also show these same imaging results
+blurred to the CLEAN beam in Figure 7 to demonstrate
+consistency with CLEAN.
+However, the stark improvement in resolution of Com-
+rade in comparison to CLEAN shown in Figure 6 is
+misleading because of the standard blurring procedure
+within CLEAN—the CLEAN components may be con-
+sistent with Comrade when blurred to scales below the
+beam resolution. The analysis in Appendix A shows
+consistency between the MFS and total intensity results
+to∼1/3 of the CLEAN beam.
+From Figure 7, the OJ287 multifrequency spectral in-
+dex map displays what appears to be a systemic offset
+from the single frequency spectral index maps. This is
+a fundamental degeneracy in the multifrequency imag-
+ing problem present in our current parameterization (see
+Section 4 for more details). This offset can be corrected
+through total flux measurements at both frequencies—
+we do not correct for it here.
+3.2.MOJA VE: PKS 1424+240
+The BL Lac source PKS 1424+240 is a redshiftz=
+0.605 (Paiano et al. 2017) blazar identified as a poten-
+tial neutrino source by IceCube (IceCube Collaboration
+et al. 2022). Through long-term monitoring with MO-
+JAVE, Kovalev et al. (2025) recently showed that the
+jet has an extremely small viewing angle (<1 ◦) within
+the jet cone, which reveals detailed jet structure.
+We imaged the MOJAVE observations of PKS
+1424+240 at 15, 23, and 43 GHz taken with the VLBA
+on June 26, 2021. Here, we probe a dataset with a
+much wider frequency range and different source geom-
+etry than that of our OJ287 test. Like our OJ287 anal-
+ysis, we performed a single frequency Comrade fit and
+MFS Comrade fit, and show our results in comparison
+with CLEAN results (Kovalev et al. 2025).
+Our image grid spanned 256×256 pixels with a FOV
+of 12×12 mas, which corresponds to 3.6 pixels/beam
+at 43 GHz—the highest resolution observation in this
+dataset. We used the same image grid dimensions for
+all the single and multifrequency image reconstructions.
+We found that fitting for a spectral index map was suf-
+ficient to obtain good fit quality, and therefore we did
+not perform a spectral index+spectral curvature fit. For
+the multifrequency fit, we chose the reference frequency
+to be 15 GHz, and we fixed the total flux at 15 GHz to
+0.3 Jy.
+The imaging results are shown in Figure 8. As shown
+in Figure 6, the alignment of structure across frequencies
+with CHIBI improves the spectral index map. The MFS
+CHIBI results agree with the relative spectral structure
+predicted by the Blandford & K¨ onigl (1979) model and
+seen in the prior CLEAN results (Hovatta et al. 2014;
+
+11
+2 mas
+Jy/mas2
+10− 2
+10− 1
+100
+101
+102
+𝛼
+−1.0
+−0.5
+0.0
+0.5
+1.0
+8.1 GHz Dynamic Range Contours
+104 103 102 101
+8.1 GHz ImageSpectral Index Map
+Comrade MFS Comrade (No MFS) C LEAN (No MFS)
+𝜎log10I = 0.42 𝜎log10I = 0.42
+𝜎𝛼 = 0.65 𝜎𝛼 = 0.65
+Figure 6.OJ287 reconstructions from VLBA MOJAVE data at 8.1 and 12.1 GHz. From left to right, we show the multifrequency
+imaging results (CHIBI), the single frequency imaging results (HIBI), and the published single frequency CLEAN imaging results
+of this data (Hovatta et al. 2014; Lister et al. 2018). The top row shows total intensity image at the reference frequency (8.1
+GHz) and the bottom row shows the corresponding spectral index map for each test. The thin, grayscale contours are identical
+for each column; they trace out total intensity emission of the reference image in log-scale. The bold lines on theComrade.jl
+images represent the “credibility contours” calculated from the posterior for this test: the gold lines traceσ logI = 0.42, and the
+black lines trace outσ α = 0.65. Note that only the CLEAN results are blurred here (with the 8.1 GHz CLEAN beam), the
+Comrade.jlresults are shown at their native resolution, which display a significant amount of super-resolution. We show insets
+to highlight the super-resolved structure near the core. We recover the standardα >0 core andα <0 jet structure predicted
+by (Blandford & K¨ onigl 1979). However the recovered structure is far more certain with MFS than single frequency imaging.
+Lister et al. 2018): the core has a higher spectral index
+relative to the downstream jet emission. We do not see a
+change in sign between the core and jet spectral indices,
+potentially due to the spectral index offset degeneracy
+present in MFS imaging (see Section 4.1 for detailed dis-
+cussion of this degeneracy). The considerably improved
+effective angular resolution of the Comrade.jl images re-
+veal a prominent elongated jet emanating from the core
+region. The MFS CHIBI results constrain this region of
+high spectral index to this elongated jet structure ema-
+nating from the core, and the low spectral index to the
+surrounding, diffuse jet emission.
+3.3.Current EHT
+The current EHT array we consider for this syn-
+thetic data test is comprised of the Atacama Large Mil-
+limeter Array (ALMA), the Atacama Pathfinder Eperi-
+ment (APEX), the Greenland Telescope (GLT), the In-
+stitut de Radioastronomie Millimetrique (IRAM), the
+James Clerk Maxwell Telescope (JCMT), the 12-meter
+Kitt Peak Telescope (KP), The Large Millimeter Tele-
+scope (LMT), the Northern Extended Millimeter Array
+(NOEMA), the Submillimeter Array (SMA), and the
+Submillimeter Telescope (SMT). We assume an 8 hour
+observation during April 1st, with a random weather
+
+12
+4 mas
+Jy/mas2
+10− 3
+10− 2
+10− 1
+100
+𝛼
+−1.0
+−0.5
+0.0
+0.5
+1.0
+8.1 GHz Dynamic Range Contours
+104 103 102 101
+8.1 GHz ImageSpectral Index Map
+Comrade MFS Comrade (No MFS) C LEAN (No MFS)
+𝜎log10I = 0.1 𝜎log10I = 0.1
+𝜎𝛼 = 0.1 𝜎𝛼 = 0.1
+Figure 7.Same as Figure 6, but now all reconstructions are blurred with the 8.1 GHz CLEAN beam. All spectral index
+maps are derived after convolving the multifrequency 8.1 and 12.1 GHz image samples with the 8.1 GHz CLEAN beam. We
+demonstrate consistency with the CLEAN total intensity results (see Figure 15).
+realization typical of April. These synthetic data were
+generated byngehtsim(Pesce et al. 2024).
+As test data, we employ theoretical images of M87*
+at 86, 230 and 345 GHz calculated using general rel-
+ativistic radiative transfer (GRRT) based on a MAD
+GRMHD model with a rapidly spinning black hole (the
+a∗ = 0.9 simulation from Narayan et al. 2022), which
+was introduced in Tsunetoe et al. (2025). In this model,
+anisotropic nonthermal synchrotron-electrons are in-
+jected into the jet, producing a limb-brightened struc-
+ture consistent with observations of the M87 jet (e.g.,
+Kim et al. 2018; Walker et al. 2018), in combination
+with a helical magnetic-field geometry of the underlying
+plasma flow. The jet PA was rotated to match the large-
+scale M87 jet and the total flux density of the images was
+scaled to match the observed value at 230 GHz (Event
+Horizon Telescope Collaboration et al. 2019). Ten sets
+of synthetic data were generated at each frequency with
+an observing track length of 8 hours: these correspond
+to ten different realizations of April weather.
+For this test, we did not perform any instrument mod-
+eling. We use the image model described in Section 2.1,
+with the only variation being a half-normal prior dis-
+tribution onσbeingHN(0,0.1) instead ofHN(0,0.2).
+This change placed a more restrictive prior on the im-
+age structure and improved sampling performance for
+this sparse dataset. We performed a multifrequency
+test with this dataset, and a single frequency test for
+comparison. Source detections at 345 GHz are more
+challenging than 230 GHz due to rapid fluctuations in
+the atmosphere (Pesce et al. 2024). This results in very
+sparse 345 GHz (u, v) coverage that cannot be imaged
+via single frequency imaging Figure 5. As a result, with
+traditional imaging methods it is impossible to recover
+a spectral index map for this data set. However, com-
+bining the data at both frequencies through MFS allows
+for the recovery of a 345 GHz and a spectral index map
+
+13
+2700 𝜇as
+Jy/𝜇as2
+10−3
+10−2
+10−1
+100
+101
+𝛼
+−1.0
+−0.5
+0.0
+0.5
+1.0
+15 GHz Dynamic Range Contours
+104 103 102 101
+15 GHz ImageSpectral Index Map
+15 - 23 - 43 GHz
+Comrade MFS Comrade (No MFS) CLEAN (No MFS)
+𝜎log10I = 0.3 𝜎log10I = 0.3
+𝜎𝛼 = 0.1 𝜎𝛼 = 0.9
+Figure 8.MFS and Single Frequency imaging results of PKS 1424+240 shown in comparison with the correponding published
+CLEAN (Hovatta et al. 2014; Lister et al. 2018) results. We include insets in the Comrade results to highlight the super-resolved
+core structure. The bold lines represent our credibility contours (gold:σ logI = 0.3; black:σ α = 0.9) and the thin gray-scale
+lines show logarithmically-scaled total intensity emission for each test. These results demonstrate the floating-point spectral
+index degeneracy introduced by MFS—without a priori measurements to anchor the total fluxes at 23 and 43 GHz, the MFS
+spectral index map inherits an unconstrained offset.
+(see Figure 9 for results and Figure 10 for validation
+metrics).
+3.4.BHEX
+BHEX is a space-VLBI mission concept which aims to
+image black holes at unprecedented resolution (Johnson
+et al. 2024). The concept is to have a 3.4-meter sub-mm
+antenna in space observe in tandem with the current
+EHT. Extending to space would allow BHEX to achieve
+an angular resolution of 6µas. While BHEX is a pro-
+posed mission concept, space VLBI has been successfully
+demonstrated for decades, and multiple generations of
+space-VLBI missions have now flown (Levy et al. 1986;
+Hirabayashi et al. 1998; Kardashev et al. 2013; Gurvits
+2020). Space VLBI represents a unique, but relevant
+regime in radio astronomy that we explore here with
+BHEX as an example.
+As M87* is one of the BHEX primary targets, we use
+the same simulated GRMHD snapshot described in Sec-
+tion 3.3 as our ground truth image for this test. We as-
+sume a BHEX array observing at 79 and 230 GHz, where
+observations at 79 GHz-only are performed with GBT,
+IRAM, JCMT, and LMT, observations at 230 GHz-only
+were made by ALMA, GLT, KP and SMA, and simulta-
+neous dual-band observations at 79+230 GHz are made
+with the IRAM 30-m, JCMT, and LMT. The stations
+observing at 79+230 GHz simultaneously are assumed to
+use frequency phase transfer (FPT; see Rioja & Dodson
+2020, and references therein). This technique leverages
+the correlated atmospheric phase structure across fre-
+quencies to correct for rapid phase fluctuations at higher
+observing frequencies, and has been demonstrated with
+VLBI up to 230 GHz (Issaoun et al. 2025; Zhao et al.
+2025).
+
+14
+100 𝜇as
+Jy/𝜇as2
+10− 7
+10− 6
+10− 5
+10− 4
+𝛼
+−2
+0
+2
+230 GHz Dynamic Range Contours
+104 103 102 101
+Log Scale
+230 GHz Image
+230 GHz - 345 GHz
+Spectral Index Map
+Truth C omrade MFS Comrade (No MFS)
+𝜎logI = 0.07
+𝜎𝛼 = 0.3
+Figure 9.Imaging results of a GRMHD simulation of M87 with the current EHT at 230 and 345 GHz (see Section 3.3).
+From left to right: the ground truth GRMHD simulation, the CHIBI MFS imaging result, and the Single Frequency HIBI
+imaging results. The top and bottom rows are the total intensity images (230 GHz) and spectral index maps (230 - 345 GHz).
+Regions in the MFS spectral index map that correspond to total intensity values less than a factor of 10 −4 dimmer than the
+maximum brightness have been masked. The insets show the inner ring structure in linear scaling. These images are blurred
+with a Gaussian kernel with FWHM equal to the half-beam at 230 GHz (∼12µas) to increase interpretability of the credibility
+contours. The solid grayscale contours in each column trace the 230 GHz total intensity emission in log-scale. There is no
+spectral index map corresponding to single frequency imaging for this dataset—the 345 GHz data are too sparse to image.
+Producing a spectral index map is only possible with multifrequency synthesis.
+We assume a dataset comprised of thirty nights of
+observation with a three-day cadence, starting on Jan-
+uary 1st, 2032. The data are simulated assuming good
+weather conditions across this observing window. We
+assume participation from ALMA only during March.
+For a more detailed instrument and observational ca-
+dence description of BHEX, see Johnson et al. (2024)
+and Issaoun et al. (2024).
+For our image reconstructions here, we solely model
+the image structure (no instrument modeling). The im-
+age reconstructions had a FOV of 1×1 mas and image
+dimensions of 256×256 pixels. For the multifrequency
+fit, we chose 79 GHz as our reference frequency and set
+the total flux at 79 GHz to beF tot, ref = 1.2 Jy. The
+total flux densities of the single frequency images at 79
+and 230 GHz were set to 1.2 Jy and 1.7 Jy, respectively.
+Note that these are the ground truth values.
+We show our imaging results in Figure 11 and the
+corresponding validation metrics in Figure 12. In this
+test, multifrequency synthesis primarily improves the jet
+structure. Large and fine scale jet-structure at 79 GHz
+are both recovered more accurately with multifrequency
+imaging due to the addition of the 230 GHz ground array
+and space baselines, respectively. Similarly, while both
+single and multifrequency imaging both can recover the
+central ring’s spectral index, the jet spectral structure is
+radically improved with the addition of MFS, emphasiz-
+ing the potential of multifrequency imaging over a wide
+frequency range with space VLBI, especially in AGN jet
+imaging.
+
+15
+100 𝜇as
+log I [Jy/𝜇as2]
+− 7
+− 6
+− 5
+− 4
+𝛼
+−2
+0
+2
+230 GHz Dynamic Range Contours
+104 103 102 101
+Truth - Mean
+−1.0
+−0.5
+0.0
+0.5
+1.0
+230 GHzSpectral Index Map
+Truth CHIBI MAP CHIBI Mean Residual Image
+𝜎logI = 0.07
+𝜎𝛼 = 0.3
+Figure 10.Metrics validating the EHT multifrequency imaging results with CHIBI. The top and bottom rows show the total
+intensity and spectral index imaging results, respectively. From left to right: The ground truth image, the MAP image used
+to initialize the HMC, the mean of the sampled posterior, and the residual image. The insets are shown in linear scaling.
+The residual images shown are calculated as follows. For total intensity, we calculate the residual between the log-scaled total
+intensity Truth and CHIBI Mean images: log I T ruth −log I Mean. For spectral index, we calculate the difference images of the
+spectral index Truth and CHIBI Mean images:σ T ruth−σ Mean. These images are blurred with a Gaussian kernel with FWHM
+equal to the half-beam at 230 GHz. Although recovery of a spectral index map is enabled by multifrequency synthesis, the
+undersampling of the data drives uncertainty in the recovered map without additional upgrades.
+3.5.ngEHT
+The ngEHT is an array design effort to up-
+grade the EHT telescopes with simultaneous multi-
+frequency wide-bandwidth systems and to motivate ad-
+ditional telescopes at key sites that enable broader
+(sub)millimeter black hole science with an enhanced and
+denser array (Johnson et al. 2023; Doeleman et al. 2023).
+We assume the ngEHT phase 2 array configuration
+and frequency capabilities from Table A2 of the ngEHT
+reference array paper Doeleman et al. (2023), minus
+BOL, KILI, KVN stations, LLA, SGO, SPT, and SPX
+for a total of 17 sites. Here we assume that ALMA and
+SMA observe only at 230 GHz, all other stations simul-
+taneously observe at 86 and 230 GHz (Issaoun et al.
+2023). The data are generated with weather conditions
+typical of April observations. We used the 86 and 230
+ray-traced images of the M87 GRMHD simulation de-
+scribed in Section 3.3 as the ground truth images for this
+test. The image raster grid spans 256×256 pixels and
+has an image FOV of 1.8×1.8 mas. We chose 86 GHz
+as our reference frequency for the multifrequency image
+reconstruction, and fixed the 86 GHz total flux density
+to 1.7 Jy. The total flux densities at the 86 and 230 GHz
+single frequency images are 1.7 and 1.2 Jy, respectively.
+Here we note one change in the image model that we
+made for this test. We demonstrate an alternative pa-
+rameterization for the spectral index mapα(x, y) that
+allows the spectral-index offset degeneracy to be sam-
+pled more directly (see Section 4 for more details). For
+this test, we model the spectral indexα(x, y) as
+α(x, y) =α 0 +σ αα′(x, y).(24)
+This simplifies to the standard spectral index model de-
+scribed in Section 2.1 whenα 0 = 0, σα = 1.
+In this alternative parameterization,α 0 represents the
+zero-point value of the spectral index map, andσ α is a
+dimensionless scaling factor to modify the spectral in-
+dex map fluctuations:α ′(x, y). We maintain the same
+GMRF prior onα ′(x, y) described in Section 2.2:
+α′ ∼GMRF[0,Q 1(σ= 1)] (25)
+We set the prior onα 0 to be a normal distribution with
+mean 0 and standard deviation 0.1:
+α0 ∼ N(0,0.1).(26)
+
+16
+83 𝜇as
+Jy/𝜇as2
+10− 7
+10− 6
+10− 5
+10− 4
+𝛼
+−2
+−1
+0
+1
+2
+79 GHz Dynamic Range Contours
+104 103 102 101
+79 GHz ImageSpectral Index Map
+79 GHz - 230 GHz
+Truth CHIBI  MFS Single Frequency
+𝜎logI = 0.1
+𝜎𝛼 = 0.1
+Figure 11.Identical to Figure 9, but now displaying the imaging results from BHEX + ground array observations of M87
+at 79 and 230 GHz. The credibility contours for the total intensity images shown here correspond toα logI = 0.1 (gold), and
+αα = 0.3 (black). The images are blurred with a circular Gaussian with FWHM equal to half the 79 GHz beam to increase
+interpretability of the credibility contours. The high-frequency space baselines contributed from BHEX at 230 GHz contributes
+a better grasp on the sharp features of the central ring and jet launching region, while the 79 GHz coverage + ground array
+constrains the jet spectral index.
+The prior onσ α is a half-normal distribution with mean
+0, standard deviation 0.01, and lower bound of 0:
+σα ∼ HN(0,0.01).(27)
+The imaging results and corresponding validation
+metrics are shown in Figure 13 and Figure 14. This
+test emphasizes the value of MFS in terms of image
+alignment. The ngEHT array is already dense at both
+frequencies, and therefore the improvement in the total
+intensity image at 86 GHz with MFS is subtle. However,
+the improvement in spectral index is striking—this im-
+provement arises from MFS aligning the spectral index
+structure at both frequencies. As discussed in Section 4,
+the spectral index GMRF prior prefers aligned structure
+between frequencies—this produces clean, interpretable
+spectral index maps. The alignment is further techni-
+cally supported by the simultaneous multi-frequency de-
+sign of the instrument itself.
+4.DISCUSSION
+4.1.Image Degeneracies
+There are a variety of fundamental degeneracies that
+arise during the VLBI imaging problem, some of which
+are unique to multifrequency synthesis.
+There is a total flux degeneracy in VLBI imaging.
+When modeling instrumental gains (analogous to self-
+calibration) or when fitting closure amplitudes as our
+data product, the total flux of the image is degenerate.
+In the case of modeling instrumental gains, the image
+total flux can be changed via the gain amplitudesA p
+(see Equation 3) and still retain consistency with data.
+Log-gain priors centered around 0 weakly breaks the to-
+tal flux degeneracy, but the existence of any prior mass
+
+17
+83 𝜇as
+log I [Jy/𝜇as2]
+− 7
+− 6
+− 5
+− 4
+𝛼
+−2
+−1
+0
+1
+2
+79 GHz Dynamic Range Contours
+104 103 102 101
+Truth - Mean
+−1.0
+−0.5
+0.0
+0.5
+1.0
+79 GHzSpectral Index Map
+Truth CHIBI MAP CHIBI Mean Residual Image
+𝜎logI = 0.1
+𝜎𝛼 = 0.1
+Figure 12.Identical to Figure 10, but now for the BHEX synthetic data test. The images are blurred with a circular Gaussian
+with FWHM equal to half the 79 GHz beam. Multifrequency synthesis of the combined ground+space coverage improves the
+recovery of spectral index structure in the ring and jet, however a denser ground array is necessary to accurately recover extended
+jet features.
+on the gains leaves some degeneracy still open. Like-
+wise, by definition, closure amplitudes are invariant to
+a change in total flux, so the degeneracy remains even if
+we circumvent gain amplitude modeling by using closure
+products as our data product.
+Another degeneracy is an unconstrained image cen-
+troid. This emerges in two different situations: when
+modeling instrumental gain phases and when fitting clo-
+sure phases. In both cases only therelativephase struc-
+ture is preserved—an absolute phase shift can be ab-
+sorbed into the instrumental gain phases, and closure
+phases are inherently invariant to a global phase shift.
+An absolute phase difference will shift the entire image,
+thus, the image centroid location is unconstrained.
+In the context of multifrequency imaging, each indi-
+vidual frequency band suffers from the aforementioned
+degeneracies, resulting in a lack of knowledge about the
+relative flux densities and relative centroids of each band
+with respect to every other band. When modeling gains
+or fitting closure products, now the total flux ateach
+frequencyis unconstrained. This produces an unknown
+overall offset in the spectral maps—only the relative
+spectral structure is constrained. Unconstrainedrela-
+tiveimage centroids similarly naturally follow from each
+image having unconstrained centroid locations—the rel-
+ative centroids at each frequency are unconstrained as
+well.
+These issues compound when fitting for additional fre-
+quencies of data—each additional frequency introduces
+a potential centroid offset—and when fitting for higher
+order spectral structure. Each order (spectral index,
+spectral curvature, etc...) introduces an unknown spec-
+tral offset.
+4.2.Addressing the Degeneracies
+These various degeneracies complicate posterior struc-
+ture by introducing correlations and multi-modality
+(multiple, distinct image solutions) which make poste-
+rior sampling intractable. We address this by param-
+eterizing the image model such that a priori source-
+specific information can break these degeneracies.
+For the single frequency imaging model, we explic-
+itly parametrize the total image flux density. Therefore,
+we can use a priori flux measurements to break the de-
+generacy (seeF tot in Equation 6). Uncertainty on the
+total flux measurement can be folded in via a prior on
+Ftot. For the multifrequency imaging model, only the
+reference image has a parameterized total flux density.
+The total flux density at other frequencies are free pa-
+rameters. As a result the spectral offset described in
+
+18
+270 𝜇as
+Jy/𝜇as2
+10− 7
+10− 6
+10− 5
+10− 4
+𝛼
+−2
+−1
+0
+1
+2
+86 GHz Dynamic Range Contours
+104 103 102 101
+86 GHz ImageSpectral Index Map
+86 GHz - 230 GHz
+Truth Comrade MFS Comrade (No MFS)
+𝜎𝛼 = 0.02
+𝜎logI = 0.02
+Figure 13.The same as Figures Section 3.3 and Figure 11, now for simulated ngEHT observations of M87 at 86 and 230 GHz.
+The images are blurred with one-third of the ngEHT 86 GHz beam for interpretability of the credibility contours. The bolded
+credibility contours denoteσ logI = 0.02 (gold), andσ α = 0.02 (black). Here, the spectral index insets retain the same scaling
+as the full spectral index maps. Here, the primary improvement with MFS is shown in the spectral index map—correlating the
+structure between the two frequencies through multifrequency modeling greatly improves recovery of the spectral index at all
+scales.
+Section 4.1 remains—only the relative structure is con-
+strained.
+To address this challenge, our standard treatment is
+to set the mean structure of the spectral GMRF prior to
+be a flat value across the entire image. Our prior on this
+mean value is a normal distributionN(0,1). This places
+the bulk of the probability mass within the range of
+spectral map values expected for synchrotron radiation.
+This is the spectral index model we used in our Gaussian
+validation test, the MOJAVE data, and on synthetic
+data generated for the current EHT and BHEX tests.
+In our ngEHT test in Figure 13, we parameterize the
+spectral offset more explicitly. We model the mean
+GMRF prior for the spectral structure as Equation 24:
+α(x, y) =α 0 +σ αα′(x, y).Here, (α 0) is an overall offset
+in the spectral map that we sample. Explicitly mod-
+eling the offset makes it simpler for the HMC sampler
+to explore this offset value. However, the degeneracy
+isn’t truly broken because the fluctuations superimposed
+upon this mean structure also determine the total flux
+density of the images at other frequencies, but it can be
+explicitly broken with a priori total flux measurements
+at each frequency
+As mentioned in Section 4.1, modeling instrumental
+gain phases results in an unconstrained image centroid.
+In Section 2.1, we presented this issue as a result of the
+image structure drifting between posterior samples. Our
+solution is outlined in Section 2.1: we reduce the size
+of the Gaussian distribution used for the mean struc-
+ture of the GMRF prior to concentrate the image flux
+in a limited region of the image, which restricts image
+drift. Ultimately, image drift cannot be completely elim-
+inated in our model. Therefore when calculating statis-
+tical quantities from the posterior (e.g. mean, standard
+deviation), we choose to center all the VLBA Blazar ob-
+servations with a bright, unresolved core with regards
+
+19
+270 𝜇as
+log I [Jy/𝜇as2]
+− 7
+− 6
+− 5
+− 4
+𝛼
+−2
+−1
+0
+1
+2
+79 GHz Dynamic Range Contours
+104 103 102 101
+Truth - Mean
+−1.0
+−0.5
+0.0
+0.5
+1.0
+79 GHzSpectral Index Map
+Truth CHIBI MAP CHIBI Mean Residual Image
+𝜎logI = 0.02
+𝜎𝛼 = 0.02
+Figure 14.Identical to Figure 10 and Figure 12, but now for the ngEHT synthetic data test. All images are blurred with
+one-third of the ngEHT 86 GHz beam. Multifrequency synthesis with the dense ground array enables high-fidelity recovery
+of extended jet structure in both total intensity and spectral index. Here we see the effect of the spectral index degeneracy
+described in Section 4.1: a uniform offset in the residual map.
+to the brightest point in the image (the core), and all
+other images with respect to their image centroids.
+For our multifrequency model, centering the reference
+image and corresponding spectral maps with regard to
+the reference’s brightest pixel or image centroid does not
+correct for therelativeoffset between images. There are
+two ways to address this: in the image model, or in the
+instrument model. Currently we only address it with the
+image model, but we outline here how future instrument
+model development would present a superior solution.
+If we impose a particular image geometry (e.g. a ring),
+an image offset could be explicitly parameterized. How-
+ever, since we do not assume specific image geometry,
+we rely on the spectral image GMRF prior to align the
+images. Misaligned image structures cause large fluctu-
+ations in spectral index across the entire image. There-
+fore, our standard image prior which prefers a flat spec-
+tral map around 0 will preferentially align the images.
+In the case where any of these degeneracies cause
+multi-modal image structure (e.g. an image flip, mul-
+tiple possible image alignments), as mentioned in Sec-
+tion 2.3, our NUTS sampler may fail to explore each
+mode during a simgle sampling run. Therefore, multi-
+ple image runs with a variety of distinct initializations is
+typically necessary to discover the various image modes.
+For each of our tests shown here, we performed multi-
+ple fits with different independent initializations. High-
+certainty regions were statistically consistent across the
+different runs. In low SNR regions of the image recon-
+structions, features were recovered up to expected MC
+error. In the cases where we did see discrepancies be-
+tween initializations, these were associated with the de-
+generacies discussed in Section 4.1.
+4.3.Future development
+To explicitly break the relative image position degen-
+eracy, we can use novel observational techniques such as
+frequency phase transfer (FPT; e.g., Rioja et al. 2015;
+Rioja et al. 2023) and source frequency phase referenc-
+ing (SFPR; e.g., Zhao et al. 2019; Rioja & Dodson 2020),
+which constrain the relative phase structure between
+multiple frequencies. FPT has recently been success-
+fully demonstrated for high-frequency VLBI and will en-
+able MFS with EHT-like arrays in the future (Issaoun
+et al. 2025; Zhao et al. 2025). This technique will au-
+tomatically align our multifrequency images — errors
+in this alignment will naturally arise from phase errors
+in the data. This requires the future development of a
+multifrequency instrument model with correlated phase
+structure across multiple frequencies.
+Computationally, there are avenues to improve perfor-
+mance and speed. Parallelization and GPU compatibil-
+
+20
+ity will be essential to enable MFS Comrade for larger
+datasets than VLBI, such as phased arrays.
+Algorithmically, we only tested a single spectral model
+implementation in this paper—a logarithmic polynomial
+expansion. For emission mechanisms where this poly-
+nomial expansion is purely phenomenological (i.e., not
+physically well-motivated), the code is modular enough
+that an interested user can implement alternative spec-
+tral models. Future development in this area may in-
+clude implementing a multi-gaussian spectral line model
+to perform spectral-line analysis.
+5.CONCLUSIONS
+We presented a new method for multifrequency syn-
+thesis in a Bayesian inference framework, implemented
+inComrade.jl. The model parametrization is rooted
+in the spectral behavior of synchrotron radiation, the
+primary radio emission mechanism in supermassive
+black holes. We validated the performance of our
+Bayesian multifrequency synthesis implementation and
+found that it is able to recover the source multifrequency
+structure more accurately and precisely than single fre-
+quency imaging. In addition, we found that the multi-
+frequency structure derived from MFS is clearly data-
+driven.
+We tested MFS with a variety of VLBI arrays repre-
+senting various approaches and challenges to multifre-
+quency imaging. We applied our MFS technique to real
+data of AGN blazars (OJ287, 1424+240) and then to
+synthetic observations of M87*’s near-horizon structure
+with the current EHT and future arrays, such as the
+Black Hole Explorer space-ground interferometer and
+the next-generation EHT (Johnson et al. 2024; Doele-
+man et al. 2023).
+The structure recovered by Comrade MFS with the
+VLBA observations is consistent with the published
+CLEAN imaging results (Hovatta et al. 2014; Lister
+et al. 2018), with clear improvements in image resolu-
+tion and recovery of structure in the spectral index maps
+compared to CLEAN. For the current EHT, MFS is re-
+quired to create a 345 GHz image, and, consequently, a
+230-345 GHz spectral index map, due to the sparsity of
+the coverage at that frequency. The improved coverage
+enabled by BHEX allows imaging at both simulated fre-
+quencies (79 GHz and 230 GHz). The (u, v) coverage
+added by the space baselines at 230 GHz greatly im-
+proves the image resolution at 79 GHz, and the 79 GHz
+baselines help constrain the jet emission and spectral in-
+dex. For the ngEHT result, the greatest improvement is
+shown in the spectral index map. We attribute this to
+the dense (u, v) coverage, but also the image alignment
+of structure between frequencies enforced by MFS. In all
+cases, MFS improved the total intensity images and the
+resulting spectral index maps. This is due to the im-
+provement in (u, v) coverage from combining multiple
+datasets sampling different spatial frequencies, and also
+due to the alignment of image structures across multiple
+frequencies. This method will greatly improve spectral
+index measurements and spatially-resolved spectral in-
+dex maps of black hole jets with VLBI.
+The current implementation of our Bayesian MFS
+framework can be applied to a variety of scenarios. As
+of 2018, the EHT observing setup has four sub-bands
+at 213, 215, 227, and 229 GHz, with existing obser-
+vations (Event Horizon Telescope Collaboration et al.
+2024, 2025). No modification to the model is necessary
+to fit sub-band observations, which are also truly simul-
+taneous, making the most recent EHT observations ideal
+datasets for MFS. Future work will also include multifre-
+quency analysis of non-AGN continuum emission, such
+as protoplanetary disks (e.g., ALMA Partnership et al.
+2015). While we focused on VLBI arrays in this analysis,
+this technique can also be applied to data from phased
+interferometers, such as ALMA or SMA. The primary
+barrier here is the computational cost due to much larger
+data volumes than the VLBI arrays we tested in this pa-
+per.
+Further development of our Bayesian MFS framework
+involves extending to polarized multifrequency synthe-
+sis. In addition to improving the polarized image struc-
+ture at each frequency, this would enable the recovery of
+Faraday rotation measure maps as a result of the imag-
+ing process (e.g., Brentjens & de Bruyn 2005; Andrecut
+et al. 2012; Bell & Enßlin 2012). Rotation measure maps
+are particularly important to infer magnetic field struc-
+ture and plasma properties of AGN jets and accretion
+flows (e.g., Gabuzda et al. 2004; Hovatta et al. 2012;
+Marrone et al. 2007; Bower et al. 2018). The Bayesian
+framework would enable uncertainty quantification on
+these rotation measure maps as well.
+Implementing additional spectral models into the mul-
+tifrequency model would be another natural extension
+to this method. Currently, the polynomial expansion
+model we have implemented can only model continuum
+radio emission. With the addition of a multi-component
+Gaussian spectral model, we can simultaneously model
+continuum and spectral-line emission. Our framework
+would then be useful for a variety of other radio targets
+exhibiting, e.g., maser line emission or protoplanetary
+disk molecular line emission.
+Future work will also incorporate multifrequency in-
+strument modeling. The current instrument model is
+appropriate for observations where the instrumental
+corruptions and atmospheric corruptions are uncorre-
+
+21
+lated between the different frequencies. This works well
+for quasi-simultaneous observations—non-simultaneous
+multifrequency observations where we assume the source
+is stationary and the atmosphere variability is largely
+uncorrelated. However, truly simultaneous multifre-
+quency observations with frequency phase transfer and
+its variants introduce correlations in the gain structure
+across frequencies (e.g., Asaki et al. 1996, 1998; Dodson
+et al. 2017; Rioja et al. 2014, 2015; Zhao et al. 2018).
+Modeling this frequency-dependent gain structure ex-
+plicitly would break a variety of image degeneracies in
+the multifrequency problem, such as the relative image
+position degeneracy (for FPT), absolute image position
+degeneracy (for source frequency phase referencing), and
+the overall spectral index offset. It also opens the possi-
+bility for Bayesian multifrequency astrometry, of which
+one application is measuring AGN core-shifts (Rioja &
+Dodson 2020).
+ACKNOWLEDGEMENTS
+We acknowledge financial support from the National
+Science Foundation (AST-2307887, AST-1935980, AST-
+2034306). This publication is funded in part by the Gor-
+don and Betty Moore Foundation, Grants GBMF-12987,
+GBMF-5278, GBMF-10423. This work was supported
+by the Black Hole Initiative, which is funded by grants
+from the John Templeton Foundation (Grant #62286)
+and the Gordon and Betty Moore Foundation (Grant
+GBMF-8273)—although the opinions expressed in this
+work are those of the author(s) and do not necessarily
+reflect the views of these Foundations. This material
+is based upon work supported by the National Science
+Foundation Graduate Research Fellowship under Grant
+No. DGE 2140743.
+Software:Comrade.jl (Tiede 2022), ehtim (Chael
+2023), Makie.jl (Danisch & Krumbiegel 2021)
+APPENDIX
+A.SUPER-RESOLUTION ANALYSIS: OJ287
+The CHIBI and HIBI imaging results of the OJ287
+MOJAVE data shows significant super-resolution. To
+determine this, we perform a super-resolution consis-
+tency test between the three images: CLEAN, Single
+Frequency Comrade, and MFS Comrade. Following pre-
+vious super-resolution studies to compare different imag-
+ing algorithms (e.g., Event Horizon Telescope Collabora-
+tion et al. 2019), we use the normalized cross-correlation
+(NXCORR) as our comparison metric:
+ρN X(X, Y) = 1
+N
+X
+i
+(Xi − ⟨X⟩)(Y i − ⟨Y⟩)
+σX σY
+.(A1)
+Here,X i andY i are the pixel values of the two compared
+images,σ X,σ Y are the standard deviation values of the
+pixel values from each image, andNis the total number
+of pixels in the image.
+Our procedure included blurring each of these im-
+age reconstructions with circular Gaussian beams whose
+FWHMs ranged from 0 (no blur) to the array resolu-
+tion, and computing the NXCORR between each pair
+of images for each combination of blurring kernel size
+between pairs of images. Note that the CLEAN beam is
+highly elliptic because of the asymmetric (u, v) coverage
+of this observation. For the Comrade and CLEAN im-
+ages we blurred the raw images (shown in Figure 6) and
+the CLEAN components, respectively. We choose the
+threshold value of NXCORR=0.99 to determine that the
+compared images are identical. The results are shown
+in Figure 15, which demonstrates that the CLEAN and
+Comrade images are consistent to∼1/3 of the CLEAN
+beam.
+B.MOJAVE IMAGES AT ALL FREQUENCIES
+In Figure 16 and Figure 17 we show the imaging
+results at all frequencies of data from MFS CHIBI
+and single frequency HIBI imaging of OJ287 and PKS
+1424+240.
+C.GOODNESS OF FIT FOR IMAGE
+RECONSTRUCTIONS
+We show goodness of fit statistics for each imaging test
+shown in this paper in Figure 18. We calculate the nor-
+malized residual as the difference between the measured
+and modeled complex visibility, normalized by the mea-
+surement noise. The normalized residual is calculated
+separately for the real and imaginary components of the
+complex visibilities.
+REFERENCES
+Akiyama, E., Hasegawa, Y., Hayashi, M., & Iguchi, S. 2016,
+ApJ, 818, 158, doi: 10.3847/0004-637X/818/2/158
+ALMA Partnership, Brogan, C. L., P´ erez, L. M., et al.
+2015, ApJL, 808, L3, doi: 10.1088/2041-8205/808/1/L3
+
+22
+0.0 0.2 0.4 0.6 0.8 1.0
+Comrade Beam [ θ/θ8.1GHz]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0CLEAN Beam [ θ/θ8.1GHz]
+0.0 0.2 0.4 0.6 0.8 1.0
+MFS Comrade Beam [ θ/θ8.1GHz]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0CLEAN Beam [ θ/θ8.1GHz]
+0.0 0.2 0.4 0.6 0.8 1.0
+MFS Comrade Beam [ θ/θ8.1GHz]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Comrade Beam [ θ/θ8.1GHz] Equal Beams
+NXCORR=0.99
+NXCORRmax(x)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+√
+1 − NXCORR
+Figure 15.A NXCORR analysis which compares the similarity of the super-resolved structure from the total-intensity CLEAN
+(Lister et al. 2018), single frequency Comrade, and multifrequency Comrade image reconstructions of OJ287 at 8.1 GHz. The
+axes represent the FWHM of the Gaussian blurring kernel applied to each image—they are normalized to the 8.1 GHz array
+resolution (θ8.1 GHz ). We use a threshold value of NXCORR=0.99 (purple contour) to determine that two images are identical—
+the CLEAN and Comrade reconstructions of OJ287 are consistent to about 1/3 of the CLEAN beam.
+2 mas
+Jy/mas2
+10− 2 10− 1 100 101 102
+𝛼
+−1.0 −0.5 0.0 0.5 1.0
+Dynamic Range Contours
+104
+103
+102
+101
+8.1 GHz Image 12.1 GHz Im age Spectral Index Map
+Comrade MFSComrade (No MFS)
+𝜎log10I = 0.42
+𝜎log10I = 0.42
+𝜎log10I = 0.42
+𝜎log10I = 0.42
+𝜎𝛼 = 0.65
+𝜎𝛼 = 0.65
+Figure 16.OJ287 VLBA MOJAVE image reconstructions at all frequencies (8.1, 12 GHz) and the resulting spectral index
+maps. See Figure 6 for full description of all figure elements.
+
+23
+2700 𝜇as
+Jy/𝜇as2
+10−3 10− 2 10− 1 100 101
+𝛼
+−1.0−0.5 0.0 0. 5 1.0
+Dynamic Range Contours
+104
+103
+102
+101
+15 GHz 23 GHz 43 GHz Sp ectral Index
+Comrade MFSComrade (No MFS)
+Figure 17.PKS 1424+240 VLBA MOJAVE image reconstructions at all frequencies (15, 23, 43 GHz) and the resulting spectral
+index maps. See Figure 8 for full description of all figure elements. Note that at the highest frequency of 43 GHz, the extended
+jet emission is only recoverable via multifrequency imaging.
+
+24
+-5.0
+-2.5
+0
+2.5
+5.0
+0.0 0 .1 0. 2 0 .3
+-5.0
+-2.5
+0
+2.5
+5.0
+0.00 0 .05 0. 10 0.15 0. 20
+0.0 0.1 0.2 0.3
+0.0 0.1 0 .2 0.3
+-5.0
+-2.5
+0
+2.5
+5.0
+0.00 0.05 0.10 0.15 0. 20
+0.0 0.1 0. 2 0.3
+0.0 0. 5 1. 0
+-5.0
+-2.5
+0
+2.5
+5.0
+0.0 0.1 0.2 0. 3 0.4
+0.00 0.2 5 0 .50
+ 0.0 0. 5 1.0
+0 5 10
+-5.0
+-2.5
+0
+2.5
+5.0
+0 2 4 6 8
+0 10 20
+-5.0
+-2.5
+0
+2.5
+5.0
+2.5 5.0 7. 5
+ 0 10 20
+Projected Baseline Length (G𝜆)
+0 2 4 6 8
+-5.0
+-2.5
+0
+2.5
+5.0
+0 1 2 3
+ 0 2 4 6 8
+Multifrequency Single Frequency
+Normalized Residual
+Gaussian Validation TestOJ287PKS1424+240EHTBHEXngEHT
+Figure 18.The normalized Residuals, aggregated across 20 random draws from the posterior, for all imaging tests performed
+in this paper. The averagedχ 2,χ 2
+avg across each of those 20 samples are over-plotted for each test. The tests which perform
+joint image and instrument modeling are colored in black, tests which solely perform image modeling (no instrument modeling)
+are colored in red. We plot both the real and imaginary components of the normalized complex visibility residual on each plot.
+Andrecut, M., Stil, J. M., & Taylor, A. R. 2012, AJ, 143,
+33, doi: 10.1088/0004-6256/143/2/33
+Arras, P., Frank, P., Haim, P., et al. 2022, Nature
+Astronomy, 6, 259, doi: 10.1038/s41550-021-01548-0
+Asaki, Y., Saito, M., Kawabe, R., Morita, K.-I., & Sasao, T.
+1996, Radio Science, 31, 1615, doi: 10.1029/96RS02629
+Asaki, Y., Shibata, K. M., Kawabe, R., et al. 1998, Radio
+Science, 33, 1297, doi: 10.1029/98RS01607
+Baars, J. W. M., Genzel, R., Pauliny-Toth, I. I. K., &
+Witzel, A. 1977, A&A, 61, 99
+Bell, A. R. 1978, MNRAS, 182, 147,
+doi: 10.1093/mnras/182.2.147
+Bell, M. R., & Enßlin, T. A. 2012, A&A, 540, A80,
+doi: 10.1051/0004-6361/201118672
+Besag, J. 1981, Journal of the Royal Statistical Society:
+Series B (Methodological), 43, 302
+Blandford, R. D., & K¨ onigl, A. 1979, ApJ, 232, 34,
+doi: 10.1086/157262
+Blandford, R. D., & Ostriker, J. P. 1978, ApJL, 221, L29,
+doi: 10.1086/182658
+Bower, G. C., Broderick, A., Dexter, J., et al. 2018, ApJ,
+868, 101, doi: 10.3847/1538-4357/aae983
+Brentjens, M. A., & de Bruyn, A. G. 2005, A&A, 441, 1217,
+doi: 10.1051/0004-6361:20052990
+Britzen, S., Fendt, C., Witzel, G., et al. 2018, MNRAS,
+478, 3199, doi: 10.1093/mnras/sty1026
+Broderick, A. E., Gold, R., Karami, M., et al. 2020, ApJ,
+897, 139, doi: 10.3847/1538-4357/ab91a4
+Chael, A. 2023, eht-imaging, v1.2.6, Zenodo,
+doi: 10.5281/zenodo.8327551
+Chael, A., Issaoun, S., Pesce, D. W., et al. 2023, ApJ, 945,
+40, doi: 10.3847/1538-4357/acb7e4
+
+25
+Chael, A., Johnson, M. D., Bouman, K. L., et al. 2018,
+ApJ, 857, 23, doi: 10.3847/1538-4357/aab6a8
+Conway, J. E., Cornwell, T. J., & Wilkinson, P. N. 1990,
+MNRAS, 246, 490
+Danisch, S., & Krumbiegel, J. 2021, Journal of Open Source
+Software, 6, 3349, doi: 10.21105/joss.03349
+de Villiers, M. S. 2023, The Astronomical Journal, 165, 78,
+doi: 10.3847/1538-3881/acabc3
+Dodson, R., Rioja, M. J., Jung, T., et al. 2017, New
+Astronomy Reviews, 79, 85,
+doi: 10.1016/j.newar.2017.09.003
+Doeleman, S. S., Barrett, J., Blackburn, L., et al. 2023,
+Galaxies, 11, doi: 10.3390/galaxies11050107
+EHTC, Akiyama, K., Alberdi, A., et al. 2019, The
+Astrophysical Journal Letters, 875, L2,
+doi: 10.3847/2041-8213/ab0c96
+ESO. 2025, ALMA Receiver Bands. https:
+//www.eso.org/public/teles-instr/alma/receiver-bands/
+Event Horizon Telescope Collaboration, Akiyama, K.,
+Alberdi, A., et al. 2019, ApJL, 875, L4,
+doi: 10.3847/2041-8213/ab0e85
+—. 2022, ApJL, 930, L14, doi: 10.3847/2041-8213/ac6429
+—. 2024, A&A, 681, A79,
+doi: 10.1051/0004-6361/202347932
+Event Horizon Telescope Collaboration, Akiyama, K.,
+Albentosa-Ru´ ız, E., et al. 2025, A&A, 704, A91,
+doi: 10.1051/0004-6361/202555855
+Frieden, B. R. 1972, J. Opt. Soc. Am., 62, 511,
+doi: 10.1364/JOSA.62.000511
+Gabuzda, D. C., Murray, ´E., & Cronin, P. 2004, MNRAS,
+351, L89, doi: 10.1111/j.1365-2966.2004.08037.x
+Grimes, P. K., Keating, G. K., Blundell, R., et al. 2024,
+arXiv e-prints, arXiv:2406.17192,
+doi: 10.48550/arXiv.2406.17192
+Gurvits, L. I. 2020, Advances in Space Research, 65, 868,
+doi: 10.1016/j.asr.2019.05.042
+Hallinan, G., Ravi, V., Weinreb, S., et al. 2019, Bulletin of
+the AAS, 51
+Hirabayashi, H., Hirosawa, H., Kobayashi, H., et al. 1998,
+Science, 281, 1825, doi: 10.1126/science.281.5384.1825
+Hoffman, M. D., & Gelman, A. 2011, arXiv e-prints,
+arXiv:1111.4246, doi: 10.48550/arXiv.1111.4246
+H¨ ogbom, J. A. 1974, A&AS, 15, 417
+Hovatta, T., Lister, M. L., Aller, M. F., et al. 2012, AJ,
+144, 105, doi: 10.1088/0004-6256/144/4/105
+Hovatta, T., Aller, M. F., Aller, H. D., et al. 2014, AJ, 147,
+143, doi: 10.1088/0004-6256/147/6/143
+IceCube Collaboration, Abbasi, R., Ackermann, M., et al.
+2022, Science, 378, 538, doi: 10.1126/science.abg3395
+Issaoun, S., Pesce, D. W., Roelofs, F., et al. 2023, Galaxies,
+11, 28, doi: 10.3390/galaxies11010028
+Issaoun, S., Alonso, K., Akiyama, K., et al. 2024, in Society
+of Photo-Optical Instrumentation Engineers (SPIE)
+Conference Series, Vol. 13092, Space Telescopes and
+Instrumentation 2024: Optical, Infrared, and Millimeter
+Wave, ed. L. E. Coyle, S. Matsuura, & M. D. Perrin,
+130926P, doi: 10.1117/12.3020041
+Issaoun, S., Pesce, D. W., Rioja, M. J., et al. 2025, AJ, 169,
+229, doi: 10.3847/1538-3881/adbb55
+Jansky, K. G. 1933, Nature, 132, 66, doi: 10.1038/132066a0
+Johnson, M. D., Akiyama, K., Blackburn, L., et al. 2023,
+Galaxies, 11, 61, doi: 10.3390/galaxies11030061
+Johnson, M. D., Akiyama, K., Baturin, R., et al. 2024, in
+Space Telescopes and Instrumentation 2024: Optical,
+Infrared, and Millimeter Wave, ed. L. E. Coyle,
+S. Matsuura, & M. D. Perrin, Vol. 13092, International
+Society for Optics and Photonics (SPIE), 130922D,
+doi: 10.1117/12.3019835
+Junklewitz, H., Bell, M. R., & Enßlin, T. 2015, A&A, 581,
+A59, doi: 10.1051/0004-6361/201423465
+Junklewitz, H., Bell, M. R., Selig, M., & Enßlin, T. A.
+2016, A&A, 586, A76, doi: 10.1051/0004-6361/201323094
+Kardashev, N. S., Khartov, V. V., Abramov, V. V., et al.
+2013, Astronomy Reports, 57, 153,
+doi: 10.1134/S1063772913030025
+Kellermann, K. I. 1964, ApJ, 140, 969, doi: 10.1086/147998
+Kim, J.-Y., Krichbaum, T. P., Lu, R.-S., et al. 2018, A&A,
+616, A188, doi: 10.1051/0004-6361/201832921
+Kingma, D. P., & Ba, J. 2017, Adam: A Method for
+Stochastic Optimization.
+https://arxiv.org/abs/1412.6980
+Kovalev, Y. Y., Pushkarev, A. B., G´ omez, J. L., et al. 2025,
+A&A, 700, L12, doi: 10.1051/0004-6361/202555400
+Krips, M. 2025, NOEMA Observing Capabilities and
+Current Status. https://www.iram.fr/GENERAL/calls/
+w25/NOEMACapabilities.pdf
+Lehto, H. J., & Valtonen, M. J. 1996, ApJ, 460, 207,
+doi: 10.1086/176962
+Levy, G. S., Linfield, R. P., Ulvestad, J. S., et al. 1986,
+Science, 234, 187, doi: 10.1126/science.234.4773.187
+Lister, M. L., Aller, M. F., Aller, H. D., et al. 2018, ApJS,
+234, 12, doi: 10.3847/1538-4365/aa9c44
+Marrone, D. P., Moran, J. M., Zhao, J.-H., & Rao, R. 2007,
+ApJL, 654, L57, doi: 10.1086/510850
+Narayan, R., Chael, A., Chatterjee, K., Ricarte, A., &
+Curd, B. 2022, Monthly Notices of the Royal
+Astronomical Society, 511, 3795,
+doi: 10.1093/mnras/stac285
+
+26
+Narayan, R., & Nityananda, R. 1986, ARA&A, 24, 127,
+doi: 10.1146/annurev.aa.24.090186.001015
+NRAO. 2021, ngVLA Performance Estimates (December
+2021). https://ngvla.nrao.edu/page/performance
+—. 2025a, VLA Frequency Bands and Tunability.
+https://science.nrao.edu/facilities/vla/docs/manuals/
+oss2025b/proposing
+—. 2025b, Frequency Bands & Performance.
+https://science.nrao.edu/facilities/vlba/docs/manuals/
+oss/bands-perf
+Offringa, A. R., & Smirnov, O. 2017, MNRAS, 471, 301,
+doi: 10.1093/mnras/stx1547
+Paiano, S., Landoni, M., Falomo, R., et al. 2017, ApJ, 837,
+144, doi: 10.3847/1538-4357/837/2/144
+Palumbo, D. C. M., Baub¨ ock, M., & Gammie, C. F. 2024,
+ApJ, 970, 151, doi: 10.3847/1538-4357/ad5fed
+Palumbo, D. C. M., Wong, G. N., & Ricarte, A. 2025,
+ApJL, 994, L33, doi: 10.3847/2041-8213/ae1ba8
+Pesce, D. W., Blackburn, L., Chaves, R., et al. 2024, ApJ,
+968, 69, doi: 10.3847/1538-4357/ad3961
+Rau, U., & Cornwell, T. J. 2011, A&A, 532, A71,
+doi: 10.1051/0004-6361/201117104
+Ricarte, A., Gammie, C., Narayan, R., & Prather, B. S.
+2023, MNRAS, 519, 4203, doi: 10.1093/mnras/stac3796
+Rioja, M. J., & Dodson, R. 2020, A&A Rv, 28, 6,
+doi: 10.1007/s00159-020-00126-z
+Rioja, M. J., Dodson, R., & Asaki, Y. 2023, Galaxies, 11,
+doi: 10.3390/galaxies11010016
+Rioja, M. J., Dodson, R., Jung, T., & Sohn, B. W. 2015,
+AJ, 150, 202, doi: 10.1088/0004-6256/150/6/202
+Rioja, M. J., Dodson, R., Jung, T., et al. 2014, AJ, 148, 84,
+doi: 10.1088/0004-6256/148/5/84
+Roelofs, F., Blackburn, L., Lindahl, G., et al. 2023,
+Galaxies, 11, 12, doi: 10.3390/galaxies11010012
+Sault, R. J., & Wieringa, M. H. 1994, A&AS, 108, 585
+Scheel-Platz, L. I., Knollm¨ uller, J., Arras, P., et al. 2023,
+A&A, 680, A2, doi: 10.1051/0004-6361/202243819
+Sillanpaa, A., Haarala, S., Valtonen, M. J., Sundelius, B., &
+Byrd, G. G. 1988, ApJ, 325, 628, doi: 10.1086/166033
+SKA. 2025, SKA Telescope Specifications.
+https://www.skao.int/en/science-users/118/
+ska-telescope-specifications
+Sutter, P. M., Wandelt, B. D., McEwen, J. D., et al. 2014,
+MNRAS, 438, 768, doi: 10.1093/mnras/stt2244
+Thompson, A. R., Moran, J. M., & Swenson, Jr., G. W.
+2017, Interferometry and Synthesis in Radio Astronomy,
+3rd Edition, doi: 10.1007/978-3-319-44431-4
+Tiede, P. 2022, Journal of Open Source Software, 7, 4457,
+doi: 10.21105/joss.04457
+Tiede, P., Moses, W., Churavy, V., et al. 2025, arXiv
+e-prints, arXiv:2511.17706,
+doi: 10.48550/arXiv.2511.17706
+Tsunetoe, Y., Pesce, D. W., Narayan, R., et al. 2025, ApJ,
+984, 35, doi: 10.3847/1538-4357/adc37a
+Valtaoja, E., Ter¨ asranta, H., Tornikoski, M., et al. 2000,
+ApJ, 531, 744, doi: 10.1086/308494
+Valtonen, M. J., Lehto, H. J., Nilsson, K., et al. 2008,
+Nature, 452, 851, doi: 10.1038/nature06896
+Villata, M., Raiteri, C. M., Sillanpaa, A., & Takalo, L. O.
+1998, MNRAS, 293, L13,
+doi: 10.1046/j.1365-8711.1998.01244.x
+Walker, R. C., Hardee, P. E., Davies, F. B., Ly, C., &
+Junor, W. 2018, ApJ, 855, 128,
+doi: 10.3847/1538-4357/aaafcc
+Whipple, F. L., & Greenstein, J. L. 1937, Proceedings of
+the National Academy of Science, 23, 177,
+doi: 10.1073/pnas.23.3.177
+Wiaux, Y., Jacques, L., Puy, G., Scaife, A. M. M., &
+Vandergheynst, P. 2009a, MNRAS, 395, 1733,
+doi: 10.1111/j.1365-2966.2009.14665.x
+Wiaux, Y., Puy, G., Boursier, Y., & Vandergheynst, P.
+2009b, MNRAS, 400, 1029,
+doi: 10.1111/j.1365-2966.2009.15519.x
+Zhao, G.-Y., Algaba, J. C., Lee, S. S., et al. 2018, AJ, 155,
+26, doi: 10.3847/1538-3881/aa99e0
+Zhao, G.-Y., Jung, T., Sohn, B. W., et al. 2019, Journal of
+Korean Astronomical Society, 52, 23,
+doi: 10.5303/JKAS.2019.52.1.23
+Zhao, G.-Y., Roy, A. L., Wagner, J. F., et al. 2025, A&A,
+701, A132, doi: 10.1051/0004-6361/202555346

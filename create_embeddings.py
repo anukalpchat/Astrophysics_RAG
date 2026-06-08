@@ -43,8 +43,13 @@ class FaissEmbeddingCreator:
                 - 'multi-qa-MiniLM-L6-cos-v1' (optimized for Q&A)
             use_gpu: Whether to use GPU if available
         """
-        # Check GPU availability
-        self.device = 'cuda' if torch.cuda.is_available() and use_gpu else 'cpu'
+        # Check GPU availability — prefer CUDA, then Apple MPS, then CPU
+        if torch.cuda.is_available() and use_gpu:
+            self.device = 'cuda'
+        elif torch.backends.mps.is_available() and use_gpu:
+            self.device = 'mps'
+        else:
+            self.device = 'cpu'
         
         print(f"{'='*60}")
         print(f"Loading embedding model: {model_name}")
@@ -84,58 +89,69 @@ class FaissEmbeddingCreator:
         print(f"{'='*60}")
         return data, texts, metadata_list
     
-    def create_embeddings(self, texts: List[str], batch_size: int = 64, cache_file: str = None) -> np.ndarray:
+    def create_embeddings(self, texts: List[str], batch_size: int = 32, cache_file: str = None, chunk_size: int = 10000) -> np.ndarray:
         """
-        Create embeddings for all texts with optimization
-        
+        Create embeddings in chunks to avoid macOS multiprocessing segfaults.
+        Encodes chunk_size texts at a time, accumulates results, then saves cache.
+
         Args:
             texts: List of text chunks
-            batch_size: Batch size for encoding (larger = faster on GPU)
-            cache_file: Path to cache embeddings (to resume if interrupted)
-            
-        Returns:
-            Numpy array of embeddings
+            batch_size: Encoding batch size passed to the model (keep small on CPU)
+            cache_file: Path to cache the final embeddings array
+            chunk_size: Number of texts to process per outer loop iteration
         """
-        # Check if cached embeddings exist
         if cache_file and Path(cache_file).exists():
             print(f"\n✓ Found cached embeddings at {cache_file}")
-            print("Loading from cache...")
             embeddings = np.load(cache_file)
             print(f"✓ Loaded {len(embeddings):,} embeddings from cache")
             return embeddings
-        
+
+        total = len(texts)
         print(f"\n{'='*60}")
-        print(f"Creating embeddings for {len(texts):,} chunks")
-        print(f"Batch size: {batch_size}")
-        print(f"This may take a few minutes...")
+        print(f"Creating embeddings for {total:,} chunks")
+        print(f"Processing in groups of {chunk_size:,} | encode batch size: {batch_size}")
         print(f"{'='*60}\n")
-        
+
         start_time = time.time()
-        
-        # Encode with progress bar
-        embeddings = self.model.encode(
-            texts,
-            batch_size=batch_size,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            normalize_embeddings=True  # Normalize for cosine similarity
-        )
-        
+        all_embeddings = []
+
+        for start in range(0, total, chunk_size):
+            end = min(start + chunk_size, total)
+            group = texts[start:end]
+
+            print(f"  Encoding chunks {start+1}–{end} of {total}...")
+
+            # show_progress_bar=False avoids the multiprocessing tokenizer
+            # that causes segfaults on macOS when PyTorch threads are active.
+            group_embeddings = self.model.encode(
+                group,
+                batch_size=batch_size,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
+            all_embeddings.append(group_embeddings)
+
+            elapsed = time.time() - start_time
+            rate = end / elapsed
+            remaining = (total - end) / rate if rate > 0 else 0
+            print(f"    done — {elapsed/60:.1f} min elapsed, ~{remaining/60:.1f} min remaining")
+
+        embeddings = np.vstack(all_embeddings)
+
         elapsed_time = time.time() - start_time
-        
         print(f"\n{'='*60}")
         print(f"✓ Embeddings created!")
         print(f"  Shape: {embeddings.shape}")
         print(f"  Time: {elapsed_time:.2f} seconds ({elapsed_time/60:.2f} minutes)")
-        print(f"  Speed: {len(texts)/elapsed_time:.1f} chunks/second")
+        print(f"  Speed: {total/elapsed_time:.1f} chunks/second")
         print(f"{'='*60}")
-        
-        # Cache embeddings if requested
+
         if cache_file:
             print(f"\nCaching embeddings to {cache_file}...")
             np.save(cache_file, embeddings)
             print(f"✓ Embeddings cached!")
-        
+
         return embeddings
     
     def create_faiss_index(self, embeddings: np.ndarray, index_type: str = 'flat') -> faiss.Index:

@@ -1,0 +1,618 @@
+Title: Enhancing Galaxy Classification with U-Net Variational Autoencoders. III. Disk-like Galaxy Identification in JWST Samples of up to redshift 4
+Authors: Sergey S. Mirzoyan, Arno Avagyan
+Published: 2026-05-29
+Categories: astro-ph.GA
+
+Research in Astron. Astrophys. V ol.0 (20xx) No.0, 000-000
+http://www.raa-journal.org http://www.iop.org/journals/raa
+(LATEX: RAA˙4˙2.tex; printed on June 1, 2026; 1:40)
+Research in
+Astronomy and
+Astrophysics
+Enhancing Galaxy Classification with U-Net Variational
+Autoencoders. III. Disk-like Galaxy Identification in JWST
+Samples of up to redshift 4
+S. S. Mirzoyan1,2 and A. Avagyan1
+1 Center for Cosmology and Astrophysics, Alikhanyan National Laboratory, 2 Alikhanyan Brothers
+str., Yerevan 0036, Armenia;mserg@yerphi.am
+2 Yerevan State University, Yerevan 0025, Armenia
+Received 20xx month day; accepted 20xx month day
+AbstractIn this third study of the series, we extend our U-Net Variational Autoencoder-
+based galaxy classification framework to a significantly larger JWST sample spanning the
+redshift range0.5< z <4. Focusing on massive systems with stellar masses exceeding
+1010 M⊙, we analyze 1,380 galaxies that satisfy these criteria and apply our previously
+developed denoising and classification pipeline to identify disk-like morphologies across
+cosmic time. Within this population, our classifier detects 382 disk-like galaxies, with a
+subset showing uncertain features consistent with the expected performance limits of cur-
+rent deep-learning models. This expanded dataset allows us to examine the distribution
+of disk-like systems in a statistically meaningful high-redshift regime, including epochs
+where well-ordered disks are traditionally expected to be rare. The results demonstrate
+that disk-like structures persist across a broad range of redshifts and stellar masses, sug-
+gesting that massive disks may be more common in the early universe than previously as-
+sumed. These findings emphasize the value of combining advanced denoising techniques
+with machine-learning-based morphological analysis for characterizing galaxy popula-
+tions in large JWST surveys.
+Key words:galaxies: classification: morphology - techniques: convolutional neural net-
+works: variational autoencoder: u-net
+1 INTRODUCTION
+Understanding when and how ordered disks assemble and survive in massive galaxies requires a uni-
+form, redshift-spanning morphological census anchored to astrophysically motivated selection criteria.
+Classical frameworks emphasize the diversity of morphologies within broad Hubble classes (Buta 2019;
+Mo et al. 2010; Sparke & Gallagher 2000; Sandage 2005), while comprehensive reviews highlight the
+physical drivers of morphological transformation across cosmic time (Bell et al. 2026; Conselice 2014;
+Naab & Ostriker 2017; Genel et al. 2018). Robust inferences at high redshift are sensitive to surface-
+brightness dimming, PSF and bandpass effects, and morphology-k-corrections (Conselice et al. 2024,
+2023; Conselice 2020; Lotz et al. 2004; Mager et al. 2018; van der Wel et al. 2014). A mass-limited
+strategy mitigates some of these biases and enables direct comparison across epochs.
+JWST(James Webb Space Telescope) (Gardner et al. 2006; Rigby et al. 2023) imaging ex-
+tends quantitative morphology well into the early universe, with large public catalogs facilitating
+arXiv:2605.31420v1  [astro-ph.GA]  29 May 2026
+
+2 S. S. Mirzoyan
+population-level analyses (Genin et al. 2025; Carreira et al. 2026; Shuntov et al. 2025; Sun et al. 2024).
+Spectroscopic surveys further contextualize structural evolution during reionization and Cosmic Noon
+(Meyer et al. 2025; Belli et al. 2025; Rieke et al. 2023; van der Wel et al. 2014). These data require
+morphological pipelines that can handle heterogeneous signal-to-noise conditions, diverse structural
+features, and domain-shift effects across filters and redshifts.
+RecentJWST-based observational studies have provided important context for the present work.
+In particular, visual classifications from the CEERS (Cosmic Evolution Early Release Science) survey
+have revealed a surprisingly high fraction of spiral-like galaxies at intermediate redshifts, with up to
+nearly half of systems atz∼0.5exhibiting discernible spiral structure, declining to∼8%byz∼4
+(Kuhn et al. 2024). These fractions exceed earlier estimates based onHSTimaging and suggest that
+dynamically cold disks and spiral structure may have emerged at much earlier cosmic times than tradi-
+tionally assumed. Artificial redshifting tests further indicate that intrinsic spiral fractions below∼10–
+20%are statistically disfavored atz∼2–3, motivating mass-limited and resolution-aware morphology
+analyzes when probing disk formation in the early universe. Independent structural analyses based on
+JWST/NIRCam surface-brightness decompositions have further reported that flattened, disk-like com-
+ponents are already common at high redshift, with only a modest decline in disk-dominated systems
+toward earlier epochs for massive galaxies (Tsukui et al. 2026). Broader morphology surveys spanning
+multiple publicJWSTfields have likewise reported high disk fractions at low and intermediate stellar
+masses, while finding a pronounced decline in disk dominance at the highest masses, where spheroid-
+like morphologies become increasingly prevalent (Lee et al. 2024; Carreira et al. 2026). Extending disk
+studies to even earlier epochs, Mirzoyan et al. (2026) found that disk-like morphologies constitute a
+significant fraction of the population at4≲z≲7.7, emphasizing the importance of noise suppression
+for robust high-redshift inference.
+In parallel, new unsupervised machine-learning approaches have improved the efficiency of large-
+scale morphology analysis, such as the ConvNeXt+UMAP framework, which combines hierarchi-
+cal CNN Convolutional Neural Network feature extraction based on the ConvNeXt (Convolutional
+Neural Network for the 2020s) architecture (Liu et al. 2022) with nonlinear manifold learning using
+UMAP (Uniform Manifold Approximation and Projection) (McInnes et al. 2018) to classify nearly10 5
+COSMOS (Cosmic Evolution Survey) galaxies (Scoville et al. 2007) into physically meaningful mor-
+phology groups using an optimized set of 20 clusters (Fang et al. 2026). More generally, representation-
+learning approaches applied toJWSTdata suggest that a fraction of visually identified disks atz≳3
+may occupy a more structurally ambiguous regime when compared against simulated galaxy popula-
+tions, highlighting potential systematics in visually driven or supervised classifications (Vega-Ferrero et
+al. 2024). Large-scale unsupervised clustering analyses further demonstrate that disk-like galaxies pop-
+ulate multiple distinct regions of morphology space rather than forming a single homogeneous class,
+underscoring the diversity of disk structures and the sensitivity of disk identification to the adopted
+representation and clustering strategy (Fang et al. 2026). Together, these developments highlight both
+the rapid evolution of galaxy structures across cosmic time and the growing need for automated, noise-
+robust classification methods capable of operating across heterogeneous imaging datasets.
+Machine learning (ML) has become central to modern galaxy morphology studies, lens discovery,
+and classification pipelines (Mirzoyan 2025a,b; Mirzoyan et al. 2019; Ghaderi et al. 2025; Tian et al.
+2025; Atemkeng et al. 2025). CNN and group-equivariant architectures have shown excellent perfor-
+mance on benchmark galaxy datasets (Pandya et al. 2023), though input noise and imaging artifacts
+continue to limit accuracy—especially for high-redshift sources.
+To address this limitation, in Paper I of this series Mirzoyan 2025a we introduced a denois-
+ing framework based on a U-Net Variational Autoencoder (V AE) (Ronneberger et al. 2015; Kingma
+& Welling 2014). Trained on realistically contaminated EFIGI (Extraction de Formes Id ´ealis´ees de
+Galaxies en Imagerie) images (Baillard et al. 2011), the model effectively suppressed noise while pre-
+serving morphology-relevant structures, yielding consistent gains in downstream classification metrics
+across multiple deep-learning architectures. Paper I established the methodological foundation that de-
+noising is not merely cosmetic, but functionally beneficial for morphological inference.
+
+JWST High Redshift Galaxy Classification 3
+In Paper II Mirzoyan 2025b, we extended this denoising pipeline toJWSTNear-Infrared Camera
+(NIRCam) (Rieke et al. 2005, 2023) observations up toz≈4. There we demonstrated that V AE-based
+denoising improves the recoverability of faint structural components and enhances disk/non-disk sepa-
+rability in early-universe galaxies. Analysis of a pilot subsample revealed that disk-like morphologies
+could be reliably identified even at high redshift, reinforcing the need for denoising-informed classifica-
+tion in low-S/N regimes.
+In the present Paper III, we analyze a mass-selected sample ofJWSTgalaxies withM ⋆ >10 10 M⊙
+over0.5< z <4. Source selection is based on established CANDELS catalogs (Grogin et al. 2011) to
+ensure robust stellar-mass and redshift estimates, while all morphological measurements are performed
+exclusively onJWST/NIRCam imaging (CEERS Collaboration 2025). The construction of the sample
+and the motivation for this selection are described in detail in Section 2.
+Relative to our earlier papers, the focus in this work is on achieving a more complete sample, ensur-
+ing methodological stability at large scale, and implementing rigorous controls for systematic effects.
+Specifically, we (i) reduce domain-shift problems by incorporating denoising-informed data augmenta-
+tion and calibrated classification scores and (ii) propagate classification uncertainties by T-scaling.
+This paper is structured as follows: Section 2 provides an overview of the dataset employed in
+our research. In Section 3, we elaborate on the methodologies utilized for data processing and galaxy
+classification . Section 4 presents the analysis results and its significance. Lastly, Section 5 concludes
+the paper with a summary of our findings.
+2 DATASET
+For theJWSTdata used in this paper, we adopt a filtering approach informed by recent morphological
+studies that emphasize the connection between structural features, stellar mass, and redshift. TheJWST
+imaging analyzed in this work is drawn from the Cosmic Evolution Early Release Science (CEERS)
+survey, an Early Release Science (ERS) program designed to showcase the capabilities ofJWSTfor
+studying galaxy formation and evolution across cosmic time. CEERS targets the EGS field, covering
+100arcmin 2 during Cycle 1 and provides deep, multi-band NIRCam imaging spanning approximately
+0.9–5µm, enabling rest-frame optical morphological studies for galaxies out toz∼4. We utilize the
+publicly available CEERS NIRCam imaging from the ERS data release (Cycle 1). The images have a
+native pixel scale of∼0.031 ′′ and achieve a point-spread-function full width at half maximum (FWHM)
+of approximately0.06 ′′–0.09′′ across the filters relevant to this study, corresponding to sub-kiloparsec
+physical resolution over most of the redshift range probed.
+To construct the parent galaxy sample, we use the CANDELS photometric catalogs (Grogin et al.
+2011), which provide homogeneous stellar-mass estimates, photometric redshifts, and extensive ancil-
+lary photometry across the EGS field. The CANDELS catalogs are well suited for defining mass-limited
+samples due to their uniform selection, calibrated stellar population modeling, and established com-
+pleteness limits. AlthoughJWST-based photometric catalogs are now becoming available, we do not
+use them for parent-sample definition because their mass completeness and cross-field homogeneity are
+still evolving for large, multi-field samples. In this work, CANDELS is therefore used solely to define
+the parent sample in stellar mass and redshift, while all morphological measurements are performed ex-
+clusively onJWST/NIRCam imaging from the CEERS survey. We restrict the parent sample to galaxies
+with stellar massesM ⋆ >10 10 M⊙ and redshifts0.5< z <4, following the approach of Kuhn et al.
+(2024). This selection ensures robust stellar-mass completeness and facilitates direct comparison with
+pre-JWSTstudies.
+Because the CEERSJWSTsurvey covers only a subset of the full EGS field spanned by the
+CANDELS catalogs, the CANDELS parent sample is spatially matched to the CEERS footprint prior
+to retrievingJWST/NIRCam imaging. For each galaxy in the selected CANDELS parent sample, we
+retrieve all availableJWST/NIRCam observations from the CEERS survey across seven filters: F115W,
+F150W, F200W, F277W, F356W, F410M, and F444W. This cross-matching procedure yielded a total of
+12,390 cutout images, corresponding to 1,380 unique galaxies. The remaining sources from the initial
+CANDELS list were not located within the availableJWSTfields. These bands span rest-frame optical
+
+4 S. S. Mirzoyan
+to near-infrared wavelengths over0.5< z <4, allowing different structural components to be enhanced
+or suppressed depending on wavelength coverage and signal-to-noise conditions.
+AllJWST/NIRCam images are extracted as fixed-size, square cutouts centered on the CANDELS
+catalog coordinates of each galaxy. Each image stamp has a size of 100×100 pixels, corresponding to
+an angular extent of approximately3 ′′ ×3 ′′. This field of view is sufficient to capture the full extent of
+the target galaxies and their immediate surroundings while minimizing background contamination and
+ensuring consistent input dimensions for the denoising and classification pipeline.
+To ensure the integrity of the morphological analysis, all retrieved image cutouts are subjected to an
+automated quality-control procedure prior to denoising and classification. Images exhibiting extremely
+low signal levels, abnormally high background noise, incomplete coverage, or near-uniform pixel distri-
+butions are identified using statistical diagnostics based on dynamic range, spatial variance, and central-
+to-background contrast, and are excluded from further analysis. The specific quality-assessment algo-
+rithm and rejection criteria are described in detail in Section 3.
+After applying the stellar-mass and redshift selection based on the CANDELS catalogs, cross-
+matching with available CEERSJWST/NIRCam imaging, and removing low-quality or unusable frames
+through automated quality control, our final analysis sample consists of 1,380 galaxies with reliable
+multi-bandJWSTcoverage, corresponding to a total of 6,730JWST/NIRCam images. These galax-
+ies span the redshift range0.5< z <4and have stellar massesM ⋆ >10 10 M⊙, forming a mass-
+complete sample suitable for statistical morphology studies. Application of the denoising and clas-
+sification pipeline described in Section 3 identifies 382 galaxies that are flagged as disk-like, with a
+small additional subset classified as ambiguous. The redshift distribution of the final sample is shown in
+Figure 1.
+Fig. 1: Redshift distribution of the 1,380 galaxy sample shown as a histogram, with redshift values
+plotted along the x-axis and galaxy counts per bin along the y-axis.
+In addition to theJWST/NIRCam imaging from the CEERS survey described above, we employ two
+auxiliary datasets to train and validate the components of our denoising and morphology–classification
+
+JWST High Redshift Galaxy Classification 5
+pipeline. As part of the methodology, we use the EFIGI dataset exclusively for training and validating
+the denoising module prior to applying the denoising pipeline to theJWSTdata.
+The EFIGI catalog (Baillard et al. 2011) contains high-quality, visually inspected galaxy images
+across a wide range of Hubble types. The images are primarily based on optical imaging from surveys
+such as SDSS, with a typical pixel scale of∼0.4 ′′ per pixel and an effective seeing-limited spatial
+resolution of approximately1–1.5 ′′. As in Paper I (Mirzoyan 2025a), we use EFIGI to simulate realistic
+imaging contaminants and validate the performance of the denoising model.
+The second dataset used for supervised morphological modeling is the Galaxy10 DECaLS dataset
+(Willett et al. 2013; Lintott et al. 2011; Walmsley et al. 2022), which provides curated ten-class mor-
+phological labels derived from the Galaxy Zoo project and DECaLS imaging. The DECaLS imaging
+underlying Galaxy10 is based on ground-based optical observations with a native pixel scale of0.262 ′′
+and a typical point-spread-function FWHM of∼1.0 ′′–1.3′′. As demonstrated in Paper II, this dataset is
+well suited for constructing a robust binary disk/non-disk classifier when denoised inputs are supplied
+to modern deep-learning architectures.
+3 METHOD
+The methodological framework employed in this work builds upon the general strategy introduced in
+Paper I of this series, but it is presented here in a fully self-contained form. Our objective is to obtain
+morphology-preserving denoised galaxy images before performing a supervised disk/non-disk clas-
+sification. The overall approach consists of two major components: (i) training a U-Net Variational
+Autoencoder (V AE) to remove realistic astrophysical and instrumental contaminants, and (ii) applying
+a rotation- and reflection-equivariant classifier to distinguish disk-like systems from non-disks.
+3.1 Image Quality Assessment and Filtering
+Our objective is to obtain morphology-preserving denoised galaxy images, following automated
+image-level quality assessment, before performing a supervised disk/non-disk classification.
+A non-negligible fraction of the retrieved images exhibit either extremely low signal levels or ex-
+ceptionally high background noise. In such cases, the classifier’s predictions become unreliable, and
+these frames must be excluded from the final sample. To accomplish this, we employ a self-developed,
+automated quality-assessment algorithm that applies a series of statistical and structural checks to iden-
+tify and remove low-quality images prior to inference. The quality-assessment algorithm is tailored
+specifically for automated pre-selection of JWST cutouts before morphological analysis. Representative
+examples of the rejected frames are shown in Figure 2.
+Fig. 2: Representative examples of JWST cutout images rejected by the automated quality-assessment
+pipeline, including noise-dominated frames, partially corrupted images, incomplete coverage artifacts,
+and blank fields lacking reliable morphological information.
+For images passing these global checks, the algorithm compares the statistical properties of a central
+region to those of an outer annulus. Images are rejected if the central region fails to exhibit sufficient
+contrast or signal-to-noise relative to the background, or if gradient-based structure in the central region
+is not enhanced compared to the outskirts. These criteria remove frames with detectable flux but lack-
+ing the centralized signal or morphological structure required for reliable GCNN-based classification,
+
+6 S. S. Mirzoyan
+Fig. 3: Image rejection rates from the quality-assessment pipeline.Left:Per-filter rejection rates show-
+ing higher rejection in bluer bands.Right:Per-redshift rejection rates shown for diagnostic purposes,
+illustrating the expected increase toward higher redshift due to surface-brightness dimming and band-
+dependent sensitivity.
+ensuring that downstream inference operates only on images containing meaningful and interpretable
+galaxy information.
+The filtering procedure operates on the grayscale representation of each image and evaluates sev-
+eral statistical diagnostics. First, it rejects globally uniform or near-uniform frames by examining their
+overall standard deviation and dynamic range. It then inspects large spatial regions—halves and quarters
+of the image—to detect uniform blocks indicative of empty, corrupted, or partially blank exposures. To
+ensure that the galaxy is not overwhelmed by noise, the algorithm compares the central region with an
+outer annulus, computing relative contrast, local signal-to-noise ratio, and gradient-based structural dif-
+ferences. Images lacking sufficient central signal or morphological structure—conditions necessary for
+a reliable GCNN prediction—are discarded. These statistical checks collectively provide a robust, au-
+tomated mechanism for separating unusable frames from high-quality galaxy images, ensuring that the
+subsequent GCNN classifier operates on data where meaningful morphological information is present.
+After applying this filtering step, we retain 6,730 images corresponding to 1,144 galaxies, for which
+the GCNN model is used to perform the final inference.
+Figure 3 summarizes the behavior of the automated quality-assessment pipeline across observational
+conditions. The left panel shows the fraction of rejected images as a function of JWST filter, highlighting
+increased rejection in bluer bands, while the right panel illustrates the redshift dependence of image
+rejection, demonstrating a systematic increase toward higher redshift consistent with surface-brightness
+dimming and band-dependent sensitivity effects.
+3.2 Training Data and Contamination Modeling
+To construct a suitable training set for the denoising stage, we select a subset of 1,400 visually clean
+galaxies from the EFIGI survey (Baillard et al. 2011). These images serve as baseline inputs from which
+we generate controlled contamination scenarios. Using thePyAutoLensframework (Nightingale et
+al. 2023), each image is augmented by inserting between one and three foreground or background
+sources—either compact stars or extended galaxies—with randomized structural parameters, light pro-
+files, ellipticities, orientations, and intensities. This process mimics the wide variety of blends, overlaps,
+and artifacts present in real extragalactic imaging campaigns. Similar contamination simulations have
+been shown to increase robustness of the model in related studies (Yao et al. 2024).
+From the contaminated dataset, 1000 images are assigned to the training and validation subset, while
+the remaining 400 are held out for testing. Each clean image undergoes ten independent contamination
+realizations, yielding a final corpus of 10,000 denoising examples. All images are normalized to the[0,1]
+interval and padded to256×256×3pixels so that the output format matches the Galaxy10 DECaLS
+dataset used later for classification.
+
+JWST High Redshift Galaxy Classification 7
+3.3 U-Net V AE Architecture
+The denoising model used in this work is a U-Net–based variational autoencoder (V AE) designed to
+remove noise while preserving faint morphological structure. The architecture follows a standard en-
+coder–decoder layout: the encoder consists of four convolutional blocks with ReLU activations and
+max-pooling operations, which progressively downsample the input image and increase the represen-
+tation depth. The decoder mirrors this structure using transposed convolutions to restore the original
+spatial resolution. Unlike a purely deterministic U-Net, the model includes a variational latent space
+from which reconstructions are sampled. During training the V AE is optimized with a composite loss
+function that balances two objectives: (i) accurate pixel-level reconstruction of the input image and (ii)
+regularization of the latent representation so that it remains smooth and well-behaved. The reconstruc-
+tion component encourages the network to reproduce the clean underlying structure of the galaxy, while
+the latent regularization prevents overfitting to noise and ensures that the learned latent space captures
+statistically meaningful variations in morphology. A full methodological description, including used
+composite loss function is provided in Paper II.
+3.4 Binary Disk Identification via Group CNNs
+In Paper I, we utilized a group-equivariant convolutional neural network (GCNN) model (Cohen &
+Welling 2016) to tackle a ten-class morphological classification problem. In contrast, the current work
+applies a GCNN architecture to a binary classification task, distinguishing disk-like from non-disk galax-
+ies, following the methodology presented in Paper II. As demonstrated in Paper II, this GCNN-based
+binary framework performs exceptionally well: trained on the Galaxy10 DECaLS dataset, the model
+achieved 98.9% training accuracy, 98.6% test accuracy, and an F1-score of 96.5%, confirming its
+strong generalization capability and its effectiveness in identifying disk-like structures even in noisy,
+high-redshift images. This reduction to a binary task reflects the scientific goal of identifying rotation-
+ally supported structures over a wide redshift range.
+For this purpose, we adopt Group Convolutional Neural Networks (GCNNs), which naturally in-
+corporate discrete rotational and reflection symmetries into the network architecture. GCNNs are par-
+ticularly suited to astronomical imaging, where galaxy orientation on the sky is arbitrary. Following the
+methodology of Pandya et al. (2023), the classifier is implemented with theescnnlibrary (Weiler &
+Cesa 2021) using D16 symmetry-a group including 8 rotational and 8 reflection operators. This choice
+ensures equivariance to common geometric transformations without requiring the network to learn them
+from data, leading to improved performance on both low- and high-redshift samples.
+TheJWSTimaging used in this paper extends to redshiftsz≈4, offering a rare opportunity to
+explore the emergence of disk-like structures near cosmic dawn. All galaxy images are first denoised
+through the V AE and then passed to the GCNN classifier to generate disk-likelihood scores.
+3.5 Qualitative Validation on JWST Data
+A qualitative validation of both the denoising and classification stages is shown in Figure 4, using
+representative JWST galaxy images spanning redshift intervalsz∈[0,1],[1,2],[2,3], and[3,4]. The
+top row displays the original JWST observations, while the bottom row shows the corresponding outputs
+produced by the U-Net V AE. In all cases, the denoising model effectively suppresses foreground and
+background contaminants while preserving the underlying galaxy morphology, including extended low-
+surface-brightness structure.
+Disk and non-disk classifications predicted by the GCNN are indicated above each column. The
+classifications are consistent across the full redshift range considered. These examples demonstrate that,
+despite the significant domain shift between ground-based DECaLS imaging used for training and space-
+based JWST observations, the combined V AE and GCNN framework yields physically plausible and
+interpretable disk identification results.
+
+8 S. S. Mirzoyan
+Fig. 4: Visual validation of the denoising and classification pipeline applied to JWST galaxy images. The
+top row shows original JWST observations, while the bottom row shows the corresponding denoised
+images produced by the U-Net V AE. Each column displays a galaxy classified by the GCNN as either
+DiskorNon-Disk, as indicated above the images. Columns 1-2 correspond to galaxies withz∈[0,1],
+columns 3-4 toz∈[1,2], columns 5-6 toz∈[2,3], and columns 7-8 toz∈[3,4]. The denoising
+process removes contaminating sources while preserving key morphological features, enabling robust
+disk identification across a wide redshift range despite substantial observational differences between the
+DECaLS training data and JWST imaging.
+4 ANALYSIS
+TheJWSTimaging used in this study reaches redshifts ofz≈4, providing a rare opportunity to investi-
+gate the emergence of disk-like structures near cosmic dawn. All galaxy images are first denoised using
+the V AE model and subsequently passed through the GCNN classifier to obtain disk-likelihood scores.
+The motivation for collecting multi-filter observations of each galaxy is that different filters can ei-
+ther suppress or enhance key morphological features. Certain wavelengths may obscure disk signatures,
+while others reveal them more clearly. As a result, our inference procedure is inherently multi-instance:
+every available image of a galaxy is classified independently. The individual predictions are then aggre-
+gated at the galaxy level. For example, if a galaxy has seven available images and the classifier identifies
+six as non-disk and one as disk, the final classification is assigned as disk. This reflects the physical ex-
+pectation that genuine disk structures may be detectable only in particular filters, and a single confident
+disk detection is sufficient to label the system as disk-like.
+4.1 GCNN Inference: Galaxy-level Statistics and High-redshift Disk Fraction
+Raw GCNN output probabilities tend to be overconfident for atypical or low-S/N inputs. To correct
+for this, we adopt a calibration scheme inspired by standard reliability analysis used in modern deep-
+learning classification tasks. First, we construct a validation subset consisting of denoised Galaxy10
+DECaLS images together with their true binary labels. The GCNN is evaluated on this set, and the re-
+sulting predicted probabilities are compared to empirical class frequencies in fixed probability bins. We
+then apply a temperature-scaling transformation, a standard post-hoc calibration technique introduced
+by Guo et al. (2017),
+ˆp=σ
+ z
+T
+
+,(1)
+wherezis the pre-softmax logit,σis the sigmoid function, andTis a calibration temperature opti-
+mized by minimizing the negative log-likelihood on the validation data. This adjustment preserves the
+model’s decision boundaries but rescales probability values to be better aligned with observed classi-
+fication uncertainty. The resulting calibrated scores form the basis for the disk likelihood values used
+throughout the analysis.
+We aggregate image-level predictions across available filters to the galaxy level by grouping sources
+by identifier and applying an “any-positive” rule: a galaxy is labeled disk-like if at least one of its images
+
+JWST High Redshift Galaxy Classification 9
+Table 1: Redshift-binned disk fractions (Wilson 95% CIs).
+zbin N N disk fdisk low highp median
+0–1 211 55 0.261 0.206 0.324 1.000
+1–2 557 197 0.354 0.315 0.394 1.000
+2–3 286 106 0.371 0.317 0.428 1.000
+3–4 90 24 0.267 0.186 0.366 1.000
+Fig. 5: Disk fraction versus redshift bin with Wilson 95% confidence intervals.
+is classified as disk. For a continuous confidence metric, we combine per-image probabilities via a noisy-
+OR aggregator,
+pgal = 1−
+Y
+i
+(1−p i),
+which matches the physical expectation that disk signatures may be preferentially revealed in spe-
+cific bands.
+Across the post-filtered sample of1,144galaxies, the overall disk fraction isf disk = 0.334with
+a Wilson 95% confidence interval of0.307-0.362. The distribution of galaxy-level disk probabilities is
+strongly skewed toward high confidence, with a medianp gal ≈1.
+Redshift dependence. Partitioning the sample intoz∈[0,1),[1,2),[2,3), and[3,4], the disk fractions
+with Wilson intervals are summarized in Table 1 and Figure 5. In the high-redshift regime (z≥3), we
+measure a disk fraction of0.267(95% CI0.186-0.366) based on90galaxies, with a medianp gal near
+unity. These results indicate that rotationally supported systems persist toz∼4within our sample.
+Stellar mass dependence. Using stellar-mass binslog(M ⋆/M⊙)∈[10.0,10.5),[10.5,11.0)and
+[11.0,12)the corresponding disk fractions are0.379(95% CI0.343-0.416),0.261(95% CI0.220-
+0.307), and0.293(95% CI0.202-0.404), respectively (Table 2; Figure 6). Within our sample, the disk
+fraction peaks aroundlogM ⋆ ∼10.0-10.5 and is comparatively lower toward higher masses.
+Multi-filter consistency and band effects. A total of365galaxies exhibit mixed per-filter labels (both
+disk and non-disk), underscoring that some bandpasses can suppress disk signatures while others reveal
+them. At the image level, the mean predicted probability and the fraction of disk classifications vary
+with filter (Table 3), indicating band-dependent sensitivity that may reflect PSF, S/N, and rest-frame
+coverage effects.
+Comparison with previous studies. The disk fractions derived in this work are broadly consistent with
+recent observational results based onJWSTimaging, while reflecting differences in sample definition,
+
+10 S. S. Mirzoyan
+Fig. 6: Disk fraction versus stellar mass bin with Wilson 95% confidence intervals.
+Table 2: Stellar-mass-binned disk fractions (Wilson 95% CIs).
+Mbin N N disk fdisk low high
+10.0-10.5 686 260 0.379 0.343 0.416
+10.5–11.0 383 100 0.261 0.220 0.307
+11.0–12.0 75 22 0.293 0.202 0.404
+classification methodology, and selection criteria. Visual classifications from the CEERS survey suggest
+that the fraction of spiral or disk-like systems declines from∼40-50%atz∼0.5to∼5-10% byz∼4
+(Kuhn et al. 2024). Within our mass-limited sample (M ⋆ >10 10 M⊙), we measure a disk fraction of
+∼26-37% over0< z <3, decreasing to27 +10
+−8 %atz≥3. The comparatively higher fractions reported
+here are expected given our focus on massive galaxies, for which disks are both easier to detect and more
+likely to survive dynamical heating.
+Our results are also in close quantitative agreement with recent machine-learning–based morphol-
+ogy studies at even earlier cosmic times. Using a denoising V AE combined with a rotation-equivariant
+GCNN classifier applied toJWST/NIRCam imaging at4≲z≲7.7, Mirzoyan et al. (2026) reported
+a disk-like fraction of≃0.34, remarkably similar to the overall disk fraction measured in the present
+work despite the higher redshift range probed. This consistency suggests that a substantial population
+of rotationally supported systems is already in place well beforez∼4, provided that noise suppression
+and representation-aware classification techniques are employed.
+BroadJWSTmorphology surveys spanning multiple public fields further support this picture. In
+particular, Carreira et al. (2026) find high disk fractions at low and intermediate stellar masses, with
+a pronounced decline toward the highest masses where spheroid-dominated morphologies become in-
+creasingly prevalent. This mass dependence is qualitatively consistent with the trends observed in our
+mass-limited sample, reinforcing the conclusion that disk survivability decreases at the highest stellar
+masses, likely due to enhanced merger and compaction activity.
+Differences with visual spiral fractions are also attributable to classification definitions: our bi-
+nary disk/non-disk framework encompasses rotationally supported systems that may lack clearly iden-
+tifiable spiral arms, particularly at high redshift where surface-brightness dimming, clumpiness, and
+band-dependent effects obscure detailed arm structure. In this sense, our results should be interpreted
+as constraints on the prevalence of disk-like stellar mass distributions rather than on visually prominent
+spiral morphology alone. Similar conclusions have been reached in kinematic and structural studies of
+massive galaxies atz≳2, which find evidence for dynamically cold disks even when classical spiral
+structure is absent (Genzel 2017; Lelli et al. 2023).
+
+JWST High Redshift Galaxy Classification 11
+Table 3: Per-filter image diagnostics: number of images (N), mean predicted probability (⟨p⟩), and
+fraction classified as disk (fdisk).
+F ilter N P mean fdisk
+F115W 905 0.907 0.305
+F150W 803 0.899 0.320
+F200W 822 0.895 0.277
+F277W 977 0.937 0.068
+F356W 1204 0.949 0.039
+F410M 1010 0.952 0.029
+F444W 1009 0.954 0.025
+5 CONCLUSIONS
+In this work, we have conducted a comprehensive, multi–wavelength morphological analysis of 1,144
+galaxies with availableJWST/NIRCam imaging, leveraging a denoising V AE and a graph-based con-
+volutional neural network to identify disk-like structures deep into the epoch of peak galaxy assembly.
+Our methodology combines rigorous image-quality filtering, multi-instance classification across seven
+NIRCam filters, and a conservative galaxy-level aggregation scheme designed to capture genuine disk
+signatures even when they are present in only a subset of observed bands. Importantly, within the redshift
+range0.5≤z≤4.0, we identify382 disk galaxiesout of the1,144systems in our final sample.
+After removing low-quality frames, the GCNN classifier achieves robust performance on the re-
+maining 6,730 images. At the galaxy level, we measure an overall disk fraction off disk = 0.334 +0.028
+−0.027,
+indicating that approximately one-third of galaxies in our sample exhibit disk-like morphology. When
+examined as a function of redshift, the disk fraction increases fromf disk ∼0.26atz <1to a peak
+of∼0.37atz∼2-3, before declining modestly to0.27 +0.10
+−0.08 atz≥3. These results confirm that
+rotationally supported systems are already well established byz∼2and remain present—at a non-
+negligible level—into the early Universe atz∼4, consistent with recent dynamical and photometric
+evidence for early disk formation. A similar trend emerges with stellar mass: the disk fraction peaks at
+log(M⋆/M⊙)∼10.0–10.5 and declines toward higher masses. This behavior is broadly consistent with
+the expectation that intermediate-mass systems are most likely to host dynamically cold disks, whereas
+massive galaxies undergo more frequent mergers or compaction episodes that disrupt disk structure. An
+important outcome of our multi-filter approach is the identification of substantial wavelength-dependent
+variance in disk detectability. Approximately one-third (365) of the galaxies exhibit mixed per-filter
+classifications, where at least one filter reveals a disk-like signature while others do not. This high-
+lights the complex interplay between morphology and observed wavelength: shorter-wavelength bands
+(e.g., F115W, F150W) more frequently show high disk-likelihoods, whereas longer-wavelength filters
+(e.g., F277W, F356W) often suppress or dilute these features, potentially due to differences in PSF size,
+surface-brightness sensitivity, and rest-frame wavelength coverage. Our findings therefore underscore
+the necessity of multi-band classification for robust morphological inference at high redshift.
+Finally, our results can be placed in the context of recentJWST-based studies that have explored
+the fraction of disk-like galaxies at high redshift using a variety of complementary approaches. Visual
+classifications from the CEERS survey report high spiral and disk fractions at intermediate redshifts,
+suggesting that ordered disk structures emerge earlier than inferred fromHST-based analyses (Kuhn et
+al. 2024). Machine-learning and representation-based studies applied to the same data have emphasized,
+however, that a subset of visually identified disks may exhibit structurally ambiguous or dynamically hot
+configurations, highlighting sensitivity to classification methodology and image quality (Vega-Ferrero
+et al. 2024; Fang et al. 2026). Structural analyses relying on surface-brightness decompositions likewise
+find that flattened, disk-like components are common at high redshift, with disk dominance declining
+primarily at the highest stellar masses (Tsukui et al. 2026; Lee et al. 2024). Extending such analyses to
+even earlier epochs, denoising-informed classification ofJWST/NIRCam imaging at4≲z≲7.7has
+demonstrated that disk-like systems constitute a substantial fraction of the population, with inferred disk
+
+12 S. S. Mirzoyan
+fractions of order∼0.3even within the first billion years of cosmic time (Mirzoyan et al. 2026). In this
+broader context, the disk fraction measured here for massive galaxies over0.5< z <4is fully con-
+sistent with recentJWST-based results, while benefiting from a strictly mass-selected sample, uniform
+JWST/NIRCam imaging, and explicit control of noise-driven systematics through denoising-informed
+classification. These methodological elements help reconcile differences among existing measurements
+and reinforce the conclusion that disk-like structures are both common and resilient across a wide range
+of cosmic epochs.
+Taken together, these results provide quantitative evidence that disk-like structures are both common
+and resilient across cosmic time, even when viewed through the diverse and sometimes challenging
+observational windows provided byJWST. The strong wavelength dependence, high incidence of mixed-
+filter classifications, and redshift evolution observed here point to a promising future in which machine-
+learning–assisted, multi-band morphological studies will play a central role in charting the emergence
+of ordered galactic structure from the early Universe to the present day.
+Acknowledgements We thank the referee for many useful comments.We acknowledge the use of
+the EFIGI, Galaxy10 DECaLS datasets and CEERS database, which enabled the development and vali-
+dation of this research.
+References
+Andalman, Z. L., et al. 2025,On the origin of the high star formation efficiency in massive galaxies at
+Cosmic Dawn, MNRAS, 540, 3350.
+Atemkeng, M. T., et al. 2025,A benchmark analysis of saliency-based explainable deep learning meth-
+ods for the morphological classification of radio galaxies, arXiv:2502.17207. 2
+Baillard, A., et al. 2011,The EFIGI catalogue of 4458 nearby galaxies with detailed morphology, A&A,
+532, A74. 2, 5, 6
+Belli, S., et al. 2025,The Blue Jay Survey: Deep JWST spectroscopy for a representative sample of
+galaxies at cosmic noon, arXiv:2510.11775. 2
+Bell, E. F., et al. 2026,The low-mass and structured stellar halo of M83 argues against a merger origin
+for its starburst and extended neutral hydrogen disk, ApJ, 997, 153. 1
+Buta, R. J. 2019,The systematics of galaxy morphology in the de Vaucouleurs revised Hubble–Sandage
+classification system: application to the EFIGI sample, MNRAS, 488, 590. 1
+Carreira, C., et al. 2026,JWST Advanced Deep Extragalactic Survey (JADES) Data Release 5: Catalogs
+of inferred morphological properties, arXiv:2601.15957. 2, 10
+Finkelstein, S. L., et al. 2025,The Cosmic Evolution Early Release Science Survey (CEERS), ApJL. 3
+Cohen, T. S., & Welling, M. 2016,Group Equivariant Convolutional Networks, in Proc. of the 33rd
+International Conference on Machine Learning (ICML), 2990 7
+Conselice, C. J. 2014,The evolution of galaxy structure over cosmic time, ARA&A, 52, 291. 1
+Conselice, C. J. 2020,The Cosmic Evolution of Galaxy Structure, IOP Publishing. 1
+Conselice, C., et al. 2023,Discovery of the highest redshift galaxies with JWST, AAS Meeting Abstracts,
+241, 153–07. 1
+Conselice, C. J., et al. 2024,EPOCHS Paper V: The dependence of galaxy formation on galaxy structure
+atz <7from JWST, MNRAS, 531, 4857. 1
+Fang, G., et al. 2026,An updated efficient galaxy morphology classification model based on ConvNeXt
+encoding with UMAP dimensionality reduction, AJ, 171, 59. 2, 11
+Gardner, J. P., et al. 2006,The James Webb Space Telescope, Space Sci. Rev., 123, 485 1
+Genel, S., et al. 2018,The size evolution of star-forming and quenched galaxies in the IllustrisTNG
+simulation, MNRAS, 474, 3976. 1
+Genin, A., et al. 2025,DAWN JWST Archive: Morphology from profile fitting of over 340,000 galaxies,
+arXiv:2505.21622. 2
+Genzel, R. 2017,The Early Evolution of Galactic Disks: Structure, Dynamics and Feedback, Disk
+Instabilities Across Cosmic Scales, 5. 10
+
+JWST High Redshift Galaxy Classification 13
+Ghaderi, H., et al. 2025,Galaxy Morphological Classification with Zernike Moments and Machine
+Learning, ApJS, 277, 10. 2
+Grogin, N. A., et al. 2011,The Cosmic Assembly Near-infrared Deep Extragalactic Legacy Survey
+(CANDELS), HST WFC3/ACS Deep Survey Description, Survey overview available athttps://
+www.ipac.caltech.edu/project/candels. 3
+Guo, C., et al. 2017,On Calibration of Modern Neural Networks, in Proc. of the 34th International
+Conference on Machine Learning (ICML), 1321 8
+Gurzadyan, V .G. and Ozernoy L.M., 1981,Accretion of the cloud of gas debris of stars disrupted by the
+tidal forces of a supermassive black hole, A&A, 95, 39
+Kingma, D. P., & Welling, M. 2014,Auto-Encoding Variational Bayes, arXiv:1312.6114 2
+Kocjan, Z., et al. 2024,Hot gas accretion fuels star formation faster than cold accretion in high-redshift
+galaxies, MNRAS, 534, 918.
+Kuhn, V ., et al. 2024,JWST reveals a surprisingly high fraction of galaxies being spiral-like at0.5≤
+z≤4, ApJL, 968, L15. 2, 3, 10, 11
+Lee, J. H., Park, C., Hwang, H. S., & Kwon, M. 2024,Morphology of Galaxies in JWST Fields: Initial
+Distribution and Evolution of Galaxy Morphology, ApJ, 936, 112. 2, 11
+Lelli, F., et al. 2023,Cold gas disks in main-sequence galaxies at cosmic noon, A&A, 672, A106. 10
+Lintott, C., et al. 2011,Galaxy Zoo 1: data release of morphological classifications for nearly 900,000
+galaxies, MNRAS, 410, 166. 5
+Liu, Z., et al. 2022,A ConvNet for the 2020s, in Proc. of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR), 11976 2
+Lotz, J. M., et al. 2004,A new nonparametric approach to galaxy morphological classification, AJ, 128,
+163. 1
+Mager, V . A., et al. 2018,Galaxy structure in the ultraviolet: wavelength dependence of morphological
+parameters, ApJ, 864, 123. 1
+McInnes, L., et al. 2018,UMAP: Uniform Manifold Approximation and Projection for Dimension
+Reduction, arXiv:1802.03426 2
+Meyer, R. A., et al. 2025,JWST COSMOS-3D: Spectroscopic census of [O III] emitters at6.75< z <
+9.05, arXiv:2510.11373. 2
+Mirzoyan, S. S., et al. 2019,Machine learning and Kolmogorov analysis to reveal gravitational lenses,
+MNRAS Lett., 489, L32. 2
+Mirzoyan, S. S. 2025a,Enhancing Galaxy Classification with U-Net VAEs for Denoising, RAA, 25,
+095006. 2, 5
+Mirzoyan, S. S. 2025b,Enhancing Galaxy Classification with U-Net VAEs. II. JWST High-Redshift
+Sample, RAA, 26, 025010. 2, 3
+Mirzoyan, S. S., Avagyan, A., & Gurzadyan, V . G. 2026,Disk-like Galaxies at4< z <7.7:
+JWST/NIRCam Morphologies Revealed by Denoising VAE–GCNN Classification, MNRAS Lett., in
+press, arXiv:2604.14599. 2, 10, 12
+Mo, H., et al. 2010,Galaxy Formation and Evolution, Cambridge Univ. Press. 1
+Naab, T., & Ostriker, J. P. 2017,Theoretical challenges in galaxy formation, ARA&A, 55, 59. 1
+Nightingale, J. W., et al. 2023,PyAutoLens: Automated Modeling of Strong Gravitational Lenses, JOSS,
+8, 5073 6
+Pandya, S., et al. 2023,E(2)-equivariant neural networks for robust galaxy morphology classification,
+arXiv:2311.01500. 2, 7
+Rees, M. 1988,TTidal disruption of stars by black holes of 106-108 solar masses in nearby galaxies,
+Nature, 333, 523
+Rieke, M. J., et al. 2005,Overview of the James Webb Space Telescope Near-Infrared Camera
+(NIRCam), Proc. SPIE, 5904, 1 3
+Rieke, M. J., et al. 2023,The JWST Near-Infrared Camera (NIRCam), PASP, 135, 028001 3
+Rieke, M., et al. 2023,Data from the JWST Advanced Deep Extragalactic Survey (JADES), MAST
+Release. 2
+
+14 S. S. Mirzoyan
+Rigby, J. R., et al. 2023,The Science Performance of the James Webb Space Telescope: Early Results,
+ApJ, 943, 38 1
+Ronneberger, O., et al. T. 2015,U-Net: Convolutional Networks for Biomedical Image Segmentation, in
+Proc. MICCAI, 234 2
+Sacchi, A. 2025,Detection of Anisotropies in the Circumgalactic Medium of Disk Galaxies:
+Supermassive Black Hole Activity or Star Formation-driven Outflows?, arXiv:2501.18681
+Sampaio, V .M. 2026,Morphology across cosmic time: assessing the evolution and interplay of disk and
+bulge-dominated galaxies in the CANDELS survey, arXiv:2506.12205;
+Sandage, A. 2005,The classification of galaxies: Early history and ongoing developments, Annu. Rev.
+Astron. Astrophys., 43, 581. 1
+Scoville, N., et al. 2007,The Cosmic Evolution Survey (COSMOS): Overview, ApJS, 172, 1 2
+Sharma, G., et al. 2026,The MAGPI Survey: co-evolution of baryons and dark matter in star-forming
+disk-like galaxies at 0.1 ¡ z ¡ 0.85,, arXiv:2601.12315;
+Shuntov, M., et al. 2025,COSMOS2025: The COSMOS-Web galaxy catalog, A&A, 704, A339. 2
+Sparke, L. S., & Gallagher, J. S. 2000,Galaxies in the Universe: An Introduction, Cambridge Univ.
+Press. 1
+Sun, W., et al. 2024,The structure and morphology of galaxies during the Epoch of Reionization re-
+vealed by JWST, ApJ, 960, 104. 2
+Tian, C., et al. 2025,Automatic machine learning framework to study AGN host morphology, ApJ, 981,
+5. 2
+Tsukui, T., Yoachim, P., Comer´on, S., et al. 2026,Structural Evolution of Stellar Disks fromz∼3to
+the Present with JWST, MNRAS, in press. 2, 11
+van der Wel, A., et al. 2014,3D-HST + CANDELS: Evolution of the size–mass distribution sincez= 3,
+ApJ, 788, 28. 1, 2
+Vega-Ferrero, J., Huertas-Company, M., Costantin, L., et al. 2024,On the Nature of Disks at High
+Redshift Seen by JWST/CEERS with Contrastive Learning and Cosmological Simulations, ApJ, 961,
+51. 2, 11
+Walmsley, M., et al. 2022,Galaxy Zoo DECaLS: Detailed visual morphology for 314,000 galaxies,
+MNRAS, 509, 3966. 5
+Weiler, M., & Cesa, G. 2021,General E(2)-Equivariant Steerable CNNs, in Advances in Neural
+Information Processing Systems (NeurIPS), 14334 7
+Willett, K. W., et al. 2013,Galaxy Zoo 2: detailed morphological classifications for 304,122 SDSS
+galaxies, MNRAS, 435, 2835. 5
+Yao, Y ., et al. 2024,A galaxy image augmentation method using few-shot learning and GANs, RAA, 24,
+035015. 6
+Zhu, Y ., et al. 2026,Clump-like structures in high-redshift galaxies from JADES, arXiv:2601.15965.

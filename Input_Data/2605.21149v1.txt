@@ -1,0 +1,2382 @@
+Title: CosmoForge I: A unified framework for QML power spectrum estimation and pixel-based likelihood analysis
+Authors: Giacomo Galloni, Luca Pagano
+Published: 2026-05-20
+Categories: astro-ph.CO, astro-ph.IM
+
+Astronomy&Astrophysicsmanuscript no. main©ESO 2026
+May 21, 2026
+CosmoForge I
+A unified framework for QML power spectrum estimation and pixel-based
+likelihood analysis
+G. Galloni/orcid1,2⋆ and L. Pagano/orcid1,2,3
+1 Dipartimento di Fisica e Scienze della Terra, Università degli Studi di Ferrara, via Saragat 1, I-44122 Ferrara, Italy
+2 Istituto Nazionale di Fisica Nucleare, Sezione di Ferrara, via Saragat 1, I-44122 Ferrara, Italy
+3 Institut d’Astrophysique Spatiale, CNRS, Univ. Paris-Sud, Université Paris-Saclay, Bât. 121, 91405 Orsay cedex, France
+Draft May 21, 2026
+ABSTRACT
+Context.Optimal power spectrum estimation on the largest angular scales of the cosmic microwave background relies on the Quadratic
+Maximum Likelihood (QML) estimator. Existing public implementations, however, each address only a subset of the problem and
+none combines power spectrum estimation with a self-consistent pixel-space likelihood within a single framework.
+Aims.We presentCosmoForge, a public Python framework that unifies QML power spectrum estimation and pixel-based Gaussian
+likelihood evaluation for spin-0 and spin-2 fields on the sphere, with general (non-diagonal) noise covariances.
+Methods.The framework is split into three installable packages:CosmoCore(infrastructure),QUBE(Fisher and QML estimation), and
+PICSLike(pixel-space likelihood). A common interface exposes two interchangeable computation bases — a harmonic basis built
+on the Sherman–Morrison–Woodbury identity and a direct pixel-space basis — selecting whichever is cheaper for the configuration at
+hand. Exact algorithmic optimisations reduce the Fisher cost toO(ℓ 4
+max) for arbitrary noise covariances, withNumbaJIT compilation
+of the hot kernels and MPI parallelisation of the likelihood scan.
+Results.CosmoForgereproduces the Planck low-ℓFortran reference implementation across both the QML and pixel-space likelihood
+pipelines, consistently with double-precision arithmetic. Native multipole binning and three output normalisations (deconvolved,
+decorrelated, window-convolved) are exposed through a single code path, and the same covariance infrastructure powers both QML
+estimation and likelihood evaluation.
+Conclusions.CosmoForgeoffers a general-purpose, modular, and validated tool for the optimal analysis of large-scale data on the
+sphere. It is publicly available, pip-installable, and extensible to non-CMB observables.
+Key words.methods: data analysis – methods: numerical – methods: statistical – cosmic background radiation
+1. Introduction
+The angular power spectrum of the Cosmic Microwave
+Background (CMB) is a cornerstone observable of modern
+Cosmology. Its measurement has driven precision constraints
+on the cosmological model, from the first detections of acous-
+tic oscillations to the tight bounds on the tensor-to-scalar
+ratiorfrom current experiments (Planck Collaboration
+2020; BICEP/Keck Collaboration 2021; Tristram et al.
+2022). Next-generation experiments such as LiteBIRD
+(LiteBIRD Collaboration 2023) and the Simons Observa-
+tory (Ade et al. 2019) will target large angular scales with
+unprecedented sensitivity, where the primordial gravitational
+wave signal in B-mode polarization is expected to peak and
+where the optical depth to reionizationτmust be determined.
+At these large angular scales, the limited number of available
+modes and the effects of partial sky coverage make optimal sta-
+tistical methods essential. The Quadratic Maximum Likelihood
+(QML) estimator, introduced by Tegmark (1997) and extended
+to polarization by Tegmark & de Oliveira-Costa (2001), pro-
+vides minimum-variance, unbiased power spectrum estimates
+by construction. Unlike pseudo-C ℓ methods (Hivon et al. 2002;
+Alonso et al. 2019), which are computationally cheap but sub-
+⋆ Corresponding author:giacomo.galloni@unife.it
+optimal on large scales, the QML approach accounts exactly for
+the mask-induced mode coupling and noise anisotropy through
+the full pixel-space covariance matrix. This optimality comes
+at a computational cost that scales asO(N 3
+pix) in the naive im-
+plementation, set by the inversion of the pixel-space covariance
+and by the dense matrix products in the Fisher-matrix trace,
+limiting its applicability to low-resolution maps (N side ≲64).
+However, the large-scale science case — primordial B-modes,
+reionization optical depth, parity violation, isotropy anomalies
+— precisely requires this regime, making QML the method of
+choice for the most sensitive measurements planned in the com-
+ing decade. The QML estimator’s optimality is not, however,
+restricted to the large-scale regime: at intermediate and small
+scales, where pseudo-C ℓ methods are usually adopted for their
+cheap cost, QML can still deliver tighter error bars when the
+noise covariance is non-trivial or the mask geometry induces sig-
+nificant mode coupling that pseudo-C ℓ approximations handle
+only asymptotically, opening room for deeper scientific targets
+where computational resources allow.
+The pixel-space likelihood offers a complementary ap-
+proach: rather than estimating the power spectrum as an in-
+termediate step, it evaluates the full Gaussian log-likelihood
+lnL=− 1
+2[d⊤C−1d+ln|C|] directly for each point in a cos-
+mological parameter grid. This approach has been used ex-
+Article number, page 1
+arXiv:2605.21149v1  [astro-ph.CO]  20 May 2026
+
+A&A proofs:manuscript no. main
+tensively in low-ℓCMB analyses, from the WMAP polariza-
+tion likelihood (Page et al. 2007) to the Planck low-ℓpipelines
+(Planck Collaboration 2016a), and provides the ground truth
+against which approximate likelihood methods are validated
+(Galloni et al. 2025). Its combination with QML estimation in
+a single framework enables a self-consistent analysis pipeline
+from power spectrum recovery to parameter inference.
+Over the past two decades, several QML implementa-
+tions have been developed, each tailored to specific analy-
+sis needs: pixel-space polarization estimation (Gruppuso et al.
+2009), the unified low-ℓlikelihood and QML formalism
+of Gjerløw et al. (2015), which compared pixel, spherical-
+harmonic, and signal-to-noise eigenbasis representations on the
+same footing, cross-spectrum estimation for noise bias removal
+(Vanneste et al. 2018), optimised harmonic-space formulations
+(Bilbao-Ahedo et al. 2021), and scaling to large numbers of cor-
+related fields for galaxy surveys (Kvasiuk et al. 2025). These
+codes have enabled important scientific results, but they indi-
+vidually address different subsets of the problem. Some are re-
+stricted to specific computation bases (pixel or harmonic, but
+not both), others assume diagonal noise covariance — excluding
+the correlated noise patterns common in real CMB experiments,
+both space- and ground-based, and ubiquitous when residual sys-
+tematics or component-separation outputs are propagated to the
+analysis covariance — and none integrates a pixel-space likeli-
+hood module within the same framework. The situation echoes
+that of the pseudo-C ℓ landscape before the development of Na-
+Master (Alonso et al. 2019), where well-validated codes such as
+MASTER (Hivon et al. 2002), PolSpice (Chon et al. 2004), Xpol
+(Tristram et al. 2005), and Xpure (Grain et al. 2009) each han-
+dled specific cases well, but the community lacked a single pub-
+lic framework consolidating those capabilities into a maintained,
+validated tool.
+In this paper, we presentCosmoForge, a unified Python
+framework for QML power spectrum estimation and pixel-based
+likelihood analysis of fields on the sphere. While designed
+with the CMB in mind, the framework applies to any signal
+characterised by an angular power spectrum (e.g. galaxy sur-
+veys, 21 cm intensity mapping, gravitational-wave backgrounds)
+and to any combination of them.CosmoForgesupports the
+joint analysis of scalar (spin-0, denotedS) and tensor (spin-
+2, decomposed into gradientGand curlCcomponents) fields
+with all auto- and cross-spectra (S S,GG,CC,S G,S C,GC; the
+CMB analogues areTT,EE,BB,T E,T B,EB) in arbitrary multi-
+field configurations, with automatic detection of field groups
+that decouple in both signal and noise for fast block-diagonal
+covariance handling. The same algorithm is exposed through
+two interchangeable computation bases — a harmonic ba-
+sis built on the Sherman–Morrison–Woodbury (SMW) identity
+(Planck Collaboration 2016a) and a direct pixel-space basis with
+Cholesky inversion — behind a common abstract interface that
+auto-selects the cheaper path. Native multipole binning is pro-
+vided through a single code path that recovers per-multipole
+estimation as its∆ℓ=1 special case, with three output nor-
+malisations available without recomputation: deconvolved ˆCℓ =
+F−1q, decorrelatedF −1/2qwith unit covariance, and window-
+convolved estimates for direct comparison with theory. The same
+covariance infrastructure powers a pixel-space Gaussian likeli-
+hood over cosmological parameter grids, with MPI parallelism
+on the independent stages (Fisher trace pairs, independent sim-
+ulations, parameter-grid points) and Numba JIT compilation
+of the hot kernels (Legendre polynomials, Wignerd-matrices,
+signal-matrix assembly), bringing the harmonic-basis Fisher to
+an exactO(ℓ 4
+max) scaling for arbitrary noise covariances.
+CosmoForgeis organised as three interconnected, inde-
+pendently pip-installable packages:CosmoCore(computational
+foundation, including the computation-basis abstraction with its
+harmonic and pixel implementations and the SMW machin-
+ery),QUBE(Quadratic maximum likelihood UnBiased Estima-
+tor: Fisher matrix and QML estimation), andPICSLike(Pixel-
+based Inference with Correlated-Skies Likelihood: pixel-space
+Gaussian likelihood over parameter grids). The full pipeline
+has been validated against the Planck low-ℓFortran refer-
+ence of Pagano et al. (2020) and thesimalllikelihood of
+Planck Collaboration (2020) to machine-precision tolerances
+(Sect. 4.1). Forthcoming work will present specific features and
+scientific case studies.
+The paper is organised as follows. Section 2 reviews the
+QML formalism, the harmonic-space reformulation based on the
+Sherman–Morrison–Woodbury identity, native multipole bin-
+ning, the three available output normalisations, and the pixel-
+space likelihood. Section 3 describes the package architec-
+ture and its principal classes. Sections 4–5 present the vali-
+dation against the Planck low-ℓreference, internal consistency
+and Monte Carlo tests, an end-to-end pixel-based inference
+demonstration on the tensor-to-scalar ratio, and the empirical
+performance characterisation. Section 6 summarises the work
+and outlines forthcoming developments. Appendices A–E col-
+lect the spin-2 extension and the spin-weighted harmonic con-
+ventions, the matrix-determinant-lemma derivation of the log-
+determinant, the algorithmic optimisations of the harmonic-
+space implementation, the comparison ofCosmoForgewith ex-
+isting public QML codes, and the configuration interface to-
+gether with the Y AML reference.
+2. Formalism
+In this section, we present the mathematical framework underly-
+ing the QML estimator and its implementation inCosmoForge.
+We begin with the signal model and covariance structure
+(Sect. 2.1), then present the QML estimator in pixel space
+(Sect. 2.2). Section 2.3 introduces the harmonic-space refor-
+mulation based on the Sherman–Morrison–Woodbury identity,
+which provides an exact and computationally efficient alternative
+to direct pixel-space evaluation. For clarity, we present the for-
+malism for spin-0 (scalar) fields throughout Sects. 2.1–2.3; the
+generalisation to spin-2 (tensor) fields is given in Appendix A.
+Sections 2.4–2.6 describe multipole binning, the three normali-
+sation modes, and the pixel-space likelihood, respectively.
+2.1. Signal model and covariance
+We consider a set of observations of one or more fields on
+the sphere, pixelised using the HEALPix scheme (Górski et al.
+2005) at resolutionN side. After masking unreliable or contami-
+nated pixels, the data vectordconsists of theN pix values at the
+retained pixel locations. In the simplest case of a single spin-0
+field (e.g., CMB temperature, galaxy overdensity, or 21 cm in-
+tensity), the data model reads
+d=s+n,(1)
+wheresis the signal andnis the instrumental noise, both
+assumed to be zero-mean Gaussian random fields. Their statis-
+tical properties are fully characterised by their covariance ma-
+trices: the signal covarianceS=⟨ss ⊤⟩and the noise covariance
+N=⟨nn ⊤⟩. The total data covariance is
+Article number, page 2
+
+Galloni & Pagano: CosmoForge I
+C=S+N.(2)
+We emphasise thatNis a general symmetric positive-definite
+matrix:CosmoForgedoes not require the noise to be diago-
+nal (uncorrelated between pixels) or isotropic (uniform across
+the sky). This allows the treatment of realistic noise patterns,
+including 1/fnoise present in both space-based and ground-
+based experiments, correlated residuals from component separa-
+tion, and noise correlations between frequency channels in cross-
+correlation analyses.
+The signal covariance encodes the angular power spectrum
+Cℓ of the underlying field. For a statistically isotropic signal ob-
+served through a circularly symmetric beam with transfer func-
+tionB ℓ and pixel window functionp ℓ, the elements ofSare given
+by
+S pp ′ =
+ℓSig.
+maxX
+ℓ=ℓSig.
+min
+2ℓ+1
+4π Cℓ Wℓ Pℓ(cosθ pp ′),(3)
+whereP ℓ is the Legendre polynomial of degreeℓ,θ pp ′ is the
+angular separation between pixelspandp ′, andW ℓ =B 2
+ℓ p2
+ℓ is
+the combined beam-and-pixel window function. The sum is trun-
+cated on both ends:ℓ Sig.
+min ≥ |s|since spin-sharmonics vanish be-
+lowℓ=|s|, withℓ Sig.
+min =2 required for spin-2 fields and conven-
+tional for CMB temperature analyses (where it also excludes the
+monopole and dipole; see Sect. E.1 for the per-component gen-
+eralisation), andℓ Sig.
+max is set by the support ofW ℓ.CosmoForge
+defaults toℓ Sig.
+max =4N side, the largest multipole at which the
+HEALPix pixel windowp 2
+ℓ is tabulated byhealpy(Górski et al.
+2005; Zonca et al. 2019); this may be lowered wheneverW ℓ is
+already suppressed below analysis precision at a smallerℓ— in
+particular when the beamB 2
+ℓ alone has killed the signal — for a
+corresponding reduction in basis dimension.
+The power spectrum estimation problem consists of recover-
+ing the set{C ℓ}from the datad, given knowledge ofN, the pixel
+geometry, and the beam.
+2.2. The QML estimator
+The Quadratic Maximum Likelihood (QML) estimator
+(Tegmark 1997; Bond et al. 1998) provides an optimal solution
+to this problem. It is defined through a two-step procedure: (i)
+compute a set of quadratic quantitiesq ℓ from the data that are
+related to the angular power spectrum; (ii) normalise them using
+the Fisher information matrixFto obtain unbiased estimates ˆCℓ.
+The Fisher information matrix quantifies the sensitivity of
+the likelihood to changes in the power spectrum. Its elements
+are
+Fℓℓ′ = 1
+2 tr
+h
+C−1Pℓ C−1Pℓ′
+i
+,(4)
+whereP ℓ ≡∂C/∂C ℓ =∂S/∂C ℓ is the derivative of the signal
+covariance with respect to the power spectrum at multipoleℓ.
+From Eq. (3), this is
+(Pℓ)pp ′ = 2ℓ+1
+4π Wℓ Pℓ(cosθ pp ′).(5)
+The quadratic estimates are
+qℓ = 1
+2 d⊤C−1Pℓ C−1 d−b ℓ,(6)
+whereb ℓ is the noise bias,
+bℓ = 1
+2 tr
+h
+C−1Pℓ C−1N
+i
+.(7)
+The expectation value ofq ℓ satisfies⟨q ℓ⟩= P
+ℓ′ Fℓℓ′ Cℓ′, so that
+the QML power spectrum estimate
+ˆCℓ =
+X
+ℓ′
+(F−1)ℓℓ′ qℓ′ (8)
+is unbiased:⟨ ˆCℓ⟩=C ℓ. Its covariance is
+Cov( ˆCℓ, ˆCℓ′)=(F −1)ℓℓ′ ,(9)
+which saturates the Cramér–Rao bound, making the QML es-
+timator minimum-variance among all unbiased estimators. The
+connection between this single-step estimator and the maxi-
+mum of the full pixel-space likelihood is recovered in Sect. 2.6;
+iterative-QML extensions building on the same architecture are
+deferred to forthcoming work (Sect. 6).
+Cross-correlation.When two independent data setsd 1 andd 2
+are available (e.g., maps from different detectors or frequency
+channels), two approaches to cross-spectrum estimation are pos-
+sible.
+The first (following Tegmark & de Oliveira-Costa 2001;
+Gjerløw et al. 2015) is to treat the two data sets as components
+of a joint data vectord=(d 1,d 2) with total covariance
+Cjoint =
+ 
+S+N 1 S+N 12
+S+N ⊤
+12 S+N 2
+!
+,(10)
+whereN 12 encodes any noise component shared betweend 1 and
+d2 (zero in the simplest case of statistically independent splits),
+and apply the standard QML estimator (Eqs. 4–8) to the full sys-
+tem. This yields the minimum-variance, unbiased estimator for
+all auto- and cross-spectra simultaneously, at the cost of dou-
+bling the data dimension. This formulation naturally accommo-
+dates residual noise correlations between the two data sets: any
+non-zeroN 12 enters the off-diagonal blocks and is folded into
+both the estimator and its variance.
+The second is a cross-correlation variant (Vanneste et al.
+2018; Planck Collaboration 2016b) in which the two data sets
+are filtered independently:
+q×
+ℓ = 1
+2 d⊤
+1 C−1
+1 Pℓ C−1
+2 d2,(11)
+with mode-mixing matrixW ×
+ℓℓ′ = 1
+2 tr
+h
+C−1
+1 Pℓ C−1
+2 Pℓ′
+i
+. With inde-
+pendent noise between the two data sets the estimator is naturally
+noise-bias-free (any knownN 12 is subtracted analogously1). The
+independent filtering byC −1
+1 andC −1
+2 discards the inter-map sig-
+nal correlation in the off-diagonal blocks of Eq. (10), so the es-
+timator is unbiased but in general not minimum variance; in ex-
+change, errors inN 1 orN 2 propagate into the variance but not the
+bias (Planck Collaboration 2016b).CosmoForgesupports both
+approaches: the full multi-field QML, and the cross-QML as a
+computationally lighter alternative when noise-bias freedom is
+the priority.
+1 AnalyticalN 12 subtraction in Eq. (11) is not yet exposed in the pub-
+lic API; the full multi-field path (Eq. 10) supports it through the off-
+diagonal blocks.
+Article number, page 3
+
+A&A proofs:manuscript no. main
+Computational cost.In pixel space, the dominant costs are: (i)
+computingC −1, which scales asO(N 3
+pix); and (ii) evaluating the
+Fisher matrix elements (Eq. 4), each of which requires the trace
+of a product of twoN pix ×N pix matrices. Forn ℓ multipoles andn s
+spectra, the Fisher matrix has (ns·nℓ)2 elements, and the total cost
+of the pixel-space implementation scales asO(n 2
+s n2
+ℓ N2
+pix +N 3
+pix).
+This rapidly becomes prohibitive for high-resolution analyses,
+motivating the harmonic-space reformulation described in the
+next section.
+2.3. Harmonic-space formulation
+An algebraically equivalent but computationally more efficient
+formulation of the QML estimator can be obtained by factor-
+ing the signal covariance through the spherical harmonic basis.
+The harmonic factorisationS=V ⊤ΛVthat underpins this re-
+formulation goes back to Tegmark (1997), where it was intro-
+duced as a computational device for the pixel-space Fisher ma-
+trix; Gjerløw et al. (2015) placed it within a unified low-ℓlike-
+lihood framework that treats the spherical-harmonic, pixel, and
+signal-to-noise eigenbasis representations on a common footing.
+Its combination with the Sherman–Morrison–Woodbury (SMW)
+identity (Woodbury 1950; Golub & Van Loan 2013) for efficient
+covariance inversion was introduced in the context of the Planck
+low-ℓlikelihood (Planck Collaboration 2016a).CosmoForge
+builds on this lineage, extending the SMW-accelerated harmonic
+basis from likelihood evaluation to QML power spectrum esti-
+mation and binding the two to a common pixel-space alternative
+through a single computation-basis interface (Sect. 3.2).
+2.3.1. The harmonic operator
+The derivative matrixP ℓ (Eq. 5) factors via the addition theorem
+for Legendre polynomials,
+Pℓ(cosθ pp ′)= 4π
+2ℓ+1
+ℓX
+m=−ℓ
+Yℓm(ˆnp)Y ∗
+ℓm(ˆnp′),(12)
+whereY ℓm are the spherical harmonics and ˆnp denotes the unit
+vector towards pixelp. Substituting into Eq. (3) and collecting
+terms, the signal covariance becomes
+S=V ⊤ΛV,(13)
+whereVis the (n modes ×N pix) harmonic operator whose rows are
+the real spherical harmonics evaluated at the active pixel loca-
+tions, andΛis the (n modes ×n modes) diagonal matrix with entries
+Cℓ Wℓ, each repeated (2ℓ+1) times for them-degeneracy. Here
+nmodes = PℓSig.
+max
+ℓ=ℓSig.
+min
+(2ℓ+1) is the total number of harmonic modes.
+InCosmoForge,Vis constructed using real spherical har-
+monics with the normalisation convention
+Yreal
+ℓm (θ, ϕ)=
+r
+2ℓ+1
+4π Nℓm P|m|
+ℓ (cosθ)×
+
+√
+2 cos(mϕ) m>0
+1m=0√
+2 sin(|m|ϕ) m<0
+(14)
+whereN ℓm = √(ℓ− |m|)!/(ℓ+|m|)! andP m
+ℓ is the associated Leg-
+endre function. With this convention, the (2ℓ+1)/(4π) normalisa-
+tion factor is absorbed into the basis functions, so thatC ℓ inputs
+are physical power spectra (as output by Boltzmann codes such
+asCAMBorCLASS) without any pre-multiplication.
+The rows ofVare ordered by azimuthal quantum number|m|
+rather than byℓ: first all modes withm=0 (one perℓ), then pairs
+of cos/sin modes for|m|=1,2, . . . , ℓ Sig.
+max.
+2.3.2. The Sherman–Morrison–Woodbury identity
+With the factorisationS=V ⊤ΛV, the total covariance takes the
+form of a low-rank update to the noise matrix:
+C=N+V ⊤ΛV.(15)
+This structure allows the application of the Sherman–Morrison–
+Woodbury (SMW) identity, which expresses the inverse of such
+a matrix as
+C−1 =N −1 −N −1V⊤K−1VN−1,(16)
+where we have defined the SMW kernel
+K≡Λ −1 +VN −1V⊤.(17)
+The matrixKhas dimensionn modes ×n modes, which is typically
+much smaller thanN pix ×N pix: for an analysis atℓ max =32,
+nmodes =1 085 whileN pix may be several thousand depending on
+the sky coverage. The inversion ofKtherefore costsO(n 3
+modes)
+instead ofO(N 3
+pix). The projected combinationVC −1V⊤ that ap-
+pears throughout the QML algebra reduces, via Eq. (16), to a dif-
+ference of two large matrices that can suffer catastrophic cancel-
+lation in the cosmic-variance-limited regime;CosmoForgeeval-
+uates it through an algebraically equivalent but numerically sta-
+ble rewrite, described in Sect. C.3.
+The log-determinant ofC, needed for likelihood evaluation
+(Sect. 2.6), can be obtained via the matrix determinant lemma:
+ln|C|=ln|N|+ln|Λ|+ln|K|.(18)
+Each term on the right-hand side involves matrices of dimension
+at mostn modes, and ln|N|needs to be computed only once (it is
+independent ofC ℓ).
+2.3.3. Fisher matrix and QML in harmonic space
+To express the Fisher matrix and QML estimates in harmonic
+space, it is convenient to define the projected inverse covariance
+eC−1 ≡V C −1 V⊤.(19)
+Using Eq. (16), this can be written as
+eC−1 =M−M K −1 M,(20)
+whereM≡V N −1 V⊤ is the noise-weighted Gramian of the har-
+monic operator. BothMandK −1 are (nmodes ×n modes) matrices
+that are precomputed once and stored.
+The derivativePℓ factors asP ℓ =V ⊤Eℓ V, whereE ℓ is a diag-
+onal matrix with entries equal toW ℓ at positions corresponding
+to modes with angular degreeℓ, and zero elsewhere. Substituting
+into the Fisher matrix (Eq. 4) and using the cyclic property of the
+trace:
+Fℓℓ′ = 1
+2 tr
+heC−1 Eℓ eC−1 Eℓ′
+i
+.(21)
+SinceE ℓ is diagonal, the productseC−1Eℓ amount to selecting and
+scaling columns of eC−1. Moreover,E ℓ has only (2ℓ+1) nonzero
+entries (the modes belonging to multipoleℓ), so the trace can be
+reduced to a double sum over these mode indices, avoiding any
+Article number, page 4
+
+Galloni & Pagano: CosmoForge I
+dense matrix product. With this sparse-trace evaluation, com-
+puting the full Fisher matrix scales asO(ℓ 4
+max) rather than the
+naiveO(n 2
+ℓ n2
+modes) that one would obtain from dense trace evalu-
+ation, while remaining mathematically exact for arbitrary noise
+covariance. Implementation details and benchmarks are deferred
+to Appendix C.
+Similarly, define the weighted harmonic data vector
+w=V C −1 d.(22)
+Using the SMW expression forC −1 (Eq. 16), this can be com-
+puted efficiently as
+w=VN −1d−M K −1 VN−1d,(23)
+requiring only matrix-vector products with precomputed quanti-
+ties. The QML quadratic estimate then becomes
+qℓ = 1
+2 w⊤ Eℓ w−b ℓ,(24)
+which, sinceE ℓ is diagonal, reduces to a weighted sum over
+the squared harmonic coefficients at multipoleℓ. This is the
+harmonic-space form actually evaluated by theSpectraclass
+(Sect. 3.3) when the harmonic basis is selected.
+2.3.4. Multipole switching
+In many analyses, the power spectrum is varied only over a lim-
+ited range of multipolesℓ∈[ℓ min, ℓmax] — theinference window
+— while the signal at the multipoles bracketing it on either side
+is held fixed at a fiducial model: low-ℓmultipolesℓ∈[ℓ Sig.
+min, ℓmin)
+on the lower end, and high-ℓmultipolesℓ∈(ℓ max, ℓSig.
+max] on the
+upper end. This situation arises naturally when the science target
+is at large angular scales (e.g., primordial B-modes atℓ≲30) but
+the signal extends to smaller scales through the beam; symmet-
+rically, it allows low-multipole content (e.g., the CMB temper-
+ature monopole and dipole) to be held at a fiducial value while
+still entering the model covariance, when the inference window
+starts atℓ min =2.
+Following the approach of Planck Collaboration (2016a), the
+fixed-multipole contribution can be absorbed into an effective
+noise matrix:
+C=V ⊤
+inf Λinf Vinf +N eff,(25)
+whereV inf andΛ inf contain only the modes withℓ∈[ℓ min, ℓmax],
+and
+Neff=N+
+X
+ℓ∈[ℓSig.
+min ,ℓmin)
+∪(ℓ max,ℓSig.
+max]
+Cfid
+ℓ Wℓ Pℓ (26)
+is the instrumental noise augmented by the fixed signal con-
+tribution from both sides of the inference window. The SMW
+identity (Eq. 16) is then applied withN effin place ofN, and the
+dimension of the kernelKis reduced fromn modes(ℓSig.
+min, ℓSig.
+max) to
+nmodes(ℓmin, ℓmax). SinceN effis independent of the power spec-
+trum being estimated,N −1
+effis computed only once. When switch-
+ing is active,N −1 itself is never assembled —N −1
+efftakes its place
+throughout Eqs. (16)–(23) — avoiding a redundant pixel-space
+inversion.
+2.4. Multipole binning
+On limited sky, the per-ℓFisher matrix can become singular
+or poorly conditioned and per-ℓestimates carry strong inter-
+multipole correlations (Bond et al. 1998; Bilbao-Ahedo et al.
+2021).CosmoForgeaddresses both issues with native binned es-
+timation adapted from Vanneste et al. (2018): the bin-derivative
+Pb = P
+ℓ∈b Wℓ Pℓ replacesP ℓ in the Fisher andqformulae,
+and the algebra downstream is identical. The deconvolved band-
+power ˆCb =(F −1q)b is then a Fisher-weighted combination of
+theC ℓ within the bin rather than a flat-C ℓ average, the two co-
+inciding whenC ℓ varies slowly across the bin. The implementa-
+tion is a single code path: per-multipole estimation is the∆ℓ=1
+special case. Native binning is not equivalent to post-hoc averag-
+ing — the two correspond to different estimators, (P⊤F P)−1P⊤q
+vsP F −1q, which differ wheneverFhas significant off-diagonal
+structure (Bond et al. 1998); the native version is preferred as it
+regularises the Fisher matrix and operates on the sufficient statis-
+tics directly.
+2.5. Normalisation modes
+The raw QML estimatesq ℓ (orq b in the binned case) can be pre-
+sented in three different normalisations, each suited to different
+analysis needs. These correspond to the raw, deconvolved, and
+uncorrelated representations discussed in Sect. V .A of Tegmark
+(1997). In the following we write the expressions for the per-ℓ
+case; the binned case is obtained by replacingℓindices with bin
+indicesb.
+Deconvolved mode.The standard normalisation applies the in-
+verse Fisher matrix to obtain estimates of the true power spec-
+trum:
+ˆCdeconv
+ℓ =
+X
+ℓ′
+(F−1)ℓℓ′ qℓ′.(27)
+The covariance of these estimates is Cov( ˆCℓ, ˆCℓ′)=(F −1)ℓℓ′,
+which is generally non-diagonal: estimates at nearby multipoles
+are correlated. This is the default output mode.
+Decorrelated mode.To obtain estimates with uncorrelated er-
+rors, the inverse square root of the Fisher matrix is applied
+(Tegmark 1997; Tegmark & Hamilton 1997):
+ˆCdecorr
+ℓ =
+X
+ℓ′
+(F−1/2)ℓℓ′ qℓ′,(28)
+whereF −1/2 is computed via eigendecomposition:F=
+UΞU ⊤ ⇒F −1/2 =UΞ −1/2 U⊤. Eigenvalues below 10 −12
+times the maximum are set to zero to regularise ill-conditioned
+modes. The covariance is the identity matrix by construc-
+tion: Cov( ˆCdecorr
+ℓ , ˆCdecorr
+ℓ′ )=δ ℓℓ′, but the expectation value is
+⟨ ˆCdecorr
+ℓ ⟩= P
+ℓ′(F1/2)ℓℓ′ Cℓ′, notC ℓ itself. That is,F 1/2 acts as
+a window function that mixes multipoles: the decorrelated es-
+timates are uncorrelated linear combinations of the true power
+spectrum, not direct estimates of individualC ℓ. To compare with
+a theoretical model, one must apply the sameF 1/2 transforma-
+tion to the theory. These estimates are useful for visualisation
+(unit error bars at each data point) and for analyses that require
+independent measurements. The total information content is pre-
+served — it is merely redistributed across multipoles.
+Article number, page 5
+
+A&A proofs:manuscript no. main
+Convolved mode.In this mode, the raw estimates are returned
+without any deconvolution, together with the window matrix
+Wℓℓ′ =F ℓℓ′ that relates them to the true power spectrum:
+⟨qℓ⟩=
+X
+ℓ′
+Wℓℓ′ Cℓ′ .(29)
+Rather than invertingW(which may be ill-conditioned), the user
+convolves the theoretical prediction:C th,conv
+ℓ = P
+ℓ′ Wℓℓ′ Cth
+ℓ′ and
+compares directly withq ℓ. The covariance of the raw estimates
+isFitself. This mode is particularly useful when the Fisher ma-
+trix is poorly conditioned (e.g., for small sky fractions) or when
+the estimated spectra are to be used in a subsequent likelihood
+analysis that accounts for the window function explicitly.
+2.6. Pixel-space likelihood
+In addition to the QML power spectrum estimator,CosmoForge
+implements a direct pixel-space Gaussian likelihood for cosmo-
+logical parameter inference. Given a set of cosmological param-
+etersθthat determine the theoretical power spectraC ℓ(θ), the
+log-likelihood of the data is
+lnL(θ)=− 1
+2
+h
+d⊤C(θ)−1d+ln|C(θ)|
+i
++const,(30)
+whereC(θ)=S(θ)+NandS(θ) is built fromC ℓ(θ) via Eq. (3).
+Both the quadratic form and the log-determinant can be eval-
+uated efficiently using the SMW identity (Eqs. 16 and 18), re-
+ducing the per-point cost fromO(N 3
+pix) toO(n 3
+modes). Whenℓ-
+switching is employed (Sect. 2.3.4), the cost is further reduced
+toO(n modes(ℓmin, ℓmax)3).
+InCosmoForge, the likelihood is evaluated over a Cartesian
+grid of cosmological parameters. At each grid point, the theo-
+retical power spectra are loaded from precomputed files (e.g.,
+generated byCAMBorCLASS), the signal covariance is rebuilt,
+and the likelihood is evaluated. The grid points are distributed
+across MPI processes in a round-robin fashion for near-perfect
+load balancing. Results are collected into aLikelihoodResult
+object that provides best-fit parameter extraction, marginalised
+likelihoods, and confidence interval computation.
+The QML estimator (Eq. 8) corresponds to a single Newton–
+Raphson step towards the maximum of Eq. (30), starting from
+the fiducial model (Bond et al. 1998): the pixel-space likelihood
+is therefore the exact target that the single-step QML estimator
+approximates and to which iterative QML converges.
+3. Code architecture and implementation
+CosmoForgeis implemented in Python and organised as three
+interconnected packages with a layered architecture:CosmoCore
+provides the computational foundation,QUBEimplements the
+QML estimation pipeline, andPICSLikeevaluates the pixel-
+space likelihood. Each package is independently installable but
+shares a common infrastructure throughCosmoCore. In this sec-
+tion we describe the design principles, the main classes and their
+responsibilities, and the computational strategies employed.
+3.1. Package structure
+The three packages are:
+–CosmoCore— Core computational library. Provides field
+management (spin-0 and spin-2), spherical harmonic and
+pixel-space operations, matrix algebra, the harmonic oper-
+atorVand SMW machinery, binning, beam handling, and
+I/O utilities. All numerically intensive operations (Legendre
+polynomial evaluation, Wignerd-matrix computation, signal
+matrix construction) are accelerated with Numba JIT compi-
+lation (Lam et al. 2015) to achieve performance comparable
+to compiled languages.
+–QUBE(Quadratic maximum likelihood UnBiased Estima-
+tor) — QML analysis engine. Implements theFisher
+andSpectraclasses for Fisher matrix computation and
+power spectrum estimation, including all three normalisa-
+tion modes (Sect. 2.5), noise bias computation, and cross-
+spectrum support.
+–PICSLike(Pixel-based Inference with Correlated-Skies
+Likelihood) — Pixel-space likelihood engine. Implements
+thePICSLikeclass for evaluating the Gaussian likelihood
+(Eq. 30) over parameter grids, with automated marginalisa-
+tion and confidence interval extraction.
+BothQUBEandPICSLikeinherit from theCoreabstract
+base class defined inCosmoCore, which provides the common
+setup pipeline: field initialisation, pixel geometry computation,
+noise covariance loading, power spectrum and beam configura-
+tion, and — when the harmonic-space formulation is used —
+construction of theVoperator and SMW quantities. This shared
+inheritance ensures that the same covariance infrastructure is
+used consistently across QML estimation and likelihood eval-
+uation. A schematic overview of the package structure is shown
+in Fig. 1.
+3.2. CosmoCore
+CosmoCoreexposes a type system of field classes
+(ScalarFieldspin-0,PolarizationFieldspin-2, both
+inheriting fromBaseField) and aFieldCollectionthat
+groups them into a joint analysis, auto-derives the relevant
+auto- and cross-spectra, and lets each component carry its own
+multipole floor (so the spin-0 monopole or dipole can be esti-
+mated jointly withℓ≥2 polarisation in a single TQU pass; see
+Appendix E). Low-level mathematics — Legendre polynomials
+with absorbed (2ℓ+1)/(4π) normalisation, Wigner-dmatrices
+via Jacobi recurrence (Appendix A), Cholesky-based linear
+algebra, and the SMW identity (Appendix B) — lives in the
+basicssubpackage and is JIT-compiled with Numba. The
+pixel-space signal covarianceSand its per-ℓderivatives are built
+by thepixelmodule with separate spin-0×0, spin-2×2 and
+spin-0×2 paths.
+Computation basis.The harmonic-vs-pixel choice is exposed
+through aComputationBasisabstract interface with two im-
+plementations:HarmonicBasiscarriesV,Λ,M=VN −1V⊤
+andK, and reduces eC−1, the Fisher matrix, and the likelihood
+terms to operations on those objects via the SMW identity;
+PixelBasisformsCexplicitly and Cholesky-inverts it. The
+autoselector compares the leading-order costs —n 3
+modes for the
+SMW kernel against (Nbins +1)N 3
+pix for the per-binC −1 ∂C/∂Cℓ
+products — and picks the cheaper basis at setup time. Whenℓ-
+switching is active (Sect. 2.3.4), the effectivenmodes shrinks and
+the harmonic path remains applicable to higher resolutions.
+Article number, page 6
+
+Galloni & Pagano: CosmoForge I
+ComputationBasis interface
+HarmonicBasis (SMW)
+V,Λ(C fid
+ℓ )
+M=VN −1V⊤,K=Λ −1+M
+C−1 =N −1 −N−1V⊤K−1VN−1
+ln|C|=ln|N|+ln|Λ|+ln|K|
+PixelBasis (direct)
+buildSin pixel space:
+Spp′ =P
+ℓ CℓWℓPℓ(cosθ pp′)
+formC=S+N
+C−1,ln|C|from Cholesky factorisation
+CosmoCore
+d mask N Cfid
+ℓ Bℓ,p ℓ
+qℓ = 1
+2 d⊤C−1PℓC−1d−b ℓ
+Fℓℓ′ = 1
+2 Tr[C−1PℓC−1Pℓ′]
+ˆCℓ =(F −1q)ℓ three normalisations
+lnL(θ)=− 1
+2
+h
+d⊤C−1(θ)d+ln|C(θ)|
+i
+over a parameter gridθ
+QUBE PICSLike
+C−1,ln|C|
+Fig. 1: Architecture and data flow ofCosmoForge. The standard inputs (top: datad, mask, noise covarianceN, fiducial power
+spectrumC fid
+ℓ , beam and pixel windowsB ℓ,p ℓ) feedCosmoCore, which exposes a commonComputationBasisinterface with
+two interchangeable implementations — the harmonic basis (left), whereC −1 and ln|C|are obtained from the Sherman–Morrison–
+Woodbury identity and the matrix determinant lemma applied to the operatorsV,Λ,M,K(Sect. 2.3); and the pixel basis (right),
+whereSis built directly in pixel space,C=S+Nis formed explicitly, andC −1 together with ln|C|are obtained from a Cholesky
+factorisation. Both paths drive QML power spectrum estimation inQUBE(left) and pixel-space likelihood evaluation inPICSLike
+(right).
+3.3. QUBE
+TheQUBEpackage implements the QML estimation pipeline
+through two main classes.
+TheFisherclass computes the Fisher information matrix
+(Eq. 4 or 21) and optionally caches the binned derivative ma-
+trices for reuse by theSpectraclass. It supports both single-
+spectrum (e.g., a scalar-only analysis) and multi-spectrum (e.g.,
+joint scalar and spin-2) configurations. In the multi-spectrum
+case, the Fisher matrix has dimension (n s ×N bins)2, with blocks
+coupling different spectra and multipole bins. The computation
+is parallelised across MPI processes by distributing the Fisher
+matrix element pairs.
+TheSpectraclass computes the QML power spectrum es-
+timatesq ℓ (Eq. 6 or 24), the noise biasb ℓ (Eq. 7), and re-
+turns the final estimates in any of the three normalisation modes
+(Sect. 2.5). It can accept a precomputedFisherinstance to
+avoid redundant computation, and inherits the cached deriva-
+tives and basis configuration. Multiple simulation maps are pro-
+cessed together at every rank, vectorised across the simulation
+index throughnumpybroadcasting; the MPI parallelism on this
+stage distributes the (spectrum, bin) pairs of the QML evaluation
+across ranks rather than the simulations themselves. The cross-
+correlation mode (Eq. 11) is supported for pairs of independent
+data sets with uncorrelated noise.
+3.4. PICSLike
+ThePICSLikepackage evaluates the pixel-space Gaussian like-
+lihood (Eq. 30) across a user-specified grid of cosmological pa-
+rameters.
+TheParameterGridclass manages the Cartesian product of
+parameter ranges and the associated theoretical power spectra,
+which are loaded from precomputed files at each grid point. The
+ℓ-switching mode (Sect. 2.3.4), shared with the QML pipeline
+through the commonCoresetup, lets the user vary the power
+spectrum only over a target multipole range while holding higher
+multipoles fixed at a fiducial model. This reduces the multipole
+range that must be tabulated in each grid-point spectra file and
+the per-point computational cost; the file count is unchanged.
+At each grid point, the signal covarianceS(θ) is rebuilt from
+the theoreticalC ℓ(θ), the total covarianceC(θ)=S(θ)+Nis
+formed, and the log-likelihood is evaluated. When the harmonic
+basis is available, the SMW identity provides both the quadratic
+formd ⊤C−1dand the log-determinant ln|C|at a cost ofO(n 3
+modes)
+per grid point. Grid points are distributed across MPI processes
+in a round-robin fashion. Multiple simulation maps are evaluated
+together at every rank, sharing the per-point covariance inverse
+and producing per-simulation likelihood curves at no extra in-
+version cost.
+TheLikelihoodResultclass stores theχ 2 and log-
+likelihood values across the parameter grid, and provides meth-
+ods for best-fit extraction, marginalised likelihoods (by summing
+over unwanted parameter dimensions), and confidence interval
+computation (by finding the smallest interval containing the de-
+sired probability mass). Results are serialisable for later analysis.
+The configuration interface that drives everyCosmoForge
+analysis (Y AML schema, default templates, and a minimal
+Python usage example) is documented in Appendix E.
+4. Validation
+In this section we present the validation ofCosmoForgeagainst
+the Planck low-ℓFortran reference implementation and through
+internal consistency tests. The validation covers every stage of
+the pipeline: signal covariance construction, covariance inver-
+Article number, page 7
+
+A&A proofs:manuscript no. main
+sion, Fisher matrix computation, QML power spectrum estima-
+tion, noise bias, and pixel-space likelihood evaluation. All tests
+use HEALPix maps atN side =4–8 with realistic masking and
+noise configurations.
+4.1. Planck low-ℓreference validation
+We validateCosmoForgeagainst the Planck low-ℓFortran ref-
+erence of Pagano et al. (2020) and thesimalllikelihood of
+Planck Collaboration (2020)2 element-by-element on aB-mode
+analysis atN side =8,ℓ max =24, with a tabulated beam and white
+noise. The primary covariance products (N,S,C −1) reproduce
+the reference at machine precision (10 −11–10−13,Nbit-exact);
+the trace-based final products of the QML pipeline (F, ˆCℓ,b ℓ)
+sit at∼10 −7 and those of the pixel-space likelihood pipeline (χ2,
+lnL) at∼10 −9, the latter tighter because it carries fewer sequen-
+tial trace evaluations; the floors reflect floating-point accumula-
+tion order between the Numba/NumPy and Fortran summations
+rather than any algorithmic disagreement. The same picture is re-
+covered in spin-2: againstdofisher_QU+qml_QUatN side =8,
+ℓmax =32 with a Gaussian beam, the noise-bias rel-diffstays
+≤6×10 −6 forEE(1×10 −9 forBB), with median∼10 −10.
+The harmonic and pixel-space computation paths agree inter-
+nally to∼10 −13 on the Fisher matrix in both single-field spin-0
+and multi-field configurations, confirming that the SMW iden-
+tity and the spin-2 machinery (Wigner-d, 2×2Λblocks, rotation
+angles) are correctly assembled. Structural sanity checks of the
+spin-2 path —Vblock shape (2n base
+modes ×2N phys
+pix with non-zeroE
+andBsub-blocks), 2×2Λblocks with the correctEE/BB/EB
+entries, and a multi-field benchmark on three independent spin-
+0 fields simulatingT,E,B— hold at the same precision; the
+native-binning path is validated byF binned =P ΣFunbinnedP⊤
+Σ and
+qb = P
+ℓ∈b qℓ to machine precision for∆ℓ=2,3,5.
+4.2. Monte Carlo validation
+We validate the statistical properties of the QML estimator on
+Nsims =10 000 Gaussian polarization (Q,U) realisations at
+Nside =16,ℓ∈[2,32], drawn from aΛCDM lensing-only model
+(τ=0.06,r=0) with a cosine-window beam (Benabed et al.
+2009) applied at the harmonic level and white pixel noise atσ=
+10−3 µK arcmin matching the QML noise covarianceN=σ 2I.
+A±10 ◦ Galactic cut yieldsf sky ≈89%, and the analysis esti-
+matesEE,BB,EBjointly in the harmonic basis with noise-bias
+subtraction.
+Unbiasedness.Figure 2 shows the difference between the
+mean recoveredBBspectrum over the 10 000 realisations and
+the input fiducial, compared to the standard error on the mean
+σℓ/ √Nsims (red band) and the Fisher-predicted uncertaintyp
+(F−1)ℓℓ/ √Nsims (grey band). The mean residual is consistent
+with zero across all multipoles, with no systematic trend, con-
+firming that the QML estimator is unbiased at the∼10 −8 preci-
+sion level. TheBBspectrum is the most demanding test because
+it is subdominant toEEby several orders of magnitude, and any
+E-to-B leakage through the mask would appear as a positive bias
+inBB. The absence of such leakage confirms that the full pixel-
+space covariance treatment handles E/B separation correctly.
+2 Thepse_qml(QML estimation) andparameter_estimation
+(pixel-space likelihood) codes are athttps://baltig.infn.it/
+cosmology_ferrara/lowell-likelihood-analysis.
+Fig. 2: Monte Carlo validation of the QML estimator for the
+BBpower spectrum. The red line shows the difference between
+the mean recovered spectrum and the input fiducial over 10 000
+realisations. The red band is the standard error on the mean
+(σℓ/ √Nsims), and the grey band is the Fisher-predicted uncer-
+tainty scaled by 1/ √Nsims. The two bands overlap, confirming
+that the Fisher matrix correctly predicts the estimator variance.
+Configuration:N side =16,ℓ max =32, spin-2 (Q,U) analysis,
+cosine window beam,f sky ≈89%.
+Fig. 3: Standard deviation of the estimatedBBpower spectrum
+over 10 000 MC realisations (solid lines) compared to the Fisher-
+predicted error bars (dashed lines), for five sky fractions: full sky
+(red),±10 ◦ Galactic cut (blue),±18 ◦ (green),±30 ◦ (orange), and
+±40◦ (magenta). Configuration:N side =16,ℓ max =32, spin-2 (Q,
+U) analysis.
+Variance and sky fraction dependence.Figure 3 compares
+the empirical standard deviation of theBBpower spectrum es-
+timates against the Fisher-predicted error bars
+p
+(F−1)ℓℓ for five
+sky fractions, from full sky to a±40 ◦ Galactic cut (f sky ≈36%).
+Empirical scatter and Fisher prediction overlap at every multi-
+pole and everyf sky, confirming thatF −1 accurately captures the
+estimator variance regardless of mask geometry; the combined
+window functionW ℓ =B 2
+ℓ p2
+ℓ is absorbed into the Fisher deriva-
+tives so that no post-hoc beam correction is required.
+Article number, page 8
+
+Galloni & Pagano: CosmoForge I
+Noise bias subtraction.The simulations include small white
+noise (σ=10 −3 µK arcmin). At this level the noise is well below
+the cosmic-variance amplitude of the recovered spectra at every
+multipole considered; its role here is regularisation, providing fi-
+nite eigenvalues for the modes ofCthat the beam window func-
+tionW ℓ would otherwise drive towards zero in the signal-only
+limit and which would renderCnumerically singular. The same
+Nis used both to draw the noise realisations and to construct
+the analytical noise biasb ℓ = 1
+2 Tr[C−1EℓC−1N] (Eq. 7), and
+the unbiasedness reported in Fig. 2 therefore validates the noise
+bias computation and its subtraction simultaneously. A comple-
+mentary noise-dominated Monte Carlo run — the polarisation
+BBanalogue of the temperature-noise regime partially sampled
+by the QML-vs-PCL comparison of Sect. 4.4, where the noise
+drives the variance rather than acting as a regulariser — is in
+preparation and will be presented in a dedicated companion note.
+4.3. End-to-end pixel-based inference
+To close the validation loop and make the unification claim of
+Sect. 2 concrete, we drive thePICSLikelikelihood end-to-end
+on the very same Monte Carlo sample used in Fig. 2. The simu-
+lations, the noise covariance, the mask, the beam, and the reso-
+lution are reused without modification (N side =16,ℓ max =32,
+cosine-window beam,f sky ≈0.89,r true =0); only the anal-
+ysis target changes, from per-multipole bandpowers to a 1D
+scan of the tensor-to-scalar ratiorover the physical ranger∈
+[0,3×10 −4] (31 grid points). The grid spectra are built from the
+same fiducialΛCDM lensing baseline that generated the simu-
+lations, with a linear tensor BB template on top.
+Figure 4 shows the mean-χ2 likelihood
+¯L(r)∝exp
+h
+− 1
+2 ⟨χ2(r)⟩sims
+i
+,(31)
+constructed from the per-realisationχ 2(r) acrossN sims =1000
+Monte Carlo simulations. We stress that ¯L(r) isnotthe sam-
+ple average of the per-realisation likelihoods⟨L(r)⟩ sims: the two
+coincide only in the limit of smallχ 2 fluctuations across realisa-
+tions, since by Jensen’s inequality (Jensen 1906)⟨exp
+
+−χ2/2
+
+⟩ ≥
+exp
+
+−⟨χ2⟩/2
+
+. We use ¯Lhere because, for an unbiased estimator
+with a correct covariance model,E[χ 2(r)]=Tr[C(r) −1 Ctrue]+
+ln|C(r)|is minimised exactly atr=r true, so the peak of Eq. (31)
+is itself the unbiasedness test. With the priorr≥0, the recov-
+ered posterior peaks at the lower edge of the grid,r=0=r true,
+demonstrating unbiasedness, and yields one-sided upper limits
+r<9×10 −5 at 68% credibility andr<2.1×10 −4 at 95%.
+No additional infrastructure is required beyond the QML
+pipeline: the pixel-space covarianceC=S(r)+Nthat sup-
+plies the Fisher matrix and noise bias forQUBEalso supplies
+the quadratic form and log-determinant of the pixel-space like-
+lihood, with the same SMW machinery (Sect. 2.3, Appendix B)
+accelerating both. Application to real CMB data and a compar-
+ison against external pixel-space likelihood codes is the subject
+of a forthcoming companion paper.
+4.4. Optimality versus pseudo-Cℓ
+To benchmark the optimality gap that motivates the QML ap-
+proach, we compareCosmoForgeagainst the publicNaMaster
+pseudo-Cℓ implementation (Alonso et al. 2019) on the same set
+of simulations. The test is in temperature (TT) atN side =32,
+ℓmax =2N side =64, withN sims =1000 Gaussian CMB+noise
+realisations. The white-noise level is set toσ=1.5µK per pixel
+Fig. 4: Mean-χ2 PICSLikelikelihood ¯L(r)∝exp
+h
+− 1
+2 ⟨χ2(r)⟩sims
+i
+on the tensor-to-scalar ratiorfromN sims =1000 Monte Carlo
+simulations, evaluated on the same configuration as Fig. 2
+(Nside =16,ℓ max =32, cosine-window beam,f sky ≈0.89, in-
+putr true =0). Markers indicate the 31PICSLikegrid points;
+the solid curve is a cubic-spline interpolation between them. The
+peak sits at the lower edge of the physical ranger≥0, with 68%
+and 95% upper limitsr<9×10 −5 andr<2.1×10 −4 (shaded
+bands), consistent with the input within the MC sampling error.
+(∼520µK arcmin inTTangular sensitivity), chosen to match
+the per-mode S/N of a 2µK arcmin polarisation experiment on
+BBatℓ=50, so the temperature analysis sits in the same regime
+that a polarisation experiment faces on its primaryB-mode tar-
+get. Two Galactic-strip masks bracket the relevant range: a 24 ◦
+cut yieldingf sky ≈0.60 analysed at∆ℓ=1, and a 64 ◦ cut yield-
+ingf sky ≈0.10 analysed at∆ℓ=5. Theℓ max =2N side choice
+keeps the analysis inside the HEALPix-exact regime where the
+pseudo-Cℓ transform is unbiased, ensuring the comparison iso-
+lates the optimality gap rather than transform inaccuracy.
+Recovery and variance.Figure 5 (left) shows the recovered
+DTT
+ℓ bandpowers; both methods agree with the windowed the-
+ory across both sky fractions. The right panel reports the per-
+bandpower ratioσ PCL/σQML. As expected, at large scales the
+QML estimator strongly outperforms pseudo-C ℓ: atf sky ≈0.10
+the pseudo-C ℓ error bars are∼35–60% larger than the QML
+ones across the lowest six bandpowers (ℓ≲30), and even at
+fsky ≈0.60 the pseudo-C ℓ variance exceeds the optimal one by
+up to∼40% at the lowest multipoles. At smaller scales (ℓ≳30)
+the gap shrinks but does not close: pseudo-C ℓ is still∼15–20%
+noisier than QML atf sky ≈0.10, and a few percent noisier at
+fsky ≈0.60.
+For upcoming experiments, at LiteBIRD-relevantf sky the
+∼50% variance inflation at the reionisation bump and recombi-
+nationB-mode peak is not recoverable by extra integration time,
+while at the higher ground-basedf sky of the Simons Observatory
+the few-to-twenty-percent gain still tightens constraints directly
+(LiteBIRD Collaboration 2023; Ade et al. 2019). Figure 6 shows
+the same picture in the empirical bandpower correlation matri-
+ces: the QML estimate (upper triangle) is consistent with diago-
+nal, while the pseudo-Cℓ counterpart (lower triangle) retains the
+off-diagonal structure inherited from the mode-coupling matrix,
+more pronounced atf sky ≈0.10. The QML decorrelated normal-
+isation ˆCℓ =F −1/2 qℓ (Sect. 2.5) is independently consistent with
+Article number, page 9
+
+A&A proofs:manuscript no. main
+Table 1: Numba JIT warmup vs. steady-state cost for the two
+performance-critical kernels, measured on a single Galileo100
+node.legendre_plmis timed for a full HEALPix sphere at
+Nside =16,ℓ max =32;compute_signal_matrixbuilds a
+3200×3200 pixel-space signal covariance withℓ Sig.
+max =64.
+Kernel Warmup Steady-state
+legendre_plm. . . . . . . . . . . . . . 0.27 s 14.1 ms
+compute_signal_matrix. . . . 2.92 s 1.23 s
+the identity on the same simulations (diagonal mean 0.97/0.99
+atf sky ≈0.10/0.60, off-diagonal RMS≈0.03 in both).
+5. Performance
+This section reports empirical wall-time behaviour of the public
+CosmoForgepipeline, complementing the algorithmic deriva-
+tions of Sect. 2 and the architectural choices of Sect. 3. The
+optimisations responsible for the scaling reported here are doc-
+umented in Appendix C; we focus in this section on the mea-
+surements themselves and on what they imply for the practical
+operating regime of the framework.
+All measurements were collected on the CINECA
+Galileo100 cluster (each node equipped with 2×Intel Xeon Plat-
+inum 8260 “Cascade Lake” CPUs, 24 cores each at 2.4 GHz, for
+a total of 48 cores per node and 384 GB RAM, scipy-openblas
+linear algebra) from a single git revision. The benchmark
+scripts that produce these measurements are distributed with
+the codebase undersrc/cosmoforge.qube/benchmarks/.
+The wall-time numbers reported here cover the operating
+regime a user is most likely to encounter; per-stage memory
+characterisation is reported separately in Appendix C.6.
+5.1. Numba JIT acceleration
+The two performance-critical Python kernels inCosmoCoreare
+the spin-0 Legendre evaluationlegendre_plmand the pixel-
+space signal matrix buildercompute_signal_matrix. Both
+are JIT-compiled throughNumba(Lam et al. 2015); the first in-
+vocation pays the compilation cost, and subsequent calls run in
+optimised native code. Table 1 reports the warmup and steady-
+state timings measured on a single Galileo100 node.
+The compilation overhead is paid exactly once per process:
+by the time a Fisher matrix or QML estimate has been pro-
+duced, the kernels have been called many thousands of times
+and the warmup contribution is negligible compared with the
+linear-algebra cost. The functions are therefore safe to use in-
+side hot loops without manual caching. The warmup-to-steady-
+state ratio differs sharply between the two kernels,∼19×for
+legendre_plmand∼2.4×forcompute_signal_matrix: the
+Legendre kernel is dominated by tight scalar arithmetic in which
+the JIT-compiled inner loop benefits maximally from native
+code, whereas the signal-matrix builder spends most of its time
+in BLAS-bound dense operations whose pre- and post-JIT cost
+is comparable.
+5.2. Scaling withN side andℓ max
+The most demanding regime in routine use is the small-sky-
+fraction limit. Atf sky ≲1%, even high-resolution maps have
+a modest active pixel count, and the pixel basis is dramati-
+Table 2: Total wall-time (Fisher+ten-simulation QML) atf sky =
+0.01 andf sky =0.1, with theautobasis selector active (it picks
+pixel-direct in every cell). The largest entry corresponds to a
+15 624×15 624 dense jointQ,Ucovariance;N pix aggregates the
+two Stokes components forQUrows.
+FieldN side Npix Total (s) QML/sim (s)
+fsky =0.01
+T16 24 4.15 0.014
+T32 112 1.00 0.082
+T64 480 4.61 0.339
+T128 1984 24.05 1.670
+T256 7812 315.26 18.04
+QU16 48 3.02 0.008
+QU32 224 1.76 0.150
+QU64 960 8.69 0.512
+QU128 3968 93.32 7.087
+QU256 15624 1334.19 38.09
+fsky =0.1
+T16 312 4.49 0.030
+T32 1200 1.64 0.108
+T64 4900 22.46 0.993
+QU16 624 3.90 0.045
+QU32 2400 8.97 0.260
+QU64 9800 159.57 4.165
+cally smaller than its harmonic counterpart: atN side =256,
+ℓmax =4N side =1024, the harmonic basis carriesn modes ∼10 5
+modes whereas the pixel basis atf sky =0.01 carries fewer than
+1.6×10 4 active pixels, an order-of-magnitude saving in the di-
+mension that drives the cubic linear-algebra cost. Table 2 reports
+total wall-time for anautopipeline run (Fisher matrix plus a
+ten-simulation QML loop) acrossN side ∈ {16,32,64,128,256}
+in two field configurations and at two sky fractions (fsky =0.01,
+fsky =0.1). The selector consistently picks the pixel-direct path
+in this regime; near the basis crossover, where the unmodelled
+prefactors of then 3
+modes harmonic-SMW and (N bins +1)N 3
+pix
+pixel-direct cost models can be of comparable size, users with
+prior knowledge of the regime can override the default by pass-
+ingmethod="harmonic"ormethod="pixel"(the latter with
+use_direct=Truefor the no-projector pipeline characterised
+here).
+The empirical scaling withN side is consistent with the cu-
+bic dependence onN pix predicted by the dense linear-algebra
+cost model. FromN side =64→128→256, the active pixel
+count grows by approximately 4×per step (the precise factor
+depends on the discretised mask boundary), so a strictly cu-
+bic cost would scale as 64×per step. The measured factors are
+8.7 s→93 s→1334 s inQUatf sky =0.01, i.e. 11×and
+14×between successive nside doublings, both well within the
+cubic-cost envelope after accounting for the actual mask area
+and for the constant-factor overheads (covariance I/O, SMW ker-
+nel assembly) that contribute a non-negligible offset at small
+nside. The bottom-right corner of thef sky =0.01 block demon-
+strates that the framework reachesN side =256 with a general
+(non-diagonal) noise covariance within a single-node, single-
+allocation budget: a full Fisher matrix and ten QML simulations
+of a 15 624×15 624 jointQ,Ucovariance complete in approxi-
+mately 22 minutes on a 48-core node. We do not claim a record
+here — ECLIPSE (Bilbao-Ahedo et al. 2021) reports analyses at
+Nside =64,ℓ max =192 on 144 cores using its diagonal-noise spe-
+cialisation, and a direct head-to-head comparison would have to
+Article number, page 10
+
+Galloni & Pagano: CosmoForge I
+Fig. 5: Comparison ofCosmoForge’s QML estimator and the publicNaMasterpseudo-C ℓ implementation (Alonso et al. 2019)
+overN sims =1000 simulations of CMB-plus-noiseTTmaps atN side =32,ℓ max =64,σ=1.5µK per pixel (∼520µK arcmin in
+TT,TT-equivalent of 2µK arcmin polarisation noise atℓ=50), for two Galactic-strip masks (f sky ≈0.10 and 0.60).Left:mean
+recoveredD TT
+ℓ bandpowers atf sky ≈0.60 (per-multipole estimation,∆ℓ=1) compared to the windowed theory; error bars are the
+empirical per-realisation standard deviation.Middle:same atf sky ≈0.10 (binned estimation,∆ℓ=5).Right:per-bandpower ratio
+σPCL/σQML for both cases; the QML estimator is everywhere tighter, with the gap reaching∼60% at the lowest multipoles of the
+small-f sky case.
+Fig. 6: Empirical bandpower correlation matrices for the same configuration as Fig. 5. Each panel uses a split-triangle layout:
+CosmoForge’s decoupled QML correlation in the upper triangle,NaMasterdecoupled pseudo-C ℓ in the lower triangle, forf sky ≈
+0.10 (left) andf sky ≈0.60 (right). The QML correlation is consistent with diagonal at both sky fractions; the pseudo-C ℓ correlation
+retains the off-diagonal structure inherited from mask-induced mode coupling.
+be performed at matching configurations and assumptions — but
+the configuration is well above the historical operating regime of
+the Planck low-ℓreference at the same level of generality on the
+noise model. Atf sky =0.1 the qualitative scaling is the same,
+with wall-times larger in proportion to the active pixel count.
+This table covers the operating regime relevant to upcoming
+low-ℓCMB analyses:f sky ≈0.01 for the deepest small-patch ex-
+periments andf sky ≈0.1 for the joint-mask configurations more
+typical of full-sky satellite or ground-based-survey settings. The
+framework reachesN side =256 in jointQ,Uatf sky =0.01
+within a single-node, single-allocation budget. In this regime the
+pixel basis is decisively cheaper than the harmonic alternative,
+and theautoselector picks it in every cell without user inter-
+vention.
+5.3. MPI strong scaling
+CosmoForgeparallelises three independent stages over MPI
+ranks (Appendix C.4): Fisher trace contractions, simulation-
+by-simulation QML evaluation inSpectra, and parameter-grid
+sweeps inPICSLike. We characterise the first two on the same
+fixed problem (QU,N side =32,ℓ max =64, 10 4 simulations) at
+fixed total core budget, sweeping rank countN∈ {1,2,4,8}with
+Table 3: Hybrid MPI×OpenMP scaling at fixedN×N OMP =48
+on a single Galileo100 node. Configuration:QU,N side =32,
+ℓmax =64, harmonic basis, 10 4 Gaussian simulations. “Fisher” is
+the full pipeline cost (setup+traces); “Spectra” is the per-batch
+wall-time for the full simulation set.
+N N OMP Fisher (s) Spectra (s) QML/sim (ms)
+1 48 197.9 9.16 0.92
+2 24 230.7 13.35 1.34
+4 12 268.5 21.05 2.11
+8 6 375.2 38.91 3.89
+the per-rank thread budget adjusted asN OMP =48/N. Table 3
+reports the wall-time per stage.
+Both stagesanti-scalewithNat fixed total core budget: the
+BLAS-dominated rank-0 setup work (V build, effective-noise in-
+version, SMW kernel assembly) is single-process and benefits
+directly from the per-rank thread budget, so subdividing 48 cores
+into 48/N-thread slices linearly stretches it;Spectrafollows
+the same pattern through its per-simulation BLAS calls. A refer-
+ence point atN=1,N OMP =1 returns Fisher 1156 s and Spectra
+Article number, page 11
+
+A&A proofs:manuscript no. main
+152 s —∼6×slower than theN=1,N OMP =48 row — con-
+firming the workload is BLAS-thread-bound. Cross-rank con-
+sistency on the recovered Fisher matrix and QML estimates is at
+machine precision (∼10 −16) across all configurations. The MPI
+distribution does deliver near-linear speedups where the parallel
+work is not bottlenecked by single-process setup —PICSLike’s
+parameter-grid scan and cross-spectrum loops over independent
+map pairs are both distributed round-robin across ranks with no
+shared single-process stage (the parameter-grid scan of Sect. 4.3
+is run in this configuration). An alternative MPI partitioning that
+distributes the SMW kernel assembly and the per-bin trace stage
+across ranks is a natural target for follow-up work.
+Deploy with one MPI rank per node and OpenMP threads
+matched to the available cores; the default thread placement
+is reliable (explicitOMP_PROC_BIND=spreaddegrades single-
+process BLAS in our tests). Per-node memory sizing follows
+the closed-form persistent-state model and calibrated peak-RSS
+sweep of Appendix C.6, within a single-node budget for the con-
+figurations characterised here.
+6. Conclusions and outlook
+We have presentedCosmoForge, a Python framework that inte-
+grates QML power spectrum estimation and pixel-space Gaus-
+sian likelihood evaluation for spin-0 and spin-2 fields with gen-
+eral (non-diagonal) noise covariances, exposing a harmonic-
+space SMW path and a direct pixel-space path through a single
+abstract computation-basis interface (Sect. 3.2). The implemen-
+tation is validated end-to-end against the Planck low-ℓFortran
+reference of Pagano et al. (2020) and thesimalllikelihood of
+Planck Collaboration (2020) and exercised on 10 4 Monte Carlo
+polarisation realisations across five sky fractions (Sect. 4.1).
+Within the QML code landscape (Appendix D),CosmoForge
+is the only public framework that simultaneously exposes three
+normalisation modes, both computation bases through a single
+abstract interface, an integrated pixel-space likelihood, and a
+per-component multipole floor, all in Python.
+Several extensions of the released framework are at vari-
+ous stages of development and will be presented in dedicated
+follow-up papers. Iterative QML (Bilbao-Ahedo et al. 2021) can
+be driven on top ofCosmoForgeby re-entering the pipeline with
+the previous-iteration estimates in place of the fiducial, leverag-
+ing the modular separation between fiducial ingestion and basis
+assembly; an end-to-end pixel-based-inference characterisation,
+including application to real CMB data and integration with cos-
+mological samplers, is the subject of a forthcoming companion
+paper based on the demonstration in Sect. 4.3; and GPU accel-
+eration of the pixel-space hot loops viaCuPyorJAXis localised
+to the basis kernels by the abstract interface and is the obvious
+next step where the dense linear algebra dominates. The frame-
+work targets the regime of upcoming low-ℓCMB analyses —
+LiteBIRD (LiteBIRD Collaboration 2023) and the Simons Ob-
+servatory (Ade et al. 2019) — where correlated noise, partial
+sky, and a primordialB-mode target make optimal estimators es-
+sential, and extends to non-CMB spherical observables (galaxy
+clustering, 21 cm intensity mapping, stochastic GWB searches)
+and their cross-correlations through the multi-field design.
+CosmoForgereplaces the historical proliferation of single-
+purpose QML codes with a single, modular, validated, and
+openly-developed framework, lowering the barrier to entry for
+optimal large-scale analyses and providing a reliable foundation
+on which future algorithmic and scientific work can build.
+CosmoForgeis publicly available athttps:
+//github.com/ggalloni/CosmoForge; the three sub-
+packagesCosmoCore,QUBE,PICSLikeare pip-installable from
+PyPI ascosmocore,qube-qml,picslike, and the umbrella
+cosmoforgeinstalls all three.
+Acknowledgements.The authors thank L.P.L. Colombo for valuable comments
+and discussions. Some of the results in this paper have been derived using
+the following packages:CAMB(Lewis et al. 2000; Howlett et al. 2012),healpy
+(Górski et al. 2005; Zonca et al. 2019),Matplotlib(Hunter 2007),SciPy
+(Virtanen et al. 2020),NumPy(Harris et al. 2020),Numba(Lam et al. 2015), and
+mpi4py(Dalcin & Fang 2021). We acknowledge the financial support from the
+INFN InDark initiative and from the COSMOS network through the ASI (Ital-
+ian Space Agency) Grants 2016-24-H.0 and 2016-24-H.1-2018. This work has
+also received funding by the European Union’s Horizon 2020 research and in-
+novation program under grant agreement no. 101007633 CMB-Inflate. G.G.
+acknowledges support by the MUR PRIN2022 Project “BROWSEPOL: Be-
+yond standaRd mOdel With coSmic microwavE background POLarization”-
+2022EJNZ53 financed by the European Union – Next Generation EU. We ac-
+knowledge CINECA for the availability of high performance computing re-
+sources and support through the CINECA-INFN agreement. During the prepara-
+tion of this work the authors used Anthropic’s Claude (via the Claude Code agen-
+tic coding interface) to assist with code implementation and manuscript drafting.
+All AI-generated content and code was reviewed, edited, and validated by the
+authors, who take full responsibility for the contents of this publication.
+References
+Ade, P. et al. 2019, JCAP, 02, 056
+Alonso, D., Sanchez, J., Slosar, A., & LSST Dark Energy Science Collaboration.
+2019, MNRAS, 484, 4127
+Benabed, K., Cardoso, J.-F., Prunet, S., & Hivon, E. 2009, A&A, 500, 969
+BICEP/Keck Collaboration. 2021, Phys. Rev. Lett., 127, 151301
+Bilbao-Ahedo, J. D., Barreiro, R. B., Vielva, P., Martínez-González, E., & Her-
+ranz, D. 2021, JCAP, 2021, 034
+Bond, J. R., Jaffe, A. H., & Knox, L. 1998, Phys. Rev. D, 57, 2117
+Chon, G., Challinor, A., Prunet, S., Hivon, E., & Szapudi, I. 2004, MNRAS, 350,
+914
+Dalcin, L. & Fang, Y .-L. L. 2021, Comput. Sci. Eng., 23, 47
+Galloni, G., Campeti, P., Pagano, L., et al. 2025, JCAP, 12, 052
+Gjerløw, E., Colombo, L. P. L., Eriksen, H. K., et al. 2015, ApJS, 221, 5
+Goldberg, J. N., Macfarlane, A. J., Newman, E. T., Rohrlich, F., & Sudarshan, E.
+C. G. 1967, J. Math. Phys., 8, 2155
+Golub, G. H. & Van Loan, C. F. 2013, Matrix Computations, 4th edn. (Johns
+Hopkins University Press)
+Górski, K. M., Hivon, E., Banday, A. J., et al. 2005, ApJ, 622, 759
+Grain, J., Tristram, M., & Stompor, R. 2009, PhRvD, 79, 123515
+Gruppuso, A., de Rosa, A., Cabella, P., et al. 2009, MNRAS, 400, 463
+Harris, C. R., Millman, K. J., van der Walt, S. J., et al. 2020, Nature, 585, 357
+Hivon, E., Górski, K. M., Netterfield, C. B., et al. 2002, ApJ, 567, 2
+Howlett, C., Lewis, A., Hall, A., & Challinor, A. 2012, JCAP, 2012, 027
+Hunter, J. D. 2007, Comput. Sci. Eng., 9, 90
+Jensen, J. L. W. V . 1906, Acta Mathematica, 30, 175
+Kamionkowski, M., Kosowsky, A., & Stebbins, A. 1997, Phys. Rev. D, 55, 7368
+Kvasiuk, Y ., Lai, A., Münchmeyer, M., & Smith, K. M. 2025, arXiv e-prints
+[arXiv:2510.05215]
+Lam, S. K., Pitrou, A., & Seibert, S. 2015, in Proceedings of the Second Work-
+shop on the LLVM Compiler Infrastructure in HPC, LLVM ’15 (ACM)
+Lewis, A., Challinor, A., & Lasenby, A. 2000, ApJ, 538, 473
+LiteBIRD Collaboration. 2023, PTEP, 2023, 042F01
+Pagano, L., Delouis, J.-M., Mottet, S., Puget, J.-L., & Vibert, L. 2020, A&A,
+635, A99
+Page, L., Hinshaw, G., Komatsu, E., et al. 2007, ApJS, 170, 335
+Planck Collaboration. 2016a, A&A, 594, A11
+Planck Collaboration. 2016b, A&A, 596, A107
+Planck Collaboration. 2020, A&A, 641, A5
+Planck Collaboration, Aghanim, N., et al. 2020a, A&A, 641, A5
+Planck Collaboration, Akrami, Y ., et al. 2020b, A&A, 643, A42
+Tegmark, M. 1997, Phys. Rev. D, 55, 5895
+Tegmark, M. & de Oliveira-Costa, A. 2001, Phys. Rev. D, 64, 063001
+Tegmark, M. & Hamilton, A. J. S. 1997, in Relativistic Astrophysics: 18th Texas
+Symposium
+Tristram, M., Macías-Pérez, J. F., Renault, C., & Santos, D. 2005, MNRAS, 358,
+833
+Tristram, M. et al. 2022, Phys. Rev. D, 105, 083524
+Vanneste, S., Henrot-Versillé, S., Louis, T., & Tristram, M. 2018, Phys. Rev. D,
+98, 103526
+Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020, Nat. Methods, 17, 261
+Woodbury, M. A. 1950, Inverting modified matrices, Tech. rep., Memorandum
+Report 42, Statistical Research Group, Princeton University
+Zaldarriaga, M. & Seljak, U. 1997, Phys. Rev. D, 55, 1830
+Zonca, A., Singer, L., Lenz, D., et al. 2019, J. Open Source Softw., 4, 1298
+Article number, page 12
+
+Galloni & Pagano: CosmoForge I
+Appendix A: Spin-weighted spherical harmonics
+and rotation angles
+A.1. Spin-2 extension
+The formalism presented so far applies to spin-0 (scalar) fields
+such as CMB temperature or galaxy density. Spin-2 (tensor)
+fields — most notably CMB polarization, described by the
+Stokes parametersQandU, and weak-lensing galaxy shear
+(γ1, γ2) — require a generalisation to spin-weighted spherical
+harmonics. In this section we describe how each ingredient of
+the QML estimator is modified for spin-2 fields and for cross-
+correlations between spin-0 and spin-2 fields.
+A.1.1. Spin-weighted harmonics and the V operator
+A spin-2 field on the sphere is decomposed intoE-mode (parity-
+even) andB-mode (parity-odd) components using the spin-
+weighted spherical harmonics ±2Yℓm (Kamionkowski et al. 1997;
+Zaldarriaga & Seljak 1997). In pixel space, a spin-2 field con-
+tributes 2Nphys
+pix data points (theQandUvalues at each unmasked
+pixel), while in harmonic space it contributes 2n base
+modes modes (E
+andBmodes for each (ℓ,m)).
+The harmonic operatorVfor a spin-2 field has the block
+structure
+Vspin-2 =
+ 
+VEQ VEU
+VBQ VBU
+!
+,(A.1)
+where rows correspond to [Emodes|Bmodes] and columns
+to [Qpixels|Upixels]. The sub-blocks are constructed from
+Wignerd-matrix elementsd ℓ
+m,±2(θ), evaluated via a numerically
+stable three-term recurrence inℓderived from the Jacobi poly-
+nomial recurrence. Rotation angles between pixel coordinate
+frames, computed from the full spherical geometry (not a flat-
+sky approximation; see Kamionkowski et al. 1997), are used to
+properly transform between the local (Q,U) basis at each pixel
+and the global (E,B) basis.
+A.1.2. Lambda matrix for spin-2
+For a spin-0 field,Λis diagonal with entriesC ℓ Wℓ. For a spin-2
+field,Λacquires a 2×2 block structure at each (ℓ,m):
+Λspin-2
+ℓm =
+ 
+CEE
+ℓ Wℓ CEB
+ℓ Wℓ
+CEB
+ℓ Wℓ CBB
+ℓ Wℓ
+!
+.(A.2)
+This block-diagonal structure (diagonal in (ℓ,m) but 2×2 inE/B)
+is a consequence of statistical isotropy: different (ℓ,m) are uncor-
+related, butEandBmodes at the same (ℓ,m) may be correlated
+ifC EB
+ℓ ,0.
+A.1.3. Multi-field structure
+For a joint analysis of multiple fields — for example, tempera-
+ture (T, spin-0) and polarization (Q/U, spin-2) — the data vector
+is assembled asd=(T 1, . . . ,T NT
+pix
+,Q 1, . . . ,QNP
+pix
+,U 1, . . . ,UNP
+pix
+),
+and the harmonic operator becomes block-diagonal across field
+components:
+V=
+ 
+VT 0
+0V QU
+!
+.(A.3)
+TheΛmatrix acquires the full block structure coupling all spec-
+tra. For aT EBanalysis, each (ℓ,m) block is 3×3:
+ΛT EB
+ℓm =W ℓ
+
+CTT
+ℓ CT E
+ℓ CT B
+ℓ
+CT E
+ℓ CEE
+ℓ CEB
+ℓ
+CT B
+ℓ CEB
+ℓ CBB
+ℓ
+ ,(A.4)
+encoding all six auto- and cross-power spectra. The derivative
+matricesE ℓ and the Fisher matrix generalise accordingly, with
+indices running over all (spectrum, ℓ) pairs.
+The SMW machinery (Sect. 2.3.2) carries over without mod-
+ification:K=Λ −1 +VN −1V⊤ is nown total
+modes ×n total
+modes, with
+ntotal
+modes =n T
+modes +2n P
+modes for aT EBanalysis.
+Field block-diagonal optimisation.When no cross-spectra
+are estimated between certain field groups and their noise is
+independent, the kernelKis exactly block-diagonal across
+those groups.CosmoForgedetects this structure automatically
+and inverts each block independently, reducing the cost from
+O((ntotal
+modes)3) to P
+g O((ng
+modes)3). For aT EBanalysis without
+T E/T Bcross-spectra, this gives two blocks (TandEB) and a
+speedup of approximately 4×on theKinversion.
+The spin-2 machinery of Sect. A.1 relies on a small num-
+ber of explicit conventions for the spin-weighted spherical har-
+monics ±2Yℓm and for the rotation that aligns the local Stokes
+frame at every pixel with the globalE/Bbasis. Because different
+communities adopt different sign conventions for these objects,
+and because mistakes in either of them propagate silently into
+the spin-0×spin-2 cross-spectra, this appendix records the con-
+ventions used byCosmoForgein a form that is sufficient for an
+independent implementation to reproduce our results.
+A.2. Conventions for ±2Yℓm
+We follow the spin-raising/lowering conventions of
+Goldberg et al. (1967) as adapted to the CMB context by
+Kamionkowski et al. (1997) and Zaldarriaga & Seljak (1997).
+The spin-weighted harmonics sYℓm admit the explicit form
+sYℓm(θ, ϕ)=
+r
+2ℓ+1
+4π dℓ
+m,−s(θ)e imϕ,(A.5)
+whered ℓ
+m,s(θ) is the small Wignerd-matrix (Sect. A.3). TheE
+andBbasis functions follow as real-valued combinations of the
+±2Yℓm:
+Eℓm =− 1
+2
+ 
+2Yℓm + −2Yℓm
+,B ℓm = + i
+2
+ 
+2Yℓm − −2Yℓm
+.(A.6)
+The minus sign in theEcombination is the one that propagates
+into the spin-0×spin-2 entries ofΛ(Eq. A.2) and into the corre-
+sponding derivative matrices. Without it, theT EandT Bblocks
+ofV ⊤ΛVacquire the wrong sign relative to the pixel-spaceT–
+Q,Ucorrelations, while theTT,EE,BB, andEBblocks —
+which are all even in the±2 sum — remain unaffected and can-
+not diagnose the mistake. We mention this explicitly because it
+is the sign convention against which our spin-0×spin-2 unit tests
+are calibrated.
+A.3. Wigner-drecurrence
+The values ofd ℓ
+m,s(θ) at the pixel colatitudes are evaluated
+through a stable three-term recurrence inℓ, derived from
+Article number, page 13
+
+A&A proofs:manuscript no. main
+the Jacobi polynomial three-term recurrence and implemented
+incosmocore.basics.wigner. The recurrence takes the
+schematic form
+dℓ+1
+m,s (θ)= αℓ cosθ+β ℓ
+ dℓ
+m,s(θ)+γ ℓ dℓ−1
+m,s (θ),(A.7)
+withα ℓ, βℓ, γℓ the standard Jacobi coefficients (omitted here for
+brevity; the explicit form is given in the source).
+Two book-keeping points are worth recording. First, the re-
+currence is started from the boundary caseℓstart =max(|m|,|s|), at
+whichd ℓstart
+m,s has a closed-form expression in half-angles cos(θ/2),
+sin(θ/2). The factorials that appear in the boundary expression
+are evaluated through their logarithms to avoid overflow at high
+ℓ. Second, the symmetryd ℓ
+m,s =(−1) m−s dℓ
+s,m =(−1) m−s dℓ
+−m,−s is
+used to remap any requested (m,s) into the range|m| ≥ |s|,m≥
+0 before running the recurrence; this is the regime in which
+Eq. (A.7) is numerically well-behaved across the full range of
+ℓrelevant to low-ℓanalyses.
+A.4. Rotation angles between pixel frames
+The Stokes parametersQandUat a pixelpare defined relative
+to the local meridian through that pixel. To expressQ p,U p as a
+linear combination of the globalE ℓm,B ℓm harmonic coefficients,
+the local frame must be rotated to coincide with theE/Bbasis
+defined globally at the pixel position. Equivalently, the spin-2
+entries of theVoperator (Sect. A.1.1) carry phasese ±2iαp that
+depend on the pixel direction ˆnp and on the global frame chosen
+forE,B.
+For the pair-wise objectVV ⊤ that enters the projected
+covariance, the relevant quantity is not a single rotation
+angle per pixel but the pair (α pp ′ , αp′ p) of angles attached
+to the geodesic connecting two pixelsp,p ′ to the chosen
+reference.CosmoForgeevaluates these angles in closed
+form from the unit vectors ˆn p,ˆnp′ as implemented in
+cosmocore.basics.geometry.get_rotation_angle:
+the cross product ˆnp ×ˆnp′ defines the geodesic plane, and the
+projection of this plane onto the local tangent plane at each
+pixel yieldsα pp ′ , αp′ p via two well-defined arc-cosines whose
+signs are fixed by the orientation of the geodesic relative to
+the reference axis. We use the full-sky spherical-trigonometric
+expression rather than the flat-sky approximation, so the rotation
+angles remain accurate at all separations on the sphere; this
+is required for the QML computation at lowN side where pixel
+separations span a large fraction ofπ.
+Appendix B: Sherman–Morrison–Woodbury for
+log-determinants
+Equation (18) expresses the log-determinant of the total covari-
+anceCas a sum of three contributions defined on much smaller
+matrices thanCitself. The identity is a direct consequence of the
+matrix determinant lemma, which is less commonly stated than
+the Sherman–Morrison–Woodbury identity for the inverse. This
+appendix records the derivation, in the form in which it applies to
+theCosmoForgefactorisation, and the numerical considerations
+that follow from it.
+B.1. Matrix determinant lemma
+For any invertibleN∈R Npix×Npix and rectangularV∈R nmodes×Npix
+withn modes ≤N pix, and any invertibleΛ∈R nmodes×nmodes,
+N+V ⊤ΛV
+ =|N|
+Inmodes +ΛV N −1 V⊤ .(B.1)
+A short proof follows from a Schur-complement argument ap-
+plied to the block matrix
+ 
+N−V ⊤Λ
+V I nmodes
+!
+.(B.2)
+Computing its determinant by eliminating the upper-right
+block via the lower-left block gives|N| |I nmodes +ΛV N −1 V⊤|,
+while eliminating the lower-left block via the upper-left block
+gives|I nmodes| |N+V ⊤ΛV|. Equating the two expressions yields
+Eq. (B.1). The identity|I+AB|=|I+BA|for any rect-
+angularA,Bof compatible shape, used implicitly above, is a
+standard consequence of the same block-matrix construction
+(Golub & Van Loan 2013).
+Applying Eq. (B.1) to theCosmoForgefactorisationC=
+N+V ⊤ΛV(Eq. 15) gives
+|C|=|N|
+Inmodes +ΛM
+ ,M≡V N −1 V⊤.(B.3)
+The bracket can be rewritten usingΛK=I nmodes +ΛMwithK=
+Λ−1 +M(Eq. 17), so that|I nmodes +ΛM|=|Λ| |K|. Substituting
+and taking logarithms recovers Eq. (18):
+ln|C|=ln|N|+ln|Λ|+ln|K|.(B.4)
+Every term on the right-hand side is a determinant of a matrix
+whose dimension does not exceedn modes. The pixel-space deter-
+minant|C|is never formed.
+B.2. Numerical evaluation inCosmoForge
+ln|N|.The noise covarianceNis independent of the cosmo-
+logical parameters, so ln|N|is computed once at setup from a
+Cholesky factorisationN=L L ⊤ as ln|N|=2 P
+i lnL ii, and the
+result is cached for the lifetime of the analysis.
+ln|Λ|.The harmonic signal covarianceΛis block-diagonal in
+(ℓ,m). The structure of each block depends on the field configu-
+ration:
+–Single spin-0 field.Λ ℓm =C ℓWℓ is a scalar, and ln|Λ|=P
+ℓ(2ℓ+1) ln (CℓWℓ) whereW ℓ is the combined beam and
+pixel-window factor (Sect. 2.3.1).
+–Single spin-2 field.Λ ℓm is the 2×2 block of Eq. (A.2), mixing
+EE,BB, andEB. Its determinant is computed in closed form
+per (ℓ,m) and summed.
+–Multi-field (e.g. T,E,B joint).Λ ℓm is the 3×3 block of
+Eq. (A.4); we evaluate ln|Λ ℓm|via a Cholesky factorisation
+per (ℓ,m). The per-block cost is negligible compared to the
+assembly ofK.
+BecauseΛenters Eq. (18) with a positive sign, no sign-tracking
+ambiguity arises here; the lemma is stated in terms ofΛitself
+rather thanΛ −1.
+ln|K|.The kernelKis a densen modes ×n modes matrix that
+depends onC ℓ throughΛ. We evaluate ln|K|from the same
+Cholesky factorisation ofKthat is already required for the inver-
+sion in Eq. (16), at no additional asymptotic cost. WhenKis re-
+duced in dimension by theℓ-switching scheme of Sect. 2.3.4, the
+multipoles outside the inference window (i.e.ℓ∈[ℓ Sig.
+min, ℓmin)∪
+(ℓmax, ℓSig.
+max]) migrate into an effective noise termNeffwhose de-
+terminant is absorbed into ln|N|, leaving Eq. (18) formally un-
+changed withN→N effandΛ,Krestricted toℓ∈[ℓ min, ℓmax].
+Article number, page 14
+
+Galloni & Pagano: CosmoForge I
+Quadratic form.The pixel-space quadratic formd ⊤C−1dthat
+appears alongside the log-determinant in the Gaussian likelihood
+is evaluated by direct application of Eq. (16):
+d⊤C−1d=d ⊤N−1d−
+
+V N−1 d
+⊤
+K−1 
+V N−1 d
+
+.(B.5)
+The first term depends only on the data and the cachedN −1; the
+second involves a single back-substitution against the Cholesky
+factor ofK, the same factorisation used for the log-determinant.
+Both terms scale asO(n 3
+modes) for the Cholesky factorisation and
+O(n2
+modes) for the back-substitution; the pixel-space costO(N 3
+pix)
+is avoided entirely.
+Appendix C: Algorithmic optimisations and
+implementation
+The harmonic reformulation of Sect. 2.3 reduces the leading
+cost of QML estimation fromO(N 3
+pix) toO(n 3
+modes), but sev-
+eral further optimisations are required for analyses to remain
+tractable atN side ≳32. This appendix collects the algorith-
+mic and implementation-level techniques used inCosmoForge,
+with explicit complexity statements. None of the optimisations
+described here introduces an approximation: each is an alge-
+braically exact restatement of an operation already defined in the
+main text.
+C.1. Sparse evaluation of Fisher traces
+The dominant cost of the harmonic-space Fisher matrix is the
+evaluation of the (n s nℓ)2 traces in Eq. (21). A naive imple-
+mentation that forms the dense matrix products eC−1Eℓ scales
+asO(n 2
+ℓ n2
+modes). This dense evaluation is unnecessary because
+each per-multipole derivativeE ℓ is extremely sparse: it has only
+(2ℓ+1) nonzero entries on the diagonal (one per real harmonic
+mode at multipoleℓ). Cross-spectrum derivatives (EB,T E,T B)
+similarly carry 2(2ℓ+1) nonzero off-diagonal entries connecting
+the corresponding mode blocks.
+Storing eachE ℓ in coordinate (COO) form as triplets
+(rα,c α,v α), the trace in Eq. (21) reduces to
+Fℓℓ′ = 1
+2
+X
+α,β
+vα vβ eC−1[cβ,r α] eC−1[cα,r β],(C.1)
+whereαruns over the nonzero entries ofE ℓ andβover those
+ofE ℓ′. The cost of this sub-block evaluation isO(N ℓ Nℓ′), with
+Nℓ the nonzero count ofE ℓ. Summed over the Fisher matrix, the
+total scaling becomes
+O
+
+X
+ℓ,ℓ′
+(2ℓ+1)(2ℓ ′ +1)
+ =O(ℓ 4
+max),(C.2)
+to be compared withO(ℓ 6
+max) in pixel space and with
+O(n2
+ℓ n2
+modes)∼ O(ℓ 6
+max) for the dense harmonic-space evalua-
+tion.3 A similar reduction applies to the noise bias of Eq. (7) and
+to the per-bin operators of Sect. 2.4, where the binned derivative
+inherits the same union-of-supports structure.
+3 Then 2
+modes factor in the dense evaluation absorbs the fullP
+ℓ(2ℓ+1)=
+(ℓmax +1) 2 mode count, hence the sameℓ 6
+max scaling as the pixel-space
+algorithm despite the smaller prefactor.
+Generality.The optimisation is purely algebraic: it makes no
+assumption on the structure ofN,VorΛ, and applies identi-
+cally to spin-0, spin-2 and multi-field analyses. For reference, the
+symbolic-trace technique used byECLIPSE(Bilbao-Ahedo et al.
+2021) achieves a comparableO(ℓ 4
+max) scaling, but only under the
+assumption of diagonal pixel noise; Eq. (C.1) retains the same
+algorithmic complexity for arbitrary noise covariances.
+Empirical gain.Measured on a single 48-core node, the trace
+stage of aQUanalysis atN side =16 drops from 71 s to 0.3 s
+(∼240×); atN side =32 the same stage drops from approxi-
+mately 4400 s to 5 s (∼850×). After this optimisation the domi-
+nant runtime contributions become covariance I/O, signal-matrix
+construction and the SMW kernel inversion (see Sect. C.5).
+C.2. Field block-diagonal SMW kernel
+For multi-field analyses the SMW kernelKacts on a vector of
+dimensionn total
+modes = P
+g ng
+modes, summed over field groups (e.g.,
+Talone,EBtogether). Whenever (i) no cross-spectrum is in-
+cluded between two field groups and (ii) the noise covariance
+has no off-diagonal block coupling them, bothΛandVN −1V⊤
+become block-diagonal across those groups, and so doesK. In-
+verting each block independently replaces anO((n total
+modes)3) fac-
+torisation with P
+g O((ng
+modes)3).
+For the commonT EBanalysis with noT EorT Bcross-
+spectra and uncorrelatedT/Pnoise, two blocks remain (Tand
+EB) of comparable size, giving roughly a 4×speedup onKin-
+version.CosmoForgedetects this structure automatically from
+the spectra list and the noise covariance topology — no user flag
+is required — and falls back to a single dense inversion when
+any cross-coupling is present, ensuring correctness in the gen-
+eral case.
+C.3. Stable evaluation of the SMW projected inverse
+The Sherman–Morrison–Woodbury identity used in Sect. 2.3.2
+writes the projected inverse as a difference of two large matrices,
+V C−1 V⊤ =M−M K −1 M,K=Λ −1 +M,(C.3)
+withM≡VN −1V⊤. In the cosmic-variance-limited regime,
+where the signal contribution to the covariance dominates the
+noise (e.g., temperature at low multipoles when the polarization
+sensitivity is sub-µK·arcmin), one hasΛ≫M −1, and the two
+matrices on the right-hand side of Eq. (C.3) become large and
+nearly equal: the difference is dominated by catastrophic can-
+cellation in floating-point arithmetic and can produce spuriously
+negative entries on the diagonal ofVC −1V⊤. When that hap-
+pens the binned Fisher matrixF b acquires negative eigenvalues,
+breaking the positive-definiteness assumed by Cholesky inver-
+sion and contaminating any downstream covariance estimate.
+CosmoForgeavoids the subtraction entirely. The algebraic
+identity
+M−M K −1 M=M K −1 Λ−1 =M(I+ΛM) −1 (C.4)
+follows fromK=Λ −1(I+ΛM), soVC −1V⊤ can be evaluated as
+one solve of the linear system (I+ΛM) ⊤ X⊤ =M ⊤. The matrix
+(I+ΛM) has eigenvalues 1+eig(Λ1/2MΛ1/2)≥1 and is therefore
+well-conditioned independently of the signal-to-noise ratio. Two
+Article number, page 15
+
+A&A proofs:manuscript no. main
+further QML quantities follow the same identity:
+V C−1 d=(I+MΛ) −1 V N−1 d,(C.5)
+A≡I−M K −1 =(I+MΛ) −1,(C.6)
+wheredis a data vector andAenters the noise-bias matrix
+Cov(w|noise)=A T A ⊤ used in the QML pipeline. Equa-
+tions (C.4)–(C.6) involve the same matrix (I+ΛM) (or its trans-
+pose), so a single LU factorisation is reused for the projected
+inverse, the data weighting and the noise-bias matrix. The wall-
+time cost is comparable to the legacy SMW form (one LU in
+place of one Cholesky plus dense matrix products); the gain is
+numerical accuracy in the high-SNR regime, where the legacy
+form silently corrupts the Fisher matrix.
+C.4. Implementation notes
+The pixel-space noise covariance is loaded via tilednumpyfancy
+indexing (unmasked-pixel index split into∼64 MiB tiles), so
+that the active-mask submatrix is assembled inO(⌈N pix/Ntile⌉2)
+tile iterations without a full-size intermediate; signal-covariance
+assembly and spin-2Vconstruction areNumba @njitkernels
+paired with direct LAPACK bindings, leaving no critical path
+in the Python interpreter. The sparse derivatives{E ℓ}built dur-
+ing the Fisher computation are cached and reused byQUBEat
+the power-spectrum stage at no extra setup cost. On multi-rank
+nodes the largest precomputed objects (N,S, the SMW factors)
+are placed in MPI shared-memory windows, so that per-node
+footprint is set by the object sizes rather than by the rank count.
+Numerically, the (2ℓ+1)/(4π) prefactor is absorbed into the
+spherical-harmonic basis functions (eliminating a class of post-
+hoc normalisation errors atℓ=2), Wigner-dmatrix elements use
+the Jacobi-derived three-term recurrence (Appendix A), Fisher
+decorrelation regularises eigenvalues below 10 −12 of the maxi-
+mum, and log-determinants flow through the matrix-determinant
+lemma (Appendix B) on LAPACK Cholesky factors so that no
+large determinant is ever computed directly.
+C.5. Summary of complexity reductions
+Table C.1 summarises the asymptotic costs of the dominant
+stages of aCosmoForgeQML analysis, with and without the
+optimisations of this appendix.
+For a representativeT EBanalysis atN side =32,ℓ max =64,
+fsky ≈0.7, the combined effect of the optimisations in this ap-
+pendix is to bring a single Fisher+Spectra evaluation from a
+regime where it is dominated by Fisher trace evaluation (∼hours
+per rank) to one where it is dominated by setup cost (covariance
+I/O, signal matrix and SMW kernel construction; minutes per
+rank).
+C.6. Memory profile derivation and calibration
+C.6.1. Persistent-state model
+The persistent state retained by each computation basis through
+the Fisher andSpectrastages admits a closed-form size esti-
+mate in terms of the basis dimensions; the dominant transients
+are short enough not to set the lifetime peak. We collect the lead-
+ing terms here so that a user can predict the per-rank footprint
+of a planned analysis before submission. All terms are dense
+double-precision buffers and carry an implicit factor of 8 bytes.
+Table C.1: Asymptotic complexity of the dominant QML stages.
+“Pixel-direct” refers to a direct evaluation of Eqs. (4)–(6) in pixel
+space, with the per-bandpower precomputeeC−1Eb shared across
+the trace pairs. “Harmonic (dense)” is the SMW reformulation of
+Sect. 2.3 with naive trace evaluation. “Harmonic (CosmoForge)”
+adds the optimisations of this appendix. The dimensions are:Npix
+unmasked pixels,n modes harmonic modes (∼ℓ 2
+max),n ℓ =ℓ max −
+ℓmin +1 multipoles,N bins bandpowers (Nbins ≤n ℓ, withN bins =
+nℓ in the unbinned case),n s spectra. Big-Oscaling is implicit
+throughout.
+Stage
+Pixel-
+direct
+Harmonic
+(naive)
+Harmonic
+(CosmoForge)
+C−1 assemblyN 3
+pix n3
+modes n3
+modes
+†
+Fisher matrix ‡ ns Nbins N3
+pix
++n 2s N2
+bins N2
+pix
+N2
+bins n2
+modes ℓ4
+max
+Quadratic estimatesN bins N2
+pix Nbins nmodes nmodes
+† Split into block sums when the kernel is field block-diagonal
+(Sect. C.2).
+‡ Pixel-direct cost is dominated by theNbins Cholesky-multiplies
+eC−1Eb whenN pix ≫N bins; forN bins →n ℓ (unbinned) the lead-
+ing term scales asn ℓ N3
+pix ∼ℓ 7
+max at fixed sky fraction.
+Harmonic path.The persistent state retained from
+basis_setuponwards is
+Mpers
+harm =N 2
+pix|{z}
+L
++n modes ·N pix|        {z        }
+VN−1
++n 2
+modes|{z}
+VN−1V⊤
++n 2
+modes|{z}
+T,switch only
+,(C.7)
+whereLis the in-place Cholesky factor ofN(the explicitN −1 is
+never formed),VN −1 andVN −1V⊤ are the precomputed projec-
+tors of Sect. 2.3.3, andTis the noise-bias kernel that decouples
+fromVN −1V⊤ only whenℓ-switching (Sect. 2.3.4) is active. The
+basis_setuptransient peak adds the pixel projectorVitself
+(nmodes ·N pix) and, when switching is active, the fixed-multipole
+signal contributionS fixed (N2
+pix) together with onen modes ·N pix
+intermediate.
+Pixel-direct path.Without the harmonic projector and SMW
+kernel, the persistent state is dominated byN 2
+pix buffers:
+Mpers
+pix =N 2
+pix|{z}
+C
++N 2
+pix|{z}
+N(F-order copy)
++N 2
+pix|{z}
+S fixed (switch only)
+.(C.8)
+The middle term reflects an unavoidable Fortran-ordered copy
+at basis-construction time; the third term is allocated only when
+the basis-construction rangeℓ Sig.
+max exceeds the inference window
+ℓmax (the implicit-switch regime), and is held in the allocator
+pool throughbasis_setupexit even after its consumer deref-
+erences it. The Fisher transient peak addsC −1 together with the
+per-bin products{C −1 ∂C/∂θi}that drive the trace loop, scaling
+asn params N2
+pix withn params =n s Nbins. The Fisher constructor ex-
+posescache_derivatives = Falseto suppress this cache at
+the cost of recomputing the products insideSpectra, recovering
+a∼2×saving on the transient term; the default caches them in
+line with the throughput-oriented baseline of Sect. 5.2.
+Theqube-memory-budgetcommand-line tool exposes
+Eqs. (C.7)–(C.8) and the corresponding transient terms, return-
+ing a per-stage predicted peak that a user can consult before re-
+questing a node allocation.
+Article number, page 16
+
+Galloni & Pagano: CosmoForge I
+Table C.2: Peak RSS for the pixel-direct path atfsky =0.1 (single
+rank, full thread budget). The larger of the two pipeline-stage
+peaks is the node-sizing number.
+FieldN side Npix Fisher peak (GB) Spectra peak (GB)
+T16 312 0.4 0.4
+QU16 624 0.6 0.6
+T32 1200 0.7 0.7
+QU32 2400 2.4 1.7
+T64 4900 3.8 3.2
+QU64 9800 31.1 19.8
+Table C.3: Peak RSS for the harmonic path atf sky =0.5 (single
+rank, full thread budget); complementary to Table C.2, each re-
+ported at the sky fraction where its basis is theautoselector’s
+cost-optimal choice.
+FieldN side Npix nmodes Fisher peak (GB)
+T16 1568 1085 0.9
+QU16 3136 2170 1.6
+T32 6208 4221 4.5
+QU32 12416 8442 15.7
+C.6.2. Measured profile and calibration
+Table C.2 reports the pixel-direct path atf sky =0.1. Memory is
+dominated by the Fisher stage; Spectra reuses Fisher’s setup and
+adds at most a few megabytes for the ten-simulation batch. At
+Nside =64,QUthe per-bin derivative cache (the leading transient
+identified above) carries∼13 GiB; the remainder of the 31.1 GB
+peak is the persistentN 2
+pix buffers of Eq. (C.8), the Python inter-
+preter baseline (∼13 GiB at the imports used here), and BLAS
+scratch.
+The harmonic path has a different working set — dominated
+by the projectorVN −1 and the projected inverseVN −1V⊤ of
+Eq. (C.7), with sparse-COO derivatives contributing negligibly.
+Table C.3 reports the harmonic profile atf sky =0.5, where the
+harmonic basis is the cost-optimal choice; peak RSS at this sky
+fraction is dominated by then modes ·N pix andn 2
+modes terms of
+Eq. (C.7).
+The model of Eqs. (C.7)–(C.8) has been calibrated against
+psutil-instrumented production runs: on aQU,N side =64,
+ℓSig.
+max =256,ℓ max =128,f sky ≈0.6 harmonic stress test (and
+on the pixel-directN side =64,QU,f sky =0.1 configuration
+of Table C.2), persistent state is reproduced at the∼1% level
+on both paths; transient peaks at∼0.5% on the harmonic side
+and within∼6% on the pixel-directFisherpeak once allocator
+and BLAS-scratch slack are included. The pixel-directSpectra
+stage is modelled as a ceiling rather than a tight estimate, on the
+conservative side appropriate for cluster sizing.
+Appendix D: Comparison with existing codes
+The QML estimator has been implemented several times over
+the past two decades, each implementation tailored to the sci-
+ence case at hand and to the computing resources available at the
+time. The role of this section is to positionCosmoForgewithin
+that landscape — not to claim superior performance against any
+specific competitor. The correctness ofCosmoForgeis estab-
+lished independently in Sect. 4.1 through element-by-element
+validation against the Planck low-ℓFortran reference implemen-
+tation. What follows is a feature-scope comparison in the spirit
+of Alonso et al. (2019), who introducedNaMasteras a unified
+pseudo-Cℓ tool succeeding a generation of single-purpose codes.
+The QML landscape today is at a similar stage: each public
+code addresses a useful subset of the problem, and the gap that
+CosmoForgeseeks to fill is not a missing feature but the uni-
+fication of features across a single, modern, extensible Python
+framework.
+D.1. The QML code landscape
+We focus on the QML implementations that are publicly avail-
+able, documented, and used in the recent CMB literature. We
+deliberately exclude internal or unpublished codes, and we do
+not attempt a historical survey; Bilbao-Ahedo et al. (2021) and
+Vanneste et al. (2018) provide complementary discussions of the
+algorithmic lineage.
+The Planck low-ℓreference.The Fortran code used as the ref-
+erence in Sect. 4.1, distributed athttps://baltig.infn.it/
+cosmology_ferrara/lowell-likelihood-analysisand
+used in Pagano et al. (2020) and thesimalllow-ℓlikelihood of
+Planck Collaboration (2020), comprises three modules: template
+fitting for polarisation, QML power spectrum estimation sup-
+porting both auto- and cross-spectra, and a pixel-based Gaussian
+likelihood evaluated on a parameter grid. It supports general
+(non-diagonal) noise covariances and the fullT,Q,Ujoint
+analysis. Its main limitation is the implementation language —
+Fortran with custom build chains — and the absence of native
+multipole binning; both were appropriate for the production
+context but represent a barrier to entry today.
+ECLIPSE (Bilbao-Ahedo et al. 2021).A Fortran imple-
+mentation distributed athttps://github.com/CosmoTool/
+ECLIPSE, designed around the observation that the QML algebra
+simplifies dramatically when the noise is spatially uncorrelated.
+ECLIPSE supports the full intensity-and-polarisation analysis,
+both pixel- and harmonic-space implementations of the algebra,
+and provides a binned version of the estimator that recovers a
+regular Fisher matrix when small sky fractions would otherwise
+render the standard estimator singular. The code is parallelised
+for high-performance computing centres (144 cores in the pub-
+lished benchmarks). Because ECLIPSE assumes diagonal noise
+— an assumption that allows several traces and matrix-vector
+products to be replaced by sub-block operations — it is excep-
+tionally fast for experiments whose noise can be approximated
+as diagonal in pixel space, but does not natively support the cor-
+related noise covariances that arise generically once residual sys-
+tematics, component-separation outputs, or cross-frequency cor-
+relations are propagated through the analysis pipeline, in both
+space- and ground-based experiments.
+xQML (Vanneste et al. 2018).A Python code (with
+OpenMP-accelerated C routines) distributed athttps:
+//gitlab.in2p3.fr/xQML/xQML, designed specifically for
+cross-spectrum estimation between two independent maps as
+a means of removing noise bias without requiring an ana-
+lytical model of the noise. xQML supports the fullT,Q,U
+analysis, accepts dense per-map noise covariancesN A and
+NB, and provides aBinsclass for native multipole binning
+— a feature which directly inspired the binning module of
+Article number, page 17
+
+A&A proofs:manuscript no. main
+CosmoForge(see Sect. 2.4) 4. It does not include a pixel-space
+likelihood module and works entirely in the pixel basis: the
+dense pixel-space covarianceS+Nis inverted directly, with no
+harmonic-basis (SMW-style) path.
+QML-FAST (Kvasiuk et al. 2025).A Python code (NumPy
++Numba) distributed athttps://github.com/ykvasiuk/
+qmlfast, designed to scale QML estimation to large numbers
+of correlated scalar fields, motivated by galaxy-clustering ap-
+plications. QML-FAST inverts the dense pixel-space covari-
+ance directly and then uses the Legendre addition theorem to
+project the Fisher traces through spherical harmonics, evaluat-
+ing Tr[C −1Pℓ1 C−1Pℓ2] via precomputed eC−1 ≡VC −1VT con-
+tractions; this is harmonic-space algebra at the trace level, not a
+Sherman–Morrison–Woodbury reformulation of the covariance
+itself, so we mark the corresponding row in Table D.1 as partial.
+It supports native band-power Fisher computation via eigende-
+composition of binned basis elements, and arbitrary rank-one de-
+compositions beyond the spherical-harmonic default. The public
+examples and the released API are restricted to scalar (spin-0)
+fields: the repository contains no spin-weighted spherical har-
+monic or Wigner-dmachinery, and polarisation is not docu-
+mented as a supported configuration.
+BolPol (Gruppuso et al. 2009).A Fortran QML code devel-
+oped for early Planck and WMAP polarisation analyses. It treats
+the fullT,Q,Ucovariance as a single dense matrix, and is paired
+with a companion pixel-space likelihood. The code itself, to our
+knowledge, has never been publicly released, which limits its ac-
+cessibility outside the original collaboration; we include it in the
+comparison because of its historical role in the QML literature,
+but the entries in Table D.1 that we cannot verify from a public
+source are flagged with “?”.
+Each of these codes is well-suited to the analysis it was de-
+veloped for, and the choice of which code to deploy in a given
+study is a function of that study’s specific requirements.
+D.2. Feature comparison
+Table D.1 compiles the capabilities ofCosmoForgealongside
+the codes discussed above. Entries marked “y” denote a doc-
+umented, publicly available feature; “–” denotes an absent or
+undocumented feature; “p” denotes partial support (the feature
+is present but covers a subset ofCosmoForge’s implementa-
+tion, e.g. QML-FAST evaluates Fisher traces through spherical-
+harmonic projections of a pixel-space inverse covariance rather
+than representing and inverting the covariance in a harmonic
+basis via SMW); “?” marks claims that the published material
+does not unambiguously establish. The standard, deconvolved
+ˆCℓ =F −1qoutput is implicit in every row of the table since every
+QML estimator produces it; the rows “decorrelated bandpowers”
+and “window-convolved estimates” track only the twoadditional
+normalisation modes thatCosmoForgeexposes (Sect. 2.5). We
+have verified each entry against the most recent publicly avail-
+able paper or repository at the time of writing; we caution the
+reader that the public versions of these codes evolve, and the ta-
+ble reflects a snapshot.
+Four rows in the table are populated only in theCosmoForge
+column: the decorrelated bandpower output, the window-
+convolved estimates, the simultaneous availability of both a
+4 TheCosmoCore Binsclass is adapted from xQML and we acknowl-
+edge this lineage explicitly.
+harmonic-basis SMW path and a direct pixel-space path be-
+hind a single abstract interface, and a per-component multipole
+floor that lets the spin-0 estimation range start atℓ=1 (or,
+in principle, atℓ=0) while spin-2 components stay at the
+representation-theoretic minimumℓ=2 in the same joint analy-
+sis. ECLIPSE implements both pixel- and harmonic-space algo-
+rithms internally but exposes them as alternative computational
+strategies rather than user-selectable bases; xQML, QML-FAST,
+the Planck low-ℓreference, and BolPol each commit to one basis
+only.
+D.3. Positioning
+A direct head-to-head runtime comparison with ECLIPSE in its
+diagonal-noise regime — the only configuration in which a like-
+for-like measurement is possible without porting one of the two
+codes outside its design assumptions — requires running both
+codes at matchingN side,ℓ max and mask, on the same hardware,
+and is deferred to a dedicated companion note where the con-
+figuration can be controlled in full. The purpose of the present
+section is feature scope rather than runtime benchmarking.
+CosmoForgefills, for QML analyses, the same gap that
+NaMaster(Alonso et al. 2019) filled for pseudo-C ℓ analyses: a
+single public, validated, modular Python framework that does
+the standard analysis correctly out of the box, can be ex-
+tended to non-standard configurations without forking the code-
+base, and complements existing single-purpose implementations
+within one community-maintained codebase. Distribution chan-
+nels (PyPI package, GitHub repository, online documentation)
+are listed in the conclusions (Sect. 6).
+Appendix E: Configuration and YAML reference
+This appendix documents how aCosmoForgeanalysis is con-
+figured and run, and records the Y AML schema consumed by
+every analysis through theInputParamsclass. It is intended as
+a quick-reference for readers who want to reproduce the valida-
+tion runs of Sect. 4.1 without consulting the online documenta-
+tion. Default templates for the four canonical field configurations
+(T-only,QU-only,T EB,T QU) are bundled with theQUBEdistri-
+bution as<config>_defaults.yamlfiles and serve as starting
+points on top of which user keys are layered.
+E.1. Configuration and usage
+All analysis parameters are specified through Y AML config-
+uration files, including the HEALPix resolution (N side), the
+multipole-range keys (ℓ Sig.
+min,ℓ Sig.
+max,ℓ min,ℓ max; see below), field
+types and labels, file paths for masks, noise covariance matrices,
+input power spectra, and beam specifications. Default templates
+are bundled for the canonicalT-only,QU-only,T EB, andT QU
+configurations. The public driver classesFisher,Spectra
+(QUBE) andPICSLike(PICSLike) all take a single Y AML path
+on construction and arun()call to execute;Spectraaccepts
+a precomputedFisherinstance to reuse cached derivatives and
+basis state. MPI parallelisation is transparent: the same script
+runs on a single core or across multiple processes viampirun,
+with the workload distribution handled internally. The full API
+is documented online (see Sect. 6).
+Article number, page 18
+
+Galloni & Pagano: CosmoForge I
+Table D.1: Feature matrix of the QML implementations discussed in Sect. D.1. “y” available; “–” absent or undocumented; “p”
+partial support (a subset of the modes available inCosmoForge); “?” unverified against the published source. The “Planck low-
+ℓ” column refers to thepse_qml+parameter_estimationFortran codes used in Pagano et al. (2020) and thesimalllow-
+ℓlikelihood of Planck Collaboration (2020). ECLIPSE: Bilbao-Ahedo et al. (2021). xQML: Vanneste et al. (2018). QML-FAST:
+Kvasiuk et al. (2025). BolPol: Gruppuso et al. (2009). “Cross (multi-spec, one map)” denotes the joint estimation of all auto- and
+cross-spectra obtainable by combining the different fields (possibly with different spins) carried by a single observation — e.g. the
+sixTT,EE,BB,T E,T B,EBspectra of a CMBT,Q,Umap, or the full set of auto- and cross-spectra among multiple correlated
+scalar fields treated as a single dataset; “Cross (multi-map)” denotes the cross-correlation of two independent maps for noise-bias
+removal. The two “?” cells in the BolPol column reflect the absence of a public release for that code: the corresponding capabilities
+cannot be verified independently from the published paper, as discussed in Sect. D.1.
+FeatureCosmoForgePlanck low-ℓECLIPSE xQML QML-FAST BolPol
+Spin-0 (T) y y y y y y
+Spin-2 (Q,U) y y y y – y
+Cross (multi-spec, one map) y y y y y y
+Cross (multi-map) y y – y y ?
+General (non-diagonal) noise y y – y y y
+Harmonic basis (SMW) y – y – p –
+Pixel basis y y y y y y
+Native multipole binning y – y y y –
+Per-component multipole floor y – – – – –
+Decorrelated bandpowers y – – – – –
+Window-convolved estimates y – – – – –
+Pixel-space likelihood y y – – – y
+MPI parallelisation y y y – – ?
+Public release y y y y y –
+Language Python Fortran Fortran Python+C Python Fortran
+E.2. Top-level keys
+Table E.1 lists the Y AML keys recognised byInputParams,
+grouped by purpose. Required keys for a non-trivial analysis
+are flagged†; the remaining keys default to a sensible value or
+are required only in specific modes (e.g.,covmatfile2is re-
+quired only whendo_crossistrue). Computation-basis selec-
+tion (harmonic vs. pixel) is performed at the API level rather than
+through Y AML — see Sect. 3.2 — and is therefore not listed
+here.
+The field-label inputs accept a compact shorthand that is
+automatically expanded: a label string"QU"is interpreted as
+["Q","U"], and underscore-separated combinations such as
+"T1_T2"expand to["T1","T2"]. Thephysical_labelskey,
+when present, decouples the labels used for input-map FITS files
+from the labels used for spectra; this is needed when the maps
+are stored asT,Q,Ubut spectra are estimated inT,E,B.
+The multipole layout is controlled by four keys with an
+explicit constraint chain max(lmin_signal)≤lmin≤
+lmax≤lmax_signal, and applies uniformly to both
+the QML estimator (QUBE) and the pixel-space likelihood
+(PICSLike) since they share the sameCoresetup. The pair
+(lmin_signal,lmax_signal) delimits thesignal-cov band—
+the range of multipoles represented in the basis (V,Λ,S). The
+pair (lmin,lmax) selects theestimation/inference windowwithin
+that band: inQUBEit is the range over which the QML quadratic
+estimator solves for ˆCℓ, and inPICSLikeit is the range over
+which the modelC ℓ are varied across the parameter grid. Mul-
+tipoles inside the signal-cov band but outside this window are
+held fixed at the fiducial spectrum (read fromfiducialfile)
+and contribute throughS fixed on both the low-ℓand high-ℓ
+side. The window [lmin,lmax] corresponds to the symbols
+[ℓmin, ℓmax] used in the formalism (Sect. 2.3.4); the basis range
+[lmin_signal,lmax_signal] corresponds to [ℓ Sig.
+min, ℓSig.
+max]; the
+high-ℓside recovers the originalℓ-switching scheme as a special
+case. Defaults arelmin_signal=2,lmax_signal=4*nside,
+lmin=2,lmax=lmax_signal, reproducing the behaviourℓ∈
+[2,4N side] of analyses that pre-date this API.
+The keylmin_signalaccepts either a scalar (broadcast
+to every component) or a per-component list, with the per-
+component constraintlmin_signal[i]≥ |spins[i]|enforcing
+the representation-theoretic floor. Settinglmin_signal=[1,
+2]on aspins=[0, 2]configuration enables direct estimation
+of the temperature dipole jointly with the polarisation spectra;
+settinglmin_signal=0on a designated spin-0 component is the
+natural configuration for foreground-template marginalisation.
+The conventionsinput_conventionand
+output_conventioncontrol whether the inputC ℓ table and
+the output spectra are interpreted asC ℓ orD ℓ ≡ℓ(ℓ+1)C ℓ/2π.
+Both default to"Cl"; users supplying CAMB or CLASSD ℓ
+tables should overrideinput_conventionto"Dl".
+The two cosinesmoothing_typeoptions ex-
+pose the same raised-cosine apodising kernelb ℓ =
+1
+2[1+cos (π(ℓ−ℓ 1)/(ℓ2 −ℓ 1))] forℓ 1 < ℓ≤ℓ 2 at two
+published parameter choices:cosine_legacyusesℓ 1 =N side
+(Benabed et al. 2009; Planck Collaboration et al. 2020a) while
+cosine_npipeusesℓ 1 =1 (Planck Collaboration et al. 2020b);
+both adoptℓ 2 =3N side.
+E.3. Worked example
+TheB-mode validation of Sect. 4.1 runs from the following con-
+figuration (paths are relative to the Y AML file’s directory). Set-
+tinglmax_signalequal tolmaxpins the basis to the Fortran
+reference, which has no signal beyond its ownlmax; the default
+lmax_signal=4N side otherwise routes the fiducial high-ℓsig-
+nal throughS fixed.
+nside: 8
+lmin_signal: 2
+Article number, page 19
+
+A&A proofs:manuscript no. main
+Table E.1: Y AML keys recognised byInputParams, grouped
+by purpose. Required keys are marked†. “Path” refers to a file
+path resolved relative to the Y AML file’s directory.
+Key Type Role
+Field configuration
+nside† int HEALPix resolution
+spins† list[int] per-field spin (0 or 2)
+labels† list[str] spectrum labels
+physical_labelslist[str] input-map labels
+orderingstrRING/NESTED
+Inputs
+inputclfilepath inputC ℓ/Dℓ table
+maskfilepath analysis mask FITS
+covmatfile1path noise covariance, map 1
+covmatfile2path noise covariance, map 2
+inputmapfile1path input map FITS, map 1
+inputmapfile2path input map FITS, map 2
+fiducialfilepath fiducial spectra (switching)
+input_conventionstrCl/Dl
+Beam and pixel window
+smoothing_typestr cosine_legacy/cosine_npipe/
+gaussian/file
+beam_filepathB ℓ FITS
+fwhmarcminfloat Gaussian beam FWHM
+apply_pixwinbool includep ℓ
+smooth_polbool smooth polarisation
+Estimator and noise
+do_crossbool cross-spectrum mode
+remove_nbbool subtract noise bias
+calibrationfloat amplitude rescaling
+load_invertedbool reuse cachedC −1
+load_reducedbool noise cov. pre-reduced
+Binning
+delta_ellint uniform bin width (default 1)
+bin_lminslist[int] explicit bin lower edges
+bin_lmaxslist[int] explicit bin upper edges
+Multipole-range API
+lmin_signalint/list per-component floor (ℓ Sig.
+min)
+lmax_signalint signal-cov ceiling (ℓ Sig.
+max)
+lminint estimation lower (ℓ min)
+lmax† int estimation upper (ℓ max)
+Simulations and parameter grids
+nsimsint number of simulations
+root_dirpath theory-spectra root dir
+root_filenamestr theory-spectra template
+parametersdict cosmological grid
+Outputs
+outinvcovmatfile1,2path outputC −1
+outnoisecovmat1,2path output reducedN
+outfilefisherpath output Fisher matrix
+outcovmatfilepath outputC ℓ covariance
+outerrfilepath output spectrum errors
+output_geometry_filepath output pixel geometry
+output_conventionstrCl/Dl
+Logging
+feedbackint verbosity level
+log_filepath log destination
+log_formatstrscientific/plain
+log_timingbool include timing diagnostics
+lmax_signal: 24
+lmin: 2
+lmax: 24
+spins: [0]
+labels: ["B"]
+maskfile: inputs/mask.fits
+inputclfile: inputs/dls.txt
+input_convention: Dl
+covmatfile1: inputs/ncov.bin
+ordering: RING
+smoothing_type: file
+beam_file: inputs/beam.fits
+apply_pixwin: false
+delta_ell: 1
+remove_nb: true
+feedback: 1
+This file reproduces theCosmoForgeside of the valida-
+tion in Sect. 4.1; the pixel-likelihood validation reuses it, with
+the parameter grid and simulation paths supplied through the
+ParameterGridAPI. Direct temperature-dipole estimation is
+enabled byspins=[0],lmin_signal: [1],lmin: 1; a joint
+T,Q,Uanalysis with the dipole estimated alongside the polari-
+sation spectra usesspins=[0, 2],lmin_signal: [1, 2].
+Article number, page 20

@@ -1,0 +1,1200 @@
+Title: Extracting redshifts from 2D slitless spectroscopic images using deep learning for the CSST galaxy survey
+Authors: Xingchen Zhou, Yan Gong, Xin Zhang, Xian-Min Meng, Haitao Miao, Run Wen, Nan Li
+Published: 2026-05-16
+Categories: astro-ph.IM, astro-ph.CO
+
+Draft version May 19, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX7.0.1
+Extracting redshifts from 2D slitless spectroscopic images using deep learning for the CSST galaxy
+survey
+Xingchen Zhou
+ ,1, 2 Yan Gong
+ ,3, 1, 2 Xin Zhang
+ ,1, 2 Xian-Min Meng, 1, 2 Haitao Miao
+ ,1, 4 Run Wen
+ ,5, 6 and
+Nan Li
+ 1, 2
+1National Astronomical Observatories, Chinese Academy of Sciences, 20A Datun Road, Beijing 100101, People’s Republic of China
+2Science Center for China Space Station Telescope, National Astronomical Observatories, Chinese Academy of Sciences, 20A Datun
+Road, Beijing 100101, People’s Republic of China
+3University of Chinese Academy of Sciences, Beijing, 100049, People’s Republic of China
+4State Key Laboratory of Radio Astronomy and Technology, National Astronomical Observatories, Chinese Academy of Sciences, Beijing
+100101, People’s Republic of China
+5State Key Laboratory of Dark Matter Physics, Tsung-Dao Lee Institute, Shanghai Jiao Tong University, Shanghai 201210, People’s
+Republic of China
+6Department of Astronomy, School of Physics and Astronomy, Shanghai Jiao Tong University, Shanghai 200240, People’s Republic of
+China
+ABSTRACT
+Wide-field slitless spectroscopic galaxy surveys, such as the one performed by the upcoming Chinese
+Space Station Survey Telescope (CSST), are crucial for precision cosmology but present formidable
+data analysis challenges. Because spectra are dispersed directly onto the detector, they are convolved
+with the 2-dimensional (2D) spatial morphology, which complicates wavelength calibration and con-
+sequently degrades the fidelity of subsequent 1-dimensional (1D) spectral extraction. To overcome
+these limitations, we present a deep learning framework that extracts redshifts directly from 2D slit-
+less spectral images, bypassing 1D extraction entirely. We construct a realistic mock dataset for the
+CSSTGVandGIband using high-resolution images from HSC-SSP PDR3 and spectral energy dis-
+tributions (SEDs) from DESI DR1. A Bayesian convolutional neural network implemented by Monte
+Carlo dropout is employed to map the 2D spectral images to redshift estimations while simultaneously
+quantifying uncertainties. We find that our model can achieve a precisionσ NMAD = 0.0104 and mean
+uncertainty⟨E/(1 +z true)⟩= 0.0155 for sources with SNR GI ≥1. For sources with SNR GI higher
+than 3.0, 5.0 and 10.0,σ NMAD can achieve 0.0047, 0.0037 and 0.0024 respectively, matching the red-
+shift precision requirements for studies such as BAO using the CSST slitless spectroscopic surveys.
+Furthermore, by utilizing spatial augmentations, the network demonstrates resilience to wavelength
+calibration errors. This work provides a novel and robust pathway for data analysis of next-generation
+slitless spectroscopic galaxy surveys.
+Keywords:Space telescopes (1547) – Spectroscopy (1558) – Redshift Surveys (1378) – Convolutional
+neural networks (1938) – Bayesian Statistics (1900)
+1.INTRODUCTION
+Mapping the large-scale structure (LSS) of the Uni-
+verse and tracing the evolution of galaxies across cos-
+mic time fundamentally relies on acquiring accurate
+redshift measurements for vast number of extragalac-
+tic sources (D. H. Weinberg et al. 2013; P. Madau &
+M. Dickinson 2014). While photometric surveys can
+rapidly derive redshifts (photo-z) for billions of galaxies,
+Email: gongyan@bao.ac.cn
+these measurements inherently suffer from broad uncer-
+tainties and catastrophic outliers due to the low resolu-
+tion of broadband filters (M. Salvato et al. 2019; J. A.
+Newman & D. Gruen 2022). In contrast, spectroscopic
+observations capture the detailed emission and absorp-
+tion features of galactic spectra, yielding accurate spec-
+troscopic redshifts for high-precision cosmological con-
+straints by Baryon Acoustic Oscillations (BAO) (B. Bas-
+sett & R. Hlozek 2010; P. Ferreira & R. R. R. Reis 2025)
+and Redshift-Space Distortions (RSD) (A. J. S. Hamil-
+ton 1998), as well as detailed characterization of galaxy
+arXiv:2605.16762v1  [astro-ph.IM]  16 May 2026
+
+2
+kinematics and stellar populations (C. Conroy 2013; A.
+Gallazzi et al. 2005; M. Cappellari 2016).
+Despite high spec-zprecision, traditional multi-object
+spectroscopic surveys, which utilize fibers or slit masks,
+are fundamentally bottlenecked by target pre-selection
+and the mechanical limitations of placing fibers in dense
+focal planes (M. R. Blanton et al. 2003; DESI Col-
+laboration et al. 2016). To overcome these challenges,
+space-base slitless spectroscopy has emerged as a pow-
+erful solution. By using slitless instruments, they can
+perform wide-field and highly multiplexed spectroscopic
+observations (B. J. Weiner 2012; G. B. Brammer et al.
+2012; R. Laureijs et al. 2011). Ongoing and upcoming
+space-based missions, e.g. Euclid (L. Amendola et al.
+2013), Nancy Grace Roman Space Telescope (G. Mosby
+et al. 2020), Chinese Space Station Survey Telescope
+(CSST, Y. Gong et al. (2019, 2025); CSST Collabora-
+tion et al. (2026)), utilize slitless spectroscopic surveys
+to capture the spectra of the luminous sources within
+their expansive fields of view, completely free from at-
+mospheric interference.
+However, the rich data product of slitless spectroscopy
+introduces great challenges in data analysis. Because
+there is no slit to disperse light with high spectral res-
+olution, the spectrum recorded on the detectors is 2D
+morphological shape convolved with point spread func-
+tion (PSF). In densely populated survey fields, this leads
+to severe spectral overlapping and cross-contamination
+among neighboring objects. Furthermore, the slitless
+spectroscopy introduces severe complications for accu-
+rate wavelength calibration. Without a fixed spatial
+reference, the zero-point of the wavelength for each
+dispersed spectrum depends fundamentally on the ex-
+act spatial location and morphological centroid of the
+source. Any asymmetry in the galaxy or uncertainty
+in its position directly propagates into systematic wave-
+length shifts. Traditional data reduction pipelines at-
+tempt to calibrate these shifts, deblend overlaps, and
+extract 1D spectra from the 2D detector images, but
+this extraction process is highly complex, prone to com-
+pounding systematic errors, and inevitably results in a
+significant loss of spectral information (G. B. Brammer
+et al. 2012; M. K¨ ummel et al. 2009; I. G. Momcheva
+et al. 2016).
+For CSST, these challenges are more severe. Unlike
+other slitless spectroscopic surveys that typically acquire
+direct, undispersed images of the target field alongside
+the dispersed observations to pinpoint source coordi-
+nates, the specific focal plane design of CSST excludes
+simultaneous direct imaging during survey ( CSST Col-
+laboration et al. 2026). Consequently, establishing the
+astrometric centroid of a source and the zero-point re-
+quired to anchor the wavelength, necessitates cross-
+matching the dispersed spectra with separately and in-
+dependently acquired photometric catalogs. Any inher-
+ent astrometric uncertainties, such as focal plane distor-
+tions and alignment errors between these distinct obser-
+vations propagate directly into systematic shifts in the
+assigned wavelengths, severely affecting the 1D extrac-
+tion pipelines. On the other hand, the issue of spectral
+overlapping can be safely neglected, since the estimated
+source density is only∼2−3 galaxies per arcmin 2 (Y.
+Gong et al. 2019).
+Deep learning has rapidly emerged as a powerful tool
+to overcome these data analysis challenges. In partic-
+ular, convolutional neural networks (CNNs) are excep-
+tionally well-suited for astronomical imaging due to their
+ability to learn hierarchical and non-linear feature repre-
+sentations directly from complex and high-dimensional
+data (Y. Lecun et al. 2015; S. Dieleman et al. 2015; Y. D.
+Hezaveh et al. 2017). Unlike traditional parametric
+modeling, which relies on rigid assumptions and hand-
+crafted features, deep learning models can automatically
+identify optimal mappings between noisy observational
+inputs and physical parameters, making them highly re-
+silient to complex systematics and survey-specific arti-
+facts. Leveraging deep learning allows us to fundamen-
+tally rethink how slitless spectra are analyzed: by oper-
+ating directly on the 2D spectral images. This approach
+bypasses the complicated and error-prone 1D extraction
+step entirely. By treating the dispersed 2D image as the
+primary data product, CNNs can jointly utilize both
+the spectral dispersion features and the spatial morpho-
+logical information, maximizing the outcomes from low
+signal-to-noise ratio (SNR) observations.
+In this work, we present a deep learning framework
+to estimate redshifts directly from 2D slitless spectral
+images, tailored specifically for the upcoming CSST
+spectroscopic survey. Due to the focal plane design of
+CSST, we concentrate on wavelength calibration. To
+train and validate our models, we construct a highly
+realistic mock dataset of 2D spectral images, combin-
+ing high-resolution imaging from the Hyper Suprime-
+Cam (HSC, H. Aihara et al. (2018, 2022)) with pre-
+cise spectral templates from the Dark Energy Spectro-
+scopic Instrument (DESI, DESI Collaboration et al.
+(2022, 2025)). Recognizing the critical importance of er-
+ror characterization in precision cosmology, we employ
+the Bayesian neural network (BNN, V. Mullachery et al.
+(2018); E. Goan & C. Fookes (2020)). This network al-
+lows our model not only predict accurate point estimates
+for the spec-zs, but also provide robust and statistically
+reasonable epistemic and aleatoric uncertainties for ev-
+ery measurement.
+
+3
+This paper is organized as follows: Section 2 describes
+the generation of the mock slitless spectroscopic dataset.
+In Section 3, we discuss the details of the neural network
+architectures employed in this study. We present the
+performance of our framework in Section 4, followed by
+several discussions in Section 5. Finally, we summarize
+our results in Section 6.
+2.DATASETS
+We simulate the 2D slitless spectra using
+sls 1d spec 7, a core software module within the CSST
+simulation pipeline. Unlike the earlier version detailed
+in X. Zhou et al. (2024), this updated version intro-
+duces the critical capability to input high-resolution
+and ideal images directly into the spectral generation
+process. This advancement enables the incorporation of
+highly realistic and complex galaxy morphologies across
+the three CSST spectroscopic bands, i.e.GU, GVand
+GI, thereby overcoming the limitations of relying on
+simply assumed parametric S´ ersic profiles. To ensure
+our mock dataset is as realistic as possible, we utilize
+observational data for the simulations. Specifically,
+we extract high-fidelity spatial morphologies from the
+Hyper Suprime-Cam Subaru Strategic Program Pub-
+lic Data Release 3 (HSC-SSP PDR3, H. Aihara et al.
+(2022)) and pair them with corresponding Spectral
+Energy Distributions (SEDs) retrieved from the Dark
+Energy Spectroscopic Instrument Data Release 1 (DESI
+DR1, DESI Collaboration et al. (2025)).
+We select sources from DESI DR1 catalog based on
+the following criteria:
+ZCAT PRIMARY == True
+MASKBITS == 0
+SPECTYPE == GALAXY
+ZWARN == 0
+FLUX G, R, Z > 0
+FLUX IVAR G, R, Z > 0
+SHAPE R < 1.0
+(1)
+TheZCAT PRIMARYflag ensures the selection of the op-
+timal recommended redshift in cases of duplicate ob-
+servations, whileMASKBITS == 0guarantees that the
+source does not overlap with any masked regions.
+TheSPECTYPEandZWARNparameters correspond to
+the source classification and redshift fitting reliabil-
+ity flags derived by the redshift measurement software,
+Redrock 8, respectively. We strictly require a confirmed
+7 https://csst-tb.bao.ac.cn/code/zhangxin/sls 1d spec
+8 https://github.com/desihub/redrock
+galaxy classification with high-quality redshift measure-
+ment. To further ensure photometric quality, we select
+sources with positive fluxes and inverse variances across
+theg, randzbands, as measured by theTractoralgo-
+rithm 9. Furthermore, we restrict the half-light radius,
+SHAPE Rto be less than 1.0 arcsec. This morphological
+constraint is specifically applied to increase the signal-
+to-noise ratio (SNR) of the resulting mock spectra. Be-
+cause the dispersed light at each wavelength is spatially
+convolved with the 2D morphology of the source, a more
+compact radius concentrates the flux over fewer detec-
+tor pixels. This effectively boosts the signal relative to
+the background and instrumental noise, thereby enhanc-
+ing the overall SNR. Sources with a measured radius of
+zero, which indicates an unresolved, PSF morphology,
+are intentionally preserved in our sample, provided that
+they are still confidently classified as galaxies during the
+redshift fitting process.
+Sources from the HSC-SSP PDR3 are selected in wide
+Spring field based on the following criteria:
+i cmodel mag < 24.0
+i cmodel flux > 0
+i cmodel fluxerr > 0
+i cmodel flux / i cmodel fluxerr > 100
+(2)
+For simplicity, we restrict our 2D morphological tem-
+plates to HSCi-band images, which demonstrates high-
+est SNR among all bands for considered sources. The
+upper magnitude limit is set to 24.0, sufficiently encom-
+passing the anticipated depth of the CSST wide-field
+slitless spectroscopic observations, i.e. 23.2 inGU, 23.4
+inGVand 23.2 inGIrespectively (Y. Gong et al. 2025).
+Additionally, we enforce a strict SNR threshold exceed-
+ing 100 atiband. This stringent constraint is crucial,
+since it guarantees that the selected photometric im-
+ages possess sufficient fidelity to be treated as ideal and
+noise-free templates. As a result, these high-SNR images
+can be directly utilized in the mock spectra generation
+pipeline without further noise calibration to match the
+expected CSST instrumental noise levels.
+Subsequently, we cross-match the DESI and HSC cat-
+alogs using a maximum matching radius of 1.5 arc-
+sec, yielding a sample of approximately 700,000 galax-
+ies. Image cutouts and their corresponding PSFs are
+retrieved via the PDR3 data access service 10. For
+each cutout, the central target galaxy is identified
+and isolated using thephotutils 11 package. To re-
+9 https://thetractor.org/
+10 https://hsc-release.mtk.nao.ac.jp/doc/index.php/tools/
+11 https://photutils.readthedocs.io/en/stable/index.html#
+
+4
+cover the intrinsic morphological structure, the isolated
+galaxy is deconvolved with its corresponding PSF using
+the Richardson-Lucy deconvolution algorithm (W. H.
+Richardson 1972), implemented inscikit-image 12,
+thereby the ideal galaxy images are produced. In paral-
+lel, we construct the SEDs from model spectra for each
+source using the linear combination of the DESI basis
+templates and their corresponding coefficients. Finally,
+these ideal images and their paired SEDs are fed into
+the simulation software to generate the mock 2D slitless
+spectra.
+Note that we restrict our simulations to theGVand
+GIbands. This choice is necessitated by the wavelength
+coverage of the DESI instrument, which truncates at ap-
+proximately 4000˚A at the blue end ( DESI Collabora-
+tion et al. 2022, 2016), insufficient to cover the CSST
+GUbandpass. Furthermore, this restriction is consis-
+tent with practical observational expectations, as the
+anticipated SNR in theGUband is generally low to re-
+liably estimate redshifts. Following this comprehensive
+procedure, our final dataset comprises 689,295 mock 2D
+slitless spectral images along with their 1D extracted
+spectra.
+0.0 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0
+SNRGI
+0.0
+0.2
+0.4
+0.6
+0.8Probability
+SNR  1 (N = 430,983)
+SNR  3 (N = 182,595)
+SNR  5 (N = 78,021)
+SNR  10 (N = 9,170)
+Figure 1.The distribution of SNR atGIband, SNR GI.
+The red, green, blue and yellow lines indicate the SNR
+thresholds of 1, 3, 5 and 10, respectively. The number of
+sources exceeding each threshold is provided in the legend.
+In this work, we restrict our analysis to sources with
+a mean SNR calculated by 1D spectra at theGIband
+with SNRGI ≥1. The mean SNR is defined as
+SNR = 1
+n
+X
+i
+fi
+ei
+(3)
+wheref i ande i denote the flux and its associated error
+at wavelengthi, respectively. During this calculation,
+12 https://scikit-image.org/
+0.2 0.4 0.6 0.8 1.0 1.2 1.4
+ztrue
+5.0
+10.0
+15.0
+20.0
+25.0
+1
+SNRGI
+0
+10
+20
+30
+40
+50
+Number of sources
+Figure 2.The density plot of SNR GI with respect toz true.
+The color bar indicates the number of sources within each
+pixel.
+any negative flux values are artificially set to 0. The
+distribution of SNR GI for the samples is presented in
+Figure 1. To characterize the data quality, we compute
+the number of sources exceeding specific SNR thresh-
+olds: enforcing SNR GI >1, 3, 5 and 10 yields sample
+sizes of 430,983, 182,596, 78,021 and 9,170, respectively.
+Furthermore, the density plot of SNR GI versusz true is
+presented in Figure 2, illustrating a clear decrease in the
+SNR as redshift increases.
+Representative examples of the simulated 2D spectral
+images, alongside their corresponding 1D spectra and
+ideal image cutouts, are illustrated in Figure 3. Each
+ideal image panel is annotated with their DESI target
+ID. Furthermore, the 1D spectrum panels display the
+mean SNR GI, the true spectroscopic redshiftz true, the
+model’s predicted redshiftz pred, and the associated nor-
+malized uncertaintyE/(1+z true) as defined in Section 4.
+3.METHODOLOGY
+In this section, we introduce the employed Bayesian
+convolutional neural network and the training proce-
+dure.
+3.1.Bayesian neural network
+The 2D spectral images from theGVandGIbands
+in array shape of (40, 480) are stacked along the chan-
+nel dimension, forming a tensor of shape (2, 40, 480).
+To estimate redshifts directly from these stacked im-
+ages, we employ a Bayesian Convolutional Neural Net-
+work (BCNN). The network architecture comprises two
+primary components: a CNN feature extractor and a
+multi-layer perceptron (MLP) estimator. The feature
+extractor is based on the ResNet-34 architecture (K. He
+et al. 2015), with the input layer modified to accommo-
+date our specific data dimensions. This component is
+
+5
+ID: 39627805561984586
+Ideal Image
+2.516 ′′
+GV Band Image
+GI Band Image
+4000 5000 6000 7000 8000 9000 10000
+Wavelength (Å)
+0
+2
+4Flux (erg s 1 cm 2 Å 1)
+1e 17
+ztrue = 0.862, zpred = 0.862
+E/(1 + ztrue) = 0.021, SNRGI = 1.1
+Spectrum
+GV
+GI
+SED
+ID: 39627746120307065
+Ideal Image
+2.516 ′′
+GV Band Image
+GI Band Image
+4000 5000 6000 7000 8000 9000 10000
+Wavelength (Å)
+0
+2
+4Flux (erg s 1 cm 2 Å 1)
+1e 17
+ztrue = 0.549, zpred = 0.548
+E/(1 + ztrue) = 0.011, SNRGI = 3.1
+Spectrum
+GV
+GI
+SED
+ID: 39627907785558306
+Ideal Image
+2.516 ′′
+GV Band Image
+GI Band Image
+4000 5000 6000 7000 8000 9000 10000
+Wavelength (Å)
+0
+1
+2Flux (erg s 1 cm 2 Å 1)
+1e 16
+ztrue = 0.185, zpred = 0.183
+E/(1 + ztrue) = 0.009, SNRGI = 5.1
+Spectrum
+GV
+GI
+SED
+ID: 39627782279397823
+Ideal Image
+2.516 ′′
+GV Band Image
+GI Band Image
+4000 5000 6000 7000 8000 9000 10000
+Wavelength (Å)
+0.0
+2.5
+5.0
+7.5Flux (erg s 1 cm 2 Å 1)
+1e 17
+ztrue = 0.305, zpred = 0.311
+E/(1 + ztrue) = 0.008, SNRGI = 10.0
+Spectrum
+GV
+GI
+SED
+Figure 3.Four representative examples of mock slitless spectra at various redshifts and SNR GI. For each example, the leftmost
+panel displays the ideal spatial image, while the two upper right panels illustrate the corresponding 2D spectral images in the
+GVandGIbands. The lower panel compares the intrinsic SED with the extracted 1D spectrum.
+T able 1.The architecture of employed neural networks.
+Layer Output Shape Param
+Input (2, 40, 480) -
+ResNet-34 512 21,281,536
+FC 256 131,328
+GELU 256 -
+Dropout 256 -
+FC 128 32,896
+GELU 128 -
+Dropout 128 -
+Output 1 / 2 a 129 / 258
+a The deterministic and Bayesian neural networks have 1
+and 2 output values respectively.
+designed to compress the complex 2D spatial and spec-
+tral information into a lower-dimensional latent repre-
+sentation. The MLP estimator subsequently maps these
+latent vectors to the final redshift predictions. The es-
+timator comprises two fully connected (FC) layers, each
+followed by a GELU activation function (D. Hendrycks
+& K. Gimpel 2016) to introduce non-linearity. Addi-
+tionally, a dropout layer with dropout rate of 0.5 is ap-
+pended after each activation. The network architectures
+are demonstrated in Table 1.
+In standard deterministic networks, dropout is only
+activated during the training phase. However, for the
+Bayesian network, the dropout is kept active during
+both the training and inference stages to enable the
+Monte Carlo (MC) Dropout method (Y. Gal & Z.
+Ghahramani 2015). By performing multiple forward
+passes for a single input during testing, this approach ef-
+fectively approximates a Bayesian ensemble, allowing ro-
+bust quantification for the epistemic (model-dependent)
+uncertainty.
+To simultaneously capture the aleatoric (data-
+dependent) uncertainty inherent to the noisy spectral
+observations, we design the final layer of the network
+to output two distinct values: the mean redshift pre-
+diction and the log-variance. Predicting the variance
+in logarithmic scale ensures that the recovered variance
+remains strictly positive. Together, these two outputs
+parameterize a Gaussian posterior distribution for each
+source. While more complex distributions could theoret-
+ically be employed, a Gaussian profile serves as a robust
+and physically reasonable way for modeling redshift un-
+certainties in this context.
+The total uncertainties for a given source is derived by
+combining both the aleatoric and epistemic components
+obtained from the MC dropout sampling. For a given in-
+put 2D spectral image, we performTstochastic forward
+
+6
+Figure 4.Redshift distributions of the training (blue) and
+testing (orange) datasets. The testing set is explicitly sam-
+pled to follow the anticipated distribution of CSST slitless
+spectroscopic survey.
+passes through the network. Due to the active dropout
+layers in testing stage, each individual forward passt
+yields a predicted mean redshift,µ t, and a predicted
+aleatoric variance,σ 2
+t . The final, combined redshift pre-
+diction, ˆµ, is defined as the expectation value over allT
+stochastic samples:
+ˆµ= 1
+T
+TX
+t=1
+µt (4)
+The total predicted variance, ˆσ 2, is subsequently for-
+mulated as the sum of two distinct terms: the mean
+aleatoric variance, which captures the inherent, data-
+driven noise of the observation, and the epistemic vari-
+ance, which captures the model’s inherent uncertainty
+as measured by the sample variance of the predicted
+means. This combined uncertainty is mathematically
+expressed as:
+ˆσ2 = 1
+T
+TX
+t=1
+σ2
+t + 1
+T
+TX
+t=1
+(µt −ˆµ)2 (5)
+By taking the square root of this total variance, we ex-
+tract the final standard deviation, ˆσ, which represents
+the comprehensive uncertainty for each redshift mea-
+surement.
+3.2.Training
+The datasets described in Section 2 are split into train-
+ing and testing sets using an 8: 2 ratio. Rather than
+employing a random split, the testing set is constructed
+to mirror the anticipated spectroscopic redshift distri-
+bution of the upcoming CSST survey (Y. Gong et al.
+2019). The resulting redshift distribution for both the
+training and testing sets are presented in Figure 4.
+To stabilize the training of the Bayesian network, we
+adopt a transfer learning strategy (S. J. Pan & Q. Yang
+2010; F. Zhuang et al. 2021; A. Farahani et al. 2021).
+We initially train a deterministic version of the entire
+network to establish a robust feature space, and subse-
+quently utilize the pre-trained feature extractor as the
+foundation for the Bayesian estimator, which yields the
+final redshift measurements alongside their correspond-
+ing uncertainties.
+First, we pre-train the deterministic base network.
+This optimization is performed using a Mean Squared
+Error (MSE) loss function and the AdamW optimizer.
+AdamW improves upon the standard Adam algorithm
+by decoupling weight decay from the gradient up-
+dates, thereby providing more effective regularization (I.
+Loshchilov & F. Hutter 2017). To ensure convergence
+of the model, we employ a cosine annealing learning
+rate schedule, gradually decaying the learning rate from
+an initial value of 1×10 −4 over maximum 100 epochs.
+To evaluate network performance, we primarily monitor
+normalized median absolute deviation (NMAD)σ NMAD,
+a precision metric that is robust against catastrophic
+outliers, defined as:
+σNMAD = 1.48×median
+
+∆z−median(∆z)
+1 +z true
+
+
+,(6)
+where ∆z=z pred −z true, withz pred andz true denoting
+the predicted and true redshifts, respectively. During
+training, we continuously monitor this metric, and save
+the model corresponding to the lowestσ NMAD for test-
+ing stage. Althoughσ NMAD serves as our primary crite-
+rion for model selection, it is unsuitable as a direct loss
+function for network optimization, since it is not differ-
+entiable at the center of the data, creating a flat gradient
+that makes it hard to optimize using gradient descent.
+Furthermore, while robust to outliers, the median oper-
+ation does not utilize all data points to calculate the loss
+value, failing to provide enough information for efficient
+model convergence compared to the mean operation of
+MSE.
+To prevent overfitting and enhance the generalization
+of the network, we apply extensive data augmentation
+to the training set. This includes horizontal flipping
+and random translations along two spatial dimensions
+up to 10% of the image pixels. Crucially, these spa-
+tial translations are explicitly designed to simulate the
+positional uncertainties inherent to slitless spectroscopy,
+which directly manifest as wavelength calibration errors.
+By applying one horizontal flip and six distinct random
+translations per image, we expand the effective size of
+our training set by a factor of eight. Note that we do
+not apply vertical flips or rotations, due to the rectangu-
+
+7
+lar geometry and the physically meaningful directional
+dependence of the spectral images. Through this aug-
+mentation strategy, the network learns to naturally ac-
+count for spatial offsets, enabling it to robustly estimate
+redshifts from the 2D spectral images while entirely by-
+passing traditional wavelength calibration pipelines.
+For the Bayesian network, the training configuration
+remains largely consistent with the deterministic pre-
+training phase, but the objective function is replaced
+by the Negative Log-Likelihood (NLL) for a Gaussian
+distribution, defined as:
+NLL(µi, σi) =
+nX
+i=1
+1
+2 log(2πσ 2
+i ) + (yi −µ i)2
+2σ2
+i
+
+(7)
+whereµ i andσ i represent the network’s predicted mean
+redshift and aleatoric standard deviation for thei-th
+sample, respectively, andy i is the true spectroscopic
+redshift. Notably, the standard deviationσ i is learned
+without direct supervision, since it can be solved by bal-
+ancing the two terms in NLL. Additionally, the dropout
+rate is a hyperparameter and adjusted by experiments
+to 0.1.
+To identify the optimal Bayesian model, we continue
+to monitorσ NMAD and retain the model weights cor-
+responding to the lowest value. However, a single for-
+ward pass through the network yields only one stochastic
+sample from the predicted posterior, which may deviate
+from the true mean prediction. Therefore, to obtain a
+stable and representative estimate, we need to pass the
+testing data through the network multiple times and av-
+erage the results. To balance computational efficiency
+with robust sampling during the validation steps of the
+training phase, we execute 10 MC forward passes for
+testing data and calculate the mean prediction and com-
+pute theσ NMAD.
+Raw uncertainties predicted by Bayesian neural net-
+works are frequently mis-calibrated, often yielding sys-
+tematically overconfident or underconfident bounds that
+do not accurately reflect the true error distribution. Sta-
+tistically robust uncertainties need to be well-calibrated,
+meaning the empirical coverage probability of the pre-
+dictions should precisely match the expected theoretical
+confidence interval (e.g., 68% of true values fall within
+the predicted 1σbounds). To correct for this, we apply
+temperature scaling, a robust post-training calibration
+technique. This method scales the predicted uncertain-
+ties by a globally optimized temperature parameter, ex-
+plicitly aligning the network’s output distribution with
+rigorous statistical principles. The deterministic pre-
+training and BCNN architectures are both implemented
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+ztrue
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6zpred
+NMAD = 0.0097
+0
+10
+20
+30
+40
+50
+Number of sources
+Figure 5.The density plot of the spec-zpredictions from
+the deterministic pre-training network. The color bar indi-
+cates the number of sources within each pixel. Overall, this
+base network achieves a precisionσ NMAD = 0.0097 for all
+sources with SNR GI ≥1.0.
+T able 2.Performance metrics for the mock testing dataset,
+evaluated across various SNR GI thresholds. The table re-
+ports the total number of sourcesN, the predicted precision
+σNMAD, and the mean normalized uncertainty⟨E/(1+z true)⟩
+for thresholds of SNR GI ≥1,3,5,and 10.
+SNRGI ≥1 ≥3 ≥5 ≥10
+N 86,196 28,900 10,630 1,221
+σNMAD 0.0104 0.0047 0.0037 0.0024
+⟨E/(1 +z true)⟩ 0.0155 0.0095 0.0095 0.0118
+byPyTorch 13. The relevant scripts on data generation
+and training neural networks are publicly available in
+the Github 14.
+4.RESULTS
+In addition toσ NMAD, we evaluate the performance
+of our framework using the normalized absolute bias,
+|zpred −z true|/(1+z true) and the normalized uncertainty,
+E/(1 +z true), whereEdenotes the calibrated predicted
+uncertainty.
+To establish a baseline for the predictive power of
+learning directly from 2D spectral images, we first eval-
+13 https://pytorch.org/
+14 https://github.com/xczhou-astro/CSST specimgs
+
+8
+Figure 6.Confidence versus coverage plot used to evaluate
+the statistical reliability of the predicted uncertainties. The
+gray dashed, blue, and red curves illustrate the ideal, pre–
+calibration, and post-calibration scenarios, respectively. The
+derived temperature scaling factor ofT= 1.400 indicates
+that the raw uncertainties were initially under-estimated.
+uate the deterministic pre-trained network. Figure 5
+displays the predicted redshiftz pred against the true red-
+shiftz true for the testing set. The deterministic model
+achieves a resultσ NMAD = 0.0097 for all sources with
+SNRGI ≥1.0. The concentration of data points along
+the diagonal line demonstrates that the CNN can ef-
+fectively extract redshifts directly from the 2D images,
+successfully bypassing the need for explicit 1D spectral
+extraction and wavelength calibration.
+For the BCNN framework, we perform MC dropout
+sampling by feeding the testing data for 200 times to
+the network, and calculate the final mean point esti-
+mates and corresponding uncertainties using Equation 4
+and Equation 5. As mentioned in Section 3.2, a funda-
+mental requirement for Bayesian inference in precision
+cosmology is that the predicted uncertainties are statis-
+tically reliable. To evaluate this, we compute the empir-
+ical coverage probability of our posterior distributions.
+Figure 6 illustrates the coverage fraction against the the-
+oretical confidence level. The uncalibrated BCNN out-
+put (blue line) falls below the perfect calibration diag-
+onal. This indicates that the raw network is system-
+atically overconfident, predicting lower uncertainty val-
+ues. To correct this, we apply temperature scaling. We
+scale the uncertainties by a single global temperature
+T= 1.400. The resulting calibrated coverage (red line)
+demonstrates better agreement with the theoretical ex-
+pectation, ensuring that the uncertainties are statisti-
+cally robust.
+Figure 7 displays the predicted redshiftz pred ver-
+sus true redshiftz true evaluated across fourGI-band
+SNR thresholds SNR GI ≥1.0, 3.0, 5.0 and 10.0. The
+error-bars indicate the calibrated total uncertainties.
+Each panel reports the corresponding predictive pre-
+cisionσ NMAD and the mean normalized uncertainty
+⟨E/(1 +z true)⟩. To maintain visual clarity, a random
+subsample of 5,000 sources is shown in the first three
+panels, while the final panel (SNR GI ≥10.0) displays
+the complete subset of 1,221 sources. For sources with
+SNRGI ≥1.0, the BCNN yieldsσ NMAD = 0.0104. The
+slight degradation compared to the results of determin-
+istic model shown in Figure 5 is an expected trade-off
+in Bayesian learning, since the optimization shifts from
+minimizing the point estimate error to learning a distri-
+bution. Despite this, the BCNN maintains competitive
+accuracy while gaining the critical ability to quantify the
+uncertainties. Throughout the four panels, as expected,
+applying higher SNR cuts increases the concentration
+of data points along the diagonal line and enhances the
+precision metric.σ NMAD improves continuously, result-
+ing in 0.0104, 0.0047, 0.0037 and 0.0024 for sources with
+SNRGI ≥1.0, 3.0, 5.0 and 10.0. Particularly, the sources
+with SNR GI ≥3.0 meets the redshift requirements for
+studies such as BAO using CSST slitless spectroscopic
+surveys (H. Miao et al. 2024).
+Concurrently, the mean normalized uncertainty
+⟨E/(1 +z true)⟩initially decreases to 0.0155 to 0.0095 as
+the threshold is raised to SNR GI ≥3, reflecting a nat-
+ural reduction in the data noise. Interestingly, for the
+high SNR cuts (SNR GI ≥10), the mean uncertainty
+exhibits a slight, counter-intuitive increase. This behav-
+ior is primarily attributable to the insufficiency of data
+sample, where the statistic is significantly affected by
+the outliers. Table 2 summarizes the sample sizeN,
+precisionσ NMAD, and the mean normalized uncertainty
+⟨E/(1 +z true)⟩across different data quality regimes.
+The upper panel of Figure 8 shows the normalized ab-
+solute bias|z pred −z true|/(1 +z true) with respect to the
+true redshift. The red curve and its associated error-bars
+denote the mean and standard deviation of this met-
+ric, calculated within redshift bins of width ∆z= 0.1.
+Overall, the predicted performance exhibits a strong in-
+verse correlation with the training source density (see
+Figure 4). At low redshifts (z true <0.4), where train-
+ing sources are abundant, the network achieves low-
+est bias. In the intermediate redshift (z true ∼0.5), a
+peak in the bias emerges, directly mirroring the drop in
+source density within this range. As we move to higher
+
+9
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+ztrue
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6zpred
+SNRGI 1.0
+NMAD = 0.0104
+E/(1 + ztrue) = 0.0155
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+ztrue
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6zpred
+SNRGI 3.0
+NMAD = 0.0047
+E/(1 + ztrue) = 0.0095
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+ztrue
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6zpred
+SNRGI 5.0
+NMAD = 0.0037
+E/(1 + ztrue) = 0.0095
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+ztrue
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6zpred
+SNRGI 10.0
+NMAD = 0.0024
+E/(1 + ztrue) = 0.0118
+Figure 7.Predicted redshiftz pred versus true redshiftz true evaluated across fourGI-band SNR thresholds SNR GI ≥1.0,3.0,5.0,
+and 10.0. The error-bars indicate the calibrated total uncertainties. Each panel reports the corresponding predictive precision
+σNMAD and the mean normalized uncertainty⟨E/(1 +z true)⟩. To maintain visual clarity, a random subsample of 5,000 sources
+is shown in the first three panels, while the final panel (SNR GI ≥10) displays the complete subset of 1,221 sources.
+redshifts up toz true ∼0.9, the local density increase
+and the bias correspondingly decreases. Finally, beyond
+ztrue ∼0.9, the bias increases significantly as the avail-
+ability of training sources continues to diminish. The
+lower panel displays the calibrated normalized uncer-
+taintyE/(1+z true) with respect to the redshifts. Unlike
+the mean absolute bias, which exhibits localized fluctua-
+tions across redshifts, the mean normalized uncertainty
+displays a continuous steady increase beyondztrue ∼0.4.
+This behavior is physically and statistically expected:
+the continuous drop in SNR for high-redshift sources,
+as shown in Figure 2, causes the Bayesian network to
+appropriately output broader, less confident posterior
+distributions. Figure 9 shows both the normalized abso-
+lute bias (upper panel) and the normalized uncertainty
+(lower panel) against SNRGI. As anticipated, both met-
+rics decrease as the SNR increases, confirming that the
+BCNN correctly assigns higher confidence and achieves
+greater precision for observations with higher SNR.
+
+10
+Figure 8.Upper: The normalized absolute bias,
+|zpred −z true|/(1 +z true), as a function of true redshiftz true.
+The color bar indicates the number of sources within each
+pixel. The red curve and corresponding error bars are the
+mean and standard deviation values calculated in redshift
+bins of ∆z= 0.1.Lower: The calibrated normalized uncer-
+tainty,E/(1+z true), as a function of true redshift. The mean
+and standard deviation values are calculated using the same
+∆z= 0.1 binning as the upper panel.
+T able 3.The performance metrics for BGS, LRG and ELG
+sources according to the main target selection criteria of
+DESI.N total andN testing shows the total and testing data
+size, respectively.
+BGS LRG ELG
+N 207,755 158,954 43,859
+Ntesting 31,912 39,900 10,790
+σNMAD 0.0051 0.0177 0.0244
+⟨E/(1 +z true)⟩ 0.0093 0.0186 0.0246
+5.DISCUSSIONS
+In this section, we evaluate the performance of our
+framework across different target classifications and
+present the results when simulated wavelength calibra-
+Figure 9.Upper: The normalized absolute bias,
+|zpred −z true|/(1 +z true) as a function of SNR GI. The color
+bar indicates the number of sources within each pixel. The
+red curve and corresponding error bars are the mean and
+standard deviation values calculated in bins of ∆SNRGI = 1.
+Note that the final data point at SNR GI = 10 are de-
+rived from all sources with SNR GI ≥10.Lower: The cali-
+brated normalized uncertainty,E/(1+z true), as a function of
+SNRGI. The mean and standard deviation values are evalu-
+ated using the identical ∆SNR GI = 1 binning applied in the
+upper panel.
+tion errors are introduced. Additionally, we address sev-
+eral limitations of our current approach.
+5.1.Target classifications
+Based on the main target selection criteria of the DESI
+survey, the galaxies can be categorized into three dis-
+tinct classes, the Bright Galaxy Sample (BGS), Lumi-
+nous Red Galaxies (LRG) and Emission Line Galaxies
+(ELG) (C. Hahn et al. 2023; R. Zhou et al. 2023; A.
+Raichoor et al. 2023). Table 3 presents the total sam-
+ple sizesN total, the number of testing samplesN testing,
+and the corresponding performance metrics for each of
+these classes. BGS constitutes the vast majority of our
+dataset, following by LRG, while ELG represent the
+rarest population. Their redshift distributions are il-
+
+11
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+Redshift
+0
+1
+2
+3
+4Density
+BGS: 207,755
+LRG: 158,954
+ELG: 43,859
+Figure 10.Redshift distributions for the BGS (orange),
+LRG (green), and ELG (blue) source populations, classified
+according to the main DESI target selection criteria. The
+total number of sources for each target class is provided in
+the legend.
+lustrated in Figure 10. The BGS predominantly com-
+prises bright and low-redshift sources with high SNR. In
+contrast, LRG trace intermediate-to-high redshifts, and
+ELG generally occupy the highest-redshift tail of the
+survey volume. We notice a decreased density at red-
+shiftz∼0.5, consistent with the redshift distribution
+shown in Figure 4.
+Evaluating the performance across these distinct pop-
+ulations reveals a clear hierarchy. The BGS yield the
+highest precisionσ NMAD = 0.0051 alongside the lowest
+mean uncertainty⟨E/(1+z true)⟩= 0.0093. LRG exhibit
+intermediate performance, whereas ELG show the worst
+σNMAD = 0.0244 and highest uncertainty. This perfor-
+mance distinction is driven by a combination of physi-
+cal and statistical factors. Physically, BGS targets pro-
+vide high-SNR observations with prominent and easily
+identifiable spectral features across a wide optical con-
+tinuum. Conversely, ELG are intrinsically fainter, and
+their redshift estimation relies heavily on narrow emis-
+sion lines (such as the [OII] doublet). Because the reso-
+lution of slitless spectroscopy is low, these narrow lines
+often suffer from severe smearing, making them signifi-
+cantly harder for the network to resolve. On the other
+hand, the predicted accuracy correlate with the avail-
+able sample sizeN total. The relative scarcity of ELG
+in training set inherently restricts the network’s ability
+to thoroughly learn the mapping from the 2D spectral
+images to redshift values and their corresponding uncer-
+tainties.
+5.2.Wavelength calibration
+To explicitly test our deep learning framework’s re-
+silience to the calibration errors, we simulate wavelength
+calibration failures by applying spatial perturbations to
+the testing dataset. Specifically, we introduce random
+spatial translations of up to 10% of the image dimen-
+sions along both the horizontal and vertical axes. We
+evaluate these perturbed 2D spectral images using the
+trained Bayesian network for 200 runs as mentioned in
+Section 4.
+As anticipated, introducing these artificial degrades
+the overall predicted precision. For subsets evaluated
+at SNR GI threshold of≥1,3,5 and 10, theσ NMAD
+becomes 0.0121,0.0056,0.0044 and 0.0032, respectively.
+Compared to the performance listed in Table 2, this
+represents only a modest worse performance. This
+result clearly demonstrates that by operating directly
+on the 2D spectral images and leveraging the inherent
+translational invariance of convolutional networks, the
+deep learning framework can implicitly correct astro-
+metric uncertainties. Consequently, this approach offers
+a highly robust alternative to bypass the complicated
+1D wavelength calibration pipelines.
+5.3.limitations
+While our BCNN demonstrates strong performance
+for redshift estimation directly from 2D slitless spectra,
+our current framework relies on several simplifying as-
+sumptions. To transition this method to real observa-
+tional data from the CSST, future iterations must ad-
+dress the following limitations.
+In generating our mock 2D spectra, we utilized high-
+resolution HSCi-band images as the universal spatial
+template for each source. This approach assumes that
+the structural morphology of a galaxy remains constant
+across the entire wavelength range. In reality, galaxies
+exhibit significant color gradient. For example, star-
+forming regions are typically distributed in extended
+disks or distinct knots, which dominate the blue con-
+tinuum, while older and redder stellar populations are
+concentrated in central bulges. Consequently, the true
+spatial profile is highly wavelength-dependent. Ignor-
+ing the wavelength dependent morphology may lead to
+biases in the 2D spectral images across different bands.
+Our current slitless spectroscopic simulation only con-
+siders the Poisson and Gaussian noises. However, true
+observations are subjected to a complex instrumental
+and environmental systematics, including cosmic ray,
+detector defects, complex background gradients from
+zodiacal light and spatially varying PSF on the focal
+plane. A deep learning model trained on idealized noises
+may struggle to generalize to the artifacts present in real
+
+12
+data. To create more realistic datasets, future simula-
+tions need to incorporate a more comprehensive forward-
+modeling pipeline that mimics the precise instrumental
+signature and background complexities of the CSST de-
+tectors.
+6.CONCLUSION
+In this work, we present a deep learning framework de-
+signed to estimate spec-zdirectly from 2D slitless spec-
+tral images, entirely bypassing the complicated 1D spec-
+trum extraction. To train and validate our approach,
+we constructed a highly realistic CSST mock dataset
+of over 680,000 spectra inGVandGIbands, from
+high-resolution galaxy images from HSC-SSP PDR3 and
+SEDs from DESI DR1.
+By employing a BCNN implemented by Monte Carlo
+dropout, our deep learning model can accurately es-
+timate spec-zvalues with their corresponding uncer-
+tainties accounting for both epistemic and aleatoric as-
+pects from 2D spectral images. The deterministic base-
+line network achieves a precision ofσ NMAD = 0.0097
+for sources with SNR GI ≥1, while the BCNN main-
+tains a high precisionσ NMAD = 0.0104 by transfer-
+ring the feature extractor of the deterministic base-
+line model. By applying higher SNR threshold to be
+3.0, 5.0 and 10.0,σ NMAD can reach 0.0047, 0.0037 and
+0.0024 respectively, matching the redshift accuracy re-
+quirements for studies such as BAO employing CSST
+slitless spectroscopic survey. Following a temperature
+scaling calibration, the BCNN yields reliable predicted
+uncertainties, resulting in mean normalized uncertain-
+ties⟨E/(1 +z true)⟩of 0.0155, 0.0095, 0.0095 and 0.0118
+respectively for SNR GI ≥1.0,3.0,5.0 and 10.0 respec-
+tively. These uncertainties successfully reflect physical
+and observational constraints, appropriately scaling in-
+versely with the SNR.
+Evaluating the network across standard survey popu-
+lations reveals an expected performance hierarchy. The
+BGS yields the highest precision, followed by LRG, while
+the fainter, higher-redshift ELG exhibits largest scatter
+due to their smeared narrow emission lines and smaller
+training size.
+To mimic wavelength calibration failure, we sim-
+ulate spatial translations of up to 10% of the im-
+age dimensions. In this case, the network experi-
+ences a modest degradation in performance, achieving
+σNMAD = 0.0121,0.0056,0.0044 and 0.0032 for sources
+with SNR GI ≥1.0,3.0,5.0 and 10.0. This robustness
+proves its viability as a compelling alternative to tradi-
+tional data analysis pipelines that rely on extracted 1D
+spectra.
+Ultimately, our framework establishes a powerful
+proof-of-concept for the direct analysis of 2D slitless
+spectra. Deploying robust and uncertainty-aware deep
+learning models directly on 2D spectral images offers
+a highly promising pathway to unlock the cosmological
+potential of the CSST and other next-generation slitless
+spectroscopic missions.
+ACKNOWLEDGMENTS
+X.Z. and Y.G. acknowledge the support from the
+CAS Project for Young Scientists in Basic Research
+(No. YSBR-92), National Key R&D Program of China
+grant Nos. 2022YFF0503404 and 2020SKA0110402.
+This work is also supported by science research grants
+from the China Manned Space Project with grant
+Nos. CMS-CSST-2025-A02, CMS-CSST-2021-B01, and
+CMS-CSST-2021-A01. HM acknowledges support from
+the National Natural Science Foundation of China
+(NSFC, grant No. 12503008). NL acknowledge the sup-
+port from the CAS Project for Young Scientists in Basic
+Research (No. YSBR-062).
+Facilities:CSST, HSC, DESI
+REFERENCES
+Aihara, H., Arimoto, N., Armstrong, R., et al. 2018, PASJ,
+70, S4, doi: 10.1093/pasj/psx066
+Aihara, H., AlSayyad, Y., Ando, M., et al. 2022, PASJ, 74,
+247, doi: 10.1093/pasj/psab122
+Amendola, L., Appleby, S., Bacon, D., et al. 2013, Living
+Reviews in Relativity, 16, 6, doi: 10.12942/lrr-2013-6
+Bassett, B., & Hlozek, R. 2010, in Dark Energy, ed.
+P. Ruiz-Lapuente, 246, doi: 10.48550/arXiv.0910.5224
+Blanton, M. R., Lin, H., Lupton, R. H., et al. 2003, AJ,
+125, 2276, doi: 10.1086/344761
+Brammer, G. B., van Dokkum, P. G., Franx, M., et al.
+2012, ApJS, 200, 13, doi: 10.1088/0067-0049/200/2/13
+Cappellari, M. 2016, ARA&A, 54, 597,
+doi: 10.1146/annurev-astro-082214-122432
+Conroy, C. 2013, ARA&A, 51, 393,
+doi: 10.1146/annurev-astro-082812-141017
+
+13
+CSST Collaboration, Gong, Y., Miao, H., et al. 2026,
+Science China Physics, Mechanics, and Astronomy, 69,
+239501, doi: 10.1007/s11433-025-2809-0
+DESI Collaboration, Aghamousa, A., Aguilar, J., et al.
+2016, arXiv e-prints, arXiv:1611.00036,
+doi: 10.48550/arXiv.1611.00036
+DESI Collaboration, Abareshi, B., Aguilar, J., et al. 2022,
+AJ, 164, 207, doi: 10.3847/1538-3881/ac882b
+DESI Collaboration, Karim, M. A., Adame, A. G., et al.
+2025, arXiv e-prints, arXiv:2503.14745,
+doi: 10.48550/arXiv.2503.14745
+Dieleman, S., Willett, K. W., & Dambre, J. 2015, MNRAS,
+450, 1441, doi: 10.1093/mnras/stv632
+Farahani, A., Pourshojae, B., Rasheed, K., & Arabnia,
+H. R. 2021, arXiv e-prints, arXiv:2104.02144,
+doi: 10.48550/arXiv.2104.02144
+Ferreira, P., & Reis, R. R. R. 2025, Brazilian Journal of
+Physics, 55, 33, doi: 10.1007/s13538-024-01669-7
+Gal, Y., & Ghahramani, Z. 2015, arXiv e-prints,
+arXiv:1506.02142, doi: 10.48550/arXiv.1506.02142
+Gallazzi, A., Charlot, S., Brinchmann, J., White, S. D. M.,
+& Tremonti, C. A. 2005, MNRAS, 362, 41,
+doi: 10.1111/j.1365-2966.2005.09321.x
+Goan, E., & Fookes, C. 2020, arXiv e-prints,
+arXiv:2006.12024, doi: 10.48550/arXiv.2006.12024
+Gong, Y., Liu, X., Cao, Y., et al. 2019, ApJ, 883, 203,
+doi: 10.3847/1538-4357/ab391e
+Gong, Y., Miao, H., Zhou, X., et al. 2025, Science China
+Physics, Mechanics, and Astronomy, 68, 280402,
+doi: 10.1007/s11433-025-2646-2
+Hahn, C., Wilson, M. J., Ruiz-Macias, O., et al. 2023, AJ,
+165, 253, doi: 10.3847/1538-3881/accff8
+Hamilton, A. J. S. 1998, in Astrophysics and Space Science
+Library, Vol. 231, The Evolving Universe, ed.
+D. Hamilton, 185, doi: 10.1007/978-94-011-4960-0 17
+He, K., Zhang, X., Ren, S., & Sun, J. 2015, Deep Residual
+Learning for Image Recognition,
+https://arxiv.org/abs/1512.03385
+Hendrycks, D., & Gimpel, K. 2016, arXiv e-prints,
+arXiv:1606.08415, doi: 10.48550/arXiv.1606.08415
+Hezaveh, Y. D., Perreault Levasseur, L., & Marshall, P. J.
+2017, Nature, 548, 555, doi: 10.1038/nature23463
+K¨ ummel, M., Walsh, J. R., Pirzkal, N., Kuntschner, H., &
+Pasquali, A. 2009, PASP, 121, 59, doi: 10.1086/596715
+Laureijs, R., Amiaux, J., Arduini, S., et al. 2011, arXiv
+e-prints, arXiv:1110.3193, doi: 10.48550/arXiv.1110.3193
+Lecun, Y., Bengio, Y., & Hinton, G. 2015, Nature, 521, 436,
+doi: 10.1038/nature14539
+Loshchilov, I., & Hutter, F. 2017, arXiv e-prints,
+arXiv:1711.05101, doi: 10.48550/arXiv.1711.05101
+Madau, P., & Dickinson, M. 2014, ARA&A, 52, 415,
+doi: 10.1146/annurev-astro-081811-125615
+Miao, H., Gong, Y., Chen, X., et al. 2024, MNRAS, 531,
+3991, doi: 10.1093/mnras/stae1370
+Momcheva, I. G., Brammer, G. B., van Dokkum, P. G.,
+et al. 2016, ApJS, 225, 27,
+doi: 10.3847/0067-0049/225/2/27
+Mosby, G., Rauscher, B. J., Bennett, C., et al. 2020,
+Journal of Astronomical Telescopes, Instruments, and
+Systems, 6, 046001, doi: 10.1117/1.JATIS.6.4.046001
+Mullachery, V., Khera, A., & Husain, A. 2018, arXiv
+e-prints, arXiv:1801.07710,
+doi: 10.48550/arXiv.1801.07710
+Newman, J. A., & Gruen, D. 2022, ARA&A, 60, 363,
+doi: 10.1146/annurev-astro-032122-014611
+Pan, S. J., & Yang, Q. 2010, IEEE Transactions on
+Knowledge and Data Engineering, 22, 1345,
+doi: 10.1109/TKDE.2009.191
+Raichoor, A., Moustakas, J., Newman, J. A., et al. 2023,
+AJ, 165, 126, doi: 10.3847/1538-3881/acb213
+Richardson, W. H. 1972, J. Opt. Soc. Am., 62, 55,
+doi: 10.1364/JOSA.62.000055
+Salvato, M., Ilbert, O., & Hoyle, B. 2019, Nature
+Astronomy, 3, 212, doi: 10.1038/s41550-018-0478-0
+Weinberg, D. H., Mortonson, M. J., Eisenstein, D. J., et al.
+2013, PhR, 530, 87, doi: 10.1016/j.physrep.2013.05.001
+Weiner, B. J. 2012, arXiv e-prints, arXiv:1209.1405,
+doi: 10.48550/arXiv.1209.1405
+Zhou, R., Dey, B., Newman, J. A., et al. 2023, AJ, 165, 58,
+doi: 10.3847/1538-3881/aca5fb
+Zhou, X., Gong, Y., Zhang, X., et al. 2024, ApJ, 977, 69,
+doi: 10.3847/1538-4357/ad8bbf
+Zhuang, F., Qi, Z., Duan, K., et al. 2021, IEEE
+Proceedings, 109, 43, doi: 10.1109/JPROC.2020.3004555

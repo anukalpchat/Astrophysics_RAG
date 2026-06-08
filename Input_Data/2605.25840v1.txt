@@ -1,0 +1,1053 @@
+Title: skysurvey: a pure python package to simulate the transient sky
+Authors: M. Rigault, M. Ginolin, L. Dellazzeri, B. Popovic, J. O. Hjortlund, A. Gilles-Lordet, S. Conseil, M. Coughlin, F. Ruppin, M. Smith, A. Townsend, A. Trigui, C. Barjou-Delayre, R. Kebadian, J. Nordin
+Published: 2026-05-25
+Categories: astro-ph.IM, astro-ph.CO
+
+Astronomy&Astrophysicsmanuscript no. main©ESO 2026
+May 26, 2026
+skysurvey: a pure python package to simulate the transient sky.
+Rigault, M.1,⋆ , Ginolin, M.2 , Dellazzeri, L.1 , Popovic, B.3 , Osman Hjortlund, J.4, Gilles Lordet, A.4 , Conseil,
+S.1, Coughlin, M.5, Ruppin, F.1, Smith, M.6 , Townsend, A.7 , Trigui, A.1 , Barjou-Delayre, C.8 , Kebadian, R.9 ,
+Nordin, J.10 ,
+(Affiliations can be found after the references)
+May 26, 2026
+ABSTRACT
+Context.Accurate simulation of astronomical observations is a critical element for any modern analyses, be it to measure event rates, analyses
+population properties, validate or train pipelines, account for selection effects, or correct biases.
+Aims.We present a novel pure python package namedskysurveymade to enable the user to quickly simulate astrophysical transients as observed
+by a survey. The package is structured to make the implementation of any complex population modeling fast and easy.
+Methods.skysurveyrelies on three core objects: aTarget, that models how an astrophysical target exists in nature, aSurvey, that specifies
+how the sky has been observed and, aDataSetthat combine these two to generate data as they would have been acquired. In addition, we present
+a side stand-alone package namedmodeldagthat contains the core structure that simplifies the parameter modeling.
+Results.We present in this paper howskysurveyis structured and we clearly illustrate how the code can straightforwardly be used to simulate
+complex populations, such as Type Ia Supernovae with varying color-brightnessβterm. We also illustrate how the package can be made to replicate
+the rate and redshift distribution of the ZTF SNe Ia DR2 dataset.
+Conclusions.Theskysurveypackage, already used in recent scientific publications, is now ready for general usage and paves the way for future
+use of simulations such as simulation based inference.
+Key words.Simulation ; Cosmology ; Supernovae
+1. Introduction
+Simulations are the foundation of many scientific analyzes, as
+they allow scientists to validate methods on cases where the
+ground truth is known. This is particularly useful when deal-
+ing with selection effects that impact the vast majority of astro-
+nomical and cosmological studies ; be it because of instrumen-
+tal limits, because the Milky Way, or, say, of the availability of
+follow-up instruments. Simulations are then used to validate in-
+ference pipelines or to probe what has not been observed given
+what has. The latter aspect is key to derive rates (e.g. Pain et al.
+2002; Leaman et al. 2011; Perley et al. 2020), to study proper-
+ties of the underlying population (e.g. Li et al. 2011; Vincenzi et
+al. 2019; Dimitriadis et al. 2025) or to correct the selection ef-
+fect when deriving cosmological parameters (e.g., Betoule et al.
+2014; Kessler & Scolnic 2017; Scolnic et al. 2018; Riess et al.
+2019; Brout et al. 2022). The use of massive realistic simulations
+has furthermore been shown to be able to train machine-learning
+methods to infer model parameters, a technique now known as
+simulation based inference (e.g. Cranmer et al. 2020; Karchev
+et al. 2023; Ho et al. 2024; Boyd et al. 2026, and references
+therein). Finally, simulations are essential to plan future instru-
+ments and surveys (e.g. Goobar et al. 2002; Kessler et al. 2010;
+Bernstein et al. 2012; Nissanke et al. 2013; Hounsell et al. 2018).
+In extra-galactic transient sciences, theSNANApackage
+(Kessler et al. 2009) has long been the central simulation soft-
+ware. Among many other key successes,SNANAhas been the
+reference software used to prepare the upcoming Rubin Large
+Survey of Space and Time (LSST, Ivezi ´c et al. 2019) and the
+cosmology program of the Roman Space Telescope (Rose et al.
+2021, 2025). There,SNANAwas most notably the software suite
+⋆ m.rigault@ip2i.in2p3.fr
+used to simulate realistic transients as part of the PLAsTiCC and
+ELAsTiCC classification challenges (Kessler et al. 2019; Hložek
+et al. 2023), which have been extensively used to develop and
+explore classification algorithms. Outside its use for transients
+modeling,SNANAhas been the central tool behind the last decade
+of precision cosmological measurements from Type Ia Super-
+novae (SNe Ia) (e.g. Scolnic et al. 2018; Brout et al. 2022; Vin-
+cenzi et al. 2024; Popovic et al. 2025) via the Beams with Bias
+Correction method (BBC, Scolnic & Kessler 2016; Kessler &
+Scolnic 2017; Popovic et al. 2021).
+ButSNANAis not without downsides, mostly stemming from
+its long legacy.SNANAis a complex combination ofC,fortran
+andpython, making installation famously complex and largely
+limited to a handful of high performance computing servers. Fur-
+ther compounding the approachability problem is the legacy of
+its 10+years of development: the software contains hard-coded
+numbers and structures that predate original analyses approach
+to recently discovered issues. Notably, the SN-host correlations
+(e.g., Sullivan et al. 2010; Rigault et al. 2013; Roman et al. 2018;
+Kelsey et al. 2021; Rigault et al. 2020; Brout, & Scolnic 2021)
+was not considered in the initial development ofSNANA. This led
+recent analyses to iterative fudging and new implementations of
+the SN-to-host matching to recover observed distributions for
+the treatment of SN-to-host correlation across, e.g., Smith et al.
+(2020), Brout, & Scolnic (2021), Popovic et al. (2021), Popovic
+et al. (2023), and Wiseman et al. (2022). Because of this long
+development cycle, these new features are piped through pre-
+defined structures such as libraries of host galaxies (HOSTLIBs)
+and hard-coded probability distribution functions (WGTMAPs).
+SNANAuses.inputfiles, ideal for long-term storage and repli-
+cability, but complex and spread across multiple fronts within
+SNANA. The addition of thepippinwrapper (Hinton & Brout
+Article number, page 1 of 11
+arXiv:2605.25840v1  [astro-ph.IM]  25 May 2026
+
+A&A proofs:manuscript no. main
+2020) has simplified the user experience, but, crucially, has not
+fixed the issue of IO andSNANA’s inability to rapidly iterate over
+different model, SN, or survey properties that would be neces-
+sary for the implementation of, say, SBI.
+In light of this situation, alternative simulation codes have
+emerged to replace the simulation layer ofSNANA. So far, most
+focused on specific cases, such assimsurvey(Feindt et al.
+2019) to prepare the Zwicky Transient Facility survey (ZTF
+Bellm et al. 2019) and then extensively used by the collabora-
+tion to derive rates (e.g., Sagués Carracedo et al. 2021; Andreoni
+et al. 2022; Karambelkar et al. 2023), orsnsim(Carreres et al.
+2023) developed to prepare the large-scale structure inference by
+nearby Type Ia Supernovae (SNe Ia). In 2022, we have started
+the development ofskysurveywith the aim to replace the sim-
+ulation layer ofSNANA. The goal of this package is to provide
+a fast runningpip installable library that would enable any
+user to model (complex) simulations of any kind of astrophys-
+ical sources, and notably of any transients, as given by nature
+and as observed by any kind of survey (e.g., ZTF or LSST). As
+this paper was being written, theLightCurveLynxsurvey sim-
+ulation package has been introduced through a first example on
+simulated SN Ia populations (Dai et al. 2026), further illustrating
+the need for alternative simulation codes toSNANA.
+This paper presentsskysurveyversion 1.0. Ongoing or fu-
+ture developments shall continue improving the code, both in
+terms of speed and flexibility, while conserving the core aspect
+of the package: an easy to use software made to enable the user
+to simulate complex astrophysical targets and surveys. We in-
+vite the user to refer to the online documentation that contains
+many usage examples including those described in this paper.
+The code is publicly available on GitHub and can be installed
+using thepip install skysurveycommand.
+Since its initial development, theskysurveypackage has
+already been used to publish scientific analyses: to reproduce
+an existing dataset to understand its characteristics (Amenouche
+et al. 2025; Rigault et al. 2025), to simulate realistic Super-
+novae data to validate an inference pipeline (Ginolin et al.
+2025a,b), to study the origin of unexpected rate variations with
+redshift (Gilles Lordet et al. 2026), to compare observed Super-
+novae rate with expectations in early LSST data (Freeburn et al.
+2025), to analyse the observations of strongly lensed supernovae
+(Sagués Carracedo et al. 2024), to forecast measurements ofH 0
+anisotropies with ZTF (Barjou-Delayre et al. 2026), etc. More
+analyses are ongoing, such as a complex Type Ia Supernovae
+modeling (Ginolin et al. in prep), a validation of dark energy
+and large scale structure cosmological inference pipelines (Be-
+toule et al. in prep, Kebadian et al. in prep.). Theskysurvey
+package is also particularly well suited to train simulation based
+inference pipeline (Trigui et al. in prep), to derive core-collapse
+Supernovae rate and luminosity functions (Qin et al. in prep) or
+to validate strongly lensed supernovae analyses (Osman Hjortlun
+et al. in prep.).
+The paper presentsskysurvey, focusing on introducing its
+core concept, structure, and functionalities. We start by present-
+ing "modeldag" in Section 2, a standalone package built in par-
+allel ofskysurveyand that provides its basis to draw target pa-
+rameters, making it easy to build complex astrophysical models.
+Then, after a rapid overview of theskysurveythreefold struc-
+ture (target, survey and dataset) in Section 3 we introduce each
+with more details:Targets in Section 4,Surveys in Section 5
+andDataSetin Section 6. We continue by illustrating a simple
+test example in Section 7 where we reproduce the redshift distri-
+bution of the ZTF SN Ia DR2 sample (Rigault et al. 2025). We
+conclude in Section 8.
+Throughout the paper, we present code-lines in figures in
+parallel to their physical discussion in the main text. This may be
+unusual in scientific publication, but we are convinced it is the
+best way to illustrate the fundamental idea behindskysurvey:
+A package made to respect the logical flow of a(n) (astro)physics
+intuition, which in turns enables the user to easily build complex
+(realistic) simulations thanks a straightforward user interface.
+2.modeldag: build any parameter model
+At the core ofskysurvey’s parameter generation is the
+modeldag1 package. Thispythonpackage enables a user to
+build complex models from a simple dictionary structure, form-
+ing a Directed Acyclic Graph (DAG). In this DAG, each node
+represents a model parameter, and the edges represent dependen-
+cies between them. Each parameter is associated to a function
+that describes how this parameter is drawn. Thanks to the DAG
+structure, the output of one parameter draw can be used as input
+of the function that draws another. The strength ofmodeldagis
+that this process is made straightforward by its simplepython
+dictionary structure.
+This is fully illustrated in Fig. 1 for a simple model inspired
+by the SNe Ia brighter-slower brighter-bluer relations (e.g., Tripp
+1998; Riess et al. 1996):m i =α×x 1,i +β×c i, withαand
+βpopulation parameters andm i,x 1,i andc i individual SNe Ia
+terms. As shown in the middle part of the left panel in Fig. 1,
+Themodeldag(nested-) dictionary structure is the following.
+The first levelkeys(x1,candm, Fig. 1) represent the param-
+eters to be generated. The second level explains how to do so,
+using only 2 entries: "func", which provide the information of
+the function to be used to generate the parameter, and "kwargs",
+which provide the function’s parameters. The core idea behind
+modeldagis that one can use the symbol “@“ to use the result
+of a parameter’s drawing as parameter input for another param-
+eter, as illustrated in Fig. 1. In that example,x1 andcare drawn
+from normal distribution, butmis generated by combining them
+linearly ; notice thex1=’@x1’andc=’@c’inm’skwargs.
+2.1. Any function to generate parameters
+Any function can be used to generate parameters. As illustrated
+in Fig. 1modeldaghandles functions that return parameter(s)
+or that "transform" them (i.e. generate one from others). To han-
+dle functions returning multiple parameters generated simultane-
+ously, the second level dictionary accepts a third keyword along
+sidefuncandkwargs: "as". This last keyword enables the user
+to specify each returned parameter name. As illustrated in Fig. 2,
+this is useful when several parameters have to be generated si-
+multaneously, as when randomly drawing points uniformly dis-
+tributed in a shell like sky-coordinates (RA, Dec). Alternatively,
+ascould be used to rename a single parameter.
+In addition,modeldagaccepts functions that return (n-d)
+probability distribution functions (PDF). To be automatically
+identified bymodeldag, these functions must return two arrays:
+’xx’ and ’pdf’. Thenmodeldagwill sample the parameter by
+randomly drawingxxvalues following the individual point prob-
+ability given bypdf; see online documentation for examples.
+Across the code, thesizeargument must be accepted by
+functions that returned drawn parameters, likedraw_normalin
+Fig. 1. Transformation functions do not need it assizewill be
+taken from the length of input parameters (likex1 orc, Fig. 1).
+Functions returning PDF should acceptxxas input argument
+1 https://modeldag.readthedocs.io/en/latest/
+Article number, page 2 of 11
+
+M. Rigault et al.:skysurvey
+Fig. 1.Illustration ofmodeldag.left: a
+pythoncode generating a simple model,
+where two randomly drawn parameters
+(x1 andc) are linearly combined to form
+a third (m). The "@" sign enables to
+pass parameters from a key to another
+to form a graph as illustrated in thetop-
+rightpanel.right:Corner plot presenting
+the generated data.
+Fig. 2.Complexifying amodeldag’s model.Top: apythoncode cre-
+ating a model, including a function that returns two variables (raand
+dec) generated simultaneously). There a new model is generated by
+combiningmodel_2with the original one shown in Fig. 1.bottom:new
+graph.
+specifying where the pdf must be estimated ; inputxxand re-
+turnedxxdo not need to match.
+2.2. Complexifying a model, automatic graph
+Thanks tomodeldag’s "@" symbol trick, it is easy to build
+logical connections between parameters. Furthermore, since the
+overall structure is a dictionary, it benefits from allpythondic-
+tionary tools. Updating amodel’s entry or adding new parame-
+ters and/or dependency is as simply as updating a python’s dic-
+tionary. This is illustrated in Fig. 2. In that example, theraand
+deccoordinates are generated simultaneously and a newbeta
+parameter is introduced. The parameter is then used as input for
+them’s transformation function (see Fig. 1). By combining the
+initialmodelfrom Fig. 1 and that extension one can have a more
+complex model (callednew_model, Fig. 2) where the linear con-
+nection betweencandmdepends on a non-constantbeta. Fol-
+lowing the Type Ia Supernovae example, this modification gets
+close to the dust-to-dust modeling introduced by Popovic et al.
+(2023) ; see also Brout, & Scolnic (2021)
+Consequently, thanks to the combination of: (1) a simple
+python dictionary structure, (2) a fully flexible function-based
+parameter definition approach, and (3) the introduction of the
+"@" keyword to build any graph structure, themodeldagpack-
+age enables the user to easily build any model as complex as
+desired. In addition,modeldagautomatically builds the param-
+eter drawing graph so that themodeldictionary can be built and
+combined in any order.
+3.skysurvey’s structure and logic
+Theskysurveypackage aims to simulate the transient sky in a
+forward way. Following that logic, the code enables (1) to gener-
+ateTargetobjects as given by nature, i.e. noise- and selection-
+free (see Section 4) ; (2) to createSurveyobjects containing ob-
+serving information (which filter has been used when to observe
+where under which conditions ; see Section 5) ; (3) to combine
+both objects to generate realistic lightcurves. This combination
+is trivially handled by theDataSetobject (see Section 6). This
+is illustrated in Fig. 3.
+In the following subsection, we detail how these three ob-
+jects work. Theskysurveypackage has other objects that are
+used internally and will be described when relevant within these
+subsections.
+4.Target
+Askysurvey.Targetrepresents the astrophysical objects to
+be simulated. The key attributes of this family of objects are:
+templateandmodel.
+Thetemplatecorresponds to the spectro-photometric
+model from which a lightcurve or a spectrum could be gen-
+erated. In its released version,skysurveyrelies onsncosmo
+for handling templates (Barbary et al. 2016). This is handled
+through theskysurvey.Templateobject that manages interac-
+tions between otherskysurveyobjects andsncosmo.Models
+(sosncosmo.Sources ; seesncosmo’s documentation).
+As such, anysncosmo.Source(built-in or user-defined) can
+be used inskysurvey.
+Themodelattribute is amodeldagobject (see Section 2)
+made to simulate target’s parameters. These parameters are, at
+least, those needed by thetemplateand sky coordinates (RA
+and DEC) needed to match the target with a survey and thereby
+to simulate realistic observations of the target (see Section 6).
+Article number, page 3 of 11
+
+A&A proofs:manuscript no. main
+Fig. 3.Illustration of theskysurvey
+code structure and associated code. Sky-
+survey aims at making easy arbitrarily
+complex realistic simulations of astro-
+physical targets (e.g. a Supernovae, or
+any user defined) as observed by surveys
+(e.g. ZTF, LSST, or any user defined).
+4.1. Simulating targets
+Once theTargetis loaded, one can use thedraw()method
+to generate a sample. This method internally calls thedraw()
+method ofmodeldag(i.e. of themodelattribute) to generate a
+pandas DataFrame where each row corresponds to an individual
+target and the columns are the parameters specified in themodel.
+This dataframe is stored as aTarget.dataattribute.
+Up on calling of the.draw()method, the user can alter
+the model or the model’s parameters, such as the redshift range
+of the targets and their corresponding time-range (correspond-
+ing tosncosmo’st0source parameters). This functionality fully
+exploits the modularity of the dictionary-oriented structure of
+modeldagat the core of theskysurveypackage.
+Target redshifts are generated following theTarget.rate
+attribute which could either be constant or a function of redshift
+or of any parameter such as the host properties (see detail in
+Section 4.2).
+Finally, given the redshift and time-range you can
+either specify the number of target you want (e.g.
+draw(size=10_000)) or leave the code estimate the sam-
+ple size given the volume of the Universe covered by the
+redshift range, the target rate, the cosmology, and the time of
+observation. In addition, sinceSurveycould be focusing on nar-
+row region of the sky (e.g. few deep-fields), the user is invited to
+provide theskyarea(skyarea = survey.get_skyarea())
+as input of thedraw()method. Thisshapely(Multi)Polygon
+object limits the area of the sky where targets will be drawn
+(Gillies, et al. 2023 ; see Section 5). This is particularly useful
+when simulating pencil-beam observations like deep-fields ; no
+need to generate millions of never-observed targets.
+4.2. rates and redshifts
+The rate at which a transient occurs is a crucial input for any sim-
+ulation, as it specifies how redshifts are drawn. Theskysurvey
+package relies on volumetric rates in target/Gpc 3/yr which
+could be specified in two ways: (1) as a constant (float) or (2)
+as a function. The former assumes that the rate is the same re-
+gardless of, say, direction or redshift. The latter enables a full
+flexibility of the rate: it could depend of redshift (e.g. Frohmaier
+et al. 2019), and/or host properties (e.g. Sullivan et al. 2006) etc.
+In any case, the rate function is expected to return the target’s
+volumetric rate in target/Gpc3/yr.
+To draw redshifts, the code first defines redshift bins (flexible
+size, but∆z=10 −4 by default), second computes the Universe’s
+volume (Gpc 3) of this redshift shell given a cosmology, third
+computes the volumetric target rate at the pivot redshift of the
+shell. Fourth, the target redshifts are randomly drawn from these
+redshift bins weighted by the number of targets per bin.
+4.3. Collections of targets
+Theskysurveypackage enables the user to buildTargetbased
+on anysncosmotemplate (e.g. SALT-like, or SN templates) or,
+even more generally, any user-definedsncosmo.Source.
+However, for most of transients, such as Type II Supernovae,
+there is no generic template (unlike SALT for SNe Ia) but rather
+a variety of templates based on well-observed objects. For in-
+stance,sncosmocontains 23 templates for Type II Supernovae
+as defined by Vincenzi et al. (2019).
+To simplify the user experience, a
+MultiTemplateTSTransientobject has been implemented in
+skysurveythat behaves just like aTSTransientbut handles
+the multiple-template issue in the back-end. Based on that, we
+have pre-built a variety of multiple-template targets, such as
+Type II Supernovae (see a list in Section 4.4).
+As such, theskysurvey.SNeIItarget object contains, as
+atemplate, these 23 Vincenzi et al. (2019) templates. When
+the user calls the.draw()method, the individual target’s tem-
+plate is drawn alongside all other parameters defined by the ob-
+ject’smodeldag(see Section 4). To draw these templates, the
+code takes into account that the relative rate of each of these
+templates may vary. To specify this, therateparameter of a
+MultiTemplateTSTransientobject can either be a constant,
+a function for any normalTarget, a list of constants, or a list of
+functions respecting the numpy broadcasting rule (e.g. a list of 1
+or 23 constants in that case). In the former case (or if the list has
+one entry) the templates are equiprobable. This is illustrated in
+Fig. 4.
+In addition, theskysurveypackage also contain a
+genericTargetCollectionobject that can be instantiated
+by giving a list of anyTarget(or equivalent such as a
+MultiTemplateTSTransient). The package is made such that
+thisTargetCollectionworks anywhere aTargetobject
+would ; most notably, such a target collection is accepted as input
+ofDataSet.from_target_and_survey()(see Section 6).
+4.4. built-in transients
+skysurveycomes with a number of built-inTargetobjects
+(see Table 1), and each can be customized and modified at will.
+In practice, these objects are built on theTransientvir-
+tual class that contains all the core functionalities. These built-in
+Targetinherit from thisTransientclass and pre-define a few
+attributes, mostly the defaultmodel, therateand thetemplate
+Article number, page 4 of 11
+
+M. Rigault et al.:skysurvey
+Fig. 4.Illustration of how to use multi-template based objects such as
+the Type II SupernovaeSNeII. The actual individual target (dataframe
+row) template is randomly drawn respecting the rate or model parame-
+ters that could be template-dependent.
+Table 1.Built-inTargetobject of theskysurveypackage
+name kind template(s)
+SNeIa TransientSALT-like
+TSTransient Transientanysncosmo.TimeSerie
+SNeIb MultiTemplateTSTransient12 templates*
+SNeIc MultiTemplateTSTransient7 templates*
+SNeIcBL MultiTemplateTSTransient6 templates*
+SNeII MultiTemplateTSTransient23 templates*
+SNeIIb MultiTemplateTSTransient12 templates*
+SNeIIn MultiTemplateTSTransient6 templates *
+Kilonovae TransientPOSSIS**
+Notes.*:sncosmo.TimeSeriedefined by Vincenzi et al. (2019)
+**:sncosmo.AngularTimeSeriesSource, model from (Bulla 2019)
+; which all can easily be extended or modified by the user (see
+Section 4.5).
+4.5. Modifying a target
+Therateandmodel Targetattributes can be changed to mod-
+ify the number of targets expected as a function of redshift, or
+how the target parameters are drawn. These changes can be ei-
+ther when instantiating the target (options of the.from_draw()
+class method) or on a loaded target using the associated
+.set_rate,.set_modelor.update_model[_parameters].
+Theupdate_modelmethod fully exploit themodeldagdictio-
+nary structure as explained in Section 2. With this method you
+only change how parameters are drawn and/or connected to-
+gether, or even add new parameters. As explained in Section 2,
+a new graph will automatically be built once the model is up-
+dated. The.update_model_parametersmethod directly af-
+fects thekwargsentries on the model to change the arguments
+of the function used to draw a variable, but not the functional
+form itself.
+This is illustrated in Fig. 5. In that example, we change the
+defaultSNeIarate (a constant volumetric rate of 2.35×10 4
+target/Gpc3/yr, Perley et al. 2020) to a redshift-evolving rate
+as modeled by Frohmaier et al. (2019). In addition, we make the
+betastandardization parameter of the SNe Ia Tripp’s relation a
+normally distributed variable instead of a usual constant.
+As illustrated in this Section, theskysurveypackage,
+thanks to themodeldagstructure, has been designed to make
+easy complex/realistic simulations. The user is only limited by
+its imagination and ability to define how the target’s parameters
+should be drawn and connected together, i.e. setting themodel
+and/or therate’s function. The rest is automatically handled by
+skysurvey.
+Fig. 5.Illustration of how to change a target ; here, specify a redshift
+dependentrateand make SN Ia standardization parameterbetaa vari-
+able drawn from a normal distribution.
+4.6. Adding effects
+skysurveyprovides a flexible mechanism for adding various
+physical effects to the simulation. This is handled by theEffect
+class, which can modify both the intrinsic properties of the tran-
+sients and/or the way their lightcurves or spectra are generated.
+In practice, askysurvey.Effecthas two core attributes:
+1..effect, ansncosmo.PropagationEffect, which alters
+how transient fluxes (mag) are generated, be it when getting a
+lightcurve or a spectrum ; 2..model, amodeldagdictionary
+that will be used to update the target’s model to generate the
+.effectparameters if any.
+An effect can be added to any target either during instan-
+tiation, using theeffect=option of the.from_draw()class
+method, or directly using the.set_effect()method. A target
+can handle multiple effects simultaneously.
+4.6.1. Milky Way
+A good example of this is the handling of Milky Way dust extinc-
+tion.skysurveyprovides a pre-definedEffecteasily accessi-
+ble by callingmw = skysurvey.Effect.from_name("mw").
+To handle Milky Way extinction, an observer-frame dust-
+likesncosmo.PropagationEffectis generated (Cardelli et
+al. 1989, by default), which has two parameters, "mwebv"
+and "rv" (3.1 by default). The "mwebv" parameter refers to
+the intensity of the Milky Way dust along the line of sight
+and hence depends on the target’s coordinates. Consequently,
+mw.modelhas amodeldagdictionary withfunca custom
+madeget_mwebv(ra, dec, which=’planck’)function (re-
+lying on thedustmaps 2 package; Green 2018) andkwargs:
+2 https://dustmaps.readthedocs.io/en/latest/
+Article number, page 5 of 11
+
+A&A proofs:manuscript no. main
+Fig. 6.Illustration of how to add an effect to a target ; here, the Milky
+Way extinction, whose intensity parameter (mwebv) depends on the tar-
+get’s coordinate.
+dict(ra=’@ra’, dec=’@dec’)to pass the target’s coordinate
+information to theget_mwebv()function. When themwis added
+to the target,mw.modelis used to update thetarget.model,
+which enables to generate the ’mwebv’ parameter upon
+the.draw()call, and thesncosmo.PropagationEffectis
+passed to the template to handle the effect on flux generation.
+This is illustrated in Fig. 6 which demonstrates the simplicity
+for the user to account for Milky Way extinction.
+For SNe Ia, another useful effect is that associated to
+color scatter. Those kind of effect have no model parame-
+ters, just a propagation effect. By default, two scatter effects
+have been implemented, ’C11’ (Chotard et al. 2011) and ’G10’
+(Guy et al. 2010). These can be loaded using thecscatter =
+skysurvey.Effect.from_name(’scatter’, ’c11’).
+Creating new customed effects thus simply requires the user
+to define asncosmo.PropagationEffectand themodeldag
+model that draws the propagation effect parameters, potentially
+depending on other parameters, just like for the Milky Way ef-
+fect.
+5.Survey
+TheSurveyobjects inskysurveyrepresent a time-domain sur-
+vey. A survey is defined by a spatial footprint of the camera in
+the sky, and observing logs (or corresponding simulation), spec-
+ifying what part of the sky has been observed when and under
+what conditions. Under the hood,Surveyobjects are made both
+highly modular while remaining extremely fast in matching ob-
+serving logs with any sky location (hence any target) by a com-
+bination ofshapely 3 andgeopandas 4 libraries and, for some,
+by using the healpix decomposition 5.
+There are two kind of surveys inskysurvey: the
+genericskysurvey.Survey, and the more specific
+skysurvey.GridSurveyfor surveys with fixed pointing
+grids, like, e.g. ZTF or deepfield surveys like DES, to speed up
+the computations.
+3 https://shapely.readthedocs.io/en/stable/manual.html
+4 https://geopandas.org
+5 https://healpy.readthedocs.io/en/latest/
+In both cases, the(Grid)Survey.footprintis a shapely
+(Multi)Polygon object in degrees. The MultiPolygon case is par-
+ticularly useful for multi-detector camera, such as most of the
+modern ones. There, each polygon of MultiPolygon corresponds
+to accdid(customable name), that has matching entries in the
+observing logs. As such, the observing condition are per ccd (or
+read-out channel, etc. as defined in the log) which could vary
+even within a single exposure.
+The observing logs is stored as a pandas.DataFrame
+(survey.data) and must contain, at least: the point coordinates
+ra,dec(or thefieldidfor GridSurveys) ;mjd, the observing
+time in modified Julian dates ;band, the filter used to observe
+the sky ;skynoise, the noise (in ADU) of that log entry,gain,
+to convert ADU to electron when computing the Poisson noise ;
+zp, the zeropoint of the entry.
+The coordinate’s information, together with the survey foot-
+print, is used to match any target with the survey logs. This is
+made using thesurvey.radec_to_fieldid()method, which
+uses the spatial joingeopandasmethod forGridSurveys (e.g.
+ZTF) or healpix pixelisation for genericSurveys (e.g. LSST).
+In both cases, matching 100k targets with a full sky survey takes
+only a fraction of seconds. This speed is one of the key aspects
+ofskysurvey.
+The online documentation shows several examples on how
+to create a customedSurveyor aGridSurvey. In Section 5.1
+we illustrate each kind with the pre-builtskysurvey.ZTFand
+skysurvey.LSSTsurveys.
+5.1. Built-in Surveys
+Whileskysurveymakes it easy to build any kind of surveys, a
+few major surveys have been built-in and more will be added in
+the future. We invite the user to see online documentation for an
+up-to-date list. In this paper, we present ZTF and LSST’s imple-
+mentation as they cover both survey kinds: a GridSurvey (ZTF)
+and a generic Survey (LSST).
+5.1.1. ZTF: aGridSurvey
+The ZTF survey acquires observations following two pre-defined
+pointing grids (see e.g. Bellm et al. 2019; Masci et al. 2019). The
+main grid hasfieldid<1000whilefieldids>1000are those
+of the secondary grid. This griding corresponds to the camera
+footprint in the sky as illustrated, for the main grid, in Fig. 7.
+The secondary grid is offset by a quarter of camera footprint and
+is used to increase the full sky coverage of the survey and for
+calibration purposes. In practice, this secondary grid is only ac-
+quired 10% of the time.
+The central (ra,dec) coordinates for eachfieldid
+is publicly available and easily accessible through the
+ztffield6 package. Inskysurvey, we use this package
+to build theGridSurvey.fieldsattribute that contains the
+shapely.polygoncorresponding to thefootprintcentered
+in allfieldidcoordinates. As such, logs forGridSurveylike
+ZTF only need to list which field has been observed, without
+having to specify the pointing coordinates (ignored if given).
+TheZTFsurvey has been implemented inskysurveysuch
+that the user does not need to pay attention to all these details.
+We have also implemented.from_logs()class method to in-
+stantiate ZTF given the latest ZTF survey log, i.e., these from
+Rigault et al. (2025) when writing this paper. This is illustrated
+in Fig. 7.
+6 https://ztffields.readthedocs.io
+Article number, page 6 of 11
+
+M. Rigault et al.:skysurvey
+Fig. 7.Illustration of how to load theZTFsurvey and basic plotting
+functionalities. The grid system of ZTF is clearly visible in the bottom
+panel that shows the number of visit for the main grid. The grey band
+illustrates the Milky Way location. The northern ZTF survey does not
+cover dec<−30.
+TheZTF GridSurveyhas a multi-polygonfootprint
+based on its 64 quadrants identified by anrcid(see log descrip-
+tion in Rigault et al. 2025).
+5.1.2. LSST: aSurvey
+The LSST survey does not follow a pre-defined pointing grid but
+points anywhere in the sky and the observing "logs" (in practice
+opsimsimulations when this paper is being written) hence con-
+tain these (ra,dec) coordinates, corresponding to the pointing
+location of the center of the camera. Then, assuming the LSST
+footprint (currently a single polygon, hence ignoring single ccd-
+variations) one can compute which part of the sky has effectively
+been observed as a function of time. We project information into
+a healpix sky pixelisation using thehealpypackage. By default,
+theskysurveypackages is set to usen-side=200 healpix-
+pixelisation, corresponding to 480k sky pixels of 0.086 deg2 each
+; this is tunable up load instantiation of theSurvey.
+We illustrate Fig. 8 how a generic survey like LSST can be
+loaded and visualized. In this example, we show that one can
+select only the first year of data while changing the healpix pix-
+elisation (nside=300, so 0.038 deg 2 pixels).
+Figures 7 and 8 illustrate that both kind of surveys have
+the same functionalities and, in practice, the user does not need
+to know which kind of survey the code uses;skysurveyhan-
+dles them self-consistently. Notably,.datacontains the observ-
+ing logs,.radec_to_fieldidto match target location with
+entry logs (fieldidcorresponding to the healpix index for
+Survey),.get_skyareathat returns the total survey footprint
+in the sky in form of ashapelygeometry (see Section 6),
+.get_timerange()to get the starting and ending dates of the
+survey (see Section 6), and, finally, plotting functions as illus-
+trated in these Figures 7 and 8.
+Fig. 8.Illustration of how to load theLSSTsurvey, presenting how to
+select opsim rows while loading the data (here only the first year of data)
+and changing the healpix sampling (nside). Functionalities of survey
+and gridsurvey (see Fig. 7) are self-consistent, e.g., the plotting methods
+as shown here.
+6.DataSet
+TheDataSetobject is the final product of askysurveysimula-
+tion. This object simulates the lightcurves by matching an input
+target(or list of) with the survey logs. The lightcurves gen-
+eration is detailed in Section 6.1 and keyDataSetmethods are
+presented in section 6.2. We show in section 7 how theDataSet
+object can be used to accurately simulate a survey like the ZTF
+Type Ia Supernovae dataset (Rigault et al. 2025).
+6.1. Generating lightcurves
+The lightcurve generation is made at instantiation of the
+DataSetusing the.from_targets_and_survey()class
+method. This method, the backbone of theDataSetobject,
+works as follows.
+First, targets are associated with the survey’s logs using
+the.radec_to_field()survey method, which takes a frac-
+tion of second to provide thefieldid(i.e., the healpix pixel
+id for generic survey) associated to each target. In case of a
+GridSurvey, a target can have severalfieldids as fields can
+overlap, and thisfieldidcould be a multi-layer index, espe-
+cially if the surveyfootprintis decomposed by detectors or
+amplifier (see Section 5). At this stage, we have a way to select
+the entry logs corresponding to any given target and we know
+which target has no entry (e.g. simulated outside the survey sky-
+footprint).
+Second, we loop over each target and we build its
+sncosmo.Modelincluding its template parameter alongside
+Article number, page 7 of 11
+
+A&A proofs:manuscript no. main
+with any additional effect (e.g. the Milky Way dust extinc-
+tion or color scatter, see Section 4.6). This is made using
+thetarget.get_target_template()method and takes about
+1msper target.
+Third, once the targetsncosmo.Modelis loaded, we sim-
+ulate target flux using themodel.bandfluxmethod given the
+"band", "mjd" and "zp" survey logs entry, and we compute the
+flux error given the "skynoise", this simulated "flux" and the
+camera "gain". Optionally, this computation is only made in the
+[−50,+200] d rest-frame phase range around the model’st 0 (ex-
+plosion date or peak-date for SALT-like models). This data is
+stored as a pandas dataframe and that of each target are con-
+catenated into a multi-indexpandas.DataFramewith the first
+index for the target and the second for the survey log entry. This
+multi-index dataframe then become the.dataattribute of the
+DataSet.
+Altogether, on a laptop, this whole operation, from match-
+ing each target with the survey logs to the storage of the massive
+multi-index dataframe, takes about 5min for 100k targets ( 350
+targets processed per second) for a 3πsky survey likeZTFor
+LSST. The code supports dask parallel computing to distribute
+this computation on a cluster (especially interesting forO(10 6+)
+targets simulations) and work is ongoing to replacesncosmofor
+the flux generation to enable vectorization; 10x speed up is ex-
+pected with a aim of simulating 100k target in less than 1min.
+6.2. Using aDataSet.
+Theskysurvey.DataSetobject has three main attributes:
+.targets, a pointer to the input (multi-)target object;.survey,
+a pointer to the input survey; and.data, the multi-index
+dataframe containing the simulated lightcurves (see Section 6.1).
+Based on these, and mostly on.data, theDataSethas top level
+functionalities to ease the user experience.
+First, the.get_target_lightcurve()method enables the
+user to directly extract the lightcurves of any observed target
+while applying a variety of cuts (.e.g as a function of flux sig-
+nal to noise or time) or while adding extra information (e.g. the
+phase). Second, the.get_ndetection()method enables the
+user to have access to top level statistics associated with each
+lightcurve. As illustrated in fig. 9, this method returns the num-
+ber of detections (flux/flux err >n; withn=5 by default) per
+target (and per band, optionally), combining (optionally) same
+day detections. As illustrated in the example analyses (section 7),
+where we reproduce the ZTF SN Ia DR2 dataset (Rigault et al.
+2025), this method is particularly useful when simulating the se-
+lection function of a survey as one usually requests a target to
+have at leastndetections, including at leastmpre-max andp
+post-max and, altogether at leastbbands.
+7. Example: reproduce the ZTF SN Ia DR2 dataset
+To illustrate an application case of theskysurveypackage, we
+present in that section how to reproduce ZTF SN Ia DR2 Type
+Ia Supernovae sample. ZTF SN Ia DR2 data are publicly avail-
+able (Rigault et al. 2025), which includes observations logs of
+ZTF science images from mid-2018 to end-2020. This example,
+detailed in the following section, is also available on the online
+skysurveydocumentation.
+Fig. 9.Illustration of an end-to-endskysurveysimulation, from top
+to bottom: building a survey (ZTF), generating targets (SNeIa) in the
+time range of the survey and building theDataSetobject that simulate
+the lightcurve. Then, in the next cells, illustrations of methods to access
+lightcurves statistics and visualize a simulation. This whole sequence
+takes∼15 s to run on a laptop (see text).
+7.1. Altering survey data
+According to Rigault et al. (2025, b) and Amenouche et al.
+(2025), the magnitude limits associated with ZTF science images
+do not fully reflect the depth of difference images from which
+ZTF SN Ia DR2 lightcurves are derived. They do not account
+for errors in the reference image and thus under-estimate the
+sky-noise. Following their recommendations, theskynoisede-
+rived from science image magnitude limits should be increased
+by 23%, 17% and 20% forg,r, andiZTF bands, respectively.
+We illustrate in Fig. 10 (top panel) how this is done
+withskysurvey. Since the observing logs are stored as
+pandas.DataFrame, one can use standardpandasprocedures
+to alter thesurvey.data, in that example, we group the
+data per band, and we apply to theskynoiseentry of each
+group the corresponding multiplicative coefficient. As such,
+ztf.data["skynoise"]is now the proper skynoise to con-
+sider for the simulation.
+Article number, page 8 of 11
+
+M. Rigault et al.:skysurvey
+Fig. 10.Illustration of how to simulate the ZTF SN Ia DR2 dataset,
+changing the logs (top panel) and default target (mid panel) to respect
+prescriptions from the literature (see text). In any case, the dataset gen-
+eration, which create the actual simulated lightcurve remains unaffected
+(bottom panel). In that example, the number of target is unspecified and
+consequently derived from thetarget.rate.
+7.2. Loading SNe Ia with Milky Way effects
+Once the survey is loaded and ready to be used, we can simulate
+targets of interest. Inskysurveythese targets represent astro-
+physical events as given by nature. In our example, to reproduce
+the ZTF SN Ia DR2, we shall consider all SNe Ia given by nature
+between March 2018 and end-2020 up to a redshift of 0.18 while
+accounting for dust absorption by the Milky Way. To reproduce
+this dataset, we shall simulate the Milky Way effect using the
+Schlegel et al. (1998) dust-map in place of the default Planck
+one (Planck Collaboration et al. 2016) as done in ZTF.
+We illustrate in Fig. 10 how this is done. We explicitly spec-
+ify the start and end date between which targets should be sim-
+ulated (i.e., thet 0 parameter) and we set the Milky Way dust
+extinction effect at instantiation of the target. Themwebvparam-
+eter hence becomes one of themodelparameters and we alter its
+kwargsusing the**kwargsoptions of.from_draw()as one
+can do for any model parameters.
+Notice that the number of targets to be simulated is not ex-
+plicitly specified. This number (size=) is actually derived from
+therateparameter given the volume of the Universe inferred
+from the input redshift range (z<0.18, here), the cosmol-
+ogy (Planck Collaboration et al. 2020 by default, see options),
+and the time range of the simulation (March-2018 to end-2020).
+If the cosmology were to be updated (settable attribute of any
+Targetobject), it is self-consistenty passed to the function of
+any model parameter that requires it (i.e., that havecosmo=
+orcosmology=in their option). In that example, the Universe
+should have generated nearly 123k SNe Ia assuming the default
+rate of 2.35 104 target/Gpc3/yr from Perley et al. (2020).
+Fig. 11.Illustration of how to mimic lightcurve quality cut selection
+functions (top panel, here that of the ZTF SN Ia DR2 sample from
+Rigault et al. 2025) and how to add any kind of selection (here spec-
+troscopic efficiency) to reproduce the expected full well sampled spec-
+troscopically classify SN Ia dataset.
+7.3. Generating ZTF SN Ia DR2 lightcurves
+Given any survey and target (or list of) the lightcurve generation
+is handled by theDataSet.from_targets_and_surveyclass
+method. It works as illustrated in Fig. 10. On a laptop, this steps
+takes less than 10 min to simulate 123k SN Ia on the 3πZTF
+survey. As detailed in Section 6 ongoing work is in progress to
+speed this process, however it can already be parallelized on a
+cluster using thedaskpackage (see theclient=options and
+online documentation).
+7.4. Compute selection effects
+Rigault et al. (2025) specify that is considered as well sampled
+target, any SNe Ia that have, in the [−10,+40] d rest-frame phase
+range: at least 7 5σdetections, two of which pre-max, two of
+which post-max, with at least 2 bands. Same-day detections are
+ignored to compute this statistics. As illustrated in Fig. 11, this
+cut is easy to do thanks to thedataset.get_ndetection()
+method. At this stage, only 18k/123k targets pass the cuts, while
+88k/123k are within the ZTF survey footprint (the remaining
+ones have dec<−30).
+On these, we should now apply the spectroscopic typing se-
+lection effect. ZTF did not trigger for spectroscopic follow-up to
+classify sources with high Milky Way extinction (A v ≥1, Per-
+ley et al. 2020). Second, the classification selection effects can
+Article number, page 9 of 11
+
+A&A proofs:manuscript no. main
+0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175
+redshift
+0
+50
+100
+150
+200
+skysurvey sim.
+ztf snia dr2
+Fig. 12.Redshift distribution of the ZTF SN Ia DR2 sample (orange,
+Rigault et al. 2025) compared to that simulated using theskysurvey
+package made without assuming the initial number of target, but di-
+rectly deriving it from the volumetric rate. Such an analysis illustrates
+the ability to theskysurveypackage to easily reproduce realistic data.
+easily be reproduced by a sigmoid function applied on the peak
+magnitude (Rigault et al. 2025). In the present illustration, we
+update their sigmoid parameters to loc=18.6 and scale=3.9,
+in place of 18.8 and 4.5, respectively.
+We finally randomly draw targets depending on their proba-
+bility to have a spectroscopic classification. This leads to about
+2900 targets. In comparison, the ZTF SN Ia DR2 dataset has
+2960 well sampled targets (see Table 1 of Rigault et al. 2025).
+We show Fig. 12 the redshift distribution of the simulated targets
+overlapped with that actually collected as part of the ZTF SN Ia
+DR2 release. Both distributions match, proving the accuracy of
+both the simulation package and the volumetric rate from Perley
+et al. (2020).
+The apparent excess of ZTF SN Ia DR2 data nearz=0.03
+and the gap byz=0.05 are studied in details by Gilles Lordet
+et al. (2026), who show they correspond to local structure in
+the Universe. Such structures, and more generally the Universe
+large scale structure of the can easily be taken into account
+skysurvey. To do so, one simply has to build a function, in-
+cluded in theTarget.model, and that draws simultaneouslyra,
+decandredshiftrespecting these structures. This can easily
+be done by sampling positions from dark matter halo catalogs
+based on N-body simulations or galaxy catalogs (Ishiyama et al.
+2009; Jasche & Lavaux 2019; Gilles Lordet et al. 2026).
+8. Conclusion and Discussion
+This paper presents theskysurveypackage. A pure python li-
+brary that enables the user to easily simulate complex astrophys-
+ical populations as they would be observed by a survey. This
+package has been designed to be fast, intuitive, and highly mod-
+ular in its ability to build any astrophysical target that could have
+any parameter modeling structure. This later aspect is made pos-
+sible thanks tomodeldag, a standalone package developed in
+parallel toskysurveyand also presented in this article.
+Themodeldagpython package provides a way to create a
+direct acyclic diagram (DAG) between parameters using a triv-
+ial python dictionary structure that only has three leafs:func
+that defines how the parameters should be drawn,kwargsthat
+provides the function arguments,asspecifies the name of the
+returned parameter(s) – which is particularly useful when return-
+ing multiple parameter simultaneously (e.g. coordinates). The
+trick ofmodeldagis the introduction of the "@" keyword in
+kwargs, such that "x=’@a’" is parsed by the code as "use the
+output of theaparameter draw asxinput to draw this other pa-
+rameter". This way,modeldagautomatically creates DAG be-
+tween parameters while offering an entire flexibility to the user
+to specify how parameters should be drawn as any function can
+be used and any parameter connections are accepted.
+Theskysurveypackage contains three main parts. The first
+isTargetthat specifies how the astrophysical population ex-
+ists in nature. TheTargetparameters are based onmodeldag
+and the spectro-photometric (time series) template that provides
+the target flux as a function of time, wavelength or filter are
+based onsncosmo. As such, anysncosmotemplate or model
+(built-in or user-defined) are accepted byskysurvey. By default
+skysurveyhas many built-inTargetsuch as any Supernovae
+type (SNeII, SNeIa, SNeIbc etc.) or kilonovae. The second part
+isSurvey, that carries the information of how the sky has been
+observed. A user can easily build any customed survey (see on-
+line documentation) or use a list of predefined ones such asZTF
+orLSST. the third part isDataSet, which builds the expected
+observations ofTarget(or list of) by theSurvey. The user can
+focus on complexifying the astrophysical population at will, they
+may alter theSurvey– for instance to introduce calibration un-
+certainties, but theDataSetwill still be able to handle them.
+That is the strength ofskysurvey: the package is intuitive, user
+oriented, and designed to be highly robust and easy to use. It is
+finally solely based on well supported python libraries such as
+numpy,pandasandsncosmo, ensuring stability and long term
+user supports and maintenance.
+Acknowledgements.This paper has not been written with the support of any
+large language models. This project has received funding from the European Re-
+search Council (ERC) under the European Union’s Horizon 2020 research and
+innovation program (grant agreement n 759194 - USNAC. M.W.C. acknowl-
+edges support from the National Science Foundation with grant numbers PHY-
+2117997, PHY-2308862 and PHY-2409481.
+References
+Amenouche, M., Rosnet, P., Smith, M., et al. 2025, A&A, 694, A3.
+doi:10.1051/0004-6361/202452134
+Andreoni, I., Coughlin, M. W., Perley, D. A., et al. 2022, Nature, 612, 7940, 430.
+doi:10.1038/s41586-022-05465-8
+Barbary, K., Barclay, T., Biswas, R., et al. 2016, Astrophysics Source Code Li-
+brary. ascl:1611.017
+Barjou-Delayre, C., Rosnet, P., Raboux, C., et al. 2026, arXiv:2601.11139.
+doi:10.48550/arXiv.2601.11139
+Bellm, E. C., Kulkarni, S. R., Graham, M. J., et al. 2019, PASP, 131, 995, 018002.
+doi:10.1088/1538-3873/aaecbe
+Bernstein, J. P., Kessler, R., Kuhlmann, S., et al. 2012, ApJ, 753, 2, 152.
+doi:10.1088/0004-637X/753/2/152
+Betoule, M., Kessler, R., Guy, J., et al. 2014, A&A, 568, A22. doi:10.1051/0004-
+6361/201423413
+Boyd, B. M., Mandel, K. S., Grayling, M., et al. 2026, arXiv:2603.11165.
+doi:10.48550/arXiv.2603.11165
+Brout, D., & Scolnic, D. 2021, The Astrophysical Journal, 909, 26.
+doi:10.3847/1538-4357/abd69b.
+Brout, D., Scolnic, D., Popovic, B., et al. 2022, ApJ, 938, 2, 110.
+doi:10.3847/1538-4357/ac8e04
+Bulla, M. 2019, MNRAS, 489, 4, 5037. doi:10.1093/mnras/stz2495
+Cardelli, J. A., Clayton, G. C., & Mathis, J. S. 1989, ApJ, 345, 245.
+doi:10.1086/167900
+Carreres, B., Bautista, J. E., Feinstein, F., et al. 2023, A&A, 674, A197.
+doi:10.1051/0004-6361/202346173
+Chotard, N., Gangler, E., Aldering, G., et al. 2011, A&A, 529, L4.
+doi:10.1051/0004-6361/201116723
+Cranmer, K., Brehmer, J., & Louppe, G. 2020, Proceedings of the National
+Academy of Science, 117, 48, 30055. doi:10.1073/pnas.1912789117
+Dai, M., Kubica, J., Malanchev, K., et al. 2026, arXiv:2604.07134.
+doi:10.48550/arXiv.2604.07134
+Dimitriadis, G., Burgaz, U., Deckers, M., et al. 2025, A&A, 694, A10.
+doi:10.1051/0004-6361/202451852
+Article number, page 10 of 11
+
+M. Rigault et al.:skysurvey
+Feindt, U., Nordin, J., Rigault, M., et al. 2019, J. Cosmology Astropart. Phys.,
+2019, 10, 005. doi:10.1088/1475-7516/2019/10/005
+Freeburn, J., Andreoni, I., de Soto, K. M., et al. 2025, ApJ, 994, 1, L24.
+doi:10.3847/2041-8213/ae1cba
+Frohmaier, C., Sullivan, M., Nugent, P. E., et al. 2019, MNRAS, 486, 2, 2308.
+doi:10.1093/mnras/stz807
+Gilles Lordet, A., Goobar, A., Jasche, J., et al. 2026, arXiv:2604.12714.
+Gillies, S., van der Wel, C., Van den Bossche, J., et al. 2025, Zenodo.
+doi:10.5281/zenodo.5597138.
+Ginolin, M., Rigault, M., Smith, M., et al. 2025, A&A, 695, A140.
+doi:10.1051/0004-6361/202450378
+Ginolin, M., Rigault, M., Copin, Y ., et al. 2025, A&A, 694, A4.
+doi:10.1051/0004-6361/202450943
+Goobar, A., Mörtsell, E., Amanullah, R., et al. 2002, A&A, 392, 757.
+doi:10.1051/0004-6361:20020930
+Green, G. M. 2018, The Journal of Open Source Software, 3, 26, 695.
+doi:10.21105/joss.00695
+Guy, J., Sullivan, M., Conley, A., et al. 2010, A&A, 523, A7. doi:10.1051/0004-
+6361/201014468
+Hinton, S. & Brout, D. 2020, The Journal of Open Source Software, 5, 47, 2122.
+doi:10.21105/joss.02122
+Hložek, R., Malz, A. I., Ponder, K. A., et al. 2023, ApJS, 267, 2, 25.
+doi:10.3847/1538-4365/accd6a
+Ho, M., Bartlett, D. J., Chartier, N., et al. 2024, The Open Journal of Astro-
+physics, 7, 54. doi:10.33232/001c.120559
+Hounsell, R., Scolnic, D., Foley, R. J., et al. 2018, ApJ, 867, 1, 23.
+doi:10.3847/1538-4357/aac08b
+Ivezi´c, Ž., Kahn, S. M., Tyson, J. A., et al. 2019, ApJ, 873, 2, 111.
+doi:10.3847/1538-4357/ab042c
+Ishiyama, T., Fukushige, T., & Makino, J. 2009, PASJ, 61, 1319.
+doi:10.1093/pasj/61.6.1319
+Jasche, J. & Lavaux, G. 2019, A&A, 625, A64. doi:10.1051/0004-
+6361/201833710
+Karambelkar, V . R., Kasliwal, M. M., Blagorodnova, N., et al. 2023, ApJ, 948,
+2, 137. doi:10.3847/1538-4357/acc2b9
+Karchev, K., Trotta, R., & Weniger, C. 2023, MNRAS, 520, 1, 1056.
+doi:10.1093/mnras/stac3785
+Kelsey, L., Sullivan, M., Smith, M., et al. 2021, MNRAS, 501, 4, 4861.
+doi:10.1093/mnras/staa3924
+Kessler, R., Bernstein, J. P., Cinabro, D., et al. 2009, PASP, 121, 883, 1028.
+doi:10.1086/605984
+Kessler, R., Bassett, B., Belov, P., et al. 2010, PASP, 122, 898, 1415.
+doi:10.1086/657607
+Kessler, R. & Scolnic, D. 2017, ApJ, 836, 1, 56. doi:10.3847/1538-
+4357/836/1/56
+Kessler, R., Narayan, G., Avelino, A., et al. 2019, PASP, 131, 1003, 094501.
+doi:10.1088/1538-3873/ab26f1
+Leaman, J., Li, W., Chornock, R., et al. 2011, MNRAS, 412, 3, 1419.
+doi:10.1111/j.1365-2966.2011.18158.x
+Li, W., Chornock, R., Leaman, J., et al. 2011, MNRAS, 412, 3, 1473.
+doi:10.1111/j.1365-2966.2011.18162.x
+Masci, F. J., Laher, R. R., Rusholme, B., et al. 2019, PASP, 131, 995, 018003.
+doi:10.1088/1538-3873/aae8ac
+Nissanke, S., Kasliwal, M., & Georgieva, A. 2013, ApJ, 767, 2, 124.
+doi:10.1088/0004-637X/767/2/124
+Pain, R., Fabbro, S., Sullivan, M., et al. 2002, ApJ, 577, 1, 120.
+doi:10.1086/342129
+Perley, D. A., Fremling, C., Sollerman, J., et al. 2020, ApJ, 904, 35.
+doi:10.3847/1538-4357/abbd98
+Planck Collaboration, Aghanim, N., Ashdown, M., et al. 2016, A&A, 596, A109.
+doi:10.1051/0004-6361/201629022
+Planck Collaboration, Aghanim, N., Akrami, Y ., et al. 2020, A&A, 641, A6.
+doi:10.1051/0004-6361/201833910
+Popovic, B., Brout, D., Kessler, R., et al. 2021, ApJ, 913, 1, 49.
+doi:10.3847/1538-4357/abf14f
+Popovic, B., Brout, D., Kessler, R., et al. 2023, ApJ, 945, 1, 84.
+doi:10.3847/1538-4357/aca273
+Popovic, B., Shah, P., Kenworthy, W. D., et al. 2025, arXiv:2511.07517.
+doi:10.48550/arXiv.2511.07517
+Riess, A. G., Press, W. H., & Kirshner, R. P. 1996, ApJ, 473, 88.
+doi:10.1086/178129
+Riess, A. G., Casertano, S., Yuan, W., et al. 2019, ApJ, 876, 1, 85.
+doi:10.3847/1538-4357/ab1422
+Rigault, M., Copin, Y ., Aldering, G., et al. 2013, A&A, 560, A66.
+doi:10.1051/0004-6361/201322104
+Rigault, M., Brinnel, V ., Aldering, G., et al. 2020, A&A, 644, A176.
+doi:10.1051/0004-6361/201730404
+Rigault, M., Smith, M., Goobar, A., et al. 2025, A&A, 694, A1.
+doi:10.1051/0004-6361/202450388
+Rigault, M., Smith, M., Regnault, N., et al. 2025, A&A, 694, A2.
+doi:10.1051/0004-6361/202450377
+Roman, M., Hardin, D., Betoule, M., et al. 2018, A&A, 615, A68.
+doi:10.1051/0004-6361/201731425
+Rose, B. M., Baltay, C., Hounsell, R., et al. 2021, arXiv:2111.03081.
+doi:10.48550/arXiv.2111.03081
+Rose, B. M., Vincenzi, M., Hounsell, R., et al. 2025, ApJ, 988, 1, 65.
+doi:10.3847/1538-4357/ade1d6
+Sagués Carracedo, A., Bulla, M., Feindt, U., et al. 2021, MNRAS, 504, 1, 1294.
+doi:10.1093/mnras/stab872
+Sagués Carracedo, A., Goobar, A., Mörtsell, E., et al. 2024, arXiv:2406.00052.
+doi:10.48550/arXiv.2406.00052
+Schlegel, D. J., Finkbeiner, D. P., & Davis, M. 1998, ApJ, 500, 2, 525.
+doi:10.1086/305772
+Scolnic, D. & Kessler, R. 2016, ApJ, 822, 2, L35. doi:10.3847/2041-
+8205/822/2/L35
+Scolnic, D. M., Jones, D. O., Rest, A., et al. 2018, ApJ, 859, 2, 101.
+doi:10.3847/1538-4357/aab9bb
+Shvartzvald, Y ., Waxman, E., Gal-Yam, A., et al. 2024, ApJ, 964, 1, 74.
+doi:10.3847/1538-4357/ad2704
+Smith, M., Sullivan, M., Wiseman, P., et al. 2020, MNRAS, 494, 3, 4426.
+doi:10.1093/mnras/staa946
+Sullivan, M., Le Borgne, D., Pritchet, C. J., et al. 2006, ApJ, 648, 2, 868.
+doi:10.1086/506137
+Sullivan, M., Conley, A., Howell, D. A., et al. 2010, MNRAS, 406, 2, 782.
+doi:10.1111/j.1365-2966.2010.16731.x
+Tripp, R. 1998, Astronomy and Astrophysics, 331, 815.
+Vincenzi, M., Sullivan, M., Firth, R. E., et al. 2019, MNRAS, 489, 4, 5802.
+doi:10.1093/mnras/stz2448
+Vincenzi, M., Brout, D., Armstrong, P., et al. 2024, ApJ, 975, 1, 86.
+doi:10.3847/1538-4357/ad5e6c
+Wiseman, P., Vincenzi, M., Sullivan, M., et al. 2022, MNRAS, 515, 3, 4587.
+doi:10.1093/mnras/stac1984
+1 UniversitÃl’ Lyon 1, CNRS, IP2I Lyon, UMR 5822, Villeurbanne,
+France
+2 Institute of Astronomy and Kavli Institute for Cosmology, Mading-
+ley Road, Cambridge CB3 0HA, UK
+3 School of Physics and Astronomy, University of Southampton,
+Southampton, SO17 1BJ, UK
+4 The Oskar Klein Centre, Department of Physics, AlbaNova, SE-106
+91 Stockholm , Sweden
+5 School of Physics and Astronomy, University of Minnesota, Min-
+neapolis, Minnesota 55455, USA
+6 Department of Physics, Lancaster University, Lancs LA1 4YB, UK
+7 School of Physics and Astronomy, University of Birmingham, Birm-
+ingham B15 2TT, UK
+8 UniversitÃl’ Clermont Auvergne, CNRS, LPCA, F-63000
+Clermont-Ferrand, France
+9 Aix Marseille Univ, CNRS/IN2P3, CPPM, Marseille, France
+10 Institut fur Physik, Humboldt-Universität zu Berlin, 12489 Berlin,
+Germany
+Article number, page 11 of 11

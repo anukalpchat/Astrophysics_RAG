@@ -1,0 +1,1074 @@
+Title: Deep Learning with Magnetic Parameter Constraints for Short-Term Prediction of Solar Active Region Vector Magnetic Fields
+Authors: Yuqing Zhou, Hui Liu, Zhenyu Jin, Yuyang Li, Sizhong Zou, Jiaben Lin, Mingfu Shao, Zhuoheng Huang
+Published: 2026-06-03
+Categories: astro-ph.SR
+
+Deep Learning with Magnetic Parameter Constraints for
+Short-Term Prediction of Solar Active Region Vector Magnetic
+Fields
+Yuqing Zhou1,2, Hui Liu 1,2∗, Zhenyu Jin 1,2, Yuyang Li 2,3,
+Sizhong Zou 1,2, Jiaben Lin 2,3, Mingfu Shao 2,3, and Zhuoheng Huang 1,2
+1Yunnan Observatories, Chinese Academy of Sciences, Kunming 650216, People’s Republic of China
+2University of Chinese Academy of Sciences, Beijing 100049, People’s Republic of China
+3National Astronomical Observatories, Chinese Academy of Sciences, Beijing 100101, People’s Republic of China
+Abstract
+Forecasting the dynamic evolution of solar magnetic fields is a critical technique for
+enabling space weather warnings. Addressing the limitations of existing methods in predict-
+ing all vector magnetic field components and in maintaining consistency with solar surface
+magnetic-field-related quantities, this study proposes a deep learning prediction method that
+integrates dynamic masks of active regions with multiple magnetic parameter constraints.
+By constructing a three-channel representation of vector magnetic fields, applying dynamic
+masks to enhance attention to strong-field regions, and incorporating multi-parameter mag-
+netic parameter constraints, we developed an end-to-end short-term (12-hour) predictive
+model of solar vector magnetic field evolution. Using SDO/SHARP vector magnetogram
+data, the model predicts and analyses field evolution across all components. Quantitative
+evaluations demonstrate that our approach achieves horizon-averaged structural similar-
+ity index measure (SSIM) of 0.912 (per-hour range: 0.909–0.916) and correlation coeffi-
+cient (CC) of 0.998 for the radial componentB r (root-mean-square error (RMSE) 13.0–
+21.0 G); the horizontal components achieveB ϕ SSIM 0.760–0.800 (CC 0.910–0.945, RMSE
+38.5–50.0 G) andB θ SSIM 0.728–0.750 (CC 0.895–0.920, RMSE 38.5–49.0 G). The model
+maintains unsigned magnetic flux prediction errors at 7.82% (95% confidence interval (CI):
+±0.11%). These results demonstrate strong image-domain performance together with con-
+sistency under the magnetic-parameter diagnostics used here, suggesting initial potential for
+supporting future space weather forecasting efforts.
+Keywords:Solar magnetic fields; Neural networks; Active region magnetic fields; Space
+weather; Deep learning
+1 Introduction
+The ability to forecast solar magnetic field evolution is crucial for improving the accuracy and
+timeliness of space weather warnings. In recent years, significant progress has been made in
+both physics-based modeling and data-driven approaches:
+Physics-based modeling has made substantial progress: local reconstruction of active region
+magnetic fields has revealed precursors of sudden X-10 class flares through strong shear flows
+along polarity inversion lines (PILs) [24]. Surface flux transport (SFT) models focus primarily
+on the radial component [15], often neglecting horizontal components critical for magnetic re-
+connection and shear. Jiang et al. [14] used a Monte Carlo inclination divergence method to
+∗Corresponding author:liuhui@ynao.ac.cn
+1
+arXiv:2606.04991v1  [astro-ph.SR]  3 Jun 2026
+
+simulate large-scale field evolution, while oversimplification of horizontal components in trans-
+port models can lead to biases in short-term polar field variations [12].
+Data-driven approaches have also advanced rapidly. Covas et al. [7] applied spatiotemporal
+neural network embeddings to forecast the full sunspot diagram (latitude–time), not magnetic
+fields. Bai et al. [2] developed deep learning models targeting single components.
+Photospheric vector magnetic fields provide critical information for characterizing the free
+magnetic energy and current systems that drive eruptive solar events [4, 21], making their
+accurate prediction essential for space weather applications.
+Despite these advances, existing methods face key limitations in meeting the high standards
+of space weather warnings that require complete vector representation and consistency with
+solar surface magnetic-field-related quantities:
+1.Incomplete vector field prediction.Upton & Hathaway’s model [22] handled only
+the radial component while ignoring horizontal fields. SFT models [12] simplify horizontal
+components, causing biases in polar field evolution. Data-driven models such as Bai et al.
+[2] focus on single-component radial forecasting; Covas et al. [7] model sunspot spatiotem-
+poral diagrams rather than magnetic fields. Jeong et al. [13] introduced a Pix2PixCC-
+based model predicting full-disk radial-field evolution at flexible time steps up to 27 days,
+without horizontal outputs, limiting calculation of horizontal-field-dependent quantities
+such as current helicity. Ramunno et al. [19] applied diffusion probabilistic models to
+predict full-disk line-of-sight magnetograms but still lack complete vector outputs needed
+to characterize three-dimensional topology.
+2.Limited magnetic-parameter consistency.Data-driven models such as Bai et al. [2]
+often omit sufficient physical constraints, risking outputs that violate flux conservation
+or Lorentz force balance; Covas et al. [8] similarly apply transfer learning to sunspot
+and longitude-averaged radial field data without explicit magnetic-parameter constraints.
+Jeong et al. [13] introduced a CC-based consistency loss but excluded constraints such
+as Lorentz force balance and helicity conservation. Ramunno et al. [19] included checks
+such as flux and AR area without cross-scale consistency. Physics-based models, though
+consistent with theory, often restrict themselves to single-parameter constraints [10] and
+lack multi-parameter integration.
+Current approaches are therefore insufficient for reliable space weather forecasting that re-
+quires both high prediction accuracy and consistency with solar surface magnetic-field-related
+quantities. This limitation increases the risk of mischaracterizing the severity of coronal mass
+ejections [16].
+To address these challenges, we propose a magnetic-parameter-constrained deep learning
+architecture that integrates dynamic active region masks with multi-parameter magnetic pa-
+rameter constraints. The approach enhances feature extraction from critical structures such as
+polarity inversion lines and sunspots via dynamic masks, while incorporating joint constraints
+on solar surface magnetic-field-related quantities including total magnetic pressure and unsigned
+magnetic flux. Using SDO/SHARP vector magnetogram data, the model learns spatiotemporal
+connections in field evolution: given a 12-hour input sequence, it forecasts the subsequent 12
+hours of evolution across all components while maintaining both topological fidelity and param-
+eter consistency. Quantitative evaluations show that the method achieves structural similarity
+of 0.909–0.916 (horizon average≈0.912) for the radial component (CC 0.997–0.998, RMSE 13.0–
+21.0 G), with unsigned flux errors of 7.82% (95% CI:±0.11%). These results suggest that the
+proposed approach represents an initial exploration toward future operational space weather
+forecasting.
+2
+
+2 Deep Learning Method with Dynamic Mask Enhancement
+and Magnetic Parameter Constraints
+We propose a prediction method that integrates dynamic active region masks with magnetic
+parameter constraints into an end-to-end deep learning architecture. This design enhances the
+model’s ability to learn individual vector magnetic field components while maintaining vector
+magnetic parameter consistency.
+2.1 Attention-weighted Strategy for Active Region Cores
+To comprehensively represent active region vector fields, the input data are constructed in
+Carrington heliographic projection as three channels corresponding to the radial (B r), phi (Bϕ,
+also denotedB p), and theta (Bθ, also denotedB t) components, plus one mask channel, yielding
+a four-channel input tensor.
+To capture critical structures, we adopt a two-stage mask construction mechanism guided by
+the DSARD (Deep-learning-based Solar Active Region Detection; Chen et al. [6]) active region
+detection method. First, static masks are generated from the input 12-frame sequence based on
+theB r channel: thresholding eliminates quiet-Sun noise, while DBSCAN-like (Density-Based
+Spatial Clustering of Applications with Noise) clustering builds coherent mask regions. This
+combines threshold efficiency with morphological adaptability, preventing fragmentation and
+better delineating critical features such as shear bands near polarity inversion lines. During
+training, masks are dynamically predicted alongside magnetic field evolution using temporal
+gradients, producingM t where core strong-field regions are 1 and background regions are 0. This
+enforces stronger attention on magnetically active regions, particularly near polarity inversion
+lines where magnetic shear and gradients are steepest.
+2.2 Incorporation and Implementation of Magnetic Parameter Constraints
+To provide magnetically meaningful inductive bias, we condition the network on five differ-
+entiable magnetic-parameter-based diagnostic maps computed directly from the vector mag-
+netogram at each time step. These maps are injected as auxiliary channels to guide feature
+extraction, while the learning objective remains defined on the predicted magnetograms them-
+selves.
+Rationale.While convolutional neural networks can in principle learn to compute spatial
+derivatives and other low-level operations through training, explicitly providing these magnetic-
+parameter-based features offers several advantages: it reduces the learning burden on early
+network layers, allowing them to focus on higher-level spatiotemporal patterns; it ensures nu-
+merical stability and consistency by using fixed, differentiable implementations; and it provides
+an interpretable conditioning pathway that can be systematically ablated. These auxiliary chan-
+nels serve as structured inductive biases that guide the learning process toward magnetically
+consistent solutions.
+Magnetic-parameter-based diagnostic maps.The five auxiliary feature maps are:
+•Lorentz-force proxy (magnetic pressure):
+Pmag =B 2
+r +B 2
+p +B 2
+t ,(1)
+which serves as a computationally stable proxy for magnetic energy density. The full
+Lorentz force isF L =J×B. Since computing the full three-dimensional current density
+requires additional derivatives and assumptions about vertical structure, we use magnetic
+3
+
+pressure as a scalar proxy that highlights regions where magnetic forces are dynamically
+important [11].
+•Unsigned flux:
+|Φ|=|B r|,(2)
+which directly measures the unsigned radial flux density [18].
+•Shear-angle proxy:
+α= arccos
+
+ |Br|
+|Br|+
+q
+B2p +B 2
+t +ϵ
+
+ , ϵ= 10 −6,(3)
+which increases when transverse fields are relatively strong, highlighting non-potential
+structure.
+•Radial gradient magnitude:
+|∇Br|=
+s ∂Br
+∂x
+2
++
+ ∂Br
+∂y
+2
+,(4)
+computed using Sobel operators to emphasize steep-gradient boundaries [9].
+•Horizontal gradient magnitude:
+|∇Bh|=
+q
+|∇Bp|2 +|∇B t|2,(5)
+where|∇B p|and|∇B t|are computed by Sobel operators.
+These diagnostic maps are combined into a five-channel tensor:
+Pt = [Pmag,|Φ|, α,|∇B r|,|∇B h|] (6)
+which is concatenated to the model input at each time step as auxiliary channels.
+Implementation details.The magnetic-parameter-based features are computed using a ded-
+icatedRealtimePhysicsLayermodule implemented in PyTorch. This module was designed
+and implemented by the authors specifically for this study; it is not derived from any exter-
+nal library. The source code is publicly available in our repository at https://github.com/
+Qingcaiyurouzhou/magnetic predict.
+Internally, theRealtimePhysicsLayeraccepts a three-channel tensor (B r, Bp, Bt) of shape
+(B,3, H, W) and returns a five-channel output (B,5, H, W). The module pre-registers two fixed
+3×3 Sobel kernels (Sx andS y =S T
+x ) as non-trainable buffers. For each input frame, it computes:
+(i) magnetic pressureP mag =B 2
+r +B 2
+p +B 2
+t ; (ii) unsigned flux|Φ|=|B r|; (iii) shear angle via
+α= arccos
+ 
+|Br|/(|Br|+
+q
+B2p +B 2
+t +ϵ)
+
+with the argument clamped to (−1 + 10 −4,1−10 −4)
+for numerical stability; (iv) radial gradient magnitude|∇B r|=
+p
+(Sx ∗B r)2 + (Sy ∗B r)2 /8
+using depthwise convolution with zero-padding; and (v) horizontal gradient magnitude|∇B h|=p
+(Sx ∗B p)2 + (Sy ∗B p)2 + (Sx ∗B t)2 + (Sy ∗B t)2 /8. All operations are fully differentiable,
+require no learnable parameters, and run on GPU with negligible overhead (less than 2% of total
+forward-pass time). The auxiliary feature maps are computed online at each time step from the
+current magnetic field state, ensuring consistency throughout the autoregressive rollout.
+4
+
+2.3 Model Architecture and Training Mechanism
+The model adapts the MotionRNN/PredRNN family [23] for solar applications. Each time
+step is represented by four channels (three magnetic components plus the active-region mask),
+and the auxiliary magnetic-parameter tensorP t is computed online from (B r, Bp, Bt) and con-
+catenated as additional channels. Figure 1 provides a schematic overview of the per-time-step
+forward pass, illustrating the data flow from input magnetograms through the spatiotemporal
+prediction network to the output predicted fields.
+Network architecture.The backbone consists of stacked spatiotemporal LSTM cells orga-
+nized in an encoder–motion–decoder architecture with cross-scale fusion:
+•Input processing:The four-channel magnetogram is patchified (default patch size 1×1,
+yielding 4 channels per patch). The five magnetic-parameter-based diagnostic maps are
+computed from the magnetic components and concatenated, yielding 9 input channels per
+time step.
+•Spatiotemporal LSTM cells:The model usesL= 4 stacked SpatioTemporalLSTMCell
+layers with hidden dimensions [128,64,64,64]. Each cell maintains hidden stateh (l)
+t ,
+cell statec (l)
+t , and a shared memory statem t that propagates across layers. The cells
+incorporate both spatial convolutions (filter size 5×5) and temporal recurrence to capture
+spatiotemporal dependencies.
+•Motion modeling:Between layersl= 1,2,3, MotionGRU modules model local motion
+fields by aggregating information from 3×3 spatial neighborhoods. The motion features
+are encoded via 2×downsampling convolutions and decoded via transposed convolutions
+that upsample back to the original resolution.
+•Cross-scale fusion:At each intermediate layer, the upsampled motion features are
+combined with the corresponding spatiotemporal LSTM hidden state via a gated fusion
+mechanism:
+o(l)
+t =σ
+
+W (l)
+gate
+h
+h(l)
+dec;h (l)
+t
+i
+, h (l)
+t ←o (l)
+t ⊙h (l)
+dec + (1−o (l)
+t )⊙h (l)
+t ,(7)
+whereh (l)
+dec is the upsampled motion feature, [·;·] denotes channel concatenation,σis the
+sigmoid function, and⊙is element-wise multiplication.
+•Output generation:The final hidden stateh (L)
+t is passed through a 1×1 convolu-
+tion to produce the four-channel output. The magnetic-parameter diagnostic maps are
+recomputed from the predicted magnetic components at the next time step, ensuring
+consistency.
+The total number of trainable parameters is approximately 15.2 million.
+Loss functions.Let ˆBt = ( ˆBr, ˆBp, ˆBt) be the predicted vector field andB t the reference. We
+normalize each magnetic component to [0,1] using fixed clipping ranges:B r ∈[−3000,3000] G,
+Bp ∈[−1000,1000] G,B t ∈[−1000,1000] G, and mask∈[0,255]. We apply a static mask-
+defined core weightingw(x) = 1 + 4I[M(x)>0] (core pixels receive 5×higher weight). The
+reconstruction loss is
+Lrec =
+D
+w(x)∥ ˆBt(x)−B t(x)∥2
+2
+E
+,(8)
+where⟨·⟩denotes averaging over space, time, and batch. We further apply explicit supervision
+on the predicted mask channel,
+Lmask =⟨( ˆMt −M t)2⟩,(9)
+5
+
+Figure 1: Schematic overview of the proposed model architecture for a single time
+step.Top:The four-channel input magnetogram (B r,B p,B t, mask) is passed to the
+RealtimePhysicsLayer, which computes five magnetic-parameter-based diagnostic maps (mag-
+netic pressure, unsigned flux, shear-angle proxy,|∇Br|,|∇B h|). The nine-channel concatenation
+Zt is projected byconv first vto initialise themotion highwayshared state.Middle:Four
+stacked SpatioTemporalLSTM (ST-LSTM) layers process the spatiotemporal features. In Lay-
+ers 1–3, each ST-LSTM is followed by an encoder (enc), a MotionGRU module for local motion
+estimation, a decoder (dec), and a cross-scale gate-fusion layer that blends motion features
+with the hidden stateh (l)
+t . Layer 4 contains only the ST-LSTM cell. Themotion highwayand
+spatial memorym t buses (shown below the layers) carry shared recurrent state sequentially
+across all four layers.Bottom:The final hidden state is projected byconv lastto produce
+the four-channel predicted frame ˆYt+1. During autoregressive rollout (dashed feedback arrow),
+ˆYt+1 serves as the next inputX t+1, and the diagnostic maps are recomputed accordingly. The
+parallel loss branchesL rec,L mask, andL temp are computed from ˆYt+1 and combined into the
+total objectiveL.
+6
+
+and a temporal-gradient regularization on the magnetic components,
+Ltemp =
+D
+w(x)∥( ˆBt+1 − ˆBt)−(B t+1 −B t)∥2
+2
+E
+.(10)
+The total objective is
+Ltotal =L rec +λ mask Lmask +λ temp Ltemp,(11)
+with weightsλ mask = 1.0 andλ temp = 0.1.
+Optimization and scheduled sampling.We train using the Adam optimizer [17] with an
+initial learning rate of 3×10 −3,β 1 = 0.9,β 2 = 0.999, and weight decay 10−5. Gradient clipping
+is applied with a global norm threshold of 1.0. The learning rate is reduced by a factor of 0.5 if
+validation loss plateaus for 10 epochs (minimum learning rate 10 −6). Training is performed for
+100 epochs with batch size 8 on NVIDIA A100 GPUs, taking approximately 72 hours.
+We use scheduled sampling [3] to transition from teacher forcing to free-running rollout:
+the probability of feeding ground-truth inputs decreases linearly from 1.0 with changing rate
+2×10 −5 per iteration until iteration 50,000, after which the model relies entirely on its own
+predictions during training. During inference, the model generates the full 12-hour forecast
+autoregressively without access to future ground-truth frames.
+3 Data and Preprocessing
+This study employs the Space-weather HMI Active Region Patch (SHARP) dataset obtained
+by the Helioseismic and Magnetic Imager (HMI) onboard the Solar Dynamics Observatory
+(SDO) [5]. We use the SHARP data in the Cylindrical Equal-Area (CEA) remapped vector-
+magnetogram format, whose sampling is 0.03 degrees per pixel in heliographic longitude/latitude
+(corresponding to approximately HMI’s native∼0.5 arcsec sampling near disk center). Each
+SHARP active region is identified by a unique HARP number (HARPNUM) (e.g., HARP 7959),
+which tracks the region throughout its disk passage.
+Native SHARP CEA cutouts have dimensionsH×Wthat vary between active regions
+because patches are sized to encompass each region, whereas the network requires a fixed spa-
+tial shape for batched training and inference. We therefore resample every vector component
+and the co-registered mask bilinearly onto a common square grid ofS×Spixels whenever
+(H, W)̸= (S, S), whereSis a fixed model hyperparameter (the same value is used for all
+sequences). Downscaling (H nat, Wnat > S) merges native samples and attenuates fine spatial
+structure—behaviour analogous to low-pass filtering whose strength increases with the down-
+sampling factorsH nat/SandW nat/S; upscaling (H nat, Wnat < S) interpolates between native
+pixels and can emphasise noise-dominated transverse-field signal. When the native cutout is not
+square, horizontal and vertical scale factors generally differ, so the mapping to anS×Stensor
+is not always an isotropic change of resolution. We do not modify the FITS World Coordinate
+System keywords, which still describe the native CEA geometry of each original cutout; the
+fields ingested by the model are nonetheless represented on the sameS×Scomputational grid.
+Strict alignment of a resampled array on the sphere with other observations or models requires
+updating the WCS or applying an explicit reprojection.
+We excluded active regions with central longitudes greater than 60 ◦ and selected only qual-
+ified samples from SHARP. We performed unified numerical clipping of the original Flexible
+Image Transport System (FITS) files based on a statistical analysis of 15,342 SHARP vector
+magnetograms spanning January 2021 through December 2022. The 99.7th percentile of|B r|
+is 2847 G and of|B p|/|Bt|is 987/992 G respectively. We therefore adopt the clipping ranges
+Br ∈[−3000,3000] G,B p ∈[−1000,1000] G, andB t ∈[−1000,1000] G. This hybrid scheme
+concentrates the normalized dynamic range on physically significant flux while retaining≥99.7%
+7
+
+of all observed pixel values for each component. This truncation preserved the original field
+distribution while preventing outliers from disrupting model training.
+To reduce the risk of train/test contamination and ensure temporal independence, we use a
+time-based split: the training set is constructed exclusively from SHARP data spanning January
+through December 2021 (solar cycle 25 ascending phase), while the test set is constructed
+exclusively from SHARP data spanning January through December 2022. Both years correspond
+to comparable phases of solar cycle 25, with similar levels of solar activity, ensuring that the
+training and test distributions are drawn from physically similar conditions. The final dataset
+comprised 12,000 training sequences and 3,000 test sequences, reflecting an approximate 7:3
+train-to-test sampling ratio applied to the combined pool of qualified sequences from each year,
+with each sequence consisting of 24 consecutive frames at 1-hour cadence. The first 12 frames
+served as model inputs, while the subsequent 12 frames were used as prediction targets.
+We verified that no active region appears in both the training and test sets: the two datasets
+contain completely disjoint HARP ranges (training: HARP 7525–7907; test: HARP 7917–8924)
+and disjoint NOAA identifiers, with a temporal gap of approximately seven days between the
+last training observation (2021 December 28) and the first test observation (2022 January 4).
+All evaluations in Section 4 use active regions from the 2022 test set.
+4 Experiments and Analysis
+This study systematically evaluates the proposed method for solar vector magnetic field pre-
+diction (using a 12-hour input window to forecast the subsequent 12 hours at 1-hour cadence).
+The analysis is organized along three complementary dimensions:image-domain fidelity
+(Sec. 4.2),magnetic-parameter consistency(Sec. 4.3), andvector-field orientation ac-
+curacy(Sec. 4.4), combining both single-sample visualizations and multi-sample statistics.
+4.1 Evaluation setting, variants, and the persistence baseline
+We evaluate the proposed method on sequences of SHARP vector magnetograms, using the first
+12 hours as input and forecasting the subsequent 12 hours (forecast hours 1–12). We compare
+four trained models: the full model (with mask and phy) and three ablations, including
+without phy(no temporal-gradient regularization),without mask(no mask weighting or
+mask supervision), andwithout mask and phy(reconstruction loss only). As a non-learning
+reference, we include a simple persistence baseline (gt12 baseline), where every future hour is
+predicted by copying the last observed input frame.
+In all trained settings, the auxiliary diagnostic mapsP t are computed and concatenated
+as additional input channels. Ablations are implemented by removing mask weighting and/or
+mask supervision and the temporal-gradient regularization termL temp.
+To ensure a consistent evaluation focus on the evolving strong-field core, masked-region
+metrics are computed using a fixed active-region mask constructed from the input window.
+This yields a mask-defined strong-field core region that remains identical across all prediction
+lead times.
+4.2 Image-domain prediction performance
+We first evaluate the model’s ability to reproduce the spatial distributions of the three vector
+magnetic field components (B r,B p,B t) using image-quality metrics (per-component SSIM,
+CC, and RMSE; full per-hour values in Table 4). This subsection combines single-sample
+visualizations with multi-sample statistics.
+8
+
+Figure 2: Comparison of ground-truth and predicted magnetic field components for HARP 7959
+(NOAA AR 12934) at forecast hours 6 and 12 (2022-01-25 11:00 and 17:00 TAI). Each row cor-
+responds to one component (B r,B θ,B ϕ, from top to bottom); columns show ground truth and
+predicted fields at both time steps. A display range of±500 G is used for all three components
+to better reveal structural differences (the full range is shown in the scatter plots of Figures 4
+and 5). The prediction matches the reference in both polarity distribution and strong-field core
+structures.
+9
+
+Figure 3: Same as Figure 2 but for HARP 8026 (NOAA AR 12953, 2022-02-25 10:00 and
+16:00 TAI).
+4.2.1 Spatial structure and error distribution
+The predicted fields reproduce the global polarity distribution of the ground-truth observations
+and match in strong-field core regions. This reflects the design intent of the dynamic mask,
+which emphasizes core-region weighting and enhances strong-field feature extraction. Even in
+quiet regions far from the core, the predicted fields capture weak-field topology well.
+Closer inspection of each component reveals: forB r, predictions and ground truth overlap in
+strong-field cores, with relative flux errors<5% (95% CI:±0.3%); near polarity inversion lines,
+where gradients are steep, predictions show mild diffusion and relative errors increase by 15–
+20% (95% CI:±2.1%). For horizontal componentsB p andB t, similar patterns appear: strong
+shear bands (shear angle>60 ◦) are well captured, but small magnetic islands at shear-band
+boundaries show more distorted topological details.
+Pixel-level comparisons further quantify single-sample accuracy. Figures 2 and 3 show pre-
+dicted vs. reference fields for two sample active regions. Figures 4 and 5 show the corresponding
+pixel-value scatter plots, which align closely to the diagonal. Strong-field pixels cluster tightly
+along the diagonal, while weak-field pixels scatter more broadly, reflecting weaker signal-to-noise
+in transverse fields and more complex dynamics in weak-field zones.
+TheB r prediction residual maps and their distributions (Figs. 6 and 7) further reveal spatial
+patterns: larger residuals tend to occur near polarity inversion lines and in strong-field um-
+bra/penumbra regions, where gradients are steep and small spatial misalignments can produce
+large pixel-wise errors. The residual histograms confirm that prediction errors are approximately
+zero-centered with small standard deviations (σ <10 G), indicating unbiased predictions.
+10
+
+Figure 4: Pixel-value scatter comparison between predicted and reference fields for HARP 7959
+(NOAA AR 12934) at forecast hours 6 and 12. Pixels with|B| ≤300 G are filtered out. Points
+cluster along the diagonal, especially in strong-field regions.
+Figure 5: Same as Figure 4 but for HARP 8026 (NOAA AR 12953).
+11
+
+Figure 6:B r prediction and residual analysis for HARP 7959 (NOAA AR 12934). Left panels:
+ground truth (top), predicted (middle), and residual (bottom) maps at forecast hours 6 and 12.
+Right panel: residual distribution histogram aggregated over both time steps, with mean and
+±1σindicated. A diverging red–blue colormap is used for field values and a coolwarm colormap
+for residuals.
+Figure 7: Same as Figure 6 but for HARP 8026 (NOAA AR 12953).
+12
+
+4.2.2 Multiple active region examples across evolutionary phases
+To demonstrate the model’s generalization across different evolutionary stages, we present re-
+sults for two additional active regions from the 2022 test set—HARP 7959 and HARP 8026—
+each examined at three evolutionary phases: emerging, steady, and decaying. These phases are
+defined by selecting the first, middle, and last temporal sequences within each active region’s
+disk passage, respectively. Here we show theB r component; the correspondingB p andB t
+evolutionary phase figures are provided in Appendix C.
+Figure 8:B r evolutionary phase comparison for HARP 7959 at forecast hour 12. Rows corre-
+spond to three evolutionary phases (emerging, steady, decaying); columns show ground truth
+(left), predicted field (center), and residual (right). Axes show Carrington longitude and latitude
+in degrees; images are displayed at the original HMI pixel resolution. A diverging red–blue col-
+ormap centered at zero is used with a display range of±500 G to highlight structural differences.
+The model captures the evolving morphology across all phases, with residuals concentrated near
+polarity inversion lines (PILs).
+Figures 8 and 9 confirm that the model generalizes across diverse active region morphologies
+and evolutionary stages. The predictions preserve the dominant polarity structure and strong-
+field core features at all phases, with residuals primarily localized near polarity inversion lines
+and steep-gradient regions. Quantitative performance metrics averaged over the full 3,000-
+sequence test set are presented in the following subsections.
+4.2.3 Prediction for a flare-productive active region
+To assess the model’s performance under the most challenging conditions, we examine
+HARP 8206 (NOAA AR 13006), which produced an X1.5 flare on 2022 May 10 at approxi-
+mately 13:55 UT—one of the strongest X-class events in the 2022 dataset. To construct the
+physically most demanding scenario, we selected the sequence in which the 12-hour input win-
+dow ends at 12:00 UT May 10 (entirely pre-flare) and the X1.5 flare peak (13:55 UT) falls within
+the very first forecast hour. This tests the model’s ability to anticipate an impulsive flare-driven
+13
+
+Figure 9: Same as Figure 8 but for HARP 8026. The model maintains structural fidelity
+across emerging, steady, and decaying phases despite the differing morphological characteristics
+compared to HARP 7959.
+magnetic restructuring from pre-flare observations alone.
+Figure 10 visualises theB r prediction at three characteristic forecast hours. Per-component
+metrics evolve as follows over the 12-hour window: SSIM(Br) = 0.969–0.982 (mean 0.978, RMSE
+8.2 G), SSIM(B ϕ) = 0.607–0.709 (mean 0.646, RMSE 33.8 G), and SSIM(B θ) = 0.609–0.794
+(mean 0.695, RMSE 35.0 G). As expected for flare-driven reconnection, the radial field is largely
+preserved while the horizontal components (Bϕ,B θ) exhibit pronounced degradation at the flare
+hour.
+Compared with the full 3,000-sequence test-set averages (Section 4.2.4: SSIM(B r)≈0.912,
+Bϕ ≈0.780,B θ ≈0.740), the flare-hour SSIM(B r) of 0.969 comfortably exceeds the global
+mean—reflecting the well-defined bipolar structure of this large active region—while the hori-
+zontal components drop well below: SSIM(B ϕ) = 0.619 (−20.6% relative to the test-set mean)
+and SSIM(B θ) = 0.663 (−10.4%). This selective degradation of the transverse field is physi-
+cally consistent with the expectation that flare reconnection primarily reorganises the horizontal
+magnetic structure while largely preserving the radial photospheric field.
+Within the 12-hour forecast window, horizontal-component metrics show partial recovery as
+the impulsive phase concludes: SSIM(B θ) climbs to 0.794 by hour 3 (15:00 UT), surpassing the
+test-set average, and SSIM(B ϕ) reaches 0.709 by hour 5 (17:00 UT), partially closing the gap
+with the test-set mean of 0.780. After that, a secondary degradation sets in—consistent with the
+continued M-class activity of HARP 8206 through May 11–12 that drives progressive horizontal-
+field restructuring. A sequence-level scan across all 301 test sequences of this AR confirms that
+horizontal-component SSIM remains persistently low during the May 11–12 post-flare period
+(as low asB ϕ ≈0.56,B θ ≈0.58), reflecting multi-day post-event disturbance.
+These results indicate that predicting rapid, flare-driven horizontal-field reconfigurations
+is genuinely difficult for a model trained with a mean-squared-error (MSE) based loss, which
+favors smooth temporal evolution. The radial field, dominated by large-scale polarity structure,
+14
+
+Figure 10:B r prediction for HARP 8206 (NOAA AR 13006) withpre-flare input only(input:
+01:00–12:00 UT May 10). Rows: forecast hour 1 (13:00 UT, contains the X1.5 peak at 13:55 UT),
+hour 5 (17:00 UT, partial recovery∼4 h after peak), and hour 12 (00:00 UT May 11, secondary
+degradation from continued AR activity). Columns show ground truth, predicted field, and
+residual. A±500 G display range is used.
+15
+
+Figure 11: Image RMSE [G] over the 12-hour forecast horizon (hours 1–12). Left: global RMSE.
+Right: RMSE inside the active-region mask (mask-defined strong-field core).
+remains well reproduced even during X-class events. Extending the framework with flare-aware
+loss functions, multi-modal inputs (X-ray, extreme ultraviolet (EUV)), or adversarial objectives
+to recover sharp, small-scale features is a natural direction, and systematic evaluation across a
+larger flare-productive sample is left for future work.
+4.2.4 Comparison with baseline and ablated variants
+To quantify overall image-level performance, we compute per-component SSIM (single-channel,
+raw physical units), CC, and RMSE for all three vector components (B r,B ϕ,B θ); full per-hour
+values for each component appear in Table 4. Unless otherwise stated, aggregate metrics are
+computed over the full 3,000-sequence test set.
+A clear separation emerges between learned forecasting and the persistence baseline. For
+gt12 baseline, SSIM(B r) decreases from 0.730 (hour 1) to 0.446 (hour 12), while RMSE in-
+creases from 63.9 to 102.1 G globally and from 91.5 to 192.3 G in the masked region (Fig. 11,
+12). This rapid degradation indicates that active-region evolution over the 12-hour horizon can-
+not be approximated as a static field. The persistence baseline also exhibits strong lead-time
+deterioration in the correlation ofB r: CC drops from 0.875 to 0.528 over the forecast window
+(Fig. 12).
+In contrast, the full model (with mask and phy) remains stable across the entire roll-
+out: SSIM(B r) remains stable within 0.909–0.916 (CC 0.997–0.998, RMSE 13.0–21.0 G); hor-
+izontal components achieveB ϕ SSIM 0.760–0.800 (CC 0.910–0.945, RMSE 38.5–50.0 G) and
+Bθ SSIM 0.728–0.750 (CC 0.895–0.920, RMSE 38.5–49.0 G), both degrading modestly with
+increasing lead time (Table 4). Averaged over the forecast horizon, the full model achieves
+global/masked RMSE of 16.5/25.0 G, whereas gt12 baseline reaches 88.9/160.4 G (Table 2).
+This corresponds to an improvement factor of 5.4×globally and 6.4×inside the masked core
+in RMSE, demonstrating that the proposed method captures genuine spatiotemporal evolution
+beyond persistence.
+Comparing the ablated variants in Table 2,without phy(mask supervision without
+temporal-gradient regularization) consistently outperformswithout mask(temporal-gradient
+regularization without mask supervision) on both SSIM(B r), RMSE, and CC, with SSIM(B r)
+of 0.879 vs. 0.838. This indicates that explicitly supervising the active-region mask is es-
+sential to maintain fidelity where evolution is most dynamic. Removing both ingredients
+(without mask and phy) substantially degrades SSIM(B r) to 0.612, yet still exceeds the
+persistence baseline (0.540).
+16
+
+Figure 12: SSIM(B r) and Pearson CC(Br) over the 12-hour forecast horizon (hours 1–12). Left
+(a): SSIM. Right (b): CC.
+4.3 Magnetic-parameter prediction performance
+Beyond image-domain fidelity, we evaluate the model’s ability to preserve key magnetic-
+parameter diagnostics derived from the predicted magnetic field components. These
+diagnostics—unsigned flux, magnetic pressure, shear angle, and field gradients—measure how
+well the predictions are consistent with solar surface magnetic-field-related quantities.
+4.3.1 Prediction errors for derived magnetic-parameter diagnostics
+Table 3 summarizes the prediction errors for all five magnetic-parameter-based diagnostic quan-
+tities computed from the predicted magnetic field components. Relative errors are computed
+as mean absolute error divided by mean GT value in the masked region. Unsigned flux predic-
+tion achieves a mean relative error of 7.82% (std = 2.75%, P90 = 11.38%). Magnetic pressure
+shows moderately higher errors (mean 12.40%, std = 2.88%, P90 = 16.20%), reflecting its de-
+pendence on all three magnetic field components. Shear angle errors average 12.19% (mean
+absolute 0.1350 rad, P90 = 14.72%), while gradient-based quantities show absolute errors of
+3.60 G/pixel (mean rel. 5.20%) for|∇B r|and 12.80 G/pixel (mean rel. 22.50%) for horizon-
+tal gradients. These errors arise primarily from the lower prediction accuracy of horizontal
+components (Bp,B t).
+4.3.2 Temporal evolution of magnetic-parameter diagnostics
+Figure 13 shows the per-hour relative errors for three key diagnostics averaged over all 3,000
+test sequences. Magnetic pressure (panel a) grows monotonically from∼10.60% at hour 1
+to∼13.65% at hour 12 (mean 12.40%, P90 13.20%), reflecting progressive accumulation of
+horizontal-field errors. Unsigned flux (panel b) remains comparatively stable with a mean of
+7.82% (P90 8.60%), ranging from∼7.15% to∼8.45%. Shear angle (panel c) increases steadily
+from∼10.63% to∼12.81% (mean 12.19%, P90 14.72%), consistent with diffusion of predicted
+transverse field orientations at longer lead times.
+4.3.3 Comparison with baseline and ablated variants
+The persistence baseline provides an instructive reference: its errors increase systematically
+with lead time, particularly inside the masked core (Figs. 15–18). For example, the masked-
+region absolute error of magnetic pressure rises from 3.93×10 4 G2 (hour 1) to 1.03×10 5 G2
+(hour 12), whereas the full model remains near 9.49×10 3–9.99×10 3 G2 over the same horizon.
+Similarly for unsigned flux, the masked-region absolute error increases from 57.1 to 124.7 G for
+gt12 baseline, compared with 11.7 to 11.0 G for the full model.
+17
+
+Figure 13: Per-hour relative error (%) for three magnetic-parameter diagnostics averaged over all
+3,000 test sequences (forecast hours 1–12). Relative error = mean|prediction−GT|/ mean|GT|
+in the masked region. (a) Magnetic pressure: mean 12.40%, monotonically increasing. (b) Un-
+signed magnetic flux: mean 7.82%, approximately stable. (c) Shear angle: mean 12.19%,
+steadily increasing. Statistics (Mean, Std, P90) are annotated in each panel.
+Figure 14: Absolute error of unsigned flux [G] over the 12-hour forecast horizon (hours 1–12).
+Left: global evaluation. Right: masked-region evaluation.
+Across all diagnostics, the full model achieves the lowest masked-region errors on average
+(Table 5). Relative to gt12 baseline, the full model reduces the mean masked-region magnetic-
+pressure error by∼8.59×, unsigned-flux error by∼9.82×, and|∇B r|error by∼13.7×.
+Comparingwithout phyandwithout mask, we observe that mask supervision alone
+already yields significantly improved magnetic parameter consistency in the strong-field core,
+consistent with the image-domain advantage ofwithout phy. This supports the interpretation
+that accurately preserving the core-region field structure is a necessary prerequisite for accurate
+derived magnetic parameter measures.
+Figures 14–18 show the hourly evolution of all five magnetic-parameter diagnostics. Each
+figure uses a 1×2 layout showing absolute error for global (left) and masked-region (right)
+evaluation. Relative error panels have been omitted as they closely mirror the absolute error
+patterns.
+4.4 Vector-field orientation accuracy
+Beyond component-wise and magnetic-parameter evaluations, we assess the model’s ability to
+predict the orientation of the magnetic field vector, characterized by inclination angleθand
+azimuth angleϕ. These angles are derived from the predicted vector components via standard
+spherical–Cartesian transformations:
+18
+
+Figure 15: Absolute error of magnetic pressure (Lorentz-force proxy) [G 2] over the 12-hour
+forecast horizon (hours 1–12). Left: global evaluation. Right: masked-region evaluation.
+Figure 16: Absolute error of shear angle [rad] over the 12-hour forecast horizon (hours 1–12).
+Left: global evaluation. Right: masked-region evaluation.
+Inclinationθ:
+θ= arctan
+
+
+q
+B2p +B 2
+t
+|Br|+ϵ
+
+ , ϵ= 10 −6.(12)
+The inclination angleθmeasures deviation from the radial direction and correlates with current
+helicity [1].
+Azimuthϕ:
+ϕ= atan2(B t, Bp),(13)
+whereϕ= 0 ◦ corresponds to positiveB p andϕ= 90 ◦ to positiveB t. Azimuth errors directly
+affect reconnection-rate estimates [20].
+4.4.1 Spatial distribution of orientation errors
+Figures 19 and 20 show the spatial distribution of orientation residuals for both active regions.
+The pattern mirrors that observed for component residuals: errors are minimal in strong-field
+cores where the magnetic field is pressure-dominated and evolves more deterministically, while
+larger residuals appear near polarity inversion lines and in weak-field regions where convection-
+driven dynamics introduce greater stochasticity.
+19
+
+Figure 17: Absolute error of|∇B r|[G/pixel] over the 12-hour forecast horizon (hours 1–12).
+Left: global evaluation. Right: masked-region evaluation.
+Figure 18: Absolute error of horizontal gradient|∇B h|[G/pixel] over the 12-hour forecast
+horizon (hours 1–12). Left: global evaluation. Right: masked-region evaluation.
+4.4.2 Statistical characteristics of orientation errors
+Pixel-level scatter analysis (Figs. 21 and 23) reveals strong linear correlation (CC>0.9) between
+predicted and reference orientation angles in strong-field regions. The tight clustering along the
+diagonal indicates that systematic biases are minimal.
+Statistical analysis of residual distributions (Figs. 22 and 24) shows that both inclination
+and azimuth errors approximate zero-mean Gaussian distributions. Azimuth residuals are typ-
+ically contained within∼14 ◦, while inclination residuals remain within∼5 ◦, with no significant
+skewness.
+Figure 25 shows the distribution of residual standard deviations across 3,000 test sequences.
+The relatively stableσvalues indicate consistent orientation prediction accuracy across the test
+set, with occasional outliers corresponding to highly sheared or rapidly evolving active regions.
+5 Conclusions and Discussion
+We developed a deep-learning framework that integrates dynamic active-region masks with
+multi-parameter magnetic constraints to explore the short-term (12-hour) prediction of all vector
+components of solar active-region magnetic fields. This work represents an initial exploration
+of data-driven vector magnetic field forecasting with magnetic parameter constraints, with the
+goal of assessing the potential of such approaches for future space weather applications. The
+principal conclusions are:
+1.Three-channel vector representation and dynamic masks improve structural
+20
+
+Figure 19: Spatial distribution of orientation residuals for inclinationθ(left block) and azimuth
+ϕ(right block) for HARP 7959 (NOAA AR 12934) at forecast hours 6 and 12. Each block
+shows GT, predicted, and residual maps at both time steps. Residuals are small in strong-field
+cores and systematically larger in weak-field regions and near polarity inversion lines.
+21
+
+Figure 20: Same as Figure 19 but for HARP 8026 (NOAA AR 12953).
+fidelity.By jointly encodingB r,B ϕ, andB θ in Carrington projection and incorporat-
+ing adaptive masks emphasizing polarity inversion lines and strong-gradient cores, the
+framework achieves high performance in critical regions. All three components achieve
+good structural fidelity:B r SSIM 0.909–0.916 (average 0.912), CC 0.997–0.998, RMSE
+13.0–21.0 G;B ϕ SSIM 0.760–0.800 (average 0.778), CC 0.910–0.945, RMSE 38.5–50.0 G;
+Bθ SSIM 0.728–0.750 (average 0.740), CC 0.895–0.920, RMSE 38.5–49.0 G. Horizontal
+components degrade modestly with increasing lead time (Table 4).
+2.Magnetic-parameter-feature conditioning and temporal regularization im-
+prove magnetic parameter consistency.By conditioning on auxiliary magnetic-
+parameter-based diagnostic maps (unsigned flux, magnetic pressure, shear proxy, and
+gradient measures) and applying temporal-gradient regularization, the model better pre-
+serves derived diagnostics over the forecasting window. Unsigned flux errors are main-
+tained at 7.82% (std = 2.75%, P90 = 11.38%). Magnetic pressure errors average 12.40%
+(std = 2.88%, P90 = 16.20%) with modest increase toward the horizon.
+3.Limitations remain in current-related derivatives and horizontal-field stability.
+Higher-order derivatives of transverse fields are intrinsically sensitive to small-scale errors.
+Prediction quality declines modestly in horizontal components:B ϕ SSIM drops from 0.800
+(hour 1) to 0.760 (hour 12,∼5.0%) andB θ from 0.750 to 0.728 (∼2.9%), whileB r remains
+highly stable within 0.909–0.916 (RMSE 13.0–21.0 G). The much reduced degradation rate
+forB θ compared to the previous clipping scheme (∼11.8%) confirms that the corrected
+±1000 G normalization substantially improves horizontal-field stability. These remaining
+shortcomings arise from both weaker observational signal-to-noise in transverse fields and
+the difficulty of representing coupled wave and turbulence processes within a purely data-
+driven framework.
+22
+
+Figure 21: Orientation angle scatter comparison (θandϕ) in strong-field regions for HARP 7959
+at forecast hours 6 and 12. Tight clustering along the diagonal demonstrates strong linear
+correlation.
+23
+
+Figure 22: Gaussian fits ofθandϕresidual distributions for HARP 7959 at forecast hours 6
+and 12. Both approximate zero-mean normal distributions.
+24
+
+Figure 23: Same as Figure 21 but for HARP 8026.
+25
+
+Figure 24: Same as Figure 22 but for HARP 8026.
+Figure 25: Residual standard deviations (σ) for inclinationθand azimuthϕacross 3,000 test
+sequences in strong-field regions. The relatively stableσvalues across sequences indicate con-
+sistent orientation prediction accuracy.
+26
+
+5.1 Ablation studies and baseline comparisons
+The inclusion of a persistence baseline and ablation variants clarifies the contributions of each
+component. The persistence baseline exhibits rapid degradation over the 12-hour rollout, with
+global/masked RMSE reaching 88.9/160.4 G, while the full model achieves 16.5/25.0 G, cor-
+responding to 5.4×and 6.4×lower RMSE, respectively. This confirms that the model learns
+genuine spatiotemporal evolution beyond simple temporal smoothness.
+The ablation comparison indicates that emphasizing the active-region mask is a central fac-
+tor for stability:without phy(mask supervision without temporal-gradient regularization)
+consistently outperformswithout mask(temporal-gradient regularization without mask su-
+pervision), suggesting that core-region structural accuracy is a prerequisite for reliable magnetic
+parameter measures. Combining mask supervision and magnetic parameter constraints yields
+the best overall performance and the most stable lead-time behavior.
+The superior performance of mask supervision over magnetic parameter conditioning alone
+suggests that accurate spatial localization of evolving structures is more critical than explicit
+magnetic-parameter-based feature channels for this forecasting task. However, the full model
+achieves the best performance, indicating that magnetic parameter conditioning provides addi-
+tional regularization that improves generalization, particularly for derived magnetic parameter
+diagnostics.
+5.2 Comparison with existing AI/ML models
+To place the proposed method in context, Table 1 lists a small set of representative deep-
+learning-based forecasting studies for solar magnetograms at active-region and full-disk scales.
+Because published works differ substantially in target quantity (e.g.,B r vs. LoS), spatial
+representation, forecast horizon, and evaluation protocol, the table is intended as a high-level
+overview rather than a basis for direct numerical comparison.
+Table 1: Representative deep-learning-based magnetogram forecasting studies. “AR” = active
+region; “FD” = full disk; “LOS” = line-of-sight; “Vec” = vector (B r,B p,B t); “Rad” = radial
+(Br) only.
+Model Scale Horizon Components Reported metrics
+Covas (2019) Global (sunspot butterfly diagram) Solar-cycle scale Sunspot area (proxy) SSIM
+Covas (2020) Global (longit. averaged) Solar-cycle scale Rad/LOS (unsigned, longit. avg.) SSIM
+Bai et al. (2021) AR 6 h Rad (B r) SSIM, CC, RMSE
+Ramunno et al. (2024) FD 24 h LOS Image sim. + phys. param.
+Jeong et al. (2025a) FD≤27 days Rad (B r) CC, RMSE
+Jeong et al. (2025b) Global (synoptic map) 1 solar rotation Rad/LOS (synoptic map) RMSE, FSIM (feature similarity), CC
+This work AR 12 h Vec SSIM, CC, RMSE, flux + mag. param.
+Covas [7] applied neural networks to spatio-temporal forecasting of the sunspot butterfly
+diagram (a proxy of solar magnetic activity) and evaluated forecasts using SSIM. Covas [8]
+explored transfer learning for forecasting the longitudinally averaged unsigned radial (or line-of-
+sight) magnetic-field distribution and reported SSIM-based evaluation. Bai et al. [2] formulated
+a short-term active-region-scale forecasting task forB r and evaluated predictions using SSIM,
+CC, and RMSE over a 6-hour horizon. At full-disk scale, Ramunno et al. [19] proposed a
+generative approach for 24-hour forecasting of line-of-sight magnetograms and assessed both
+image-level similarity and derived physical parameters against a persistence baseline. Jeong et
+al. [13] developed Pix2PixCC-based models for predicting time-evolving full-disk radial magnetic
+fields with an adjustable time step up to one solar rotation, and reported CC and RMSE against
+persistence and SFT baselines; Jeong et al. [12] used a Pix2PixCC-based model to predict
+synoptic maps one solar rotation ahead and evaluated predictions with RMSE, FSIM, and CC.
+The present method fills a distinct niche: short-term (12-hour), active-region-scale, full vec-
+tor field prediction with explicit magnetic parameter constraints and dynamic mask attention.
+This combination enables the computation of derived quantities (magnetic pressure, shear an-
+gle, field gradients) that require all three vector components—quantities that are critical for
+27
+
+assessing flare potential and magnetic free energy but unavailable from radial-only or LOS-only
+models. The trade-off is a shorter prediction horizon and smaller spatial coverage compared to
+full-disk and global models.
+These approaches are largely complementary rather than competing: global and full-disk
+models capture large-scale flux transport and long-term evolution, while our active-region-scale
+model provides detailed short-term vector field forecasts suited to operational space weather
+monitoring of individual active regions.
+Among the models listed in Table 1, the spatiotemporal-LSTM model of Bai et al. [2]
+operates at a comparable spatial scale (active-region patches) and temporal cadence (1-hour
+steps), making it the closest reference for contextual comparison. However, because the two
+models were trained and evaluated on different datasets and solar-cycle phases (Bai et al. used
+SDO/HMI data from 2013–2014, whereas our model was trained on 2021 data and tested on
+2022 data), a strict quantitative comparison is not feasible. Over a comparable 6-hour forecast
+window, our model yields SSIM(B r)≈0.914 and CC≈0.998 on our test set, while Bai et al.
+reported SSIM≈0.840 and CC≈0.895 on their dataset. These differences may suggest potential
+advantages of the proposed approach—such as joint vector-field prediction, the dynamic mask
+mechanism, and auxiliary magnetic-parameter conditioning—but definitive conclusions would
+require evaluation on a common benchmark dataset under identical conditions, which we leave
+as important future work.
+5.3 Limitations and future directions
+While the model achieves strong performance on average, several limitations warrant discussion:
+•Weak-field regions and small-scale structures.The mask-weighted loss de-
+emphasizes weak-field regions, leading to larger relative errors in quiet-Sun areas and
+small isolated flux concentrations. This is a deliberate design choice prioritizing flare-
+relevant strong-field cores, but limits applicability to studies requiring accurate weak-field
+evolution.
+•Horizontal-field degradation.BothB ϕ andB θ show modest degradation over the 12-
+hour horizon under the corrected clipping scheme: SSIM drops from 0.800/0.750 (hour 1)
+to 0.760/0.728 (hour 12;∼5.0%/∼2.9%), RMSE grows from 38.5/38.5 G to 50.0/49.0 G,
+and CC falls from 0.945/0.920 to 0.910/0.895. In contrast,B r remains highly stable (SSIM
+0.909–0.916, RMSE 13.0–21.0 G). The much reduced degradation rate forB θ (compared
+to∼11.8% in the previous scheme) confirms that the tightened±1000 G clipping for
+horizontal components stabilizes the autoregressive rollout. The remaining degradation
+is still concentrated in strong-shear environments (>80 ◦), and incorporating explicit
+transport or wave-propagation modules remains a promising direction.
+•Extreme events and rapid evolution.The model has not been systematically eval-
+uated on X-class flares, rapid flux emergence events, or CME-productive active regions.
+Preliminary inspection suggests that the model tends to underpredict rapid changes asso-
+ciated with flare-driven magnetic field restructuring, likely due to the rarity of such events
+in the training data and the smoothness bias of the MSE loss.
+•Temporal horizon and error accumulation.Beyond 12 hours, errors accumulate
+rapidly, particularly in horizontal components. The high frame-to-frame correlation in the
+data (typical correlation>0.95 forB r) indicates that the model learns coherent transport
+patterns of existing flux concentrations rather than predicting genuinely novel emergence.
+Extending the forecasting horizon would likely require incorporating additional physics-
+based constraints or hybrid approaches.
+28
+
+•Generalization across solar cycle phases.Although the training data span 2021 and
+the test data span 2022, both periods sample relatively active phases with morphologically
+similar active region evolution patterns. Performance on solar minimum conditions with
+predominantly weak, dispersed fields remains untested.
+•Deterministic vs. probabilistic forecasting.The current model is deterministic and
+produces a single forecast trajectory. Given the inherent stochasticity of solar magnetic
+field evolution, particularly in weak-field regions and over longer horizons, future work
+should explore probabilistic approaches that can quantify forecast uncertainty.
+5.4 Broader implications and future work
+This work demonstrates the promise of data-driven approaches with magnetic parameter con-
+straints for vector magnetic field prediction. Several directions for future research emerge:
+•Enhanced mask design.Multi-scale or attention-based masks that adaptively weight both
+core and peripheral features could improve sensitivity to weak but topologically important
+structures in surrounding quiet-Sun regions.
+•Expanded magnetic parameter constraints.Current constraints enforce unsigned flux con-
+servation and magnetic pressure consistency, but omit other potentially valuable diagnos-
+tics such as relative helicity, free magnetic energy, or electric-field consistency. Extending
+the magnetic-parameter-constrained loss to include these terms may improve both predic-
+tive accuracy and consistency with solar surface magnetic-field-related quantities.
+•Operational deployment.For real-time space-weather forecasting, latency and compu-
+tational efficiency are critical. Streamlining inference, integrating with near-real-time
+SDO/HMI pipelines, and developing uncertainty-quantification schemes will be essential
+for practical adoption.
+•Hybrid physics-data approaches.Continued progress will require deeper coupling with
+physics-based models and validation in operational contexts, potentially through hybrid
+frameworks that combine data-driven predictions with magnetohydrodynamic (MHD)
+simulations.
+Supplementary MPEG-4 (MP4) animations illustrate the temporal evolution of the magnetic
+field. Each animation uses a uniform three-panel layout (ground truth, predicted, residual)
+throughout all 24 frames; during the 12-hour input phase the predicted and residual panels are
+left blank to maintain a consistent visual layout. All animations play at 2 frames per second
+and use a diverging±500 G colormap. Animation 1 shows HARP 7959 (NOAA AR 12934),
+Animation 2 shows HARP 8026 (NOAA AR 12953), and Animation 3 shows the flare-productive
+HARP 8206 (NOAA AR 13006, X1.5 flare on 2022 May 10).
+Declarations
+Funding
+This work was supported by the Joint Fund of the National Natural Science Foundation of
+China (Grant No. U2031140).
+Competing Interests
+The authors have no relevant financial or non-financial interests to disclose.
+29
+
+Data Availability
+SDO/HMI SHARP data are available from the Joint Science Operations Center (JSOC; https:
+//jsoc1.stanford.edu/). Trained model weights and the PyTorch release (model, dynamic masks,
+magnetic-parameter layer, training and testing scripts, and example preprocessing) are provided
+at https://github.com/Qingcaiyurouzhou/magnetic predict.
+Author Contributions
+All authors contributed to the study conception and design. Material preparation, data collec-
+tion and analysis were performed by Yuqing Zhou, Hui Liu, and Zhenyu Jin. The first draft of
+the manuscript was written by Yuqing Zhou and all authors commented on previous versions
+of the manuscript. All authors read and approved the final manuscript.
+Acknowledgments
+We acknowledge the use of data from the Solar Dynamics Observatory (SDO), a mission
+of NASA’s Living With a Star Program. The HMI instrument and SHARP data products
+are provided by the Joint Science Operations Center (JSOC) at Stanford University. We
+thank the anonymous reviewers for their constructive comments that significantly improved
+this manuscript. Computational resources were provided by the High Performance Computing
+Center of Yunnan Observatories, CAS.
+A Supplementary Materials
+This appendix provides additional quantitative details to support the main text analysis. Ta-
+bles 2 and 3 present horizon-averaged metrics comparing model variants and the persistence
+baseline. Tables 4 and 5 present detailed per-hour metrics and magnetic parameter diagnostic
+errors for each model variant. All tables are displayed on rotated pages for optimal readability.
+30
+
+Table 2: Horizon-averaged image-domain metrics over the 12-hour forecast horizon (hours 1–12), including the persistence baseline (gt12 baseline).
+SSIM(Br) is the single-channel structural similarity for the radial component computed on raw physical units (data range = per-image max−min).
+img rmse is theB r single-component RMSE in Gauss [G].
+Metric w/o mask w/o phy w/o both full model gt12 baseline
+img rmse (global) [G] 74.1 35.5 43.0 16.5 88.91
+img rmse (mask-defined core) [G] 107.3 50.5 63.0 25.0 160.39
+SSIM(Br) (global) 0.838 0.879 0.612 0.912 0.54033
+CC(Br) (global) 0.9926 0.9961 0.9891 0.9978 0.66111
+Table 3: Prediction errors for all five magnetic-parameter-based diagnostic parameters (masked-region averages over the 12-hour forecast horizon,
+hours 1–12)
+Parameter Mean abs. error Mean rel. error (%) Std. dev. 90% quantile
+Unsigned flux (|B r|) 10.85 G 7.82% 2.75% 11.38%
+Magnetic pressure ( P B2) 1.05×10 4 G2 12.40% 2.88% 16.20%
+Shear angle (α) 0.1350 rad 12.19% 1.98% 14.72%
+|∇Br|3.60 G/pixel 5.20% 1.25% 6.85%
+Horizontal gradient (|∇B h|) 12.80 G/pixel 22.50% 3.80% 27.20%
+31
+
+Table 4: Per-hour image-quality metrics for all three vector components over the 12-hour forecast horizon. SSIM values are raw-float single-channel
+structural similarity (data range = per-image max−min). CC is Pearson correlation coefficient. RMSE is in Gauss [G]. All metrics averaged over
+3,000 test sequences.
+HourB r SSIMB r CCB r RMSE
+1 0.916 0.998 13.0
+2 0.915 0.998 13.3
+3 0.915 0.998 13.7
+4 0.914 0.998 14.2
+5 0.914 0.998 14.8
+6 0.913 0.997 15.5
+7 0.913 0.997 16.5
+8 0.912 0.997 17.5
+9 0.912 0.997 18.5
+10 0.911 0.997 19.5
+11 0.910 0.997 20.5
+12 0.909 0.997 21.0
+HourB p SSIMB p CCB p RMSE
+1 0.800 0.945 38.5
+2 0.795 0.942 40.0
+3 0.792 0.939 41.5
+4 0.789 0.936 43.0
+5 0.786 0.933 44.5
+6 0.783 0.930 46.0
+7 0.780 0.927 47.0
+8 0.777 0.924 48.0
+9 0.774 0.921 48.5
+10 0.771 0.918 49.0
+11 0.768 0.915 49.5
+12 0.760 0.910 50.0
+HourB t SSIMB t CCB t RMSE
+1 0.750 0.920 38.5
+2 0.748 0.918 39.5
+3 0.746 0.916 41.0
+4 0.744 0.913 42.5
+5 0.742 0.911 44.0
+6 0.740 0.908 45.0
+7 0.738 0.906 46.0
+8 0.736 0.903 47.0
+9 0.734 0.901 47.5
+10 0.732 0.899 48.0
+11 0.730 0.897 48.5
+12 0.728 0.895 49.0
+Table 5: Horizon-averaged masked-region absolute errors of derived magnetic-parameter diagnostics over the 12-hour forecast horizon (hours 1–12)
+Diagnostic Parameter w/o mask w/o phy w/o both full model gt12 baseline
+Magnetic pressure 2.91×10 4 1.24×10 4 1.85×10 4 9.42×10 3 8.09×10 4
+Unsigned flux 23.1 12.1 30.2 10.37 101.84
+Shear angle 0.1297 0.1139 0.1783 0.1013 0.1811
+|∇Br|9.32 4.31 9.51 3.63 49.73
+Horizontal gradient 22.8 13.2 15.9 11.4 25.1
+32
+
+B Detailed Temporal Evolution of Predicted Magnetic Fields
+To provide a comprehensive view of the model’s prediction behaviour across the full 12-hour
+forecast horizon, we present frame-by-frameB r maps for both active regions (HARP 7959 and
+HARP 8026) at three evolutionary phases (emerging, steady, decaying).
+Each figure is organised as follows. The top two rows show the input ground-truth sequence
+(hours 1–12). Below a horizontal divider, the next two rows compare the ground-truth and
+predicted fields during the first half of the forecast horizon (forecast hours 1–6). After a second
+divider, the final two rows show the same comparison for the second half (forecast hours 7–12).
+All panels share a common red–blue diverging colorbar centred at zero.
+33
+
+Figure 26: Full temporal evolution ofB r for HARP 7959 during theemergingphase. Top:
+12-hour input sequence (GT). Middle: forecast hours 1–6 (GT vs. predicted). Bottom: forecast
+hours 7–12 (GT vs. predicted).
+34
+
+Figure 27: Same as Figure 26 but for thesteadyphase of HARP 7959.
+35
+
+Figure 28: Same as Figure 26 but for thedecayingphase of HARP 7959.
+36
+
+Figure 29: Full temporal evolution ofB r for HARP 8026 during theemergingphase. Layout
+is the same as Figure 26.
+37
+
+Figure 30: Same as Figure 29 but for thesteadyphase of HARP 8026.
+38
+
+Figure 31: Same as Figure 29 but for thedecayingphase of HARP 8026.
+39
+
+C Evolutionary Phase Comparison forB p andB t Components
+This appendix supplements theB r evolutionary phase comparisons shown in the main text
+(Figures 8 and 9) by providing the corresponding results for theB p andB t components. The
+layout is identical: rows correspond to the emerging, steady, and decaying phases; columns
+show ground truth, predicted field, and residual at forecast hour 12. All images are displayed
+at original HMI pixel resolution with Carrington coordinate axes.
+40
+
+Figure 32:B p evolutionary phase comparison for HARP 7959 at forecast hour 12. Layout is
+the same as Figure 8.
+Figure 33:B t evolutionary phase comparison for HARP 7959 at forecast hour 12. Layout is the
+same as Figure 8.
+41
+
+Figure 34:B p evolutionary phase comparison for HARP 8026 at forecast hour 12. Layout is
+the same as Figure 8.
+Figure 35:B t evolutionary phase comparison for HARP 8026 at forecast hour 12. Layout is the
+same as Figure 8.
+42
+
+References
+[1] G. Aulanier, M. Janvier, and B. Schmieder. The standard flare model in three dimensions.
+i. strong-to-weak shear transition in post-flare loops. Astronomy and Astrophysics, 543:
+A110, 2012. doi: 10.1051/0004-6361/201219311.
+[2] Liang Bai, Yi Bi, Bo Yang, Jun-Chao Hong, Zhe Xu, Zhen-Hong Shang, Hui Liu, Hai-
+Sheng Ji, and Kai-Fan Ji. Predicting the evolution of photospheric magnetic field in solar
+active regions using deep learning. Research in Astronomy and Astrophysics, 21(5):113,
+2021. doi: 10.1088/1674-4527/21/5/113.
+[3] Samy Bengio, Oriol Vinyals, Navdeep Jaitly, and Noam Shazeer. Scheduled sampling for
+sequence prediction with recurrent neural networks. In Advances in Neural Information
+Processing Systems, volume 28, pages 1171–1179, 2015.
+[4] M. G. Bobra and S. Couvidat. Solar flare prediction using sdo/hmi vector magnetic field
+data with a machine-learning algorithm. Astrophysical Journal, 798:135, 2015.
+[5] M. G. Bobra, X. Sun, J. T. Hoeksema, M. Turmon, Y. Liu, K. Hayashi, G. Barnes, and
+K. D. Leka. The Helioseismic and Magnetic Imager (HMI) Vector Magnetic Field Pipeline:
+SHARPs - Space-Weather HMI Active Region Patches.Sol. Phys., 289:3549–3578, Septem-
+ber 2014. doi: 10.1007/s11207-014-0529-3.
+[6] Ruishuo Chen, Wutong Lu, Qi Hao, Yifan Meng, Pengfei Chen, and Chenxi Shi. Sta-
+tistical analyses of solar active region in SDO/HMI magnetograms detected by unsuper-
+vised machine learning method DSARD. arXiv preprint arXiv:2502.17990, feb 2025. doi:
+10.48550/arXiv.2502.17990. URL https://arxiv.org/abs/2502.17990. 22 pages, 15 figures,
+submitted to ApJS.
+[7] E. Covas, N. Peixinho, and J. Fernandes. Neural network forecast of the sunspot butterfly
+diagram. Solar Physics, 294(24):24, feb 2019. doi: 10.1007/s11207-019-1412-z. URL
+https://doi.org/10.1007/s11207-019-1412-z.
+[8] Eurico Covas. Transfer learning in spatial–temporal forecasting of the solar magnetic
+field. Astronomische Nachrichten, 341(4), mar 2020. doi: 10.1002/asna.202013690. URL
+https://doi.org/10.1002/asna.202013690. First published: 30 March 2020.
+[9] Y. Cui, R. Li, L. Zhang, Y. He, and H. Wang. Correlation between solar flare pro-
+ductivity and photospheric magnetic field properties. i. maximum horizontal gradient,
+length of neutral line, number of singular points. Solar Physics, 237(1):45–59, 2006. doi:
+10.1007/s11207-006-0077-6.
+[10] Y. Fan. MHD Equilibria and Triggers for Prominence Eruption, volume 415 of Astrophysics
+and Space Science Library, pages –. Springer, Cham, 2015. ISBN 978-3-319-10415-7. doi:
+10.1007/978-3-319-10416-4\ 12. URL https://doi.org/10.1007/978-3-319-10416-4 12.
+[11] G. H. Fisher, D. J. Bercik, B. T. Welsch, and H. S. Hudson. Global forces in eruptive solar
+flares: The lorentz force acting on the solar interior. Solar Physics, 277:59, 2012.
+[12] Hyun-Jin Jeong, Mingyu Jeon, Daeil Kim, Youngjae Kim, Ji-Hye Baek, Yong-Jae Moon,
+and Seonghwan Choi. Prediction of the next solar rotation synoptic maps using an artificial
+intelligence–based surface flux transport model. The Astrophysical Journal Supplement
+Series, 278(1):5, apr 2025. doi: 10.3847/1538-4365/adc447.
+43
+
+[13] Hyun-Jin Jeong, Stefaan Poedts, Haopeng Wang, Ekatarina Dineva, Panagiotis Gonidakis,
+Francesco Carella, George Miloshevich, Luis Linan, and Harim Lee. Prediction of time-
+evolving radial magnetic fields on the solar surface using deep learning. The Astrophysical
+Journal Letters, 989(2):L31, aug 2025. doi: 10.3847/2041-8213/adf5c7.
+[14] J. Jiang, R. H. Cameron, and M. Sch¨ ussler. Effects of the scatter in sunspot group tilt
+angles on the large-scale magnetic field at the solar surface. Astrophysical Journal, 791(1):
+5, 2014.
+[15] J. Jiang, D. H. Hathaway, R. H. Cameron, S. K. Solanki, L. Gizon, and L. Upton. Magnetic
+flux transport at the solar surface. Space Science Reviews, 186(1-4):491–523, dec 2014. doi:
+10.1007/s11214-014-0083-1. URL https://doi.org/10.1007/s11214-014-0083-1.
+[16] E. K. J. Kilpua, N. Lugaz, M. L. Mays, and M. Temmer. Forecasting the structure and
+orientation of earthbound coronal mass ejections. Space Weather, 17(4):498–526, 2019.
+doi: 10.1029/2018SW001944.
+[17] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv
+preprint arXiv:1412.6980, 2014.
+[18] K. D. Leka and G. Barnes. Photospheric magnetic field properties of flaring versus flare-
+quiet active regions. ii. discriminant analysis. Astrophysical Journal, 595:1296, 2003.
+[19] Francesco Pio Ramunno, Hyun-Jin Jeong, Stefan Hackstein, Andr´ e Csillaghy, Svyatoslav
+Voloshynovskiy, and Manolis K. Georgoulis. Magnetogram-to-magnetogram: Generative
+forecasting of solar evolution. arXiv preprint arXiv:2407.11659, jul 2024. doi: 10.48550/
+arXiv.2407.11659. URL https://arxiv.org/abs/2407.11659. Conference paper accepted for
+oral presentation at the ESA SPAICE CONFERENCE, 17-19 September 2024.
+[20] Y. Su, A. Veronig, G. Holman, et al. Imaging coronal magnetic-field reconnection in a solar
+flare. Nature Physics, 9:489–493, 2013. doi: 10.1038/nphys2675.
+[21] Shin Toriumi and Haimin Wang. Flare-productive active regions. Living Reviews in Solar
+Physics, 16(1):3, 2019. doi: 10.1007/s41116-019-0019-7. URL https://link.springer.com/
+article/10.1007/s41116-019-0019-7.
+[22] L. Upton and D. H. Hathaway. Predicting the sun’s polar magnetic fields with a surface
+flux transport model. The Astrophysical Journal, 780(1):5, 2014. doi: 10.1088/0004-637X/
+780/1/5.
+[23] H. Wu, Z. Yao, J. Wang, and M. Long. Motionrnn: A flexible model for video prediction
+with spacetime-varying motions. 2021.
+[24] G. Yang, Y. Xu, W. D. Cao, et al. Photospheric shear flows along the magnetic neutral
+line of active region 10486 prior to an x10 flare. Astrophysical Journal, 617:L151, 2004.
+44

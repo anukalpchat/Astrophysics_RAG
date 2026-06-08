@@ -1,0 +1,1392 @@
+Title: Photometric classification of quasars from DES and photo-$z$ estimation with Machine Learning
+Authors: Pablo Motta, Filipe B. Abdalla, Elcio Abdalla, Gabriel S. Costa, Camila Cardoso
+Published: 2026-05-18
+Categories: astro-ph.IM, astro-ph.CO
+
+Astronomy & Astrophysicsmanuscript no. aa_example©ESO 2026
+June 2, 2026
+Photometric classification of quasars from DES and photo-z
+estimation with Machine Learning
+Pablo Motta 1,2,3⋆ , Filipe B. Abdalla 1,2,4⋆⋆ , Elcio Abdalla 5,6⋆⋆⋆ , Gabriel S. Costa 7,3 , and Camila Cardoso 8
+1 Department of Astronomy, School of Physical Sciences, University of Science and Technology of China, Hefei, Anhui
+230026, China
+2 School of Astronomy and Space Science, University of Science and Technology of China, Hefei, Anhui 230026, China
+3 Instituto de Física, Universidade de São Paulo - C.P. 66318, CEP: 05315-970, São Paulo, Brazil
+4 Department of Physics and Electronics, Rhodes University, PO Box 94, Grahamstown, 6140, South Africa
+5 Departamento de Física, Centro de Ciências Exatas e da Natureza, Universidade Federal da Paraíba, CEP 58059-970,
+João Pessoa, Brazil
+6 Secretaria de Estado da Ciência, Tecnologia, Inovação e Ensino Superior, Governo da Paraíba, Brazil
+7 Instituto Nacional de Pesquisas Espaciais, Divisão de Astrofísica, Av. dos Astronautas, 1758, 12227-010 - São José
+dos Campos, SP, Brazil
+8 Escola de Engenharia de Lorena (EEL), Universidade de São Paulo (USP), Estrada Municipal do Campinho, s/n,
+Lorena, CEP 12602-810, Brazil
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+Context.Modern astronomy leverages photometric data from large surveys like the Dark Energy Survey (DES), LSST,
+and Euclid. Among billions of detected objects, quasars are invaluable probes of cosmic history. Their clustering provides
+key information on the large-scale matter distribution and baryon acoustic oscillations, while absorption features trace
+the intergalactic medium. However, their photometric similarity to stars often leads to misclassification and exclusion
+from cosmological analyses, undermining their utility for precision cosmology.
+Aims.To resolve this paradox and fully leverage quasars for cosmology, we construct a dedicated quasar catalog from
+photometric survey data. This effort requires addressing two requirements: (1) improving photometric classification to
+reliably distinguish quasars from stars, and (2) refining redshift estimation to accurately map their three-dimensional
+distribution.
+Methods.We perform a positional cross-match between photometric point-like objects from DES Data Release 2 (DES
+DR2) and spectroscopically classified objects from SDSS Data Release 16 (SDSS DR16). We employ a K-Nearest
+Neighbors (KNN) algorithm using PSF magnitudes in theg,r,i, andzbands as features to classify quasars/galaxies
+against stellar contaminants. For photometric redshift estimation we use a hybrid machine learning approach combining
+a Boosted Decision Tree (BDT) fromANNzand a Decision Tree Regressor (DTR) from scikit-learn. We further develop
+a stacked outlier classifier to mitigate catastrophic redshift errors.
+Results.Our KNN classification achieves a recall of 0.77 at 0.99 precision. The photometric redshift distribution spans
+z≈0.5toz >3, with a distinct, well-recovered population atz≈4. The full photometric redshift sample contains
+872,372 objects; the reduced-outlier catalog contains 675,683 objects. The high-redshift sample (z≳3.5) remains
+reliable without outlier removal as outliers do not extend beyondz≈3.5.
+Conclusions.We present a robustly characterized quasar catalog from DES DR2, suitable for cosmological studies. The
+cleaner catalog is ideal for large-scale structure probes in the0< z <3range, while the full catalog can be used at
+z≈4. This catalog complements a galaxy-based catalog from DES, enabling joint cosmological analyses.
+Key words.Surveys – Catalogues – Quasars: general – Methods: data analysis
+1. Introduction
+Modern astronomy leverages photometric data from large
+surveys like the Dark Energy Survey (DES; (Collaboration
+2016, 2005; Abbott et al. 2022; Kessler et al. 2015)),
+LSST (Ivezić et al. 2019), and Euclid (Laureijs et al. 2011;
+Amendola et al. 2013) to study the universe. Among bil-
+lions of detected objects, quasars (Rees 1984) are invaluable
+probes of cosmic history (Van Waerbeke 2010; Fan et al.
+2023; Zheng et al. 2020; Frieman et al. 2008). Their clus-
+⋆ Corresponding author:pablomotta@ustc.edu.cn
+⋆⋆ Corresponding author:filipe.abdalla@gmail.com
+⋆⋆⋆ Corresponding author:eabdalla@usp.br
+tering provides key information on the large-scale mat-
+ter distribution and baryon acoustic oscillations (BAO)
+(Eisenstein et al. 2005; Cole et al. 2005; Anderson et al.
+2014; Alam et al. 2017; Huetsi 2006), while absorption fea-
+tures trace the intergalactic medium (Zhang et al. 2023;
+Rauch et al. 1998). However, their photometric similarity
+to stars often leads to misclassification and exclusion from
+cosmological analyses (Repp et al. 2016; Richards et al.
+2002c; Tanaka et al. 2018; Richards et al. 2001), under-
+mining their utility for precision cosmology (Joudaki et al.
+2018; Hildebrandt et al. 2017).
+Article number, page 1
+arXiv:2605.18218v2  [astro-ph.IM]  1 Jun 2026
+
+A&A proofs:manuscript no. aa_example
+To resolve this paradox and fully leverage quasars for
+cosmology, we propose constructing a dedicated quasar cat-
+alog from photometric survey data. This effort requires
+addressing two requirements: (1) improving photometric
+classification to reliably distinguish quasars from stars,
+and (2) refining redshift estimation to accurately map
+their three-dimensional distribution. These tasks are in-
+terdependent—misclassification propagates errors into red-
+shift measurements (Hildebrandt et al. 2010), while pre-
+cise redshifts help validate classifications. Traditional meth-
+ods, like color cuts (Richards et al. 2006) or morphology
+(Baldry et al.2002),oftenfailtoresolveambiguitiesathigh
+redshifts where quasar UV features shift into optical bands
+(Fan et al. 1999b; Bolton et al. 2012; Fan et al. 1999a).
+Quasars truly act as cosmic lighthouses: their extreme
+brilliance allows detection across vast cosmic distances,
+making them invaluable for mapping the universe’s large-
+scale structure and probing the intergalactic medium via
+absorption features like the Lyman-αforest (Rauch et al.
+1998). Despite their significance, their photometric identifi-
+cation remains challenging. In astronomical images, quasars
+appear as unresolved points of light, morphologically in-
+distinguishable from stars (Weiner et al. 2005). Their col-
+ors, measured through broad photometric bands, often
+overlap with certain stellar types, such as hot blue stars
+(Richards et al. 2002b) or cool red dwarfs (Skrzypek et al.
+2016). Misclassifying quasars introduces systematic errors
+into photometric redshifts, skewing cosmological measure-
+ments like the BAO scale (Eisenstein et al. 2005; Cole et al.
+2005; Anderson et al. 2014; Alam et al. 2017)—a funda-
+mental “ruler” for studying the universe’s expansion history
+(Prat et al. 2018). Thus, enhancing both quasar classifica-
+tion purity and photometric redshift precision are insepa-
+rable and equally crucial goals, forming the dual focus of
+this work.
+Quasars are among the most energetic objects in the
+universe, fueled by supermassive black holes (Rees 1984).
+Their light spans the electromagnetic spectrum, exhibit-
+ing distinctive ultraviolet (UV) glows and broad emis-
+sion lines (Vanden Berk et al. 2001). However, in photo-
+metric surveys, their point-like appearance and character-
+istic colors frequently mimic those of stars (Richards et al.
+2002c; Brescia et al. 2013). At higher redshifts, this con-
+fusion intensifies due to the cosmological redshift effect.
+For instance, low-redshift quasars may resemble young, hot
+stars (A-type), while high-redshift quasars can be mistaken
+for cool, dim stars (M dwarfs) in broadband photome-
+try (Fan et al. 2001). Traditional identification methods,
+such as fixed color-based selection criteria (Richards et al.
+2006) or morphological analysis (Baldry et al. 2002), strug-
+gle significantly to resolve these intrinsic ambiguities, es-
+pecially in noisy data or surveys with limited wavelength
+coverage (Tanaka et al. 2018). Critically, these persistent
+misclassifications propagate into photometric redshift er-
+rors (Hildebrandt et al. 2010; Wu et al. 2004), distorting
+three-dimensional maps of the universe’s matter distribu-
+tion and ultimately compromising cosmological conclusions
+(Abbott et al. 2019; Omori et al. 2019).
+To overcome these limitations, we turn to the advanced
+capabilities of machine learning (ML). Unlike simplistic tra-
+ditional techniques, ML algorithms can simultaneously ana-
+lyze a multitude of features—such as brightness, colors, and
+subtle spatial patterns—to effectively disentangle quasars
+from stars while concurrently refining their redshift esti-
+mates (Hoyle et al.2015; Beck et al.2017; Rumelhart et al.
+1986; Bottou 2010; Friedman 2001; Oyaizu et al. 2008;
+Almosallam et al. 2016a,b; Rivera et al. 2018). This pow-
+erful dual capability directly addresses the core challenge
+of modern cosmology: balancing immense statistical power
+from vast datasets with stringent precision requirements.
+Photometric redshifts, estimated from broad-band col-
+ors rather than computationally intensive detailed spectra,
+offer an efficient means of determining distances for enor-
+mous datasets from surveys like DES, SDSS (York et al.
+2000), or Pan-STARRS (Kaiser et al. 2010). However, their
+accuracy depends critically on the quality and represen-
+tativeness of the training data (Hildebrandt et al. 2010;
+Newman et al. 2013). For quasars, reliable redshift esti-
+mation necessitates a clean, comprehensive, and represen-
+tative sample of spectroscopically confirmed quasars as
+ground truth (Dawson et al. 2013; Masters et al. 2019). In
+this study, we integrate spectroscopic quasar identifica-
+tions from the Sloan Digital Sky Survey (SDSS)—spanning
+redshiftsz≈0.1to 6—with DES photometry to
+train our ML models. Employing the Python library
+scikit-learn(Pedregosa et al. 2011) and the public code
+ANNz(Sadeh et al. 2016), we aim for two synergistic out-
+comes: high-purity quasar catalogs and precise photometric
+redshifts to create tomographic maps of the matter distri-
+bution.
+Our work complements that presented in Abdalla et al.
+(2025). While both papers create DES catalogs for cosmo-
+logical purposes, a key distinction lies in the type of celes-
+tial objects analyzed. Their work focuses on extended ob-
+jects (galaxies), whereas our study focuses on point-like ob-
+jects,typicallyexcludedfromthephotometricselectionpro-
+cesses. Consequently, this work not only focuses on accurate
+photo-z estimation but also properly separates galaxies and
+quasars from prevalent stellar contamination. These two
+catalogs are complementary, and combining them would
+significantly enhance the overall cosmological performance
+of future analyses.
+This complementarity opens new avenues for joint
+cosmological analyses, particularly in synergy with ra-
+dio surveys targeting large-scale structure, such as
+CHIME (Bandura et al. 2014), FAST (Nan et al. 2011;
+Bigot-Sazy et al. 2015), SKA (Santos et al. 2015), and
+Tianlai (Chen 2012). In particular, the Baryon Acous-
+tic Oscillations from Integrated Neutral Gas Observa-
+tions (BINGO; Abdalla et al. 2022a; Wuensche et al. 2022;
+Abdalla et al. 2022b; Liccardo et al. 2022; Fornazier et al.
+2022; Zhang et al. 2022; Costa et al. 2022; Novaes et al.
+2022; Santos et al. 2023) experiment offers a unique oppor-
+tunity to cross-correlate 21 cm intensity mapping data with
+optical catalogs. A well-characterized optical catalog pro-
+vides an ideal target for these cross-correlations. Whether
+used individually or in combination, the galaxy and quasar
+catalogs can enhance tomographic analyses, mitigate sys-
+tematics through cross-correlation, and improve constraints
+on cosmological parameters such as dark energy, structure
+growth, and primordial non-Gaussianity. Therefore, these
+parallel efforts form a coherent framework that significantly
+boosts the scientific return of both optical and radio sur-
+veys.
+This paper is organized as follows: in Section 2 we de-
+scribe the spectroscopic and photometric data; Section 3
+details the optimization of ML models for classifying ob-
+jects as stars or quasars and creating a quasar catalog;
+Article number, page 2
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+Section 4 describes photometric redshift estimation; and
+finally, in Section 5 we detail the application of our opti-
+mized classification and redshift estimation models to the
+full Dark Energy Survey data to create the comprehensive
+photometric catalog of DES quasars.
+2. Data
+We performed a positional cross-match between photomet-
+ric point-like objects from the Dark Energy Survey Data
+Release 2 (DES DR2; Abbott et al. 2021) and spectroscop-
+ically classified objects from the Sloan Digital Sky Survey
+Data Release 16 (SDSS DR16; Ahumada et al. 2020). Our
+specific interest is in identifying point-like sources, particu-
+larly quasars, which serve as valuable tracers for cosmologi-
+cal studies of large-scale structure and cosmic evolution. At
+the same time, it is essential to reliably identify and exclude
+stars, which act as contaminants in quasar samples used for
+cosmology. The cross-match allows us to associate the pre-
+cise spectroscopic labels from SDSS—providing object type
+(quasar, star, galaxy) and redshift—with the photometric
+measurements from DES, enabling the construction of a
+training set for photometric classification and redshift esti-
+mation. In the following, we describe the two surveys used
+and detail the cross-matching procedure between them.
+2.1. The Dark Energy Survey
+The Dark Energy Survey (DES; Abbott et al. 2018, 2021)
+is an optical and near-infrared public survey designed to
+improve our understanding of dark energy and cosmic ac-
+celeration by mapping galaxies, detecting supernovae, and
+studying cosmic structure patterns Abbott et al. (2022).
+The survey was conducted using the Dark Energy Camera
+(DECam) at the Cerro Tololo Inter-American Observatory
+(CTIO)andcoversapproximately5000deg 2 ofthesouthern
+skyinthegrizYbands.Inadditiontothiswide-areasurvey,
+DES includes a deep supernova survey spanning about 27
+deg2, primarily aimed at characterizing type Ia supernova
+light curves Kessler et al. (2015).
+The main scientific goals of DES are pursued through
+four complementary probes: type Ia supernovae, large-scale
+clustering of galaxies, galaxy cluster counts, and weak grav-
+itational lensing Collaboration (2005). These observations
+were designed to provide precise photometric redshifts, es-
+sential for constraining the equation-of-state parameterw
+of dark energy.
+The survey was conducted over 345 nights across six
+years. The first data release (DES DR1) included data from
+the first three years (August 2013 to January 2016), cata-
+loging nearly 400 million astronomical objects Abbott et al.
+(2018).Theseconddatarelease(DESDR2)incorporatesall
+six years of data, including a reprocessing of DR1 data, and
+providesacatalogofnearly700millionobjects,withsimilar
+proportions of galaxies and stars Abbott et al. (2021).
+The publicly available DES DR2 dataset was accessed
+viatheDESaccessplatform 1,aninterfacethatenablesusers
+toqueryandretrieveDESdata.Weretrievedthedatausing
+a Structured Query Language (SQL) query. To select point-
+like sources, we applied the following constraints,
+W A V G _ S P R E A D _ M O D E L _ I + 3 . 0∗W A V G _ S P R E A D E R R _ M O D E L _ I > 0 . 0 0 5 and
+W A V G _ S P R E A D _ M O D E L _ I + 1 . 0∗W A V G _ S P R E A D E R R _ M O D E L _ I > 0 . 0 0 3 and
+1 https://des.ncsa.illinois.edu/desaccess/
+Fig. 1: Positional cross-match between photometric point-
+like objects from DES DR2 and spectroscopically classified
+objects from SDSS DR16. The matched dataset provides
+the basis for training and testing our classification model
+and for photometric redshift estimation.
+W A V G _ S P R E A D _ M O D E L _ I−1 . 0∗W A V G _ S P R E A D E R R _ M O D E L _ I > 0 . 0 0 1 and
+W A V G _ S P R E A D _ M O D E L _ I >−1 and
+IMAFLAGS_ISO_I = 0 and
+M A G _ A U T O _ I < 21 ,
+whereWAVG_SPREAD_MODEL_Iis a morphological classifier used
+to distinguish between extended and point-like sources,
+WAVG_SPREADERR_MODEL_Irepresents its associated uncertainty,
+andIMAFLAGS_ISO_I = 0ensures that the selected objects are
+free from artifacts or contamination issues. Additionally,
+the constraint onMAG_AUTO_Iensures that only objects with
+magnitudesI < 21are included. These selection criteria fol-
+low recommendations from the DES DR2 release paper
+Abbott et al. (2021) to identify point-like objects, which
+are expected to have stellar morphology.
+2.2. Sloan Digital Sky Survey
+The Sloan Digital Sky Survey (SDSS) is a spectroscopic and
+photometric survey that initially operated with a telescope
+located at the Apache Point Observatory (APO), and since
+2017 has also included observations from the Las Campanas
+Observatory (LCO). The survey has been in operation since
+1998, and is currently in its fourth phase, with sixteen data
+releases. The first data release occurred in 2001, and the
+most recent one, Data Release 16 (DR16), was published
+in 2020 (Ahumada et al. 2020). All SDSS data releases are
+cumulative, meaning that the most recent release contains
+both the new data and reprocessed data from all previ-
+ous releases using updated pipelines and improved analy-
+ses. Therefore, itis recommended that users access the most
+recent release to ensure the highest data quality.
+The SDSS DR16 dataset provides spectroscopic red-
+shifts and automated spectral classifications—namely, QSO
+(quasi-stellar object), GALAXY, and STAR—along with
+a subset of objects flagged for visual inspection of their
+spectra (Bolton et al. 2012). In this work, we utilize these
+spectral classifications to identify and label the correspond-
+ing photometric objects from DES DR2. Through the Sky-
+Server platform, objects detected by optical spectroscopy
+were retrieved from the SpecObj view of thespecObjAll
+table, which excludes data considered bad or duplicated.
+Article number, page 3
+
+A&A proofs:manuscript no. aa_example
+Category DES DR2SDSS DR16Matched Sample
+Total Objects50,679,391 5,107,045 168,738
+Stars N/A 1,041,130 85,896
+Galaxies N/A 2,963,274 4,649
+Quasars N/A 1,102,641 78,193
+Table 1: Summary of object counts across catalogs and in
+the matched sample.
+Dataset Number of objects
+Total 168,738
+Training Set (75%) 126,553
+Test Set (25%) 42,185
+Table 2: Number of objects used for training the classifica-
+tion model of Quasar selection.
+2.3. Positional Cross-Match of DES DR2 Photometry and
+SDSS DR16 Spectroscopy
+A positional cross-match was performed between the DES
+DR2 catalog of point-like objects and the SDSS DR16 spec-
+troscopic catalog. Fig. 1 provides a visual representation
+of the resulting matched dataset, highlighting its sky cov-
+erage. This procedure utilized the initial DES DR2 cat-
+alog, containing 50,679,391 photometric objects, and the
+full spectroscopic dataset from SDSS DR16, which com-
+prises 5,107,045 spectroscopically detected objects. The
+cross-match resulted in a final sample of 177,670 matched
+objects with available spectroscopic classifications and red-
+shifts, forming the basis for further analysis in this work.
+The composition of this matched catalog, alongside the ini-
+tial counts from each survey, is summarized in Table 1. No-
+tice that for the matched sample most of the non-star ob-
+jects are quasars due to the point-like selection on the pho-
+tometric catalog. For cosmological purposes, it is not neces-
+sary to distinguish between quasars and galaxies; therefore,
+throughout the text, we refer to quasars as quasars/galaxies
+with point-like morphology.
+The cross-matching process was based on the right as-
+censionαand declinationδcoordinates defined in the equa-
+torial system. We used the Python libraryesutil2, which
+applies the Hierarchical Triangular Mesh (HTM) indexing
+method to divide the spherical surface into equal-area tri-
+angles, enabling efficient searches for corresponding objects
+across surveys Kunszt et al. (2001).
+A maximum positional tolerance of 1 arcsecond (equiv-
+alent to0.0002778degrees) was adopted, allowing at most
+one match per object. This value is consistent with the
+average point spread function (PSF) of the DES detec-
+tion bands, which ranges from 0.83 to 1.1 arcseconds
+Abbott et al.(2021).ThePSFreflectsthetypicalpositional
+uncertainty of detected objects; therefore, choosing a toler-
+ance smaller than 1 arcsecond could lead to missed genuine
+counterparts, while a larger tolerance might increase the
+number of false matches.
+3. Quasar Candidate Selection
+We divided the dataset from the cross-match between DES
+DR2 and SDSS DR16 into two subsets: 75% for training
+2 https://esutil.readthedocs.io/
+(a) Comparison of feature types
+(b) Comparison of magnitude band combination
+Fig. 2: Precision-recall curves for the KNN classification of
+quasars/galaxies versus stars using different feature combi-
+nations, evaluated on the test set. Top: Comparison of fea-
+ture sets including magnitudes, fluxes, and spread model
+parameters. The results show that magnitudes outperform
+other feature types for this classification task. Bottom:
+Comparison of different combinations of magnitude bands.
+The PSF magnitudes in the G, R, I, and Z bands provide
+the best trade-off between precision and recall.
+and 25% for testing (Table 2). The aim is to train a ma-
+chine learning model to classify objects as quasars/galax-
+ies or stars. A reliable separation is crucial, as stars con-
+taminate quasar samples used in cosmology. This section
+describes our approach: the classification model, the eval-
+uation metrics, the selection of features, and the tuning of
+model parameters.
+3.1. Classification Method: K-Nearest Neighbors
+For this classification task, we employed the K-Nearest
+Neighbors (KNN) algorithm, a simple yet effective super-
+vised method commonly used in classification problems
+(Cover & Hart 1967). The core idea is that objects close
+together in feature space tend to share the same class.
+Article number, page 4
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+Fig. 3: Recall as a function of the number of neighborsk
+for the K-Nearest Neighbors (KNN) model evaluated on
+the test set. The curves correspond to different precision
+thresholds: blue for 0.99, orange for 0.98, and green for 0.97.
+The highest recall at precision 0.99 is achieved withk= 11
+neighbors.
+Givenaqueryobject,KNNidentifiesitsknearestneigh-
+bors in the training set—typically using Euclidean dis-
+tance—and assigns a class label via majority vote. It also
+provides class probabilities based on the fraction of neigh-
+bors in each class. Because KNN is non-parametric and
+instance-based, it adapts well to complex, non-linear class
+boundaries like those between stars and quasars/galaxies in
+photometric feature space.
+We used the widely adopted scikit-learn implementa-
+tion3 Pedregosa et al. (2011), which includes efficient scal-
+ing and voting routines. KNN has been successfully ap-
+plied in astronomical classification tasks Ball et al. (2007);
+Viquar et al. (2019); Li et al. (2008). Because KNN re-
+lies on distance metrics, it is sensitive to feature scaling.
+To ensure fair weighting across attributes, we normalized
+each input feature to the range [0,1] using scikit-learn’s
+MinMaxScaler4. This prevents variables with larger numer-
+ical ranges from dominating the distance computation.
+3.2. Metrics
+Toevaluatetheperformanceofourclassificationmodels,we
+adopted the precision-recall (PR) curve as the main metric.
+This choice reflects the specific requirements of our study,
+where it is critical to build a quasar candidate catalog with
+minimal contamination from stars. In this context, preci-
+sion and recall provide complementary measures of model
+performance.
+Precision is defined as the fraction of objects classified
+as quasars or galaxies that are truly quasars or galaxies. In
+other words, it quantifies the reliability of positive predic-
+3 https://scikit-learn.org/stable/modules/generated/
+sklearn.neighbors.KNeighborsClassifier.html
+4 https://scikit-learn.org/stable/modules/generated/
+sklearn.preprocessing.MinMaxScaler.html
+(a) Non-stars (Quasars/Galaxies)
+(b) Stars
+Fig. 4: t-SNE visualization of the feature space used for ob-
+ject classification. The plots show the two-dimensional em-
+bedding of (a) photometrically classified non-stars (quasars
+and galaxies) and (b) photometrically classified stars from
+the test set, based on their PSF magnitudes in the G, R,
+I, and Z bands. The distinct clustering illustrates the sep-
+arability between the two classes achieved by the selected
+features. The color of each point indicates the probability
+assigned by the KNN model of being classified as a quasar/-
+galaxy, showing that most objects are confidently classified.
+tions and is given by
+Precision= True Positives
+True Positives+False Positives.(1)
+A high precision value indicates that the majority of the
+objects identified as quasars or galaxies are genuine, which
+Article number, page 5
+
+A&A proofs:manuscript no. aa_example
+is essential for cosmological analyses, as contamination by
+stars would compromise measurements of large-scale struc-
+ture and bias scientific conclusions.
+Recall, on the other hand, measures the fraction of ac-
+tual quasars or galaxies that are correctly identified by the
+classifier. It is defined as
+Recall= True Positives
+True Positives+False Negatives.(2)
+A high recall means that most true quasars and galaxies
+present in the dataset are recovered by the model, ensuring
+completeness of the selected sample.
+The precision-recall curve illustrates the trade-off be-
+tween these two quantities as the classification threshold is
+varied. Our priority is to achieve high precision, so that the
+final quasar catalog is as free as possible from stellar con-
+taminants. Such contaminants could otherwise introduce
+significant systematics in cosmological studies.
+Although receiver operating characteristic (ROC)
+curves are commonly used in classification problems, they
+are less informative in the presence of class imbalance be-
+cause they give equal weight to both positive and negative
+classes. In contrast, the precision-recall curve focuses on
+the performance with respect to the positive class. In what
+follows, we use the PR curve to guide the choice of model
+configurations and thresholds that balance precision and
+recall according to the scientific needs of our study.
+3.3. Feature Selection
+To improve the performance of our classification model, we
+tested different combinations of features from the photo-
+metric data to identify which provided the best separa-
+tion between quasars/galaxies and stars. Fig. 2a compares
+the precision-recall (PR) curves obtained when training the
+KNN classifier with different sets of features. In this com-
+parison, we considered subsets that included combinations
+of magnitudes, fluxes, and the spread model parameters.
+Although the spread model is useful for distinguishing
+point-like and extended sources in general, we found that
+using it as a feature for training the classifier led to poorer
+results. This outcome is expected because our original DES
+dataset was pre-selected to include only objects with point-
+like morphology by applying a cut on the spread model. As
+a result, the remaining sample no longer contained the mor-
+phological diversity that the spread model would normally
+help to separate, and the spread model provided little ad-
+ditional information for machine learning classification in
+this context.
+In contrast, we found that the magnitudes of the objects
+were the most effective features for classification, achieving
+higher precision at the same level of recall compared to
+other feature sets. In Fig. 2b, we focused on comparing dif-
+ferentcombinationsofmagnitudebandstodeterminewhich
+subset offered the best performance. We found that using
+the PSF magnitudes in the G, R, I, and Z bands provided
+the highest precision-recall curve.
+To illustrate the separability of quasars/galaxies and
+stars within the chosen feature space, defined by the PSF
+magnitudes in the G, R, I, and Z bands, we applied the t-
+distributed Stochastic Neighbor Embedding (t-SNE) tech-
+nique (Van der Maaten & Hinton 2008) to project the ob-
+jects in the test set into two dimensions. The resulting visu-
+alization reveals distinct clusters for the two classes, high-
+lighting the effectiveness of the selected features for classi-
+fication. The color of each point represents the probability
+assigned by the KNN model for the object to be a quasar
+or galaxy, indicating that most objects are classified with
+high confidence.
+3.4. Model Tuning
+Basedontheselectedfeatures,wefirstfixedthedesiredpre-
+cision at 0.99 to ensure that the final quasar candidate cata-
+log would have minimal contamination from stars. Our goal
+was to maximize recall while maintaining this high level of
+precision. To achieve this, we tuned the hyperparameterk
+(the number of neighbors in the KNN model) and evaluated
+its impact on the precision-recall performance. As shown in
+Figure 3, the optimal number of neighbors was found to
+bek= 11, which provided the highest recall compatible
+with the chosen precision. This tuning process also deter-
+mined the optimal probability threshold, which we found
+to be 0.8 in order to achieve the target precision. The final
+model achieved a recall of 0.77 at precision 0.99, with an
+area under the precision-recall curve (AUC-PR) of 0.975.
+We then applied this optimized KNN model to classify the
+full DES DR2 photometric dataset, enabling the identifica-
+tion of new quasar candidates based solely on photometric
+information.
+4. Photometric Redshift Estimation through
+Hybrid Machine Learning Approaches
+Photometric redshift estimation provides redshift infor-
+mation for large samples of galaxies and quasars us-
+ing multi-band photometry. While traditional template-
+fitting methods (Benitez 2000; Arnouts & Ilbert 2011;
+Ilbert et al. 2006; Bolzonella et al. 2000) have been widely
+used, machine learning offers a powerful alternative by
+learning non-linear relationships between photometric fea-
+tures and redshift directly from spectroscopic train-
+ing data (Collister & Lahav 2004; Carliles et al. 2010;
+Cavuoti et al. 2015; Hoyle et al. 2016; Oyaizu et al. 2008;
+Almosallam et al. 2016a). These methods have demon-
+strated improved accuracy and reduced catastrophic outlier
+rates in photometric redshift studies, particularly for chal-
+lenging quasar samples (Bovy et al. 2012; Richards et al.
+2001; Brescia et al. 2013). The precision of photo-z es-
+timation is crucial for cosmological analyses, as er-
+rors can significantly impact weak lensing measurements
+and large-scale structure constraints (Joudaki et al. 2018;
+Hildebrandt et al. 2017; Prat et al. 2018). In this section,
+we describe the machine learning models and tools used in
+our analysis.
+– Artificial Neural Networks (ANNs)are a class of
+machine learning models inspired by the structure and
+function of the human brain. They consist of multi-
+ple layers of interconnected nodes, or neurons,” where
+each connection has an associated weight. During train-
+ing, these weights are adjusted to minimize the differ-
+ence between the network’s predictions and the true val-
+ues. ANNs are highly capable of learning complex, non-
+linear relationships between input features (like photo-
+metric magnitudes and colors) and output targets (such
+as redshift). Their ability to model intricate patterns
+Article number, page 6
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+(a) Photo-zbefore outlier removal
+(b) Photo-zafter outlier removal
+Fig. 5: Top: photometric redshift estimation results shown
+for the test set. Top: Photometric redshift estimation com-
+bining two machine learning techniques: a Boosted Deci-
+sion Tree (BDT) fromANNzand a Decision Tree Regressor
+(DTR) from scikit-learn. Note the presence of two clusters
+off-diagonal which are referred as outliers. Bottom: Pho-
+tometric redshift after applying a stacked outlier classifier.
+The fraction of outliers are significantly reduced.
+makes them particularly effective for photometric red-
+shift estimation, as demonstrated in surveys like 2dF-
+GRS and SDSS (Collister & Lahav 2004; Cavuoti et al.
+2015; Newman et al. 2013).
+– Decision Trees (DTs)are non-parametric supervised
+learning models used for both classification and regres-
+sion. They operate by recursively partitioning the fea-
+ture space into a set of rectangular regions. Each inter-
+nal node in the tree represents a decision” based on a
+threshold applied to a single feature, and each branch
+corresponds to the outcome of that decision. This pro-
+cess continues until a leaf node is reached, which rep-
+resents the predicted output (e.g., a redshift value).
+Decision Trees offer a high degree of interpretability
+due to their clear, rule-based structure. However, a sin-
+gle decision tree can be prone to overfitting, especially
+Fig. 6: Precision-Recall curves for different outlier classi-
+fiers evaluated on the test set. The blue, orange, and green
+curves correspond to individual classifiers: k-Nearest Neigh-
+bors (kNN), Gradient Boosting (GB), and Random For-
+est (RF), respectively. The red curve represents a stacked
+ensemble combining kNN and RF, while the purple curve
+shows the performance of the full stacked model combin-
+ing kNN, GB, and RF. The stacked classifiers, particularly
+the full ensemble (purple), achieve higher AUC-PR, indi-
+cating more effective identification of catastrophic outliers
+while preserving sample completeness. The full ensemble
+achieves an AUC-PR of 0.92.
+when dealing with noisy data or complex relationships,
+if not properly regularized or constrained (Carliles et al.
+2010).
+– Boosted Decision Trees (BDTs)are an ensemble
+learning method that combines the predictions of multi-
+ple weak” decision tree learners to create a single, strong
+predictive model. Unlike Random Forests, BDTs build
+trees sequentially. Each new tree is constructed to fo-
+cus specifically on the instances that were mispredicted
+or had large errors by the ensemble of all previously
+built trees. This iterative process of boosting” allows
+the model to progressively correct its errors, leading to
+improved accuracy and reduced bias compared to a sin-
+gle decision tree. BDTs have demonstrated consistently
+strong performance in various photometric redshift es-
+timation tasks in large astronomical surveys, including
+SDSS and DES (Gerdes et al. 2010; Hoyle et al. 2016).
+– Random Forest Regressors (RFRs)are another
+powerful ensemble learning method that builds upon
+the concept of decision trees. A Random Forest con-
+structs multiple decision trees during training, but with
+two key differences from basic Decision Trees: (1) each
+tree is built using a bootstrap sample (a random sam-
+ple with replacement) of the training data, and (2) at
+each split in a tree, only a random subset of features
+is considered. These two sources of randomness help to
+decorrelate the individual trees within the forest. The
+final prediction is then obtained by averaging the pre-
+dictions of all individual trees. This aggregation process
+significantly reduces overfitting and decreases the vari-
+ance of the model’s predictions. Random Forests have
+been widely adopted for photometric redshift estima-
+Article number, page 7
+
+A&A proofs:manuscript no. aa_example
+tion, offering robust performance across heterogeneous
+datasets and providing good generalization capabilities
+(Carliles et al. 2010).
+– Gradient Boosted Regressors (GBRs)are an ex-
+tension of Boosted Decision Trees that utilize gradient
+descent optimization. Similar to BDTs, GBRs build an
+ensemble of decision trees sequentially. However, instead
+of simply correcting errors from previous trees, each new
+tree in a GBR is trained to predict the residuals” or er-
+rors” of the ensemble’s current prediction with respect
+to the true target values. This process is framed as mini-
+mizingaspecifiedlossfunction(e.g.,meansquarederror
+for regression) through gradient descent at each itera-
+tion. By iteratively reducing the errors in this gradient-
+based manner, GBRs are capable of yielding highly ac-
+curate and robust models that are particularly well-
+suited for complex photometric redshift relationships
+and large, noisy datasets (Hoyle et al. 2016).
+– K-Nearest Neighbors Regressors (KNRs)are a
+simple, non-parametric, instance-based learning algo-
+rithm. They are the regressor version of the classifier
+described in Sec. 3.1. To predict the redshift of a new,
+unseen object, KNRs identify thekclosest data points
+(neighbors) to that object in the multi-dimensional fea-
+ture space (defined by photometric parameters). The
+prediction for the new object’s redshift is then typically
+calculated as the average of the redshifts of itsknearest
+neighbors. KNRs are conceptually straightforward and
+require no explicit training phase (they are “lazy learn-
+ers” as computation is deferred until prediction time).
+While they can be computationally intensive for very
+large datasets due to the need to calculate distances to
+all training points, KNRs often serve as effective base-
+lines in photometric redshift studies, providing a simple
+yet robust approach to inferring redshifts based on local
+similarity in the photometric space (Ball et al. 2007).
+4.1. Implementation and Performance
+To estimate photometric redshifts (photo-z) for quasars, we
+applied several machine learning regression models. These
+models were trained on a subset of the matched sample
+consisting of objects classified as quasars or galaxies by our
+classification model. Thedataset was thensplit into 40%for
+training and 60% for testing. We allocated a larger portion
+to the test set because it was further subdivided for training
+and testing the outlier removal classifier (see Table 3). We
+focused on two computational frameworks for the redshift
+estimation:
+–ANNz(Collister & Lahav 2004; Lahav & Collister 2012)
+is a tool designed for photometric redshift estimation
+in astronomy. It supports Artificial Neural Networks
+and Boosted Decision Trees, and provides functional-
+ities for probability distribution estimation and flexi-
+ble input feature selection. Both ANNs and BDTs were
+trained usingANNzwith photometric magnitudes and,
+in a separate configuration, color indices derived from
+these magnitudes.
+– Scikit-learn(Pedregosa et al. 2011) is a widely-used
+Python library for machine learning. We used scikit-
+learn to implement Decision Tree Regressors, Gradient
+Boosted Regressors, Random Forest Regressors, and K-
+Nearest Neighbors Regressors, all trained on photomet-
+ric magnitudes.
+Fig.5acomparesthephotometricredshiftwiththespec-
+troscopic one for the test set. Across the best models, we
+observe a prominent main cluster of objects spanning ap-
+proximately0.5< z <3, where the photometric redshift
+estimates show small errors and closely track the spectro-
+scopic redshifts. Additionally, two distinct off-diagonal clus-
+ters are present; these correspond to objects for which the
+photometric redshift is not accurately recovered and are
+thus classified as outliers. Notably, we also identify a clus-
+ter nearz≈4, where photometric redshifts are well recov-
+ered. The outliers do not extend beyondz≈3.5, meaning
+the high-redshift population aroundz≈4remains reliably
+identified.
+We compared different ML models implemented in
+bothANNzandscikit-learnframeworks. The feature
+space chosen for photometric redshift estimation in-
+cludes four color indices—MAG_AUTO_G-R_DERED,MAG_AUTO_R-I_DERED,
+MAG_AUTO_I-Z_DERED, andMAG_AUTO_Z-Y_DERED—along with the
+dereddened r-band magnitudeMAG_AUTO_R_DEREDand a morpho-
+logical parameter,KRON_RADIUS. InANNz, the best-performing
+model was the BDT, while in scikit-learn, the DT provided
+superior performance over GBR and RFR. This preference
+arises because while models like GBR and RFR aim to re-
+duce overall prediction errors, they do not effectively distin-
+guish between outliers and well-predicted objects. For our
+purposes, achieving a large group of non-outliers is more
+valuable than minimizing individual prediction errors uni-
+formly. Further discussion on the photo-zestimation with
+different ML models is provided in Appendix A.
+The best overall performance (Fig. 5a) was obtained
+with the hybrid model, which combines theANNzoptimized
+BDT and the scikit-learn DTR using ak-nearest neigh-
+bors (kNN)-based dynamic weighting scheme. This hybrid
+approach leverages the complementary strengths of both
+models, resulting in a large main cluster with small photo-
+metric redshift errors, reduced size of outlier clusters, and
+preservation of the high-redshiftz≈4cluster.
+4.2. Outlier Removal
+Photometric redshift estimation is particularly susceptible
+to catastrophic outliers—objects where the difference be-
+tween the predicted and true redshift is large—often due
+to degeneracies in color–redshift space or the impact of
+photometric noise (Richards et al. 2002a; Ball et al. 2007;
+Bovy et al. 2012). We observed that groups of catastrophic
+outliers are predominantly concentrated at intermediate
+redshifts up toz≈3.5with a noticeable reduction in
+outlier frequency at higher redshifts. This trend is con-
+sistent with (Wu et al. 2004; Han et al. 2016; Yang et al.
+2017; Peters et al. 2015).
+To address this, we implemented a secondary step aimed
+at identifying and filtering such outliers. We defined catas-
+trophic outliers as objects satisfying
+|zphoto −z spec| ≥0.4.(3)
+To train and validate our classifier, we reserved 50% of the
+original test set for this task.
+We compared several classification algorithms and
+found that the best performance was achieved by a stacked
+ensemble classifier5 A stacked ensemble combines the out-
+5 https://scikit-learn.org/stable/modules/generated/
+sklearn.ensemble.StackingClassifier.html.
+Article number, page 8
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+Table 3: Training and test sets used for photometric redshift regression models and outlier removal classification models.
+Dataset Number of objects
+Total Quasar/Galaxy sample (100%) 62,570
+Photo-z Training Set (40%) 25,028
+Photo-z Test Set (60%) 37,542
+Outlier classifier Training Set (50% of Test set) 18,771
+Outlier classifier Test Set (50% of Test Set) 18,771
+puts of multiple base classifiers to produce a final predic-
+tion, leveraging the strengths of each individual model to
+improve overall performance (Wolpert 1992). Our ensemble
+integrated k-Nearest Neighbors (kNN), Gradient Boosting
+Machine (GBM), and Random Forest (RF) classifiers. The
+base models—kNN, GBM, and RF—were previously em-
+ployed in our work as regressors to estimate photometric
+redshifts. In this classification setting, however, these mod-
+els are repurposed to assign an outlier probability to each
+object, which is then used to distinguish likely outliers from
+the main quasar population
+To assess performance, we used precision–recall (PR)
+curves for all classifiers, including both individual mod-
+els and stacked ensembles. The PR curves, shown in Fig-
+ure 6, highlight how each classifier balances precision and
+recall, with the stacked models—especially the full ensem-
+ble—achieving the best trade-off, with an Area Under the
+Curve (AUC) of 0.92 We fixed the threshold of the clas-
+sification at 0.79 yielding a precision of 0.9 and recall of
+0.73. After applying the outlier classification to the full test
+sample, the filtered dataset (Figure 5b) exhibited a signif-
+icantly reduced fraction of catastrophic outliers compared
+to the original predictions, demonstrating the effectiveness
+of the outlier rejection step.
+4.3. Evaluation of photometric error
+To quantify the performance of our photometric redshift
+estimator, we computed four metrics as functions of the es-
+timated redshiftzphot: the bias, the scatterσ, the 68th per-
+centile errorσ 68, and the effective retention fractionF Re.
+These metrics are defined respectively as
+Bias=
+ zphot −z spec
+1 +z spec
+
+,(4)
+σ=
+vuut
+* zphot −z spec
+1 +z spec
+2+
+,(5)
+σ68 =68th percentile of
+
+zphot −z spec
+1 +z spec
+ ,(6)
+F Re = 100
+n
+nX
+i=1
+δi , δ i =
+(
+1if
+
+zi
+phot−zi
+spec
+1+zispec
+ < ϵ
+0otherwise
+.(7)
+Here,nis the total number of objects in the redshift
+bin. Thebiasmeasures the average systematic offset be-
+tween photometric and spectroscopic redshifts, indicating
+whether predictions tend to over- or underestimate the true
+values. Thescatterσcaptures the overall spread in the
+normalized residuals, whileσ 68 estimates the width of the
+core distribution. Theeffective retention fractionF R e re-
+flects the percentage of objects retained within the outlier
+Fig. 7: Evaluation of photometric redshift error metrics as
+a function of spectroscopic redshiftzspec. From top to bot-
+tom: (1) scatterσ, (2) bias, (3) 68th percentile errorσ68,
+and (4) effective retention fractionF Re. Two models are
+shown: a baseline BDT + DTR hybrid model (blue cir-
+cles) and the same model with an additional outlier removal
+step (red triangles). The bias remains close to zero up to
+z∼1.5, where the training data are most concentrated. All
+error metrics degrade forz≳4.5due to sample sparsity.
+The outlier removal procedure leads to a consistent reduc-
+tion in scatter and error metrics across most of the redshift
+range. The retention fractionF R e is generally higher for
+the model with outlier removal, except nearz∼3.5, where
+limited data causes fluctuations in performance.
+thresholdϵ= 0.15, thus quantifying robustness to catas-
+trophic errors.
+Figure 7 displays the evolution of these metrics across
+the redshift range for two models: the baseline BDT +
+DTR ensemble, and the same model with a post-processing
+outlier removal step. In the top three panels, we observe
+that the outlier removal consistently reduces the scatter
+σ, bias, andσ 68 across nearly the entire redshift range.
+The improvements are especially notable at higher redshifts
+(z≳2), where the baseline model exhibits increasing de-
+viation and wider error distributions. The outlier removal
+smooths these fluctuations and stabilizes performance, in-
+dicating improved resilience in low-data regimes.
+The bias remains close to zero up toz∼1.5for both
+models, where the bulk of the training set is concentrated,
+suggesting effective calibration. Beyond this range, the
+baseline model begins to exhibit increasing bias, whereas
+the model with outlier removal maintains near-zero bias up
+Article number, page 9
+
+A&A proofs:manuscript no. aa_example
+Table 4: Angular sizes and equatorial coordinates of se-
+lected sources.
+Source Apparent size RA [ ◦] DEC [ ◦]
+NGC300 20.89 arcmin 13.72−37.68
+Sculptor Dwarf Galaxy 63.10 arcmin 15.04−33.71
+Fornax Dwarf Galaxy 56.23 arcmin 39.99−34.45
+IC1613 (Cetus) 15.14 arcmin 16.23+2.13
+NGC1399 (Fornax cluster) 7.59 arcmin 54.62−35.45
+Nubecula Major 10.75 ◦ 80.89−69.76
+toz∼3, diverging only slightly thereafter. Aroundz∼3.5,
+all error metrics peak, with the baseline model perform-
+ing significantly worse. Interestingly, atz∼4, the metrics
+dip again, particularly for the model with outlier removal,
+which suggests it better handles the absence of clustered
+outliers in that region.
+The bottom panel shows the effective retention fraction
+F Re. The model with outlier removal maintains a consis-
+tently high retention fraction above 80% across most of the
+redshift range, slightly outperforming the baseline except
+nearz∼3.5, where both models exhibit a temporary drop
+likely due to data sparsity. The retention peak atz∼4
+aligns with the dip in error metrics, again indicating that
+outlier rejection enhances both precision and robustness
+without excessively discarding valid predictions.
+5. Building the DES photometric quasar catalog
+With the full machine learning pipeline trained and vali-
+dated, we proceeded to apply it to the Dark Energy Survey
+(DES) DR2 photometric data to generate a new, large-scale
+catalog of quasars. The process followed a multi-stage ap-
+proach to ensure the quality and reliability of the final sam-
+ple.
+First, we began with the full catalog of approximately
+50 million point-like sources. From this initial set, we ap-
+plied a selection cut based on magnitudes and morpholog-
+ical parameters to isolate objects within a well-populated
+and reliable region of feature space—where the training set
+offers robust coverage and our models are expected to per-
+form optimally. Specifically, we restricted the data to lie
+within the 1st to 99th percentile range of the training set
+distributions for each feature. This minimizes the impact of
+outliers and ensures consistency between the training and
+prediction domains. The applied cuts were:
+18.55>WAVG_MAG_PSF_G_DERED>22.75,(8)
+18.43>WAVG_MAG_PSF_R_DERED>22.35,(9)
+18.38>WAVG_MAG_PSF_I_DERED>22.13,(10)
+18.27>WAVG_MAG_PSF_Z_DERED>21.96,(11)
+18.25>WAVG_MAG_PSF_Y_DERED>21.70,(12)
+3.5>KRON_RADIUS>3.88.(13)
+In order to avoid contamination from bright local struc-
+tures, we applied a mask to regions of the sky that con-
+tain prominent nearby galaxies and dwarf systems. For each
+source we defined a circular mask centered on the equato-
+rial coordinates given in Table 4, with a radius given by the
+reported apparent size to ensure the removal of the entire
+brightness region.
+Then, we deploy the optimized KNN classifier on this
+pre-selected sample to identify quasar candidates. This step
+Table 5: Summary of the number of objects in the photo-
+metric catalog
+Sample Description Number of objects
+DES point-like sources 50,679,391
+DES point-like sources after color/magnitude cut 14,986,431
+Quasar/Galaxy candidates 872,373
+Quasar/Galaxy candidates after outlier removal 675,683
+Fig. 8: Photometric redshift distribution of the DES quasar
+catalog selected in this work. The photometric redshift were
+computed with our model that combines the BDT from
+ANNzand a DTR from scikit-learn. The distribution spans
+a broad redshift range fromz≈0.5to beyondz= 3, with
+a pronounced peak aroundz∼1.5. The blue curve shows
+the distribution before outlier removal (872,373 objects),
+while the orange curve shows the distribution after remov-
+ing catastrophic outliers (675,683 objects).
+yielded a catalog of 872,373 potential quasars. Finally, our
+hybrid photo-z model (Section 4) was used to estimate pho-
+tometric redshifts for all of these candidates. Table 5 sum-
+marizes the number of objects at each stage of the photo-
+metric selection process for constructing the quasar catalog.
+The photometric redshift distribution of the final cat-
+alog is presented in Fig. 8. The distribution spans a wide
+redshift range fromz≈0.1toz >3, with a prominent peak
+atz∼1.5. The distribution that includes outliers shows a
+small secondary peak aroundz≈0, which corresponds to
+catastrophic outliers. This issue is corrected in the distri-
+bution after outlier removal, where the low-redshift peak
+disappears. Fig. 9 illustrate a tomographic map of the se-
+lected quasars. The quasars appear to trace the large-scale
+structure of the Universe, providing maps suitable for cos-
+mological studies through statistical analysis.
+5.1. High-Redshift Quasar Sample (z≳3.5)
+The subset of quasars at redshiftz≳4represents an
+important, though comparatively small, part of the DES
+photometric catalog. While the number of objects iden-
+tified in this regime is only10,756(forz≥3.5), these
+sources remain cosmologically valuable. Quasars at such
+early times trace the Universe during its first∼1.5 Gyr,
+Article number, page 10
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+Fig. 9: Tomographic projection of DES quasars in redshift
+slice1.8< z <2.1. Color scale denotes relative overdensity.
+The quasars appear to trace the large-scale structure of the
+Universe, providing maps suitable for cosmological studies
+through statistical analysis.
+Fig.10:SkydistributionofDESquasarcandidateswithz≳
+3.5(10,756 objects). Despite their low surface density and
+shot-noise limitation, this high-redshift sample extends the
+catalog to earlier cosmic times and remains cosmologically
+valuable.
+providing unique information on the growth of large-scale
+structure and the transition periods of cosmic reionization.
+A distinctive feature of this regime is that the high-z
+sample does not require the additional cleaning procedures
+applied at lower redshifts. This is because the photometric
+redshift estimates atz≈4are robust and do not produce
+catastrophic outliers beyondz≈3.5. Thus, the larger cat-
+alog can safely be used for high-zstudies without risking
+degradation from misestimated redshifts.
+Figure 10 shows the sky distribution of quasars withz≳
+3.5. Despite the lower density and, therefore, higher shot-
+noise, this subsample constitutes a reliable and valuable
+component of the catalog for cosmological applications.
+6. Comparison Between the point-like and
+extended sources catalogs
+This work complements the study by Abdalla et al. (2025),
+which performed photometric redshift estimation on galaxy
+samples from the Dark Energy Survey (DES DR2). The
+Fig. 11: Photometric redshift distribution of the DES
+quasar catalog selected in this work for the high-redshift
+range3.3< z <5. This panel highlights the small sec-
+ondary peak at high redshift. Only the histogram of the
+complete sample is shown, without outlier removal, due to
+the low outlier fraction at this range.
+catalog by Abdalla et al. (2025) is based on galaxies cross-
+matched with the VIPERS spectroscopic survey, which is
+limited to intermediate redshifts, roughly spanning0.5≲
+z≲1.5, with a median redshift aroundz∼0.7. Conse-
+quently, their photometric redshift models are optimized
+for galaxy populations in this regime and are less applica-
+ble to higher redshifts.
+In contrast, our quasar-focused analysis uses SDSS
+DR16 as the spectroscopic training set, covering a much
+broader redshift range fromz∼0up toz∼6. This al-
+lows us to probe both low- and high-redshift populations.
+Notably, our model captures a clean population of high-
+redshift quasars aroundz∼4, a region that is beyond the
+reach of the galaxy-based model from Abdalla et al. (2025).
+Theperformanceofphotometricredshiftestimationalso
+differs between the two works. In Abdalla et al. (2025), the
+galaxy photo-zerrors are tightly constrained within the
+redshift intervalz≲1.2, achieving a 68th percentile error
+ofσ 68 ∼0.035and a catastrophic outlier rate of approxi-
+mately 3%. These values reflect the dense and relatively ho-
+mogeneous nature of the galaxy training set in this range,
+and the fact that the model is restricted to extended sources
+with well-defined color–redshift relations.
+Inourquasaranalysis,photo-zperformanceismorehet-
+erogeneous due to the broader redshift range and the com-
+plex spectral energy distributions of quasars, which lead
+to degeneracies in color space. Nonetheless, we achieve ro-
+bust predictions with bias and scatter metrics below 0.5 for
+most of the range up toz∼3, with a notable improvement
+aroundz∼4where model residuals are minimized and the
+outlier rate drops. Beyondz∼4.5, performance degrades
+due to the sparsity of training data, as reflected in increased
+σ,σ 68, and bias, as well as a drop in the effective retention
+fraction.
+These differences highlight the complementary nature
+of the two catalogs. Abdalla et al. (2025) provides a well-
+calibrated, low-error photo-zcatalog for galaxies in the
+intermediate-redshift regime, ideal for large-scale structure
+Article number, page 11
+
+A&A proofs:manuscript no. aa_example
+studies and tomographic analyses. Our quasar catalog, in
+turn,extendstheutilityofDESDR2tohigherredshiftsand
+to point-like sources, opening possibilities for cosmological
+studies involving quasars.
+7. Conclusions
+This paper successfully constructed a robust catalog of
+point-like objects by performing a positional cross-match
+between the Dark Energy Survey Data Release 2 (DES
+DR2) and the Sloan Digital Sky Survey Data Release 16
+(SDSS DR16). This initial cross-match resulted in a sam-
+ple of 168,738 matched objects with available spectroscopic
+classifications and redshifts. The primary goal was to iden-
+tify quasars, crucial tracers for cosmological studies, while
+effectively separating them from contaminating stars.
+To achieve this, we employed a K-Nearest Neighbors
+(KNN) classification model, optimizing its performance by
+carefully selecting photometric features, specifically PSF
+magnitudes in the G, R, I, and Z bands. Through hyperpa-
+rameter tuning, we achieved a recall of 0.77 at a precision
+of 0.99, ensuring that our final quasar candidate catalog is
+highly reliable with minimal stellar contamination.
+Beyond accurate classification, this catalog holds signif-
+icant cosmological potential due to the subsequent photo-
+metric redshift (photo-z) estimation for the quasar/galaxy
+objectsidentified.Weutilizedahybridmachinelearningap-
+proach, combining a color-optimized Boosted Decision Tree
+(BDT) fromANNzwith a Decision Tree Regressor (DTR)
+fromscikit-learn. This approach allowed us to leverage
+the strengths of different models, resulting in a catalog with
+generally small photometric redshift errors.
+A key aspect of our work was addressing the presence of
+catastrophic outliers in the photometric redshift estimates.
+We developed and applied a stacked outlier classifier, sig-
+nificantly reducing the fraction of these outliers. This is
+critical for cosmological analyses, as outliers can introduce
+substantial biases in measurements of large-scale structure
+and cosmic evolution.
+We highlight the existence of two versions of the catalog:
+one with a larger fraction of outliers in terms of redshift,
+and another with a significantly reduced outlier fraction.
+The larger catalog contains 872,373 objects while the one
+with reduced outliers contains 675,683 objects. The redshift
+distribution of the catalog primarily spans fromz≈0.5to
+z >3, peaking atz∼1.5. While the catalog with fewer
+outliers offers greater precision for most redshift ranges,
+our analysis revealed that for objects atz≈4, it is safe
+to utilize the larger catalog (with 872,373 objects). This is
+because the high-redshift population aroundz≈4remains
+reliably identified, with photometric redshifts well recov-
+ered and outliers not extending beyondz≈3.5. However,
+the number of objects withz≥3.5is relatively small, to-
+taling 10,756. The cleaner, reduced-outlier catalog contains
+675,683 objects and can safely be used to probe the redshift
+range0.5< z <3.
+This catalog, with its carefully classified and redshift-
+estimated quasar candidates, provides a valuable resource
+for future cosmological investigations, especially for prob-
+ing the late universe. As it complements the galaxy-based
+catalog presented in Abdalla et al. (2025), future work will
+focus on combining both datasets to perform cosmological
+analyses.
+Acknowledgements.P.M.: This study was financed in part by the São
+Paulo Research Foundation (FAPESP) through grant 2021/08846-2
+and 2023/07728-1. Also, this study was financed in part by the Co-
+ordenação de Aperfeiçoamento de Pessoal de Nível Superior – Brasil
+(CAPES) – Finance Code 001. F.B.A thanks the University of Sci-
+ence and Technology of China and the Chinese Academy of Science
+for grant number KY2030000215. E.A. is supported by a CNPq grant.
+The authors acknowledge the National Laboratory for Scientific Com-
+puting (LNCC/MCTI, Brazil) for providing HPC resources of the
+SDumont supercomputer, which have contributed to the research re-
+sults reported within this paper. URL: http://sdumont.lncc.br.
+References
+Abbott, T., Abdalla, F., Alarcon, A., et al. 2019, Physical Review D,
+100, 023541
+Abbott, T. et al. 2018, The Astrophysical Journal Supplement Series,
+239, 18
+Abbott, T. et al. 2021, The Astrophysical Journal Supplement Series,
+255, 20
+Abbott, T. M. C., Aguena, M., Alarcon, A., et al. 2022, Phys. Rev.
+D, 105, 023520
+Abdalla, E., Abdalla, F. B., Marins, A., et al. 2025, arXiv preprint
+arXiv:2508.10191
+Abdalla, E., Ferreira, E. G., Landim, R. G., et al. 2022a, Astronomy
+& Astrophysics, 664, A14
+Abdalla, F. B., Marins, A., Motta, P., et al. 2022b, Astronomy &
+Astrophysics, 664, A16
+Ahumada et al. 2020, The Astrophysical Journal Supplement Series,
+249, 3
+Alam, S., Ata, M., Bailey, S., et al. 2017, Monthly Notices of the Royal
+Astronomical Society, 470, 2617–2652
+Almosallam, I. A., Jarvis, M. J., & Roberts, S. J. 2016a, Monthly
+Notices of the Royal Astronomical Society, 462, 726
+Almosallam, I. A., Lindsay, S. N., Jarvis, M. J., & Roberts, S. J.
+2016b, Monthly Notices of the Royal Astronomical Society, 455,
+2387
+Amendola, L., Appleby, S., Bacon, D., et al. 2013, Living Reviews in
+Relativity, 16
+Anderson, L., Aubourg, É., Bailey, S., et al. 2014, Monthly Notices of
+the Royal Astronomical Society, 441, 24–62
+Arnouts, S. & Ilbert, O. 2011, Astrophysics Source Code Library, ascl
+Baldry, I. K., Glazebrook, K., Brinkmann, J., et al. 2002, Astrophys.
+J., 569, 582
+Ball, N. M., Brunner, R. J., Myers, A. D., Tsvetanov, Z. I., & Djor-
+govski, S. 2007, The Astrophysical Journal, 663, 774
+Bandura, K., Addison, G. E., Amiri, M., et al. 2014, in Ground-based
+and Airborne Telescopes V, Vol. 9145, SPIE, 738–757
+Beck, R. et al. 2017, Mon. Not. R. Astron. Soc., 472, 949
+Benitez, N. 2000, The Astrophysical Journal, 536, 571
+Bigot-Sazy,M.-A.,Ma,Y.-Z.,Battye,R.A.,etal.2015,arXivpreprint
+arXiv:1511.03006
+Bolton, A. S., Schlegel, D. J., Aubourg, É., et al. 2012, The Astro-
+nomical Journal, 144, 144
+Bolzonella, M., Miralles, J., & Pelló, R. 2000, Astronomy and Astro-
+physics, 363, 476
+Bottou, L. 2010, in Proceedings of COMPSTAT’2010 (Springer), 177–
+186
+Bovy, J., Myers, A. D., Hennawi, J. F., et al. 2012, The astrophysical
+journal, 749, 41
+Brescia, M., Cavuoti, S., D’Abrusco, R., Longo, G., & Mercurio, A.
+2013, The Astrophysical Journal, 772, 140
+Carliles, S., Budavári, T., Heinis, S., et al. 2010, The Astrophysical
+Journal, 721, 118
+Cavuoti, S., Brescia, M., Longo, G., & Napolitano, N. 2015, Monthly
+Notices of the Royal Astronomical Society, 452, 3109
+Chen, X. 2012, in International Journal of Modern Physics: Confer-
+ence Series, Vol. 12, World Scientific, 256–263
+Cole, S., Percival, W. J., Peacock, J. A., et al. 2005, Monthly Notices
+of the Royal Astronomical Society, 362, 505–534
+Collaboration, D. E. S. 2016, MNRAS, 460, 1270
+Collaboration, T. D. E. S. 2005, in The Dark Energy Survey White
+Paper
+Collister, A. A. & Lahav, O. 2004, Publications of the Astronomical
+Society of the Pacific, 116, 345
+Costa, A. A., Landim, R. G., Novaes, C. P., et al. 2022, Astronomy
+& Astrophysics, 664, A20
+Article number, page 12
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+Cover, T. & Hart, P. 1967, IEEE Transactions on Information Theory,
+13, 21
+Dawson, K. S. et al. 2013, Astron. J., 145, 10
+Eisenstein, D. J. et al. 2005, Astrophys. J., 633, 560
+Fan, X., Bañados, E., & Simcoe, R. A. 2023, Annual Review of As-
+tronomy and Astrophysics, 61, 373
+Fan, X., Strauss, M. A., Schneider, D. P., et al. 1999a, The Astronom-
+ical Journal, 118, 1
+Fan, X. et al. 1999b, Astrophys. J., 526, 57
+Fan, X. et al. 2001, Astron. J., 121, 54
+Fornazier, K. S., Abdalla, F. B., Remazeilles, M., et al. 2022, Astron-
+omy & Astrophysics, 664, A18
+Friedman, J. H. 2001, Annals of statistics, 1189
+Frieman, J. A., Turner, M. S., & Huterer, D. 2008, Annual Review of
+Astronomy and Astrophysics, 46, 385–432
+Gerdes, D., Dodelson, S., DePoy, D., et al. 2010, Monthly Notices of
+the Royal Astronomical Society, 402, 1881
+Han, B., Ding, H.-P., Zhang, Y.-X., & Zhao, Y.-H. 2016, Research in
+Astronomy and Astrophysics, 16, 005
+Hildebrandt, H., Brusa, M., Ilbert, O., et al. 2010, The Astrophysical
+Journal, 721, 109
+Hildebrandt, H., Viola, M., Heymans, C., et al. 2017, Monthly Notices
+of the Royal Astronomical Society, 465, 1454
+Hoyle, B., Rau, M., Abdalla, F., et al. 2016, Monthly Notices of the
+Royal Astronomical Society, 455, 3774
+Hoyle, B., Rau, M. M., Paech, K., Bonnett, C., & Seitz, S. 2015, Mon.
+Not. R. Astron. Soc., 452, 4183
+Huetsi, G. 2006, Astronomy & Astrophysics, 449, 891
+Ilbert, O., Arnouts, S., Mccracken, H. J., et al. 2006, Astronomy &
+Astrophysics, 457, 841
+Ivezić, Ž. et al. 2019, Astrophys. J., 873, 111
+Joudaki, S., Blake, C., Johnson, A., et al. 2018, Monthly Notices of
+the Royal Astronomical Society, 474, 4894
+Kaiser, N. et al. 2010, Proc. SPIE, 7733
+Kessler, R. et al. 2015, The Astronomical Journal, 150, 172
+Kunszt, P. Z., Szalay, A. S., & Thakar, A. R. 2001, in Mining the Sky
+(Springer), 631–637
+Lahav, O. & Collister, A. A. 2012, Astrophysics Source Code Library,
+ascl
+Laureijs, R. et al. 2011, arXiv:1110.3193
+Li, L., Zhang, Y., & Zhao, Y. 2008, Science in China Series G: Physics,
+Mechanics and Astronomy, 51, 916
+Liccardo, V., de Mericia, E. J., Wuensche, C. A., et al. 2022, Astron-
+omy & Astrophysics, 664, A17
+Masters, D. C., Stern, D. K., Cohen, J. G., et al. 2019, The Astro-
+physical Journal, 877, 81
+Nan, R., Li, D., Jin, C., et al. 2011, International Journal of Modern
+Physics D, 20, 989
+Newman, J. A., Cooper, M. C., Davis, M., et al. 2013, The Astrophys-
+ical Journal Supplement Series, 208, 5
+Novaes, C. P., Zhang, J., de Mericia, E. J., et al. 2022, Astronomy &
+Astrophysics, 666, A83
+Omori, Y., Giannantonio, T., Porredon, A., et al. 2019, Phys. Rev. D,
+100, 043501
+Oyaizu, H., Lima, M., Cunha, C. E., et al. 2008, The Astrophysical
+Journal, 674, 768–783
+Pedregosa, F. et al. 2011, J. Mach. Learn. Res., 12, 2825–2830
+Peters, C. M., Richards, G. T., Myers, A. D., et al. 2015, The Astro-
+physical Journal, 811, 95
+Prat, J., Sánchez, C., Fang, Y., et al. 2018, Physical Review D, 98,
+042005
+Rauch, M. et al. 1998, Astrophys. J., 489, 7
+Rees, M. J. 1984, Annu. Rev. Astron. Astrophys., 22, 471
+Repp, A., Ebeling, H., & Richard, J. 2016, Monthly Notices of the
+Royal Astronomical Society, 457, 1399
+Richards, G. T., Fan, X., Newberg, H. J., et al. 2002a, The Astronom-
+ical Journal, 123, 2945
+Richards, G. T., Fan, X., Schneider, D. P., et al. 2002b, The Astro-
+nomical Journal, 123, 2945
+Richards, G. T., Weinstein, M. A., Schneider, D. P., et al. 2001, The
+Astronomical Journal, 122, 1151
+Richards, G. T. et al. 2002c, Astron. J., 123, 2945
+Richards, G. T. et al. 2006, Astron. J., 131, 2766
+Rivera, J., Moraes, B., Merson, A., et al. 2018, Monthly Notices of
+the Royal Astronomical Society, 477, 4330
+Rumelhart, D. E., Hinton, G. E., & Williams, R. J. 1986, nature, 323,
+533
+Sadeh, I. et al. 2016, ApJS, 219, 1
+Santos, M. G., Bull, P., Alonso, D., et al. 2015, arXiv preprint
+arXiv:1501.03989
+Santos, M. V. d., Landim, R. G., Hoerning, G. A., et al. 2023, arXiv
+preprint arXiv:2308.06805
+Skrzypek, N., Warren, S. J., & Faherty, J. K. 2016, Monthly Notices
+of the Royal Astronomical Society, 458, 2971–2977
+Tanaka, M., Coupon, J., Hsieh, B.-C., et al. 2018, Publications of the
+Astronomical Society of Japan, 70, S9
+Van der Maaten, L. & Hinton, G. 2008, Journal of machine learning
+research, 9
+Van Waerbeke, L. 2010, Monthly Notices of the Royal Astronomical
+Society, 401, 2093
+Vanden Berk, D. E. et al. 2001, Astron. J., 122, 549
+Viquar, M., Basak, S., Dasgupta, A., Agrawal, S., & Saha, S. 2019,
+Emerging Technologies in Data Mining and Information Security:
+Proceedings of IEMIS 2018, Volume 3, 827
+Weiner, B. J., Phillips, A. C., Faber, S. M., et al. 2005, The Astro-
+physical Journal, 620, 595
+Wolpert, D. H. 1992, Neural networks, 5, 241
+Wu, X.-B., Zhang, W., & Zhou, X. 2004, Chinese Journal of Astron-
+omy and Astrophysics, 4, 17
+Wuensche, C. A., Villela, T., Abdalla, E., et al. 2022, Astronomy &
+Astrophysics, 664, A15
+Yang, Q., Wu, X.-B., Fan, X., et al. 2017, The Astronomical Journal,
+154, 269
+York, D. G. et al. 2000, Astron. J., 120, 1579
+Zhang, H., Behroozi, P., Volonteri, M., et al. 2023, Monthly Notices
+of the Royal Astronomical Society: Letters, 523, L69
+Zhang, J., Motta, P., Novaes, C. P., et al. 2022, Astronomy & Astro-
+physics, 664, A19
+Zheng, X., Liao, K., Biesiada, M., et al. 2020, The Astrophysical Jour-
+nal, 892, 103
+Article number, page 13
+
+A&A proofs:manuscript no. aa_example
+Appendix A: Comparison of regression methods for
+photo-z estimation
+To evaluate the impact of input features on model per-
+formance, we tested two distinct feature spaces in our
+photometric redshift estimation pipeline. The first, re-
+ferred to as the magnitude space, consists of dereddened
+broad-band magnitudes from the DES photometric system:
+MAG_AUTO_G_DERED,MAG_AUTO_R_DERED,MAG_AUTO_I_DERED,MAG_AUTO_Z_DERED,
+andMAG_AUTO_Y_DERED. The second, called the color space, in-
+cludes four color indices—MAG_AUTO_G-R_DERED,MAG_AUTO_R-I_DERED,
+MAG_AUTO_I-Z_DERED, andMAG_AUTO_Z-Y_DERED—along with the
+dereddened r-band magnitudeMAG_AUTO_R_DEREDand a morpho-
+logical parameter,KRON_RADIUS.
+We systematically compared the performance of various
+machine learning models across both feature spaces using
+implementations from theANNzandscikit-learnframe-
+works. This dual approach allowed us to assess the sensitiv-
+ity of each model to the choice of input representation and
+to determine which combination of features and algorithms
+yielded the most accurate photometric redshifts.
+For the overall behavior of the regression methods, we
+observe a prominent main cluster of objects where the pho-
+tometric redshift estimates show small errors and closely
+track the spectroscopic redshifts, aligning well with the
+diagonal line. Additionally, two distinct off-diagonal clus-
+ters are consistently present; these correspond to objects
+for which the photometric redshift is not accurately recov-
+ered and are thus classified as outliers. Notably, we also
+identify a cluster nearz≈4, where photometric redshifts
+are well recovered, signifying the model’s ability to handle
+high-redshift objects.
+Upon evaluating theANNzmodels (Figure A.1), we
+found that for some of the configurations, thez≈4cluster
+is not well formed or is dispersed. The best performingANNz
+model was the color-based Boosted Decision Tree (BDT),
+as shown in Figure A.1d. This model exhibited a main clus-
+ter spanning a large redshift range and closely following the
+diagonal, a well-formed cluster in thez≈4region, and two
+distinct outlier groups.
+Turning to thescikit-learnimplementations (Figure
+A.2), we observed that for some models, the main cluster
+was not as well aligned across the diagonal as desired. The
+Decision Tree Regressor (DT), depicted in Figure A.2a, pre-
+sented particularly good results in terms of its main cluster,
+which was very well formed and aligned across the diagonal,
+performing even better in this regard than the bestANNz
+BDT model. The high-redshift cluster nearz≈4was also
+well-formed. However, a limitation of the DT model was
+that its two outlier clusters were positioned further away
+from the main diagonal compared to other models.
+Given the strengths of both theANNzcolor-based BDT
+model and thescikit-learnDecision Tree Regressor
+(main cluster alignment), our subsequent idea was to com-
+bine the two best models to leverage their respective ad-
+vantages. This combination aimed to achieve a well-defined
+mainclusterwhileensuringthetwooutlierclusterswerenot
+too far from the diagonal. The results of this combination
+are presented in Figure 5a of the main paper.
+Article number, page 14
+
+Pablo Motta et al.: Photometric classification of quasars from DES and photo-z estimation with Machine Learning
+(a) Artificial Neural Network for magnitude-based predictors
+inANNz
+ (b) Artificial Neural Network for color-based predictors inANNz
+(c) Boosted Decision Tree for magnitude-based predictors in
+ANNz
+ (d) Boosted Decision Tree for color-based predictors inANNz
+Fig. A.1: Photometric versus spectroscopic redshift forANNzimplementations: (a) Artificial Neural Network implemen-
+tation applied to magnitude parameters, (b) Artificial Neural Network implementation applied to color parameters, (c)
+Boosted Decision Tree implementation applied to magnitude parameters, (d) Boosted Decision Tree implementation
+applied to color parameters. The last one was chosen as better performance between the ANNz models.
+Article number, page 15
+
+A&A proofs:manuscript no. aa_example
+(a) Decision Tree Regressor.
+ (b) Gradient Boosted Regressor.
+(c) K-Nearest Neighbors Regressor.
+ (d) Random Forest Regressor.
+Fig. A.2: Photometric versus spectroscopic redshift for scikit-learn implementations. We evaluate the performance of
+different scikit-learn models: Decision Tree Regressor, Gradient Boosted Regressor, K-Nearest Neighbors Regressor and
+Random Forest Regressor respectively. The best performance was found with the Decision Tree Regressor, with large
+portion of the data aligned with the diagonal of the plot.
+Article number, page 16

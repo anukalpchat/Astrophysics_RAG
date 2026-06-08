@@ -1,0 +1,1850 @@
+Title: FASTAR -- I. Continuous and differentiable evolutionary stellar population models
+Authors: Ignacio Martín-Navarro, Alexandre Vazdekis, Luis Peralta de Arriba, Isaac Alonso Asensio, Eirini Angeloudi, Patricia Iglesias Navarro, Francesco La Barbera, Katja Fahrion, Tereza Jerabkova, Michael A. Beasley, Jesús Falcón-Barroso, Marc Huertas-Company, Sebastián F. Sánchez, Prashin Jethwa
+Published: 2026-05-22
+Categories: astro-ph.GA
+
+Astronomy&Astrophysicsmanuscript no. FASTAR_I©ESO 2026
+May 26, 2026
+FASTAR - I. Continuous and differentiable evolutionary stellar
+population models
+Ignacio Martín-Navarro1,2 , Alexandre Vazdekis1,2 , Luis Peralta de Arriba3, Isaac Alonso Asensio1,2 , Eirini
+Angeloudi1,2 , Patricia Iglesias Navarro1,2 , Francesco La Barbera4, Katja Fahrion5, Tereza Jerabkova6, Michael A.
+Beasley1,2,7 , Jesús Falcón-Barroso1,2 , Marc Huertas-Company1,2,8,9 , Sebastián F. Sánchez10,1,2 , Prashin Jethwa4
+1 Instituto de Astrofísica de Canarias,c/Vía Láctea s/n, E38205 - La Laguna, Tenerife, Spain
+e-mail:imartin@iac.es
+2 Departamento de Astrofísica, Universidad de La Laguna, E-38205 La Laguna, Tenerife, Spain
+3 Departamento de Inteligencia Artificial, Universidad Nacional de Educación a Distancia (UNED), Calle Juan del Rosal 16, E-
+28040 Madrid, Spain
+4 INAF-Osservatorio Astronomico di Capodimonte, sal. Moiariello 16, Napoli 80131, Italy
+5 Department of Astrophysics, University of Vienna, Türkenschanzstraße 17, 1180 Wien, Austria
+6 Department of Theoretical Physics and Astrophysics, Faculty of Science, Masaryk University, Kotlá ˇrská 2, Brno 611 37, Czech
+Republic
+7 Centre for Astrophysics and Supercomputing, Swinburne University, John Street, Hawthorn, VIC 3122, Australia
+8 Observatoire de Paris, LERMA, PSL University, 61 avenue de l’Observatoire, F-75014 Paris, France
+9 Université Paris-Cité, 5 Rue Thomas Mann, 75014 Paris, France
+10 Instituto de Astronomía, Universidad Nacional Autónoma de México, A.P. 106, Ensenada 22800, BC, México
+Received; accepted
+ABSTRACT
+The development of evolutionary stellar population models is central to interpreting observations of galaxies in terms of astrophysical
+quantities. Stellar population models must therefore be both accurate and compatible with inversion algorithms in order to extract
+meaningful information from the observed data. Here we present FASTAR, a fully differentiable stellar population synthesis code.
+Contrary to traditional, grid-based single stellar population models, FASTAR can be continuously evaluated at any age (between
+20 Myr and 14 Gyr), metallicity (−2.5≤[M/H]≤+0.3), and initial mass function (IMF). Changes in the IMF parameterization
+are straightforward, allowing for consistent conversions of colors, magnitudes, and mass-to-light ratios, as well as the synthesis of
+models under the assumption of arbitrary IMF functional forms. FASTAR provides detailed spectroscopic predictions over the MILES
+wavelength range (3,540–7,400 Å) as well as more coarsely sampled spectral energy distributions across a wider 2,000-to-12,000 Å,
+which can be directly convolved with any arbitrary set of photometric filters. FASTAR performs at the same level of state-of-the-art
+simple stellar population models benchmarked against observations of globular clusters and high signal-to-noise spectra of early-type
+galaxies, but it is faster, lighter, and more flexible. Moreover, its differentiable nature allows for a quantitative understanding of model
+behavior and uncertainties, as well as a natural framework for gradient descent inference algorithms.
+Key words.galaxies: evolution – galaxies: stellar content– stars: evolution
+1. Introduction
+This is the first paper of a series where we introduce the FAS-
+TAR models. Here we explain the basic ingredients and syn-
+thesis principles in comparison with state-of-the-art evolution-
+ary stellar population models. Upcoming papers will describe
+the synthesis of semi-resolved populations and some immediate
+applications of the unique features of FASTAR.
+The synthesis of evolutionary stellar population models com-
+bines stellar templates with knowledge on stellar evolution the-
+ory to generate so-called simple stellar population (SSP) pre-
+dictions. The goal of these SSP models is to represent the flux
+emitted by an integrated stellar population (i.e., where individ-
+ual stars cannot be resolved) of a given age and chemical compo-
+sition. The foundational steps of Beatrice Tinsley (e.g., Tinsley
+1968, 1972; Tinsley & Gunn 1976; Tinsley 1980) have been re-
+fined and improved by subsequent generations of modelers to an
+extent where SSP models have become virtually ubiquitous for
+extragalactic studies (e.g., Worthey 1994; Leitherer et al. 1999;
+Bruzual & Charlot 2003; Thomas et al. 2003; Maraston 2005;
+Schiavon 2007; Vazdekis et al. 2010; Conroy & van Dokkum
+2012).
+The adoption of these models is not coincidental but
+has been driven by their undeniable success in reproducing
+the spectro-photometric properties of galaxies. Evolution-
+ary stellar population models have been instrumental in
+describing now well-established concepts of galaxy for-
+mation, from the downsizing of early-type galaxies (e.g.,
+Peletier 1989; Worthey et al. 1992; Vazdekis et al. 1997;
+Trager et al. 2000; Thomas et al. 2005) to the apparent
+excess of low-mass stars in the cores of most massive
+galaxies (van Dokkum & Conroy 2010; Spiniello et al. 2012;
+La Barbera et al. 2013; Martín-Navarro et al. 2015; Parikh et al.
+2018). In combination with complementary information, evolu-
+tionary SSP model predictions have helped shape our current
+view of the Universe (e.g., Kauffmann et al. 2003; Gallazzi et al.
+2005; Schawinski et al. 2007; Peng et al. 2010; Behroozi et al.
+Article number, page 1
+arXiv:2605.24093v1  [astro-ph.GA]  22 May 2026
+
+A&A proofs:manuscript no. FASTAR_I
+2013; van der Wel et al. 2014; Madau & Dickinson 2014;
+Maiolino & Mannucci 2019; Sánchez 2020).
+The calculation of SSP models relies on three main assump-
+tions. First, the total flux emitted by an integrated population is
+assumed to be the sum of the fluxes of its individual stars. Con-
+sequently, SSP predictions are based on sets of stellar templates,
+which can be either theoretical (e.g., Gustafsson et al. 2008;
+Coelho 2014; Millán-Irigoyen et al. 2021; Mészáros et al. 2024)
+or empirical (e.g., Cenarro et al. 2001; Sánchez-Blázquez et al.
+2006; Chen et al. 2014; Villaume et al. 2017; Yan et al. 2019).
+Second, the number of stars formed and present in an integrated
+population is determined by the initial mass function (IMF). The
+IMF is typically assumed to be universal and to follow the char-
+acteristic shape measured in the solar neighborhood (Salpeter
+1955; Scalo 1998; Kroupa 2002; Chabrier 2003), although vari-
+able IMF models are also becoming widespread. Finally, the
+defining assumption of evolutionary SSP models is that, for a
+given chemical composition, the combination of stars used in the
+calculations is determined by means of theoretical isochrones
+(Pietrinferni et al. 2004, 2006; Girardi et al. 2000; Choi et al.
+2016; Hidalgo et al. 2018). In other words, SSP models exploit
+our knowledge on stellar evolution theory to generate accurate
+spectro-photometric predictions.
+With these assumptions, SSPs are delivered to the commu-
+nity as grids of pre-computed models covering a range of ages
+and metallicities defined by the underlying isochrones. Vari-
+ations in the IMF are also allowed in some of these models
+through a discrete sampling of the adopted functional form.
+In recent years, state-of-the-art SSP models have been ex-
+tended toward broader spectral coverage (e.g., Röck et al. 2015;
+Vazdekis et al. 2016; Villaume et al. 2017; Verro et al. 2022),
+spanning from the ultraviolet to the infrared. They also now
+encompass wider ranges of ages (Levesque & Leitherer 2013;
+Asa’d et al. 2017; Hawcroft et al. 2025) and chemical composi-
+tions, including variations in individual elemental abundances
+(Conroy et al. 2018; Knowles et al. 2023). In addition, increas-
+ingly large and complete stellar libraries have been assem-
+bled (Yan et al. 2019; Maraston et al. 2020), alongside more re-
+fined evolutionary tracks and predictions for non-canonical stel-
+lar components (Hernández-Pérez & Bruzual 2013; Byrne et al.
+2022; Lu et al. 2024).
+In parallel, spectral inversion algorithms have also become
+progressively more sophisticated thanks to formal Bayesian
+approaches (e.g., Acquaviva et al. 2011; Chevallard & Charlot
+2016; Carnall et al. 2018; Martín-Navarro et al. 2019;
+Johnson et al. 2021; Wang et al. 2024) and the adoption
+of machine-learning-based tools (e.g., Alsing et al. 2020;
+Hahn & Melchior 2022; Melchior et al. 2023; Liang et al. 2023;
+Angthopo et al. 2024; Hunt et al. 2024; Iglesias-Navarro et al.
+2024, 2025; Alsing et al. 2024). These new ways of analyzing
+the spectral properties of galaxies allow a better characterization
+of the expected uncertainties and degeneracies, optimizing
+the amount of information retrieved from the observed data.
+Moreover, they enable the rapid and systematic analysis of
+large spectro-photometric datasets, which would otherwise
+be unfeasible (Hahn & Melchior 2022; Iglesias-Navarro et al.
+2024; Zacharegkas et al. 2025).
+This evolution in inversion algorithms has also highlighted
+some of the inherent limitations of state-of-the-art SSP mod-
+els. In particular, the computation of new models is relatively
+expensive, which hampers their adaptability to changes in the
+underlying assumptions (e.g. variations in the IMF functional
+form, isochrones etc.). Furthermore, the size of the model grids
+scales exponentially with the number of free parameters, ef-
+fectively limiting either the sampling or the number of vari-
+ables (age, metallicity, elemental abundances, and IMF param-
+eterization). Likewise, a grid-based set of SSP models lim-
+its the synthesis of continuous and differentiable predictions,
+which can only be achieved at a less fundamental level (e.g.
+through the use of star formation histories; Hearin et al. 2023).
+Finally, in most cases (but see Robotham & Bellstedt 2025;
+Bellstedt & Robotham 2025) the community of users does not
+have access to the actual computation of the SSP models. Given
+their fundamental and widespread use, increasing the trans-
+parency of these computations remains a desirable improvement.
+With FASTAR we propose an alternative approach to ex-
+ploiting the advantages of SSP modeling by releasing the first
+differentiable code to synthesize evolutionary stellar population
+models, suitable for both spectroscopic and photometric applica-
+tions. The layout of this paper is as follows: In Sect. 2 we present
+the ingredients that go into the model synthesis. In Sect. 3 we
+describe the outputs of FASTAR, which are then compared to
+observed data in Sect. 4. Finally, Sect. 5 provides a summary
+of the main results, advantages, and prospects of the proposed
+approach.
+2. Ingredients
+The synthesis of the FASTAR models follows the standard,
+isochrone integration-based approach (see e.g., Vazdekis et al.
+2010; Conroy 2013). For a given age and metallicity, the flux
+emitted by an integrated stellar population is given by the fol-
+lowing equation:
+Fλ
+ age,[M/H] =
+Z mhigh(age)
+mlow
+S MV
+λ
+ m|age,[M/H]  χ(m) dm,
+(1)
+whereS MV
+λ
+ m|age,[M/H]  is, for a given age and metallic-
+ity, the spectrum of a star with massm. The mapping between
+mand the atmospheric parameters effective temperatureT eff,
+surface gravity logg, and metallicity is determined by stellar
+evolution theory, i.e., by the assumed set of isochrones. While
+the low-mass cutoffmlow remains fixed typically at around the
+hydrogen-burning mass limit (0.1 M ⊙ in our case, determined
+by the mass range predicted by the isochrones), the upper mass
+limitm high(age) depends on the age of the population through
+the isochrones. Finally, these stellar spectra are weighted by the
+number of stars, i.e., the IMFχ(m).
+Equation 1 is rather generic and describes the basis of most
+evolutionary synthesis codes. To actually synthesize the models,
+some additional choices can be made. In particular, in FASTAR
+we follow the approach of the MILES models (Vazdekis et al.
+2010, 2015), where stellar spectra are not normalized accord-
+ing to their bolometric luminosities but based on the expected
+V-band absolute magnitudes (SMV
+λ ). This alleviates potential sys-
+tematics related to the calculation of the bolometric luminosity
+of the stellar templates but requires the adoption of empirically
+calibrated bolometric corrections.
+In short, the synthesis of FASTAR models is based on four
+main ingredients: stellar templates, a user-defined IMF, a set of
+isochrones, and a grid of bolometric corrections. We detail below
+how these four ingredients are treated in the FASTAR synthesis
+in order to preserve the differentiability of the models and a fast
+computation time. We also describe the default values for the
+most relevant parameters in the synthesis process, although they
+can all be adjusted by the user to generate their models.
+Article number, page 2
+
+Martín-Navarro et al.: FASTAR I
+2.1. IMF parameterizations
+The default FASTAR predictions are normalized to one solar
+mass at birth, i.e., the weighting of the number of stars in Eq. 1
+is calculated by normalizingχ(m) betweenm 0 =0.1 M ⊙ and
+m1 =100 M ⊙ so that
+Z m1
+m0
+χ(m)m dm,=1 (2)
+Assuming this normalization, FASTAR comes with the six
+pre-defined functional forms for the IMF. Their basic properties
+are as follows:
+Milky Way-like IMFs.SSP models with a Milky Way-like IMF
+can be synthesized assuming either a Kroupa (2001) or a
+Chabrier (2003) functional form. For these IMFs, only the
+low-mass and high-mass integration limits of Eq. 2 can be
+treated as a variable parameter.
+Single power-law.This is a generalization of the Salpeter (1955)
+IMF1 where the main free parameter is the linear slopeα
+which in FASTAR has a default, Salpeter-like value of 2.35.
+Broken power-law.A three-segment IMF parameterization as
+implemented in the Conroy & van Dokkum (2012) models.
+This parameterization is determined by two breaking masses
+(default m break1 =0.5 and m break2 =1.0) and three slopes
+connecting them (defaultα 1 =1.3 representing the low-mass
+end,α 2 =1.8, andα 3 =2.3 corresponding to the high-mass
+end slope up to the integration limit).
+Bimodal IMF .The same functional form of the MILES mod-
+els as defined in Vazdekis et al. (1996) with the high-mass
+end slopeα B as single free parameter with a default value of
+αB =2.3. Note that, in contrast to the standard definition of
+this IMF in the MILES framework, FASTAR describes the
+IMF in linear units. Thus, the default value for the bimodal
+IMF mimics a Kroupa-like IMF and corresponds toΓB =1.3
+in the original notation of the MILES models. Our imple-
+mentation also allows for a variable low-mass end slopeβ B
+(the default value adopted in the MILES models isβ B =1).
+Tapered power-law.We follow the IMF parameterization pre-
+sented in De Marchi et al. (2005), with a peak mass m p, a
+high-mass end slopeαand a tapering exponentβfor the
+low-mass end. This functional form is particularly flexible
+and naturally captures any potential characteristic mass of
+the IMF, providing a direct link to theoretical predictions.
+The default values areα=β=2.3 and m p =0.5 M ⊙.
+Figure 1 summarizes and compares all these functional
+forms. In addition, an important asset of FASTAR is that it can
+also synthesize models with arbitrary, user-defined IMF parame-
+terizations. Examples and guidelines for implementing new IMF
+functional forms are included in the documentation.
+2.2. Isochrones and bolometric corrections
+FASTAR is based on the most updated version of the BaSTI
+set of isochrones (Hidalgo et al. 2018; Pietrinferni et al. 2021,
+2024). Specifically, FASTAR makes use of the solar-scaled
+predictions, with improved treatment of atomic diffusion and
+overshooting beyond the Schwarzschild limit. This choice of
+isochrones in combination with the stellar libraries (see details
+1 It is worth emphasizing that E. Salpeter never proposed this func-
+tional form across the entire stellar mass domain of Eq. 2.
+0.1 0.3 1.0 3.0
+m [M ⊙ ]
+10−2
+10−1
+100
+101
+χ(m)
+Salpeter
+Bimodal
+Kroupa
+Chabrier
+T apered power-law
+Broken power-law
+Fig. 1: IMF functional forms. FASTAR comes with the six pre-
+defined IMF parameterizations shown here. All of their param-
+eters can be changed to synthesize new models with variable
+IMFs. In addition, models for any arbitrary IMF defined by the
+user can also be calculated.
+below) sets the limits of the FASTAR predictions, which are lim-
+ited to ages between 20 Myr and 14 Gyr and total metallicities
+between−2.5≥[M/H]≤+0.3. For an extended discussion
+of the isochrone behavior we refer the reader to Hidalgo et al.
+(2018).
+It is worth noting that, while the isochrones are calculated
+for a solar-scaled elemental mixture ([α/Fe]=0), individual stel-
+lar templates might have non-solar abundances. In practice, this
+means that in the synthesis of the FASTAR models based on
+Eq. 1, we made the common assumption that the [Fe/H] mea-
+sured for the individual stars approximately corresponds to their
+total metallicity [M/H]. Because of that, the FASTAR models
+should be regards as base models, according to the nomencla-
+ture in the MILES models’ papers. Details on the implications
+of this assumption can be found in Vazdekis et al. (2010, 2015).
+To provide continuous and differentiable SSP predictions re-
+quires the interpolation of the isochrone predictions and given
+the complexity of stellar evolution physics this can be a par-
+ticularly challenging task (Dotter 2016). Thankfully, BaSTI
+isochrones have been intentionally computed to maintain the
+same number of stellar masses for any age and chemical com-
+position. This greatly simplifies the synthesis as they can be ar-
+ranged in a regular grid and then linearly interpolated, as imple-
+mented in FASTAR.
+In addition, as noted above, FASTAR makes use of empirical
+bolometric corrections to project the theoretical isochrone pre-
+dictions for the bolometric luminosities into V-band magnitudes
+directly measurable in the individual stellar templates. FASTAR
+relies on the V-band bolometric corrections of Worthey & Lee
+(2011) for all stellar types and metallicities. These predictions
+are also shaped into a regular grid and then can be linearly inter-
+polated at any desired value ofT eff, logg, and [Fe/H].
+2.3. Stellar libraries
+FASTAR is built around the Medium-resolution Isaac
+Newton Telescope library of empirical spectra (MILES)
+(Sánchez-Blázquez et al. 2006). In short, MILES is a compi-
+lation of 985 empirical stellar spectra at a spectral resolution
+of 2.51 Å (Falcón-Barroso et al. 2011) covering a wide range
+of atmospheric parameters (e.g. from∼ −2.5 to∼+0.5 in
+Article number, page 3
+
+A&A proofs:manuscript no. FASTAR_I
+[Fe/H], including templates as hot asT eff ∼25,000K). With
+an exquisite flux calibration over the entire 3,540–7,400 Å
+wavelength range (down to the∼2% level), MILES feeds many
+state-of-the-art SSP models currently available.
+While the MILES stellar library provides excellent perfor-
+mance for detailed spectroscopic measurements, photometric
+analyses usually require combining filters that lie blueward and
+redward of the MILES wavelength limits. Therefore, FASTAR
+also makes use of the last version of the BOSZ synthetic stellar
+spectral library presented in Mészáros et al. (2024). This theo-
+retical library has predictions over a much broader wavelength
+range (from 100 nm to 32µm) while simultaneously offering an
+atmospheric parameter coverage similar to that of MILES (al-
+though their predictions are limited to stars cooler than 16,000
+K). To be consistent with the FASTAR assumptions, we only
+make use of the Mészáros et al. (2024) predictions for [α/Fe]=0
+assuming a microturbulent velocity ofv micro =2 km s −1. With
+these additional constraints, our final theoretical library is com-
+posed of 6,151 individual stellar spectra. Details on how these
+two libraries are combined are provided in the following sec-
+tions.
+2.4. Spectral interpolation
+The interpolation of stellar spectra is arguably the central com-
+ponent of evolutionary stellar population synthesis codes. The
+goal is to predict the spectrum of a star given itsT eff, logg, and
+[Fe/H] and current state-of-the-art models follow two main in-
+terpolation approaches. Local interpolators use stellar templates
+close to the desired (T eff, logg, [Fe/H]) in order to predict the
+output spectra (e.g., Vazdekis et al. 2003; Sharma et al. 2016).
+On the contrary, global interpolators parametrize the behavior
+of the stellar library through high-order polynomial fits in or-
+der to synthesize new stellar spectra (e.g., Prugniel et al. 2011;
+Villaume et al. 2017).
+FASTAR implements an alternative, machine learning-
+powered algorithm that is fast and numerically differen-
+tiable. While sophisticated spectral interpolators based on large
+datasets have been recently explored (e.g., Melchior et al. 2023;
+Koblischke & Bovy 2024), FASTAR follows the simple yet ef-
+fective approach presented in Alsing et al. (2020). In short, we
+first reduce the dimensionality of the stellar libraries using a
+principal component analysis (PCA) decomposition. Then, a
+fully connected neural network is used to estimate the mapping
+between the PCA coefficients and the stellar parameters (T eff,
+logg, [Fe/H]).
+The workflow is as follows. We first convolve the
+Mészáros et al. (2024) stellar library to match the reso-
+lution and wavelength sampling of the MILES templates
+(Falcón-Barroso et al. 2011). Then, we augment ten times each
+star within the MILES library using a simple linear interpolation.
+The augmentation process is rather insensitive to the interpola-
+tion scheme since we are only perturbing the spectra within the
+typical uncertainty of the atmospheric parameters, and allows us
+to bias the solution toward the empirical spectra in those regions
+where MILES stellar templates are available.
+Equipped with theoretical and the (augmented) empirical
+templates, we then use a PCA decomposition to reduce the di-
+mensionality of the spectra. In the same line as previous works
+(e.g., Yip et al. 2004; Portillo et al. 2020; Sharbaf et al. 2023;
+Iglesias-Navarro et al. 2024, 2025), we find that a relatively
+small number of components is enough to accurately model our
+stellar templates. After testing a range of values, we settle on 16
+3.43.63.84.04.24.44.6
+log Teff
+0
+1
+2
+3
+4
+5 log g
+0.02
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14
+Reconstruction error
+3
+ 2
+ 1
+ 0 1
+[Fe/H]
+0
+1
+2
+3
+4
+5 log g
+0.02
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14
+Reconstruction error
+Fig. 2: Performance of the FASTAR interpolator across the logg-
+Teff-[Fe/H] parameter space. Each star in the MILES and BOSZ
+libraries is color coded by the reconstruction error, defined as the
+standard deviation of the residuals between the real spectrum and
+the predicted one. The top panel shows the logg-T eff, while the
+bottom one shows logg-[Fe/H]. The average error is on the order
+of∼3%, only becoming closer to∼10% for the coolest stars in
+the sample. There is no significant trend with metallicity.
+principal components for our analysis. Prior to the PCA, each
+spectrum is first normalized by its own mean flux and then cen-
+tered by subtracting the mean spectrum of the entire training set.
+This procedure removes global flux-level differences and pro-
+vides stable, zero-centered inputs for the PCA decomposition.
+Finally, we train a fully connected neural network with four hid-
+den layers (64, 128, 128, 64 neurons) using a mean squared
+error loss to predict the 16 principal component coefficients of
+the spectra from the stellar atmospheric parameters (logg,T eff,
+[Fe/H]). During the training, empirical and stellar templates are
+used indistinguishably to calculate the loss, with no specific
+merging strategy. Once trained for 1,200 epochs on a standard
+GPU, the regressor maps stellar parameters to PCA coefficients,
+which can subsequently be transformed back into full spectra
+through the PCA basis. Note that, given the limited number of
+stellar templates available and their sparsity, all of them are used
+during training.
+Figure 2 summarizes the performance of the FASTAR spec-
+tral interpolation, with stars in the training set color coded by the
+Article number, page 4
+
+Martín-Navarro et al.: FASTAR I
+0.2
+ 0.1
+ 0.0 0.1 0.2
+Residuals
+0
+5
+10
+15
+20
+25Probability density
+Percentiles 2/98
+Percentiles 20/80
+FASTAR
+MILES
+Fig. 3: Comparison of residuals. Blue and orange lines represent
+the distribution of residuals for the FASTAR and MILES inter-
+polators when predicting the stellar spectra of the MILES library.
+The behavior of both interpolation schemes is similar, as shown
+by the vertical dashed lines marking the 20th and 80th percentiles.
+However, the 2nd and 98th percentile vertical lines indicate that
+extreme errors are less common in FASTAR. For comparison,
+the gray histogram shows the error associated to the PCA com-
+pression.
+reconstruction error measured as the standard deviation of the
+residuals between original and reconstructed spectra. The typical
+reconstruction error is on the order of a few percent ( ¯σ=0.03)
+and the 99 th percentile remains around 10%. Moreover, stel-
+lar predictions remain robust across the whole parameter space,
+only becoming progressively less accurate for the coolest stars.
+To improve the convergence of the interpolation at these edges,
+we removed from the training sample theoretical stars cooler
+than logT eff=3.5, as well as the most extreme dwarf (logg>5)
+and giant (logg<0) stars, whose spectra are dominated by
+broad molecular lines and therefore prone to model systemat-
+ics. No additional calibration was needed to combine the spectra
+and atmospheric parameters of MILES and BOSZ, revealing a
+robust consistency in the atmospheric of both libraries. Table 1
+summarizes the final training sets.
+Table 1: Stellar libraries used for the training.
+Name N stars logglogT eff [Fe/H]
+MILES 985 (x10)−0.2/5.5 3.4/4.6−2.5/ +0.5
+BOSZ 4,917 0.5/5.0 3.5/4.3−2.5/ +0.5
+Notes.The limits on the atmospheric parameters are orientative as their
+distributions can present extended tails (see Fig. 2).
+Fig. 3 shows how the FASTAR interpolator compares with
+the state-of-the-art local interpolation powering the MILES SSP
+models. Specifically, it shows the combined residual distribution
+after predicting the spectra of each star in the MILES stellar li-
+brary. In general, the behavior of both interpolators is similar al-
+though FASTAR residuals exhibit less pronounced tails toward
+extreme outliers. The error due to the PCA dimensionality reduc-
+tion is shown in gray. Our tests show that beyond 16 components,
+the uncertainty in the prediction is dominated by the error asso-
+ciated the neural network training and increasing the number of
+PCA does not lead to better results.
+Although Fig. 3 showcases the overall behavior of the FAS-
+TAR interpolation, stellar population properties are encoded in
+specific spectral regions and scales. To exemplify the reliabil-
+ity of FASTAR in reproducing these features, Fig. 4 contains
+four panels, each of them showing in blue how the FASTAR
+predictions compare to observed colors and line-strengths in the
+MILES stellar library. For comparison, Fig. 4 also includes the
+predicted values from the MILES stellar interpolator (orange),
+as well as the R2 value for each interpolator.
+In general, FASTAR performs systematically better than the
+MILES interpolator at predicting MILES stellar templates, with
+smaller residuals for all indices and colors and fewer outliers.
+Only for the [MgFe]’ line-strength the performance of both in-
+terpolators is similar, with some non-linearity apparent in the
+FASTAR predictions likely due to the difference in [Mg/Fe]
+between empirical and theoretical libraries (Milone et al. 2011;
+Mészáros et al. 2024). In this regard, it is worth noting that FAS-
+TAR has been trained to reproduce both MILES and BOSZ li-
+braries, while the MILES interpolator is optimized to predict
+MILES stars. For completeness, in Appendix A we include a
+more comprehensive comparison between FASTAR and MILES,
+including a larger set of indices.
+3. Model synthesis
+The evolutionary synthesis of FASTAR is completely defined by
+the ingredients listed above. The main outcome of FASTAR, i.e.,
+the spectroscopic and photometric predictions are exemplified
+in Fig. 5 showing the spectral energy distribution expected for
+an old (10 Gyr), solar metallicity ([M/H]=0) integrated stellar
+population. The normalization of the FASTAR prediction is an-
+chored to an assumed absolute bolometric magnitude of the Sun
+of 4.70 and a bolometric correction of BC ⊙ =−0.12. With this,
+the units of the predicted fluxes Fλ are erg s−1 cm−2 Å−1, scaled
+at 10 pc, making the computation of absolute magnitudes in any
+photometric band straightforward.
+Note that the synthesis of FASTAR, including all its ingre-
+dients and operations, is entirely coded using the JAX Python
+library (Bradbury et al. 2018; Frostig et al. 2019), allowing for a
+optimized computation in both CPU and GPU and native numer-
+ical autodifferentiation. The scope of this paper is, however, to
+describe the evolutionary aspects of the FASTAR synthesis, not
+its technical implementation. For a more in-depth description of
+the advantages of JAX in the analysis of stellar populations, we
+refer the reader to the recent overview presented in Hearin et al.
+(2023).
+FASTAR provides two set of consistent predictions. On the
+one hand, spectroscopic SSP models can be calculated for any
+age and metallicity within the isochrone range, combining the
+MILES empirical stellar library and the theoretical stellar spec-
+tra of BOSZ. These spectroscopic FASTAR models are gener-
+ated at a resolution of 2.51 Å over the MILES wavelength range
+3,525–7,500 Å and shown in Fig. 5 as a dark blue line. On the
+other hand, FASTAR can also be used for photometric analyses
+over a wider wavelength range (2,000–11,500 Å) based solely
+on the BOSZ theoretical spectra (light blue line in Fig. 5). This
+photometric version of FASTAR is at the same resolution as the
+spectroscopic one but intentionally undersampled (∆λ=4 Å) to
+strongly discourage its use for spectroscopic applications. Note
+that this wavelength range is narrower than what is in principle
+Article number, page 5
+
+A&A proofs:manuscript no. FASTAR_I
+0 2 4 6
+[MgFe]' [Å]
+0
+1
+2
+3
+4
+5
+6
+7[MgFe]' (predicted)
+R2
+MILES = 0.93
+R2
+FASTAR = 0.93
+MILES
+FASTAR
+0 5 10
+H O [Å]
+2
+0
+2
+4
+6
+8
+10
+12
+14
+H O (predicted)
+R2
+MILES = 0.91
+R2
+FASTAR = 0.95
+0.0 0.5 1.0
+TiO2 [mag]
+0.2
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+TiO2 (predicted)
+R2
+MILES = 0.75
+R2
+FASTAR = 0.88
+1
+ 0 1 2
+g-r [mag]
+1.0
+0.5
+0.0
+0.5
+1.0
+1.5
+2.0
+g-r (predicted)
+R2
+MILES = 0.98
+R2
+FASTAR = 0.99
+Fig. 4: Line-strength and color comparison. Observed (horizontal axes) line-strength and colors are compared to the predicted values
+(vertical axes) using the FASTAR (blue filled circles) and MILES (orange squares) interpolators. From left to right, we show the
+behavior of the metallicity-sensitive [MgFe]’ (Thomas et al. 2003), the age-sensitive H βO (Cervantes & Vazdekis 2009), and the
+IMF-sensitive TiO2 (Faber et al. 1985; Trager et al. 1998). The panel on the right shows the comparison of the (g-r) color. The
+interpolation in FASTAR tends to outperform that of MILES, with systematically smaller residuals as indicated on the bottom right
+corner of each panel.
+2000 4000 6000 8000 10000
+Wavelength [Å]
+0
+2
+4
+6F  [erg s 1 cm 2 Å 1]
+1e 12
+HST F300X SDSS u LSST g GTC HiPERCAM r VST OmegaCAM i JWST F090W CFHT Wircam Y
+Fig. 5: FASTAR spectroscopic and photometric predictions. Blue lines show to the FASTAR SSP models for a 10 Gyr old, solar
+metallicity population. In light blue, the FASTAR photometric model is based on the BOSZ theoretical stellar library and can be
+convolved with any set of photometric filters (exemplified by the different transmission functions in grey) to generate photometric
+predictions. In addition, the spectroscopic side of FASTAR (dark blue line) combines the MILES (empirical) and BOSZ stellar
+libraries to generate models oriented toward detailed stellar population analyses.
+allowed by the BOSZ templates, focusing only on those wave-
+lengths commonly covered by optical photometric filters.
+3.1. Line-strengths and colors
+Figure 6 presents the FASTAR SSP predictions for the HβO, Mgb,
+and TiO2 as a function of age, metallicity and IMF slope, respec-
+tively. For comparison, Fig. 6 also includes the MILES predic-
+tions for the same set of line-strength indices. In all cases, indices
+have been measured at the nominal 2.51 Å resolution.
+In general, FASTAR predictions follow the expectations
+for state-of-the-art stellar population synthesis models. Given
+the similarities in the line-strength measured for the individ-
+ual stars shown in Fig. 4, the differences between FASTAR
+and MILES arise from the different choice of isochrones and
+bolometric corrections. Two important differences are worth
+mentioning. In the top panel of Fig. 6, FASTAR predicts
+lower H βO values than MILES for old stellar populations.
+These low H βO values in FASTAR would tend to alleviate the
+long-standing zero-point issue of evolutionary stellar popula-
+tion models (see e.g., Gibson et al. 1999; Vazdekis et al. 2001;
+Schiavon et al. 2002; Mendel et al. 2007; Cenarro et al. 2008;
+Percival & Salaris 2009; La Barbera et al. 2013; Leath et al.
+2022). Secondly, the bottom panel of Fig. 6 shows that FASTAR
+tends to predict higher TiO 2 equivalent widths than MILES for
+high IMF slope values. This results from the differences in the
+TiO2 behavior at low effective temperature between the MILES
+and BOSZ libraries, as demonstrated in Appendix B. It is im-
+Article number, page 6
+
+Martín-Navarro et al.: FASTAR I
+0 5 10
+Age [Gyr]
+3
+4
+5
+6
+7
+8
+9H 0 [Å]
+MILES
+FASTAR
+2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+[M/H]
+1
+2
+3
+4Mgb [Å]
+2 3 4
+Single power law IMF slope
+0.10
+0.15
+0.20
+0.25
+0.30TiO2 [mag]
+Fig. 6: Line-strength comparison. Blue and orange lines indicate, respectively, the FASTAR and MILES predictions for different
+line-strength indices at a 2.51 Å resolution. Left panel: Equivalent width of the HβO line is shown as a function of age for a population
+of solar metallicity and a Milky Way-like IMF. For old ages, FASTAR predictions tend to be lower than those of MILES. Middle
+panel: dependence of the Mgb feature on metallicity for a 10 Gyr population with a Milky Way-like IMF. Right panel: Behavior of
+the TiO2 molecular band for different IMF slope values (single power law) is shown for 10 Gyr and solar metallicity population.
+portant to acknowledge that the modeling of these prominent
+molecular features is particularly challenging, potentially affect-
+ing both the theoretical synthesis of stellar templates and the de-
+termination of atmospheric parameters in empirical libraries. For
+completeness, Appendix C includes a more extended compari-
+son between FASTAR and MILES for a large set of widely used
+line-strength indices.
+Similarly, in Fig. 7 we show the (g-r) color dependence on
+age, metallicity and IMF slope for FASTAR, using both the pho-
+tometric and the spectroscopic synthesizer, as well as the com-
+parison with MILES. The three predictions are in overall agree-
+ment, with no significant differences between photometric and
+spectroscopic FASTAR models. The (g-r) dependence on the
+IMF is also sensitive to the model ingredients. As in Fig. 6,
+FASTAR tends to show milder changes in color than MILES
+when increasing the IMF slope value (i.e. the number of low-
+mass stars). In addition, the photometric FASTAR predictions
+show an even weaker dependence on the IMF. Given the promi-
+nence of broad molecular bands in the atmospheres of cool stars,
+the differences between the two FASTAR predictions (solid and
+dashed blue lines in the bottom panel of Fig. 7) are expected to
+be related to the theoretical versus empirical modelling of these
+molecular bands.
+3.2. Magnitudes and mass-to-light ratios
+Magnitudes and mass-to-light ratios can also be readily calcu-
+lated within FASTAR. As indicated above, FASTAR predictions
+are scaled so that the absolute magnitude of any given SSP model
+is straightforward to compute. In practice, given a generic photo-
+metric filterP, FASTAR fluxesF λ (from Eq. 1) can be translated
+into absolute AB magnitudes through the following equation:
+MAB(P)=−2.5 log 10⟨Fλ⟩P −2.40,(3)
+with the average flux density⟨Fλ⟩P within the filter given by:
+⟨Fλ⟩P = =
+R
+Fλ(λ)T P(λ)λdλ
+.
+Z
+TP(λ)/λdλ(4)
+In the equation above,F λ is the predicted FASTAR spectrum,
+TP(λ) the transmission function of the filter, andλthe wave-
+length array (in Å). In short, because of the units and scaling of
+FASTAR, Eq. 3 predicts the absolute AB magnitude of a stellar
+population that formed 1 solar mass at birth.
+In addition to this, FASTAR can also provide the expected
+mass-to-light ratio in any photometric filter within the predicted
+wavelength range (∼3,900 – 7,000 Å for spectroscopic FAS-
+TAR and 2,000-to-12,000 Å for the photometry-oriented mod-
+els). These mass-to-light ratios are calculated using the CAL-
+SPEC Kurucz model of the Sun (Bohlin et al. 2014), scaled to
+our assumed V-band absolute magnitude (see Sect. 3).
+FASTAR provides two different mass-to-light ratio M/L pre-
+dictions. The most directly connected to the stellar population
+content of galaxies is the stellar M/L. This stellar M/L is defined
+as the stellar mass of the population (in M ⊙ units) divided by
+its luminosity (also in solar units). However, there are situations
+where it might be useful to estimate the total mass of a system
+given its stellar luminosity, including not only the mass in stars
+but also the mass in stellar remnants and the mass in form of
+gas ejected by stellar winds. For these cases, FASTAR also pro-
+vides a total M/L that takes into account all mass sources. If one
+wants to translate the observed luminosity of a galaxy into a stel-
+lar mass, one might use the stellar M/L since the use of the total
+M/L requires further assumptions (i.e. knowing the behavior of
+the high mass end of the IMF even if those stars are not present
+or the assumption that all stellar remnants and gas remain within
+the observed region or galaxy.)
+To illustrate the FASTAR magnitudes and M/L predictions,
+Fig. 8 shows their dependence on the age, metallicity and IMF
+slope of the underlying population for two different photometric
+filters, one in the optical and one in the near-infrared. In this case,
+the mass-to-light ratio corresponds to the stellar ones. Trends are
+as expected, with higher M/L ratios for older, more metal rich,
+and bottom-heavier IMF slopes. The brightness of the SSP mod-
+els increase with decreasing age and metallicities, more signif-
+icantly in the optical range (green lines). Interestingly, for old
+ages and solar metallicities, the expected brightness of a popula-
+tion has a minimum for an IMF slope similar to that of the Milky
+Way.
+Article number, page 7
+
+A&A proofs:manuscript no. FASTAR_I
+0 5 10
+Age [Gyr]
+0.0
+0.2
+0.4
+0.6
+0.8(g-r)
+MILES
+FASTAR (phot)
+FASTAR (spec)
+2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+[M/H]
+0.5
+0.6
+0.7
+0.8(g-r)
+1 2 3
+Single power law IMF slope
+0.775
+0.800
+0.825
+0.850
+0.875
+0.900
+0.925
+0.950(g-r)
+Fig. 7: Color predictions. From left to right, each panel shows the color sensitivity of the photometric and spectroscopic FASTAR
+models (dashed and solid blue lines, respectively), as well as the MILES predictions (in orange) for comparison. The differences
+between the three models are due to the use of theoretical versus empirical stellar libraries and the choice of bolometric corrections
+(between FASTAR and MILES). The assumed ages, metallicities and IMF slopes are the same as in Fig. 6.
+0 5 10
+Age [Gyr]
+0
+1
+2
+3
+4
+5
+6
+7
+8(M/L)
+(M/L)
+MAB
+SDSS g
+NIRCam F090W
+2
+ 1
+ 0
+[M/H]
+2
+3
+4
+5
+6
+7
+8(M/L)
+(M/L)
+MAB
+1 2 3 4
+Single power law IMF slope
+0
+10
+20
+30
+40
+50
+60
+70(M/L)
+(M/L)
+MAB
+2
+3
+4
+5
+6
+7
+8
+MAB
+6.00
+6.25
+6.50
+6.75
+7.00
+7.25
+7.50
+7.75
+8.00
+MAB
+6
+7
+8
+9
+10
+11
+MAB
+Fig. 8: Mass-to-light ratio and magnitude trends. Solid lines and left vertical axes represent the change in stellar M/L as a function
+of age (left), metallicity (middle), and IMF slope (right). When not varied, the age is fixed to 10 Gyr, the metallicity to solar, and the
+IMF to the Milky Way value. Similarly, dashed lines and right axes correspond to the expected absolute magnitude of the population.
+FASTAR predictions for the SDSS g band are shown in green while the expectation for the near-infrared JWST/NIRCam F090W
+filter are shown in red.
+3.3. FAST AR unique features
+Spectra and the derived line-strength values, colors and M/L
+are all standard outputs of evolutionary stellar population syn-
+thesis models. With FASTAR, however, it is possible to go be-
+yond these standard predictions. The differentiable and contin-
+uous nature of FASTAR can be used, not only to implement
+more sophisticated gradient-based inversion algorithms, but also
+to achieve a deeper understanding of SSP models. For example,
+in the left panel of Fig. 9 we show the partial derivative of an SSP
+model with respect to its age (at solar metallicity). This left panel
+formalizes the well-known idea that changes in the age have pro-
+gressively less effect on the integrated spectrum of a galaxy as
+age increases. In simple terms, distinguishing a 1 Gyr difference
+is much easier for younger than for older populations. Interest-
+ingly, the maximum contribution of AGN and RGB stars to the
+integrated spectra is also evident as a clear peak in the derivative
+of the flux at∼1.5 Gyr.
+This robust quantification of the age gradient can be used in
+practice to improve upon current SSP modelling. Specifically,
+SSP model predictions are computed in an age grid following
+the sampling given by the isochrones, as exemplified by the red
+symbols on the right panel of Fig. 9. This age sampling aims
+to roughly capture the change in age sensitivity represented in
+the left panel, with older SSP having a coarser sampling than
+younger ones. With FASTAR we can formally create an optimal
+grid of models that ensures that the relative variation of the spec-
+tra is the same between two consecutive SSP models, as show-
+cased by the blue symbols on the right panel of Fig. 9. The opti-
+mal age sampling also captures the sudden contribution of giant
+stars to the integrated flux of SSP models.
+With FASTAR we provide an optimized age and metallicity
+sampling based on the mean variation of the spectra. In addition,
+the sampling can be easily optimized for any other metric (e.g.
+magnitude in a specific band, lines-strength, color etc.) thanks
+to the differentiable nature of the model predictions. The docu-
+mentation released with the code includes examples on how to
+optimize the sampling for alternative quantities.
+Article number, page 8
+
+Martín-Navarro et al.: FASTAR I
+0.1 1.0 10.0
+Age [Gyr]
+0
+10
+20
+30
+40
+50
+1
+F
+F
+age
+0 10 20 30 40 50
+Age bin
+0
+2
+4
+6
+8
+10
+12
+14Age [Gyr]
+MILES binning
+FASTAR optimal binning
+Fig. 9: Optimal age sampling. Top: Relative age sensitivity of
+FASTAR SSP models as a function of age. The normalized age
+derivative of the FASTAR models becomes smaller for older
+ages, reflecting the fact that age variations have a progressively
+weaker effect on the integrated spectrum of a galaxy with in-
+creasing age. The peak contribution of the AGB (and RGB)
+phases appears as a sudden change in the derivative at an age
+of∼1.5 Gyr. Bottom: Age sampling of the MILES models is
+shown in red, following their BaSTI isochrone grid. In blue, the
+optimized FASTAR sampling enforces a constant flux variation
+across all age bins.
+In addition, the computation speed of FASTAR can be used
+to estimate the uncertainty of our spectral and photometric pre-
+dictions, as illustrated in Fig. 10. The top panel shows a stan-
+dard SSP model of an old (10 Gyr), solar metallicity integrated
+population. On the bottom panel we show four error spectra cal-
+culated as follows. The purple one corresponds to the standard
+deviation of 100 SSP realizations where the surface gravity of
+each star along the isochrone was perturbed following a gaussian
+distribution with dispersion∆logg=0.2 dex. In other words, it
+corresponds to the error in the SSP prediction resulting from the
+typical uncertainty in the determination of loggin the individual
+stellar templates. Similarly, the red line shows the error result-
+ing from propagating a typical stellar metallicity uncertainty of
+∆[Fe/H]=0.1 dex. Finally, with yellow we indicate the uncer-
+tainty related to the determination of the effective temperature
+(∆logT e f f =0.005 dex). The gray line correspond to the total
+error budget, calculated by simultaneously perturbing the three
+atmospheric parameters.
+1
+2
+3
+4
+5F  [erg s 1 cm 2 Å 1]
+1e 12
+SSP (10 Gyr, [M/H]=0)
+3500 4000 4500 5000 5500 6000 6500 7000 7500
+Wavelength [Å]
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5F  [erg s 1 cm 2 Å 1]
+1e 14
+1  error (total)
+1  error ( [Fe/H]=0.1)
+1  error ( log Teff=0.005)
+1  error ( log g=0.2)
+Fig. 10: Uncertainty of SSP model predictions. The upper panel
+shows the SSP model predicted by FASTAR for a population
+of 10 Gyr and solar metallicity while the bottom panel shows
+the associated errors. In purple, we present the uncertainty in
+the SSP model assuming a typical error∆logg=0.2 dex in
+the determination of the surface gravity of the stars. In red and
+yellow we represent the error corresponding to the metallicity
+(∆[Fe/H]=0.1 dex) and effective temperature (∆T e f f =0.005
+dex), respectively. In grey, we show the expected total uncer-
+tainty in the SSP model.
+With these assumptions, the SSP prediction shown in the up-
+per panel has, on average, a signal-to-noise ratio∼600 around
+λ=5000, slightly lower (∼300) toward the blue and the red
+ends of the optical range. Interestingly, the dominant source of
+uncertainty across the entire wavelength range is related to the
+error in the determination of the effective temperature of individ-
+ual stars. It is worth noting, however, that this is an approximate
+estimate, assuming constant, uncorrelated and gaussian errors.
+Moreover, the current version of FASTAR does not take into ac-
+count the PCA reconstruction loss nor the epistemic uncertainty
+of the neural network predictions, which will be implemented
+in upcoming releases. Nonetheless, Fig. 10 showcases the possi-
+bilities of using FASTAR to better understand the strengths and
+limitations of SSP models.
+3.4. Stellar predictions
+The prediction of stellar templates is implicit to the calcula-
+tion of SSP models through the neural network-based interpo-
+lation scheme described above. To facilitate its usage for scien-
+tific cases where individual stellar templates might be required,
+FASTAR also makes straightforward and fast to predict new stel-
+lar spectra. After fixing the metallicity, effective temperature and
+surface gravity, FASTAR generates stellar predictions across the
+two (spectroscopic and photometric) wavelength ranges. This is
+exemplified in Fig. 11.
+Darker lines in Fig. 11 correspond to the FASTAR predic-
+tions within the MILES wavelength range, based on both MILES
+and BOSZ stellar libraries, while lighter lines are the coarser (in
+Article number, page 9
+
+A&A proofs:manuscript no. FASTAR_I
+2000 4000 6000 8000 10000
+Wavelength [Å]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0F  [arbitrary units]
+M4 III
+G2 V
+B8 III
+Fig. 11: Stellar predictions across different spectral types. Dark
+and light lines represent predictions using both the MILES and
+BOSZ stellar libraries, and using only BOSZ, respectively. Each
+color corresponds to a different stellar type, as indicated by the
+labels.
+wavelength) FASTAR stellar predictions for photometric appli-
+cations. Without any fine tuning, the two predictions are in clear
+agreement.
+4. Validation on observed data
+Globular clusters and massive quiescent early-type galaxies are
+observational benchmarks for the performance of evolutionary
+population synthesis models. Their stellar populations are rather
+simple and homogeneous and thus well-represented by SSP
+models.
+In Fig. 12 we show the H βO versus [MgFe]’ index-index di-
+agram for the Milky Way globular cluster sample of Usher et al.
+(2017), color coded by their [Fe/H] metallicity. Figure 12 also
+shows the FASTAR predictions for different ages and metallic-
+ities, assuming a Milky Way-like IMF. The globular cluster in-
+dices were measured at the nominal 2.51Å resolution of the FAS-
+TAR models.
+In general, FASTAR predictions reliably match the observed
+data, with old stellar populations across the entire globular clus-
+ter population and the independently measured metallicities (i.e.
+the color code in Fig. 12) running in parallel with the iso-
+metallicity lines of the FASTAR models. Beyond this agreement,
+the most notable aspect of this comparison is the lack of a sig-
+nificant zero-point difference between models and data, with the
+fit to the oldest globular clusters in the sample not requiring ages
+older than 14 Gyr (i.e. the age of the Universe atz∼0 under
+standard cosmologies). Interestingly, this well-known systematic
+of evolutionary synthesis models is present in the MILES models
+(see e.g., Leath et al. 2022) but not in FASTAR, where the pre-
+dicted HβO values tend to be smaller for the same age (see Fig. 4).
+Given the similarities between the MILES and FASTAR stellar
+line-strength predictions (Fig. 6), the apparent lack of discrep-
+ancy between FASTAR models and globular cluster data is due
+to the improved stellar evolutionary physics in the Hidalgo et al.
+(2018) set of isochrones, in particular, thanks to the treatment of
+atomic diffusion.
+The comparison with observed globular cluster data can be
+extended beyond the Milky Way. To showcase the broad range
+of applications of the FASTAR models, Fig. 13 shows the (g-
+z) versus [MgFe]’ model grid prediction for a Milky Way-like
+0 1 2 3 4 5
+[MgFe]' [Å]
+2
+3
+4
+5
+6
+7H o [Å]
+1.9 Gyr
+2.4 Gyr
+3.2 Gyr
+4.2 Gyr
+5.7 Gyr7.5 Gyr
+10.1 Gyr
+14.0 Gyr
+[M/H]=-2.12
+[M/H]=-0.97
+[M/H]=-0.43
+[M/H]=-0.11
+[M/H]=0.30
+2.0
+1.5
+1.0
+0.5
+[Fe/H] (Usher et al. 2017)
+Fig. 12: Line-strength HβO versus [MgFe]’ index-index diagram
+for Milky Way globular clusters. Filled symbols correspond to
+the globular cluster sample of Usher et al. (2017), color coded
+by their [Fe/H] metallicity. The FASTAR model grid prediction
+is shown in the background in grey. Labels indicate ages and
+metallicities across the grid. The equivalent width for data and
+models is measured at the FASTAR 2.51 Å spectral resolution.
+FASTAR model predictions reproduce the observed data with-
+out systematic offsets, suggesting that the well-known zero-point
+problem of evolutionary stellar population models can be at least
+minimized with state-of-the art isochrones.
+IMF. On top of the model grid, filled circles correspond to the
+globular cluster sample of Fahrion et al. (2020) in the Fornax
+cluster, color coded by their total metallicity. Observationally,
+measuring colors and line-strengths in globular clusters is sig-
+nificantly more difficult in external galaxies than in the Milky
+Way, in addition to the effect of non-solar elemental abundances,
+thus explaining the increased scatter in comparison with Fig. 12.
+However, the agreement between models and data is notewor-
+thy, particularly considering that the color predictions come from
+the FASTAR photometric models trained on synthetic stellar
+spectra, while the [MgFe]’ line-strengths are measured from the
+spectroscopic models relying on both theoretical and empirical
+templates.
+To further benchmark FASTAR predictions against globu-
+lar cluster measurements, Fig. 14 shows the observed (u-g) ver-
+sus (g-r) colors of M 31 globular clusters from Caldwell et al.
+(2011), overplotted on top of a grid of (photometric) FASTAR
+predictions. The sample of globular clusters has been restricted
+to those with low attenuation (E(B−V)<0.15) to minimize
+the effect of dust. Clusters are color coded according to their
+[Fe/H] iron metallicities. The agreement between observations
+and models is good, with a clear trend between the observed col-
+ors, models, and metallicities, in particular for the metal-poor
+population less affected by dust.
+In addition to globular clusters, we also tested the FAS-
+TAR models against the high-quality Sloan Digital Sky Survey
+(SDSS; Adelman-McCarthy et al. 2008) stacked optical spec-
+tra of quiescent early-type galaxies presented and described
+in La Barbera et al. (2013). Figure 15 shows again the H βO–
+[MgFe]’ plane, compared to line-strengths measured from the
+SDSS stacked spectra, color coded by stellar velocity disper-
+sionσ. Indices are measured at the spectral resolution given by
+the stacked spectra with the highest velocity dispersion. As ex-
+pected, FASTAR models predict a clear age and metallicity de-
+Article number, page 10
+
+Martín-Navarro et al.: FASTAR I
+0 1 2 3 4 5 6
+[MgFe]' [Å]
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8(g-z)
+2.0
+1.5
+1.0
+0.5
+0.0
+[M/H] (Fahrion et al. 2020)
+Fig. 13: Globular clusters in the Fornax Cluster. Filled circles
+correspond to the (g-z) versus [MgFe]’ values measured in the
+Fahrion et al. (2020) sample of globular clusters in the For-
+nax galaxy cluster, with the color coding representing their to-
+tal metallicity. The background model grid shows the FASTAR
+predictions for different ages and metallicities, with the (g-z)
+and [MgFe]’ values, coming from the FASTAR photometric and
+spectroscopic sets of predictions, respectively.
+1.0 1.2 1.4 1.6 1.8 2.0 2.2
+(u-g)
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9(g-r)
+E(B-V)<0.15
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+[Fe/H] (Caldwell et al. 2011)
+Fig. 14: Globular clusters in M 31. The (u-g) versus (g-r) col-
+ors of globular clusters in M 31 are shown, color coded by their
+iron metallicity, as reported in Caldwell et al. (2011). To min-
+imize the effect of dust, the sample has been reduced to those
+globular clusters with E(B−V)<0.15. The gray background grid
+shows the FASTAR photometric predictions for different ages
+and metallicities, for a fixed Milky Way-like IMF.
+pendence with velocity dispersion, with galaxies having higher
+σpresenting older and more metal-rich stellar populations. The
+recovered comparison is rather similar to the analysis presented
+in La Barbera et al. (2013) using the MILES models.
+Contrary to globular clusters, the oldest and most massive
+galaxies in Fig. 15 appear systematically below the H βO predic-
+tion for the 14 Gyr SSP. However, this is not necessarily due to
+a model zero-point issue but to the effect on H βO of a bottom-
+heavy IMF (i.e., biased toward low-mass stars, La Barbera et al.
+2013), as well as individual elemental abundance variations. For
+comparison, Fig. 15 also includes, with dashed lines, a FASTAR
+grid assuming bottom-heavy IMF.
+2.4 2.6 2.8 3.0 3.2 3.4 3.6
+[MgFe]' [Å]
+2.3
+2.4
+2.5
+2.6
+2.7
+2.8
+2.9H o [Å]
+6.4 Gyr
+7.5 Gyr
+8.6 Gyr
+10.1 Gyr
+11.8 Gyr
+14.0 Gyr
+[M/H]=-0.20 [M/H]=-0.10
+[M/H]=0.00[M/H]=0.10
+[M/H]=0.20
+150 200 250
+SDSS [km/s]
+Fig. 15: Ages and metallicities of quiescent early-type galaxies.
+Filled symbols correspond to the HβO and [MgFe]’ line-strength
+measured over the stacked SDSS spectra of La Barbera et al.
+(2013), with the color code given by the mean stellar velocity
+dispersion of each stack. The background model grid shows the
+FASTAR predictions for those two indices for a Milky Way IMF
+(solid lines). For reference, the grid for a bottom-heavy IMF (sin-
+gle power law withα=3) is also shown with dashed lines. As
+expected, the prediction from the FASTAR models is that qui-
+escent early-type galaxies become increasingly more metal-rich
+and older when increasing velocity dispersion. Models and data
+have been convolved to the resolution of the highestσstack.
+Figure 16 offers a more quantitative assessment of the
+performance of FASTAR in comparison with the state-of-
+the-art MILES evolutionary synthesis models. We use pPXF
+(Cappellari & Emsellem 2004; Cappellari 2023) to fit the SDSS
+stacked spectra using both sets of models. In the case of FAS-
+TAR, we adopt the optimized age-metallicity sampling described
+in Sect. 3.3, while fits based on MILES use the default MILES
+grid. The fits include templates for potential (although weak)
+emission lines and are done with no continuum correction to
+avoid compensating potential model systematics. No regulariza-
+tion was applied either, and we masked the NaD region during
+the fitting process to mitigate the effect of IMF variations and
+neutral gas absorption.
+For both the low- and high-σstacked spectra, the FASTAR
+and MILES solutions provide very good fits to the data, with
+residuals below the 5% level in both cases. This is particularly
+noteworthy since no polynomial correction is included to ac-
+count for flux calibration mismatches in the SDSS data. In the
+case of the high-σstack, the residuals are in both cases slightly
+larger, likely due to non-solar elemental abundances in the un-
+derlying stellar population and a bottom-heavy IMF.
+In Figs. 17 and 18 we show the recovered age - velocity
+dispersion and metallicity - velocity dispersion relations, respec-
+tively. As before, blue symbols correspond to measurements ob-
+tained using the FASTAR models and orange ones correspond to
+MILES. In both figures, filled symbols are mass-weighted quan-
+tities while empty symbols represent luminosity-weighted aver-
+ages. Generally, FASTAR and MILES models behave similarly,
+retrieving the well-known trend of older and more metal-rich
+stellar populations with increasing galaxy velocity dispersion.
+FASTAR tends to retrieve younger ages (Fig. 17), as ex-
+pected from the line-strength behavior detailed above, with
+weaker H βO values at fixed age than in MILES. Interestingly,
+age-σrelation measured with the FASTAR model shows a pe-
+Article number, page 11
+
+A&A proofs:manuscript no. FASTAR_I
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2Normalized flux
+SDSS stacked ETGs ( = 110 km s 1)
+MILES
+FASTAR
+4000 4500 5000 5500 6000 6500 7000
+Wavelength [Å]
+0.05
+0.00
+0.05
+Residuals
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2Normalized flux
+SDSS stacked ETGs ( = 280 km s 1)
+MILES
+FASTAR
+4000 4500 5000 5500 6000 6500 7000
+Wavelength [Å]
+0.05
+0.00
+0.05
+Residuals
+Fig. 16: Fits to SDSS stacked spectra. The MILES (in orange)
+and FASTAR (in blue) best-fitting models are shown compared
+to two SDSS stacked spectra (in black). The top and bottom pan-
+els correspond to stacks of low-σ(110 km s −1) and high-σ(280
+km s−1) early-type galaxies, respectively. MILES and FASTAR
+best-fitting models are very similar as demonstrated by the resid-
+ual distribution also displayed in each panel. No polynomial cor-
+rection was applied to the continuum.
+culiar behavior atσ∼200 km s −1, which is also evident in
+the H βO–[MgFe]’ plane shown in Fig. 15 but apparently ab-
+sent when using the MILES models. Regarding the recovered
+metallicities, FASTAR-based measurements show smaller differ-
+ences between luminosity- and mass-weighted trends compared
+to MILES, with systematically lower mass-weighted values.
+5. Summary
+With FASTAR we present the first generation of continuous, dif-
+ferentiable evolutionary stellar population synthesis algorithms.
+FASTAR is not a set of pre-computed model predictions, but a
+flexible tool that provides continuous SSP predictions across a
+wide range of ages, metallicities, IMFs and wavelengths. Based
+on the fundamental principles of evolutionary stellar population
+models, FASTAR, however, is faster and enables a deeper un-
+derstanding of the models’ behavior and new ways of using their
+thoroughly tested strengths. The access to the synthesis code is
+transparent and allows users to tailor FASTAR predictions to
+their needs. The key features of FASTAR are as follows:
+–PCA-based, neural network stellar interpolation. FASTAR is
+centered around a stellar interpolator trained on empirical
+and/or theoretical stellar libraries that matches the reliability
+of competing interpolation schemes currently implemented
+in SSP models, but it is faster and matches the performance
+of state-of-the-art alternatives in accurately reproducing stel-
+lar spectra.
+120 140 160 180 200 220 240 260 280
+Velocity dispersion  [km s 1]
+9
+10
+11
+12
+13
+14Age [Gyr]
+FASTAR (mass-weighted)
+MILES (mass-weighted)
+FASTAR (luminosity-weighted)
+MILES (luminosity-weighted)
+Fig. 17: Age-velocity dispersion relation. Blue and orange sym-
+bols correspond to the best-fitting ages of the SDSS stacked
+spectra using pPXF and the FASTAR and MILES SSP models,
+respectively, while filled and empty symbols indicate mass- and
+luminosity-weighted values. FASTAR and MILES models are
+able to retrieve the expected age-σrelation, with FASTAR-based
+ages generally being younger than those measured with MILES.
+120 140 160 180 200 220 240 260 280
+Velocity dispersion  [km s 1]
+0.15
+0.10
+0.05
+0.00
+0.05
+0.10
+0.15
+[M/H]
+FASTAR (mass-weighted)
+MILES (mass-weighted)
+FASTAR (luminosity-weighted)
+MILES (luminosity-weighted)
+Fig. 18: Metallicity-velocity dispersion relation. The symbols
+and colors are the same as in Fig. 17, but in this case they rep-
+resent the best-fitting metallicity values. The expected relation
+with velocity dispersion is well recovered with both sets of mod-
+els although with systematic differences as FASTAR tends to
+result in lower metallicities and less differences between mass-
+weighted and luminosity-weighted values than MILES.
+–Differentiability and flexibility. FASTAR uses the JAX nu-
+merical library to provide differentiable SSP predictions,
+ready to be implemented in gradient descent inference algo-
+rithms. Moreover, it allows for the use of any IMF functional
+form, facilitating the cross-IMF conversions of colors, stellar
+masses and all other model predictions.
+–Age and metallicity coverage. FASTAR relies on the latest
+version of the BaSTI-IAC set of isochrones, thus enabling
+SSP predictions from 20 Myr to 14 Gyr in age and from -2.5
+to+0.3 in total metallicity. Possible IMF slopes and func-
+tional forms are completely unconstrained.
+–Detailed spectroscopy. Over the 3,5400 - 7,400Å wavelength
+range, FASTAR offers detailed stellar and SSP predictions at
+a 2.51Å resolution. The code combines the MILES (empir-
+ical) and BOSZ (theoretical) stellar libraries to deliver de-
+Article number, page 12
+
+Martín-Navarro et al.: FASTAR I
+tailed SSP predictions. Colors, magnitudes, mass-to-light ra-
+tios, line-strengths etc. can be easily computed as well.
+–Photometric predictions. For photometric applications, FAS-
+TAR offers a wider wavelength range, from 2,000Å to
+12,000Å using the BOSZ theoretical stellar library. The re-
+sulting SEDs can then be convolved with any photometric
+filter and the corresponding colors and mass-to-light ratios
+can be consistently estimated.
+–Unique to FASTAR. FASTAR proposes an alternative way
+of releasing SSP models. Predictions can be evaluated at any
+age, metallicity or IMF. In addition, FASTAR provides an
+optimal age and metallicity grid sampling based on the for-
+mal flux derivative of the models. FASTAR can also be used
+to assess the intrinsic uncertainty of SSP predictions.
+Acknowledgements.We would like to thank the referee for the suggestions
+and comments on the original manuscript. We acknowledge support from grant
+PID2022-140869NB-I00 from the Spanish Ministry of Science and Innovation.
+F.L.B. acknowledges support from INAF minigrant 1.05.23.04.01. We would
+like to thank Ignacio Ferreras, Sebastián Hidalgo, Ignacio Trujillo and Francesco
+Belfiore for their insightful comments during the development of FASTAR.
+Models availability
+Documentation and examples on how to use FASTAR
+can be found at the project’s websitehttps://fastar.
+readthedocs.io
+The code is freely available herehttps://github.com/
+inavarro/fastar
+References
+Acquaviva, V ., Gawiser, E., & Guaita, L. 2011, ApJ, 737, 47
+Adelman-McCarthy, J. K., Agüeros, M. A., Allam, S. S., et al. 2008, ApJS, 175,
+297
+Alsing, J., Peiris, H., Leja, J., et al. 2020, ApJS, 249, 5
+Alsing, J., Thorp, S., Deger, S., et al. 2024, ApJS, 274, 12
+Angthopo, J., Granett, B. R., La Barbera, F., et al. 2024, A&A, 690, A198
+Asa’d, R. S., Vazdekis, A., Cerviño, M., et al. 2017, MNRAS, 471, 3599
+Behroozi, P. S., Wechsler, R. H., & Conroy, C. 2013, ApJ, 770, 57
+Bellstedt, S. & Robotham, A. S. G. 2025, MNRAS, 540, 2703
+Bohlin, R. C., Gordon, K. D., & Tremblay, P. E. 2014, PASP, 126, 711
+Bradbury, J., Frostig, R., Hawkins, P., et al. 2018, JAX: composable transforma-
+tions of Python+NumPy programs
+Bruzual, G. & Charlot, S. 2003, MNRAS, 344, 1000
+Byrne, C. M., Stanway, E. R., Eldridge, J. J., McSwiney, L., & Townsend, O. T.
+2022, Monthly Notices of the Royal Astronomical Society, 512, 5329–5338
+Caldwell, N., Schiavon, R., Morrison, H., Rose, J. A., & Harding, P. 2011, AJ,
+141, 61
+Cappellari, M. 2023, MNRAS, 526, 3273
+Cappellari, M. & Emsellem, E. 2004, PASP, 116, 138
+Carnall, A. C., McLure, R. J., Dunlop, J. S., & Davé, R. 2018, MNRAS, 480,
+4379
+Cenarro, A. J., Cardiel, N., Gorgas, J., et al. 2001, MNRAS, 326, 959
+Cenarro, A. J., Cervantes, J. L., Beasley, M. A., Marín-Franch, A., & Vazdekis,
+A. 2008, ApJ, 689, L29
+Cervantes, J. L. & Vazdekis, A. 2009, MNRAS, 392, 691
+Chabrier, G. 2003, PASP, 115, 763
+Chen, Y .-P., Trager, S. C., Peletier, R. F., et al. 2014, A&A, 565, A117
+Chevallard, J. & Charlot, S. 2016, MNRAS, 462, 1415
+Choi, J., Dotter, A., Conroy, C., et al. 2016, ApJ, 823, 102
+Coelho, P. R. T. 2014, MNRAS, 440, 1027
+Conroy, C. 2013, ARA&A, 51, 393
+Conroy, C. & van Dokkum, P. G. 2012, ApJ, 760, 71
+Conroy, C., Villaume, A., van Dokkum, P. G., & Lind, K. 2018, ApJ, 854, 139
+De Marchi, G., Paresce, F., & Portegies Zwart, S. 2005, in Astrophysics and
+Space Science Library, V ol. 327, The Initial Mass Function 50 Years Later,
+ed. E. Corbelli, F. Palla, & H. Zinnecker, 77
+Dotter, A. 2016, ApJS, 222, 8
+Faber, S. M., Friel, E. D., Burstein, D., & Gaskell, C. M. 1985, ApJS, 57, 711
+Fahrion, K., Lyubenova, M., Hilker, M., et al. 2020, A&A, 637, A27
+Falcón-Barroso, J., Sánchez-Blázquez, P., Vazdekis, A., et al. 2011, A&A, 532,
+A95
+Frostig, R., Johnson, M. J., & Leary, C. 2019, in SysML Conference 2018, Stan-
+ford, United States
+Gallazzi, A., Charlot, S., Brinchmann, J., White, S. D. M., & Tremonti, C. A.
+2005, MNRAS, 362, 41
+Gibson, B. K., Madgwick, D. S., Jones, L. A., Da Costa, G. S., & Norris, J. E.
+1999, AJ, 118, 1268
+Girardi, L., Bressan, A., Bertelli, G., & Chiosi, C. 2000, A&AS, 141, 371
+Gustafsson, B., Edvardsson, B., Eriksson, K., et al. 2008, A&A, 486, 951
+Hahn, C. & Melchior, P. 2022, ApJ, 938, 11
+Hawcroft, C., Leitherer, C., Aranguré, O., et al. 2025, ApJS, 280, 5
+Hearin, A. P., Chaves-Montero, J., Alarcon, A., Becker, M. R., & Benson, A.
+2023, MNRAS, 521, 1741
+Hernández-Pérez, F. & Bruzual, G. 2013, MNRAS, 431, 2612
+Hidalgo, S. L., Pietrinferni, A., Cassisi, S., et al. 2018, ApJ, 856, 125
+Hunt, L. J., Pimbblet, K. A., & Benoit, D. M. 2024, MNRAS, 529, 479
+Iglesias-Navarro, P., Huertas-Company, M., Martín-Navarro, I., Knapen, J. H.,
+& Pernet, E. 2024, A&A, 689, A58
+Iglesias-Navarro, P., Huertas-Company, M., Pérez-González, P., et al. 2025,
+A&A, 703, A229
+Johnson, B. D., Leja, J., Conroy, C., & Speagle, J. S. 2021, ApJS, 254, 22
+Kauffmann, G., Heckman, T. M., White, S. D. M., et al. 2003, MNRAS, 341, 33
+Knowles, A. T., Sansom, A. E., Vazdekis, A., & Allende Prieto, C. 2023, MN-
+RAS, 523, 3450
+Koblischke, N. & Bovy, J. 2024, arXiv e-prints, arXiv:2411.04750
+Kroupa, P. 2001, MNRAS, 322, 231
+Kroupa, P. 2002, Science, 295, 82
+La Barbera, F., Ferreras, I., Vazdekis, A., et al. 2013, MNRAS, 433, 3017
+Leath, H. J., Beasley, M. A., Vazdekis, A., Salvador-Rusiñol, N., & Gvozdenko,
+A. 2022, MNRAS, 512, 548
+Leitherer, C., Schaerer, D., Goldader, J. D., et al. 1999, ApJS, 123, 3
+Levesque, E. M. & Leitherer, C. 2013, ApJ, 779, 170
+Liang, Y ., Melchior, P., Lu, S., Goulding, A., & Ward, C. 2023, AJ, 166, 75
+Lu, S., Daddi, E., Maraston, C., et al. 2024, Nature Astronomy, 9, 128–140
+Madau, P. & Dickinson, M. 2014, ARA&A, 52, 415
+Maiolino, R. & Mannucci, F. 2019, A&A Rev., 27, 3
+Maraston, C. 2005, MNRAS, 362, 799
+Maraston, C., Hill, L., Thomas, D., et al. 2020, MNRAS, 496, 2962
+Martín-Navarro, I., La Barbera, F., Vazdekis, A., Falcón-Barroso, J., & Ferreras,
+I. 2015, MNRAS, 447, 1033
+Martín-Navarro, I., Lyubenova, M., van de Ven, G., et al. 2019, A&A, 626, A124
+Melchior, P., Liang, Y ., Hahn, C., & Goulding, A. 2023, AJ, 166, 74
+Mendel, J. T., Proctor, R. N., & Forbes, D. A. 2007, MNRAS, 379, 1618
+Mészáros, S., Bohlin, R., Allende Prieto, C., et al. 2024, A&A, 688, A197
+Millán-Irigoyen, I., Mollá, M., Cerviño, M., et al. 2021, MNRAS, 506, 4781
+Milone, A. D. C., Sansom, A. E., & Sánchez-Blázquez, P. 2011, MNRAS, 414,
+1227
+Parikh, T., Thomas, D., Maraston, C., et al. 2018, MNRAS, 477, 3954
+Peletier, R. F. 1989, PhD thesis, -
+Peng, Y .-j., Lilly, S. J., Kovaˇc, K., et al. 2010, ApJ, 721, 193
+Percival, S. M. & Salaris, M. 2009, ApJ, 703, 1123
+Pietrinferni, A., Cassisi, S., Salaris, M., & Castelli, F. 2004, ApJ, 612, 168
+Pietrinferni, A., Cassisi, S., Salaris, M., & Castelli, F. 2006, ApJ, 642, 797
+Pietrinferni, A., Hidalgo, S., Cassisi, S., et al. 2021, ApJ, 908, 102
+Pietrinferni, A., Salaris, M., Cassisi, S., et al. 2024, MNRAS, 527, 2065
+Portillo, S. K. N., Parejko, J. K., Vergara, J. R., & Connolly, A. J. 2020, AJ, 160,
+45
+Prugniel, P., Vauglin, I., & Koleva, M. 2011, A&A, 531, A165
+Robotham, A. S. G. & Bellstedt, S. 2025, RAS Techniques and Instruments, 4,
+rzaf019
+Röck, B., Vazdekis, A., Peletier, R. F., Knapen, J. H., & Falcón-Barroso, J. 2015,
+MNRAS, 449, 2853
+Salpeter, E. E. 1955, ApJ, 121, 161
+Sánchez, S. F. 2020, ARA&A, 58, 99
+Sánchez-Blázquez, P., Peletier, R. F., Jiménez-Vicente, J., et al. 2006, MNRAS,
+371, 703
+Scalo, J. 1998, in Astronomical Society of the Pacific Conference Series, V ol.
+142, The Stellar Initial Mass Function (38th Herstmonceux Conference), ed.
+G. Gilmore & D. Howell, 201
+Schawinski, K., Thomas, D., Sarzi, M., et al. 2007, MNRAS, 382, 1415
+Schiavon, R. P. 2007, ApJS, 171, 146
+Schiavon, R. P., Faber, S. M., Rose, J. A., & Castilho, B. V . 2002, ApJ, 580, 873
+Serven, J., Worthey, G., & Briley, M. M. 2005, ApJ, 627, 754
+Sharbaf, Z., Ferreras, I., & Lahav, O. 2023, MNRAS, 526, 585
+Sharma, K., Prugniel, P., & Singh, H. P. 2016, A&A, 585, A64
+Spiniello, C., Trager, S. C., Koopmans, L. V . E., & Chen, Y . P. 2012, ApJ, 753,
+L32
+Thomas, D., Maraston, C., & Bender, R. 2003, MNRAS, 339, 897
+Article number, page 13
+
+A&A proofs:manuscript no. FASTAR_I
+Thomas, D., Maraston, C., Bender, R., & Mendes de Oliveira, C. 2005, ApJ, 621,
+673
+Tinsley, B. M. 1968, ApJ, 151, 547
+Tinsley, B. M. 1972, A&A, 20, 383
+Tinsley, B. M. 1980, Fund. Cosmic Phys., 5, 287
+Tinsley, B. M. & Gunn, J. E. 1976, ApJ, 203, 52
+Trager, S. C., Faber, S. M., Worthey, G., & González, J. J. 2000, AJ, 119, 1645
+Trager, S. C., Worthey, G., Faber, S. M., Burstein, D., & Gonzalez, J. J. 1998,
+ApJS, 116, 1
+Usher, C., Pastorello, N., Bellstedt, S., et al. 2017, MNRAS, 468, 3828
+van der Wel, A., Franx, M., van Dokkum, P. G., et al. 2014, ApJ, 788, 28
+van Dokkum, P. G. & Conroy, C. 2010, Nature, 468, 940
+Vazdekis, A., Casuso, E., Peletier, R. F., & Beckman, J. E. 1996, ApJS, 106, 307
+Vazdekis, A., Cenarro, A. J., Gorgas, J., Cardiel, N., & Peletier, R. F. 2003,
+MNRAS, 340, 1317
+Vazdekis, A., Coelho, P., Cassisi, S., et al. 2015, MNRAS, 449, 1177
+Vazdekis, A., Koleva, M., Ricciardelli, E., Röck, B., & Falcón-Barroso, J. 2016,
+MNRAS, 463, 3409
+Vazdekis, A., Peletier, R. F., Beckman, J. E., & Casuso, E. 1997, ApJS, 111, 203
+Vazdekis, A., Salaris, M., Arimoto, N., & Rose, J. A. 2001, ApJ, 549, 274
+Vazdekis, A., Sánchez-Blázquez, P., Falcón-Barroso, J., et al. 2010, MNRAS,
+404, 1639
+Verro, K., Trager, S. C., Peletier, R. F., et al. 2022, A&A, 661, A50
+Villaume, A., Conroy, C., Johnson, B., et al. 2017, ApJS, 230, 23
+Wang, B., Leja, J., Labbé, I., et al. 2024, ApJS, 270, 12
+Worthey, G. 1994, ApJS, 95, 107
+Worthey, G., Faber, S. M., & Gonzalez, J. J. 1992, ApJ, 398, 69
+Worthey, G. & Lee, H.-c. 2011, ApJS, 193, 1
+Yan, R., Chen, Y ., Lazarz, D., et al. 2019, ApJ, 883, 175
+Yip, C. W., Connolly, A. J., Vanden Berk, D. E., et al. 2004, AJ, 128, 2603
+Zacharegkas, G., Hearin, A., & Benson, A. 2025, arXiv e-prints,
+arXiv:2506.19919
+Article number, page 14
+
+Martín-Navarro et al.: FASTAR I
+Appendix A: Line-strength comparison
+To better assess the performance of the FASTAR interpolation
+we also charaterize the behavior of different line-strengths in-
+dices across the entire spectroscopic range (3,540–7,400 Å), as
+shown in Fig. A.1. Blue symbols correspond to the difference be-
+tween the predicted value from FASTAR and that directly mea-
+sured over the MILES stars. We also include a comparison with
+the MILES interpolation predictions for the same set of indices,
+in orange. Horizontal dashed lines in Fig. A.1 indicate the mean
+difference between the observed and predicted line-strength val-
+ues while shaded areas indicate the standard deviation of the dis-
+tribution.
+As already showcased in Fig. 4, both interpolation schemes
+perform at a similar level, with FASTAR yielding generally a
+slightly smaller scatter. Some features such as the Mgb 5177 or
+the Ca 4227 show a small but noticeable non-linearity in the
+residual distribution due to differences between the empirical
+MILES and theoretical BOSZ predictions used for training. Yet,
+in general, the agreement between both interpolators is remark-
+able, even in features such as the Balmer lines that traditionally
+pose problems when comparing theoretical and empirical predic-
+tions due to non-LTE effects (Knowles et al. 2023). In FASTAR,
+predictions tend to be close to the empirical expectations because
+the training has been intentionally biased toward MILES through
+the augmentation process.
+It is also worth emphasizing that the FASTAR interpola-
+tion has been trained to match both theoretical and empirical li-
+braries, while Fig. A.1 only reflects its performance compared to
+the empirical stars of MILES. In other words, FASTAR is able
+to incorporate information about the theoretical BOSZ library
+while predicting empirical data at the same level as the MILES
+interpolation. Moreover, the training loss is evaluated based on
+the PCA components, not, for example, on the line-strength be-
+havior. Then, it would be straightforward to optimize these pre-
+dictions by explicitly training to also match line-strength predic-
+tions, which will be explored in upcoming releases.
+Appendix B: TiO 2 behavior
+The predicted TiO 2 values for FASTAR SSP models present a
+significant systematic deviation with respect to the MILES SSP
+models, as shown in Fig. 6. Following Fig. B.1, we interpret
+this as a consequence of the different behavior of the index with
+metallicity for stars cooler than logT e f f ∼3.6 in the MILES and
+BOSZ libraries.
+It is evident from this figure that, in general, MILES and
+BOSZ predictions are similar, but MILES stars do not present
+a significant dependence on metallicity, while stars in the theo-
+retical BOSZ do. However, as noted in the main text, the model-
+ing of broad molecular features can be particularly problematic
+and prone to systematics whose effects can propagate to both
+empirical and theoretical stellar libraries. Moreover, the range
+of metallicities covered by MILES for cool stars is also signifi-
+cantly narrower than that probed by BOSZ.
+3.4 3.5 3.6 3.7 3.8 3.9 4.0
+log  Teff [K]
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+1.75
+2.00TiO2 [mag]
+1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+[Fe/H] (BOSZ)
+1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+[Fe/H] (MILES)
+Fig. B.1: Empirical versus theoretical TiO 2 behavior. MILES
+stars (red symbols) do not exhibit a significant trend with metal-
+licity at low effective temperatures, contrary to the BOSZ library.
+This explains the differences between FASTAR and MILES in
+the TiO2 values predicted for SSP models 6.
+Appendix C: SSP predictions for line-strength
+indices
+In the main text we showcase the behavior of FASTAR and
+MILES SSP predictions for three indices, H βO, Mgb, and TiO 2.
+While that comparison shows an overall good agreement be-
+tween both sets of models, as well as some differences, Fig. 6
+does not fully characterize the behavior of FASTAR SSP mod-
+els.
+In Fig. C.1 we include a larger set of indices, contrasting the
+FASTAR (in blue) and MILES predictions (in orange) for vary-
+ing age, metallicity and IMF slope (under a bimodal parameter-
+ization in this case). Despite the differences in ingredients and
+assumptions, Fig. C.1 shows a remarkable agreement between
+FASTAR and MILES. From different Balmer lines to features
+sensitive to metallicity and IMF, the trends and even absolute
+values predicted by both sets of models are notably similar. Al-
+though model systematics are, in general, a limiting factor of
+SSP modelling, the similarities between FASTAR and MILES
+shown in Fig. C.1 clearly speaks in favor of the consistency and
+robustness of evolutionary stellar population models.
+As expected, the largest systematic differences between
+FASTAR and MILES happen at the extremes of the metallicity
+range. For example, for the CaHK feature (using the Serven et al.
+2005 definition), the agreement increases for those metallicities
+around the solar value where the importance of MILES empir-
+ical templates is maximal. For the case of the TiO 1 and TiO 2
+features, the differences in the metallicity dependence between
+MILES and BOSZ (see Appendix B) become evident at the SSP
+level.
+Article number, page 15
+
+A&A proofs:manuscript no. FASTAR_I
+0.25
+ 0.00 0.25 0.50
+CN1 [mag]
+0.25
+0.00
+0.25
+0 5 10
+Ca4227 [Å]
+5
+0
+5
+0 10 20
+C2 4668 [Å]
+10
+0
+10
+10
+ 0 10
+H A [Å]
+10
+0
+10
+10
+ 0 10
+H A [Å]
+10
+0
+10
+0.0 2.5 5.0 7.5 10.0
+H  [Å]
+5
+0
+5
+0 10 20 30
+Fe5015 [Å]
+5
+0
+5
+0 2 4 6
+Fe5270 [Å]
+2
+0
+2
+0 2 4 6
+Fe5335 [Å]
+2
+0
+2
+0 5 10
+Fe4383 [Å]
+5
+0
+5
+0 5 10 15
+Mgb5177 [Å]
+5
+0
+5
+0 5 10 15
+NaD [Å]
+5
+0
+5
+0 2 4
+Ca6162 [Å]
+2
+0
+2
+0.0 0.2 0.4 0.6
+TiO1 [mag]
+0.2
+0.0
+0.2
+0.00 0.25 0.50 0.75
+CaH2 [mag]
+0.2
+0.0
+0.2
+Fig. A.1: Residuals across the MILES stellar library. Blue symbols correspond to the difference between the FASTAR line-strengths
+predictions and the actual measurements over the MILES empirical spectra. For comparison, orange symbols indicate the predictions
+from the MILES interpolator. Dashed lines correspond to the mean of the distribution and shaded areas to the 1σscatter.
+Article number, page 16
+
+Martín-Navarro et al.: FASTAR I
+10
+20CaHK [Å]
+[M/H]=0, Milky Way IMF
+MILES
+FASTAR
+Age=10 Gyr, Milky Way IMF Age=10 Gyr, [M/H]=0
+2.5
+5.0
+7.5C2 4668 [Å]
+2.5
+5.0
+7.5H 0 [Å]
+0
+10H A [Å]
+2.5
+5.0
+7.5Fe5015 [Å]
+2
+4Mgb [Å]
+2
+4NaD [Å]
+0.00
+0.02
+0.04TiO1 [mag]
+0 5 10
+Age [Gyr]
+0.00
+0.05
+0.10TiO2 [mag]
+2
+ 1
+ 0
+[M/H]
+2 3 4
+IMF slope ( B)
+Fig. C.1: FASTAR versus MILES SSP predictions. Each row shows the dependence of a specific line-strength index with age (left),
+metallicity (middle) and IMF slope (right, under a bimodal parameterization) for FASTAR (in blue) and MILES (orange) SSP
+models. In each column, the value of the assumed age, metallicity and IMF slope is indicated in the first row (corresponding to the
+CaHK feature). Equivalent widths are calculated at the 2.51 Å nominal resolution of both sets of models.
+Article number, page 17

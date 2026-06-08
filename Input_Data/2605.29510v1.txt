@@ -1,0 +1,1074 @@
+Title: Time-Domain Deep Learning for Pairwise Identification of Strongly Lensed Gravitational-Wave Candidates
+Authors: Fan Zhang, Qikai Zhang, Qiyuan Yang, Jiaqing Huang, Yong Yuan, Xilong Fan
+Published: 2026-05-28
+Categories: astro-ph.HE, astro-ph.IM
+
+Draft version May 29, 2026
+Typeset using LATEX twocolumn style in AASTeX7.0.1
+Time-Domain Deep Learning for Pairwise Identification of Strongly Lensed Gravitational-W ave
+Candidates
+F an Zhang
+ ,1, 2 Qikai Zhang
+ ,1 Qiyuan Yang
+ ,3 Jiaqing Huang
+ ,4 Yong Yuan
+ ,5 and Xilong F an
+ 3
+1State Key Laboratory of Ocean Sensing & Ocean College, Zhejiang University, Zhoushan, 316021, China
+2Kavli Institute for Astrophysics and Space Research, Massachusetts Institute of Technology, Cambridge 02139, MA, USA
+3 School of Physics and Technology, Wuhan University, Wuhan 430072, China
+4Jiangsu Sungo Intelligent Technology Research Center Co., Ltd., Jiangsu 226019, China
+5Center for Gravitational Wave Experiment, National Microgravity Laboratory, Institute of Mechanics, Chinese Academy of Sciences,
+Beijing, China
+(Dated: May 29, 2026)
+ABSTRACT
+As gravitational wave (GW) catalogs continue to expand, exhaustive Bayesian comparisons of can-
+didate event pairs become increasingly computationally expensive, which motivates the development
+of fast prescreening methods for strongly lensed GW searches. We formulate lensed-pair identification
+as a binary verification problem using two preprocessed strain segments. To address this task, we pro-
+pose Physics-Inspired ResNet (PI-ResNet), a Siamese one-dimensional residual network for pairwise
+GW candidate classification. Unlike spectrogram-based prescreening approaches, PI-ResNet operates
+directly on whitened time-domain strain data and avoids an intermediate time–frequency image rep-
+resentation. A shared residual backbone with Squeeze-and-Excitation (SE) modules encodes the two
+input segments, and the paired embeddings are compared through absolute feature differences and
+Hadamard-product interactions. We train and evaluate the model using simulated GW signals from
+binary black hole mergers lensed by point-mass (PM) and singular isothermal sphere (SIS) lenses,
+injected into simulated LIGO and Einstein Telescope (ET) detector noise. Under ET design noise,
+PI-ResNet achieves accuracies of 95.60% for SIS lenses and 93.80% for PM lenses, while maintaining
+84.03% and 78.25% accuracy under simulated LIGO H1–L1 Gaussian noise. These results suggest that
+direct learning from 1D strain data provides an eﬀicient and physically motivated preselection statistic
+for candidate lensed GW pairs, while also indicating the need for detector-domain adaptation.
+1. INTRODUCTION
+The Advanced LIGO detectors J. Aasi et al. (2015)
+enabled the first direct detection of GWs from a bi-
+nary black hole (BBH) coalescence, GW150914, which
+marked the dawn of GW astronomy B. P. Abbott et al.
+(2016). Since then, the LIGO-Virgo-KAGRA (L VK)
+collaboration has reported numerous GW events B. P.
+Abbott et al. (2019); R. Abbott et al. (2023). As the
+sensitivity of ground-based GW detectors continues to
+improve toward the next-generation (3G) observatories,
+such as the ET M. Punturo et al. (2010) and Cosmic Ex-
+plorer (CE) D. Reitze et al. (2019), the expected number
+of GW detections will increase by orders of magnitude.
+This substantial increase in event rates will significantly
+enhance the probability of observing rare astrophysical
+phenomena, including the strong gravitational lensing of
+Corresponding author: Xilong Fan
+Email: Contact author: xilong.fan@whu.edu.cn
+GWs K. Liao et al. (2017); S.-S. Li et al. (2018). Strong
+gravitational lensing occurs when the GW signal emitted
+by a distant source travels through the spacetime curva-
+ture of a massive foreground object before reaching the
+observer J. Ehlers & P. Schneider (2005). For macro-
+lenses like galaxy clusters, the time delay ∆t between
+multiple images typically ranges from days to months,
+resulting in distinct, repeated events in the detector
+strain M. Sereno et al. (2010); T. Baker & M. Trodden
+(2017). In the geometrical-optics regime, strong lens-
+ing produces multiple GW images of the same compact-
+binary source. These images preserve the same intrinsic
+source parameters, but differ in their magnifications, ar-
+rival times, and lensing-induced Morse phases R. Taka-
+hashi & T. Nakamura (2003); L. Dai et al. (2018). For
+macroscopic lenses, the multiple images may appear as
+separate candidate events in a GW catalog rather than
+as a single overlapping waveform. Identifying whether
+two detected events are lensed counterparts of the same
+source is therefore a pairwise association problem.
+arXiv:2605.29510v1  [astro-ph.HE]  28 May 2026
+
+2
+Establishing such pairwise lensing associations in real-
+istic detector noise presents a substantial computational
+and analytical challenge. Currently, matched filtering
+S. A. Usman et al. (2016); C. Messick et al. (2017) re-
+mains the mathematically optimal approach. However,
+performing a coherent search across the vast, multidi-
+mensional parameter space of lens models and time de-
+lays is computationally prohibitive, especially when sig-
+nals approach the physical detection limit (low SNR)
+in the ET era K. Haris et al. (2018); O. A. Hannuk-
+sela et al. (2019); P. T. Pang et al. (2020). While deep
+learning has recently offered high-eﬀiciency alternatives
+D. George & E. Huerta (2018), conventional convolu-
+tional neural networks (CNNs) K. Simonyan & A. Zis-
+serman (2014) and time–frequency image models often
+rely on generic data representations. These representa-
+tions do not explicitly encode the pairwise consistency
+relations expected between multiple lensed images, in-
+cluding shared waveform morphology, magnification dif-
+ferences, arrival-time shifts, and lensing-induced phase-
+evolution differences. This motivates a model architec-
+ture that operates on candidate pairs and incorporates
+lensing-inspired feature interactions.
+Recent machine-learning studies have explored fast
+prescreening strategies for lensed-GW identification. S.
+Goyal et al. (2021) used Q-transform time–frequency
+maps and Bayestar sky-localization maps to rapidly fil-
+ter candidate lensed pairs before Bayesian follow-up. S.
+Magare et al. (2024) developed the SLICK pipeline by
+combining Q-transform maps with Sine-Gaussian pro-
+jection maps to improve false-positive rejection. More
+recently, D. Li et al. (2026) proposed SEMD, which
+formulates lensed-GW identification as a morphology-
+based similarity test on paired time–frequency spectro-
+grams.
+These studies demonstrate the potential of neural pre-
+screening for large GW catalogs. However, most exist-
+ing approaches rely on two-dimensional time–frequency
+or auxiliary image representations, which require an
+intermediate transformation of the detector strain.
+The consistency relations in amplitude and phase ex-
+pected between multiple lensed images are also usu-
+ally learned implicitly rather than encoded through ex-
+plicit pairwise feature interactions. Among these meth-
+ods, SEMD is the closest to our setting because it
+also formulates lensed-GW identification as a paired-
+representation classification problem. We therefore com-
+pare PI-ResNet with SEMD as the main image-based
+baseline.
+In this study, we do not attempt a full catalog-
+level search over arbitrary event times, sky locations,
+or posterior samples. Instead, following the candidate-
+screening philosophy of recent machine-learning ap-
+proaches, we formulate the problem as a binary pairwise
+verification task. Given two pre-triggered and prepro-
+cessed strain segments, the model predicts whether the
+pair is consistent with two lensed images of the same
+compact-binary source or with two unrelated events.
+Within this setting, we propose PI-ResNet for rapid
+identification of candidate lensed GW pairs. The
+Physics-Fusion module compares paired latent features
+using their absolute difference and Hadamard prod-
+uct. This design provides a compact representation of
+waveform-morphology consistency and phase-coherence-
+related interactions between candidate images.
+The remainder of this paper is organized as follows.
+Section 2 reviews the GW lensing framework and the
+thin-lens models used in this work. Section 3 describes
+the data generation, preprocessing, network architec-
+ture, and training procedure. Section 4 presents the
+classification results, baseline comparisons, and diag-
+nostic analyses. Section 5 discusses the physical in-
+terpretation, error sources, limitations, and future out-
+look. Finally, Section 6 summarizes the main find-
+ings. Throughout this paper, we take the speed of
+light c = 2 .998 × 108m · s−1, the gravitational constant
+G = 6.67×10−11m3·kg−1·s−2 and the ΛCDM cosmology
+model described in Planck Collaboration (2020), which
+is also coded in Astropy6 ( Astropy Collaboration 2022)
+with assumptions of H0 = 67 .66km · s−1 · Mpc−1 and
+Ωm = 0.30966.
+2. STRONGLY LENSED GW FRAMEWORK
+We briefly review the lensing of GWs in the regime rel-
+evant to ground-based detectors and then specialize to
+the PM and SIS models, following the scope and nota-
+tion of prior work ( R. Takahashi & T. Nakamura 2003;
+K. Kim et al. 2021; G. Pagano et al. 2020).
+2.1. Gravitational lensing
+Depending on the GW wavelength relative to the char-
+acteristic lens scale, one distinguishes between geomet-
+rical optics and wave optics approximations ( H. C. Oha-
+nian 1974; S. Deguchi & W. D. Watson 1986; R. Taka-
+hashi & T. Nakamura 2003). A convenient criterion for
+the onset of diffraction is
+ML ≲ 108 M⊙
+(
+f /mHz
+) −1
+, (1)
+as discussed by R. Takahashi & T. Nakamura (2003).
+For the frequency band relevant to ground-based
+compact-binary observations, f ∼ 102–103 Hz, Equa-
+tion ( 1) indicates that lenses with masses around
+6 http://www.astropy.org
+
+3
+102–103 M⊙ may enter the wave–optics regime, where
+diffraction effects can no longer be neglected. Such low-
+mass micro- or millilensing systems require wave-optics
+amplification factors and are not the focus of the present
+work.
+Instead, the lensing framework adopted below is the
+geometrical-optics description, in which the lensed GW
+signal is represented as a superposition of multiple
+images characterized by their magnifications, relative
+arrival-time delays, and Morse phases.
+Under the thin–lens approximation the mass distri-
+bution is confined to a plane. Let γ be the transverse
+source–plane displacement from the line of sight and ξ
+the impact parameter on the lens plane. Using the Ein-
+stein radius ξ0 as the length scale, the dimensionless
+source position is
+y = γ DL
+ξ0 DS
+, (2)
+where
+ξ0 =
+√
+4GML
+c2
+DLSDL
+DS
+. (3)
+Here DL, DS, and DLS are the angular–diameter dis-
+tances from the observer to the lens, to the source, and
+from the lens to the source, respectively.
+2.1.1. Point-Mass Lens
+For a PM lens in the geometrical optics limit, the total
+amplification factor can be written in terms of the signed
+image magnifications µ± and the inter–image time delay
+∆td R. Takahashi & T. Nakamura (2003); K. Kim et al.
+(2021):
+F (f ) = |µ+|1/2 − i |µ−|1/2 e−2πif ∆td . (4)
+We note that the sign in the exponential term differs
+from that used in R. Takahashi & T. Nakamura (2003)
+because we adopt a different convention for the inverse
+Fourier transform. The magnifications of the two images
+are given by:
+µ± = 1
+2 ± y2 + 2
+2y
+√
+y2 + 4
+, (5)
+and the relative arrival time delay between the two im-
+ages is:
+∆td = 4 GM z
+L
+c3
+[
+y
+√
+y2 + 4
+2 + ln
+( √
+y2 + 4 + y√
+y2 + 4 − y
+)]
+,
+(6)
+where M z
+L ≡ ML(1 + zL). These equations completely
+specify the frequency-domain modulation induced by a
+PM lens, forming a two-image system for any y > 0.
+2.1.2. Singular Isothermal Sphere Lens
+For a SIS lens, the surface mass density is character-
+ized by the velocity dispersion v as Σ(ξ) = v2/(2Gξ),
+where ξ is the impact parameter on the lens plane. In
+the geometrical-optics limit, the total amplification fac-
+tor can be written in terms of the signed image mag-
+nifications µ± and the inter-image time delay ∆td (R.
+Takahashi & T. Nakamura 2003):
+F (f ) =
+
+
+
+|µ+|1/2 − i |µ−|1/2 e−2πif ∆td , y < 1,
+|µ+|1/2, y ≥ 1.
+(7)
+The magnifications and the relative arrival time are
+µ± = 1 ± 1
+y , (8)
+∆td = 8 GM z
+L
+c3 y, (9)
+where M z
+L denotes the redshifted mass enclosed within
+the Einstein radius of the SIS lens. Equivalently, for an
+SIS lens,
+M z
+L = 4π2v4
+Gc2
+DLDLS
+DS
+(1 + zL). (10)
+When y < 1, two images contribute and the second term
+in Equation ( 7) produces the characteristic frequency-
+dependent modulation. When y ≥ 1, a single image
+remains and F (f ) reduces to a real magnification fac-
+tor. Equations ( 7)–(10) fully specify the SIS prescrip-
+tion used in our simulations.
+2.2. Lensed GW Waveform
+In the frequency domain the lensed GW signal is re-
+lated to the unlensed signal by
+hL(f ) = F (f ) h(f ), (11)
+where h(f ) denotes the Fourier transform of the un-
+lensed strain, hL(f ) is the corresponding lensed strain,
+and F (f ) is the amplification factor specified by the lens
+model and the dimensionless source position y. In this
+work, we consider only lensing configurations that pro-
+duce two images. We assume the time delay of the first
+image ∆td1 = 0 , and it is the minimum image of the
+lens with Morse-phase parameter ∆ϕ1 = 0. The second
+image is the saddle-point image with Morse-phase pa-
+rameter ∆ϕ2 = 1 /2. The lensed GW waveforms h1
+L(f )
+and h2
+L(f ) of the two images are then:
+h1
+L(f ) =
+√
+|µ+| · h(f ) , (12)
+h2
+L(f ) =
+√
+|µ−| · e−iπ(2f ∆td+1/2) · h(f ) . (13)
+
+4
+Figure 1. Workflow used for the simulated lensed-GW pairwise verification task. The pipeline includes waveform and lensing
+simulation (Stage 1), noise injection and whitening (Stage 2), Siamese 1D feature extraction and pairwise fusion (Stage 3), and
+performance evaluation (Stage 4).
+To quantify the signal strength, we use the optimal
+signal-to-noise ratio (SNR). For a detector response ˜h(f )
+and the corresponding one-sided noise power spectral
+density (PSD) Sn(f ), the noise-weighted inner product
+is defined as
+(a|b) = 4 Re
+∫ fmax
+fmin
+˜a∗(f )˜b(f )
+Sn(f ) d f, (14)
+where ˜a(f ) and ˜b(f ) are frequency-domain waveforms,
+the asterisk denotes complex conjugation, and Sn(f ) is
+the one-sided detector noise PSD. Here, fmin and fmax
+denote the lower and upper frequency bounds used in the
+waveform generation and detector response calculation.
+The optimal SNR of a signal h is then given by
+ρopt =
+√
+(h|h) =
+[
+4
+∫ fmax
+fmin
+|˜h(f )|2
+Sn(f ) d f
+] 1/2
+. (15)
+This definition follows the standard matched-filter for-
+malism for compact-binary GW signals ( C. Cutler &
+E. E. Flanagan 1994). In our simulations, the lensed
+frequency-domain waveform is first projected onto the
+detector response, and the optimal SNR is then com-
+puted from this response using the detector PSD. Be-
+cause our ET simulations use a single detector, the re-
+ported SNR corresponds to a single-detector optimal
+SNR rather than a network SNR.
+3. METHODS
+Figure 1 summarizes the workflow used in this study.
+We first simulate lensed and unlensed waveform pairs
+from randomized source and lens parameters. We then
+inject detector Gaussian noise for the ET and simulated
+LIGO-like configurations, whiten the detector strain in
+the frequency domain, and transform the data back to
+the time domain. The paired 1D strain inputs are passed
+to PI-ResNet, which outputs a matching probability.
+Finally, we evaluate the classification metrics and the
+SNR-dependent behavior of the model.
+3.1. Data Generation
+We first generate source-level lensed and unlensed
+strain segments before constructing candidate pairs.
+The underlying BBH waveforms are generated with
+IMRPhenomXPHM (S. Khan et al. 2019; G. Pratten et al.
+2021) through the Bilby7 (G. Ashton et al. 2019) in-
+terface and converted into 24 s time-domain segments
+sampled at 4096 Hz , corresponding to N = 98304
+samples. The source and lens parameters are summa-
+rized in Table 1, and the fixed simulation settings are
+listed in Table 2. The PM mass range and the SIS
+velocity-dispersion range are used to define macrolens-
+ing, geometrical-optics simulations in which multiple im-
+ages are treated as separated candidate events.
+7 https://git.ligo.org/lscsoft/bilby
+
+5
+T able 1. Parameters and distributions used for simulated source and lens populations.
+Parameter Range / distribution
+Source parameters
+Primary and secondary source-frame masses m1, m2 Uniform [10, 70] M⊙
+Spin magnitudes a1, a2 Uniform [0, 0.99]
+Spin tilt angles Sine prior on [0, π]
+Azimuthal spin angles ϕ12, ϕjl Uniform [0, 2π)
+Inclination θjn Sine prior on [0, π]
+Polarization ψ Uniform [0, π)
+Coalescence phase ϕc Uniform [0, 2π)
+Sky location (α, δ) RA uniform [0, 2π) and Dec cosine prior
+Source redshift zs [0.01, 1], calculated by dL with a uniform prior in comoving volume
+PM lens parameters
+Lens redshift zL zL = zs/2
+Point-lens mass ML Uniform [108, 1010] M⊙
+Impact parameter y Uniform [0.01, 0.3]
+SIS lens parameters
+Lens redshift zL zL = zs/2
+Velocity dispersion σv Uniform [100, 500] km s−1
+Impact parameter y Uniform [0.01, 0.3]
+T able 2. Fixed simulation settings
+Setting Value
+Waveform approximant IMRPhenomXPHM
+Minimum and reference frequency fmin = 20 Hz and fref = 10 Hz
+Sampling rate 4096 Hz
+Segment length 24 s
+ET detector setting Single ET-D interferometer with PSD in Bilby
+LIGO detector setting H1–L1 with PSDs in Bilby
+Whitening Frequency-domain whitening followed by inverse FFT to the time domain
+For lensed systems, the two images of the same
+compact-binary source are generated from the same
+source-lens configuration and stored as separate pre-
+triggered event segments. They share the same intrin-
+sic source parameters but differ in magnification, arrival
+time, and image-type phase factors. The inter-image de-
+lay is therefore not required to fit within a single 24 s
+data segment, and the network does not use a summed
+multi-image waveform as input. The SIS samples used
+in this work are restricted to 0.01 ≤ y ≤ 0.3, corre-
+sponding to the two-image regime. The construction of
+positive and negative candidate pairs from these source-
+level segments is described in Section 3.3.
+For each lens model, we generate both noise-free and
+noise-injected datasets. For clarity, we refer to the noise-
+free datasets as “Pure” and the Gaussian-noise-injected
+datasets as “Noisy” in the following tables and figures.
+In the noisy case, the simulated signals are projected
+onto the detector response, injected into Gaussian noise
+generated from the target detector PSD, whitened in
+the frequency domain, and transformed back to the time
+domain.The resulting whitened 1D strain segments are
+used directly as inputs to PI-ResNet, without construct-
+ing time–frequency images.
+Figure 2 shows a representative pair of unwhitened
+time-domain strain segments corresponding to the two
+images of the same PM-lensed GW event. The gray
+curves denote the noisy detector strains, and the blue
+curves denote the corresponding pure templates. The
+two segments exhibit the same underlying chirp mor-
+phology but different amplitudes and SNRs, consistent
+with the different magnifications of the two lensed im-
+
+6
+Figure 2. Representative unwhitened time-domain strain
+segments for the two images of the same PM-lensed GW
+event. The gray curves denote the noisy detector strains,
+and the blue curves denote the corresponding pure templates.
+The two images show similar chirp morphology but different
+amplitudes and SNRs, reflecting the different magnifications
+of the lensed images.
+Figure 3. Optimal SNR distributions of the simulated un-
+lensed and lensed GW signals. The vertical axis is shown
+on a logarithmic scale. Lensing magnification shifts part of
+the lensed population toward higher SNR values, producing
+a broader high-SNR tail.
+ages. In the subsequent preprocessing step, these strain
+segments are whitened and then used as paired inputs
+to the classifier.
+Figure 3 shows the optimal SNR distributions of the
+simulated unlensed and lensed signals. The lensed pop-
+ulation extends to higher SNR values because lensing
+magnification increases the observed strain amplitude
+for part of the simulated events.
+3.2. Architecture of PI-ResNet
+To determine whether two independent GW events are
+lensed counterparts, we design an end-to-end PI-ResNet.
+Each input is a pre-triggered and whitened strain seg-
+ment that has been aligned according to the injection
+coalescence time in our simulations. Before being passed
+to the network, the strain is converted into a compact
+fixed-length one-dimensional representation through a
+deterministic temporal standardization and decimation
+procedure. This step standardizes the temporal dimen-
+sion of all inputs and reduces the computational cost
+while keeping the same preprocessing protocol for both
+branches of the Siamese network. The same procedure
+is applied to both branches of the Siamese network, re-
+sulting in paired one-dimensional input tensors of length
+T = 4096 . Our PI-ResNet operates directly on these
+processed pairs of time series. The high-level roadmap
+of this architecture is illustrated in Figure 4.
+3.2.1. Shared Siamese Backbone and SE Attention
+The two input branches share identical weights to
+project the paired detector strains into a common latent
+space ( J. Bromley et al. 1993). Each branch uses a 1D
+residual convolutional backbone to extract local time-
+domain features from the whitened strain. The shared-
+weight design ensures that the two candidate segments
+are processed by the same feature extractor before pair-
+wise fusion.
+We incorporate 1D SE modules into the residual
+blocks ( J. Hu et al. 2018). These modules adaptively
+reweight channel-wise features after convolutional ex-
+traction, allowing the backbone to emphasize informa-
+tive strain patterns while reducing the contribution of
+less relevant channels. The resulting latent represen-
+tations are then passed to the Physics-Fusion layer for
+pairwise comparison.
+3.2.2. Physics-Fusion Mechanism
+Rather than using generic feature concatenation, our
+pairwise verification module adopts a physically moti-
+vated Physics-Fusion layer. Let f1 and f2 denote the
+learned representations of the two input strains ex-
+tracted by the shared Siamese backbone. The fused
+pairwise representation is defined as
+ffusion = [|f1 − f2|, f1 ⊙ f2] , (16)
+where ⊙ denotes the standard element-wise Hadamard
+product G. G. Chrysos et al. (2025). This de-
+sign is intended to represent two lensing-relevant
+feature interactions for catalog-level candidate-pair
+verification in the geometrical-optics multiple-image
+regime: amplitude-envelope-related differences and
+
+7
+Figure 4. End-to-end PI-ResNet architecture. Left: Two candidate whitened strain segments, denoted as L1 and L2, are
+processed by a shared Siamese backbone. Right: Enlarged view of the ResBlock, which integrates SE modules. The final
+output is classified based on the fused pairwise representation.
+phase-coherence-related multiplicative interactions. It
+is also closely related to the pairwise consistency tests
+used in traditional Bayesian lensing searches J. Janquart
+et al. (2021).
+The absolute-difference branch, |f1 − f2|, measures
+residual discrepancies between the two learned waveform
+representations. Since multiple lensed images originate
+from the same compact-binary source, their normalized
+macroscopic strain envelopes should remain consistent
+after accounting for magnification. This branch there-
+fore helps reject unrelated or noise-dominated pairs with
+inconsistent waveform morphology.
+The Hadamard-product branch, f1 ⊙ f2, provides a
+multiplicative interaction between the two latent repre-
+sentations. Its motivation comes from the geometrical-
+optics expression for a lensed image R. Abbott et al.
+(2021),
+˜hL
+j (f ) =
+√
+|µj|˜h(f ; θ) exp [−iπ (2f ∆tj + ∆ϕj)] , (17)
+where θ denotes the intrinsic source parameters, µj is
+the magnification, ∆tj is the arrival-time delay, and ∆ϕj
+is the Morse phase. Equation ( 17) shows that multi-
+ple images of the same source share the same intrinsic
+waveform while differing mainly through magnification,
+arrival time, and Morse phase.
+Using Equation (17), the frequency-domain cross term
+for two candidate images from the same source can be
+written as
+˜hL∗
+1 (f )˜hL
+2 (f ) =
+√
+|µ1µ2||˜h(f ; θ)|2
+× exp [−iπ (2f ∆t21 + ∆ϕ21)] ,
+(18)
+where ∆t21 = ∆ t2 − ∆t1 and ∆ϕ21 = ∆ ϕ2 − ∆ϕ1.
+This expression motivates the use of multiplicative
+feature interactions, since such interactions can em-
+phasize latent components that remain correlated be-
+tween candidate images despite lensing-induced mag-
+nification differences, arrival-time offsets, and phase-
+evolution changes. We do not claim that the Hadamard
+branch is an exact analytic substitute for a Morse-phase
+test, nor do we isolate its response to Morse phase in
+this work. Rather, it provides a compact neural feature-
+interaction mechanism for suppressing incoherent align-
+ments caused by unrelated events or detector noise.
+3.3. Dataset Construction and Training Details
+To prevent source-level data leakage, we split the
+simulated data before pair construction. For the ET
+design-noise experiments, each lens-model catalog con-
+tains 2, 500 independent source-level indices, each corre-
+sponding to two lensed images generated from the same
+compact-binary source. For the simulated LIGO H1–
+L1 Gaussian-noise comparison, each lens-model catalog
+contains 10, 000 independent source-level indices. For
+each source index, one positive pair is formed by pair-
+ing the two lensed images of the same source. Negative
+pairs are constructed either by pairing images from dif-
+ferent lensed sources or by pairing a lensed image with
+
+8
+an unlensed background segment. This yields 5, 000 can-
+didate pairs for each ET dataset, consisting of 2, 500
+positive pairs and 2, 500 negative pairs. For the sim-
+ulated LIGO H1–L1 datasets, this yields 20, 000 candi-
+date pairs, consisting of 10, 000 positive pairs and 10, 000
+negative pairs. We adopt a larger source catalog for
+the LIGO H1–L1 experiments because the higher-noise
+regime requires more training samples to converge.
+For the ET datasets, the 2, 500 source-level indices
+are randomly split into 80% for training and 20% for
+validation. For the simulated LIGO H1–L1 datasets,
+the same source-level splitting strategy is applied to the
+larger paired catalog. In all cases, the split is performed
+before pair generation, so no physical source appears in
+both subsets. During training, negative pairs are dy-
+namically sampled, with 70% hard negatives from mis-
+matched lensed sources and 30% easy negatives from
+lensed–unlensed pairs. During validation, all positive
+and negative pairs are fixed using the same random seed
+for reproducibility.
+The PI-ResNet is trained using the Binary Cross-
+Entropy with Logits loss ( BCEWithLogitsLoss). We op-
+timize the model parameters with the AdamW optimizer
+using an initial learning rate of 10−4 and a weight de-
+cay of 10−4. The learning rate is annealed to 10−6 with
+a cosine annealing schedule. The maximum number of
+training epochs is set to 300, and the pairwise verifi-
+cation threshold is fixed at 0.5. The model checkpoint
+with the highest validation accuracy is retained. There-
+fore, the metrics reported under this protocol should be
+interpreted as validation-set performance rather than in-
+dependent test-set performance.
+4. RESULTS
+4.1. Detection Sensitivity and Baseline Comparisons
+We evaluate PI-ResNet using simulated BBH signals
+under the ET design-noise setting and compare it with
+the 2D SEMD baseline ( D. Li et al. 2026). In SEMD,
+the same 1D strain segments are first converted into
+Constant-Q Transform (CQT) time–frequency maps be-
+fore pairwise classification. In contrast, PI-ResNet op-
+erates directly on whitened 1D strain pairs.
+PI-ResNet and SEMD are evaluated with the same
+source-level splits, noise realizations, training budget,
+and maximum number of epochs. For SEMD, we addi-
+tionally perform a grid search over CQT-related pre-
+processing parameters and training hyperparameters,
+including the time–frequency resolution, analyzed fre-
+quency range, and learning rate.
+Table 3 compares PI-ResNet with SEMD under ET
+design-noise conditions. In the pure setting, both mod-
+els achieve very high classification performance. After
+T able 3. Performance comparison between the proposed 1D
+PI-ResNet and the 2D image-based SEMD framework under
+the ET design-noise setting.
+Task Model AUC Accuracy
+SIS-Pure PI-ResNet 1.0000 99.40%
+SEMD (2D) 0.9993 98.40%
+SIS-Noisy PI-ResNet 0.9910 95.60%
+SEMD (2D) 0.9726 89.80%
+PM-Pure PI-ResNet 1.0000 99.80%
+SEMD (2D) 0.9999 99.50%
+PM-Noisy PI-ResNet 0.9897 93.80%
+SEMD (2D) 0.9500 87.70%
+T able 4. Performance comparison between the proposed 1D
+PI-ResNet and the 2D image-based SEMD framework under
+the simulated LIGO H1–L1 Gaussian-noise setting.
+Task Model AUC Accuracy
+SIS-Pure PI-ResNet 0.9998 99.42%
+SEMD (2D) 0.9996 98.88%
+SIS-Noisy PI-ResNet 0.9168 84.03%
+SEMD (2D) 0.8762 78.43%
+PM-Pure PI-ResNet 0.9998 99.48%
+SEMD (2D) 0.9996 99.23%
+PM-Noisy PI-ResNet 0.8685 78.25%
+SEMD (2D) 0.8346 74.37%
+ET Gaussian noise is added, PI-ResNet maintains higher
+accuracy than SEMD, outperforming it by 5.80 percent-
+age points for SIS-Noisy and 6.10 percentage points for
+PM-Noisy.
+The same comparison is extended to simulated LIGO
+H1–L1 Gaussian-noise conditions in Table 4. Both
+models perform well in the pure control cases. Their
+performance decreases under simulated LIGO H1–L1
+Gaussian noise, suggesting sensitivity to changes in the
+detector-noise PSD. PI-ResNet still outperforms SEMD,
+reaching accuracies of 84.03% for SIS and 78.25% for
+PM, corresponding to improvements of 5.60 and 3.88
+percentage points, respectively.
+Taken together, these results suggest that direct clas-
+sification of whitened 1D strain pairs can provide a
+useful alternative to intermediate time–frequency image
+representations. The improvement is consistent across
+the simulated ET and LIGO settings. Since the LIGO
+dataset is generated from detector PSDs rather than
+real non-Gaussian strain data, the observed degradation
+
+9
+Figure 5. ROC and PR curves for SIS and PM lens models in the noisy ET setting. Left: ROC curves, with the TPR axis
+restricted to 0.8–1.0 for clarity. Right: PR curves.
+should not be attributed to glitches. Instead, it mainly
+reflects the diﬀiculty of transferring the classifier to a
+different detector-noise PSD. These results support the
+use of PI-ResNet as a lightweight preselection model,
+while also indicating that detector-domain adaptation
+will be needed for more robust deployment.
+4.2. Visualization of Classification Performance
+To complement the tabulated results, we further visu-
+alize the classifier performance using ROC curves, PR
+curves, and confusion matrices. These plots provide a
+direct view of the model behavior under noisy evaluation
+settings.
+Figure 5 shows the ROC and PR performance of PI-
+ResNet under ET-design Gaussian noise. The SIS and
+PM cases give similar ROC curves, with AUC values of
+0.9910 and 0.9897, respectively. Their PR curves also
+remain stable, with average precision values of 0.9810
+for SIS and 0.9860 for PM. These results indicate that
+PI-ResNet maintains strong discrimination for both lens
+models in the noisy ET validation set.
+Figure 6 confirms the trends observed in the quantita-
+tive comparisons. In the ET mock-data experiments, PI-
+ResNet shows stronger diagonal dominance than SEMD.
+Under ET design noise, PI-ResNet reaches 95.60% accu-
+racy for SIS and 93.80% for PM, compared with 89.80%
+and 87.70% for SEMD. Under simulated LIGO H1–L1
+Gaussian noise, both models show lower accuracy than
+in the ET setting. PI-ResNet still outperforms SEMD,
+reaching 84.03% for SIS and 78.25% for PM, compared
+with 78.43% and 74.37% for SEMD. These results sug-
+gest that the 1D strain-based model is less sensitive to
+the simulated detector-noise setting than the 2D time–
+frequency baseline, while detector-PSD domain shift re-
+mains an important limitation.
+4.3. SNR-Dependent Error Diagnostics
+Signal strength affects lensed-pair verification, but it
+is not the only factor controlling the classification diﬀi-
+culty. We therefore group the noisy ET validation sam-
+ples by their optimal matched-filter SNR and examine
+the distribution of missed associations. Because each
+candidate pair contains two strain segments, the pair-
+level SNR should be regarded as a summary statistic
+rather than a complete description of the detectability
+of both images.
+Figure 7 shows the distribution of true positives and
+false negatives as a function of optimal matched-filter
+SNR. The SIS model has only a small number of
+missed associations, whereas the PM model shows a
+broader false-negative distribution. Several PM false
+negatives appear in intermediate-SNR bins, rather than
+only at the lowest SNR. This does not indicate that
+intermediate-SNR signals are intrinsically harder to
+classify. Instead, these bins can contain pairs in which
+the summarized SNR is moderate or high, while one
+image remains relatively weak or the local merger mor-
+phology is less consistent between the two branches.
+Figure 8 provides a complementary view through the
+SNR-binned true-positive rate. The SIS curve remains
+close to unity over most of the sampled range, while the
+PM curve shows stronger bin-to-bin variation. These
+variations suggest that the remaining PM errors are
+not governed by SNR alone, but are also affected by
+pairwise-consistency ambiguity, image-level SNR imbal-
+ance, and local morphology differences near merger.
+
+10
+Figure 6. Confusion-matrix summary for pairwise classification across the main evaluation scenarios. T op row: 1D PI-ResNet
+evaluated on pure and ET-design Gaussian-noise mock data for the SIS and PM lens models. Second row: 2D SEMD
+baseline evaluated under the corresponding pure and ET-design Gaussian-noise mock configurations. Third row: 1D PI-ResNet
+evaluated on the LIGO-comparison datasets, including the pure controls and the simulated H1–L1 Gaussian-noise cases. F ourth
+row: 2D SEMD evaluated under the corresponding LIGO-comparison configurations. Each panel reports the validation-set
+accuracy and the confusion matrix for unlensed/lensed pairwise classification.
+
+11
+(a) SIS Lens Model
+(b) PM Lens Model
+Figure 7. Distribution of true positives and false negatives
+as a function of optimal matched-filter SNR for the noisy ET
+validation samples. The SNR axis is shown on a logarithmic
+scale. The histograms provide an error-attribution view of
+where missed associations occur within the sampled SNR
+range.
+Figure 9 further shows a representative false-positive
+pair. Although the two signals are not generated from
+the same lensed source, they show locally similar peak
+structures within a narrow time-sample region. This ex-
+ample illustrates how unrelated pairs can produce short
+local waveform similarities that lead to spurious pairwise
+associations.
+4.4. Ablation Study
+To evaluate the contribution of individual components
+in the PI-ResNet framework, we conduct a controlled
+ablation study under the ET design-noise setting. Each
+ablation variant was trained from scratch under the
+same protocol as the full model. The random seed,
+Figure 8. Pairwise association eﬀiciency, measured by the
+true-positive rate (TPR), as a function of optimal matched--
+filter SNR for the noisy ET validation samples. The TPR
+is computed in logarithmic SNR bins. The trend shows that
+the association eﬀiciency remains high over most of the sam-
+pled range and tends to saturate at higher SNR. Statistical
+fluctuations in low-occupancy bins ( N < 10 samples) appear
+as bin-to-bin variations rather than systematic trends.
+Figure 9. Representative false-positive pair in the noisy
+ET validation set. The two signals are not generated from
+the same lensed source, but they show locally similar peak
+structures within a narrow time-sample region. The dashed
+vertical lines mark the dominant local peaks of the two sig-
+nals. This example illustrates how unrelated pairs can pro-
+duce short local waveform similarities that lead to spurious
+pairwise associations.
+T able 5. Ablation study of PI-ResNet components under
+ET design noise.
+Model SIS PM
+Acc. AUC Acc. AUC
+F ull 94.70% 0.9926 93.90% 0.9918
+No SE 93.90% 0.9904 93.40% 0.9901
+No Fusion 92.30% 0.9859 91.80% 0.9845
+batch size, and training budget were kept fixed across
+all runs. The ablation results should therefore be inter-
+preted as controlled relative comparisons among archi-
+
+12
+T able 6. Cross-regime generalization performance between
+SIS and PM lens models under noisy ET conditions.
+Training Dataset Test Dataset Accuracy AUC
+SIS SIS 95.60% 0.9910
+PM SIS 94.10% 0.9884
+SIS PM 92.40% 0.9812
+PM PM 93.80% 0.9897
+tectural variants, rather than as exact reproductions of
+the main benchmark values reported in Table 3. The ex-
+periments isolate the effects of the Physics-Fusion mech-
+anism and the SE blocks on both SIS and PM datasets,
+as summarized in Table 5.
+Table 5 shows that the full PI-ResNet architecture
+achieves the best overall performance on both datasets.
+Removing the Physics-Fusion layer leads to the largest
+degradation, with accuracy decreasing by about 2.40
+percentage points for SIS and 2.10 percentage points
+for PM. This indicates that the explicit pairwise fusion
+design helps the model capture amplitude-consistency
+and phase-coherence relations between lensed candidate
+pairs under noisy conditions. Removing the SE blocks
+produces a smaller but consistent performance drop,
+suggesting that channel-wise feature recalibration pro-
+vides a moderate stability improvement.
+4.5. Cross-Regime Generalization Performance
+Figure 10. Cross-regime generalization matrix for SIS and
+PM lens models under noisy ET conditions. Each entry re-
+ports the performance obtained when training on one lens
+model and testing on either the same or the other lens model.
+To evaluate whether PI-ResNet captures lensing-
+consistency features that transfer across different lens
+models, we perform cross-regime tests between the SIS
+and PM datasets. Specifically, models trained on one
+lens model are evaluated both on the same lens model
+and on the other lens model under noisy ET conditions.
+The results are summarized in Table 6.
+Table 6 and Figure 10 show that PI-ResNet main-
+tains relatively stable performance across SIS and PM
+test regimes. The same-regime evaluations provide the
+strongest performance, with accuracies of 95.60% for SIS
+and 93.80% for PM. In the cross-regime setting, the PM-
+trained model achieves 94.10% accuracy when tested on
+SIS, while the SIS-trained model achieves 92.40% accu-
+racy when tested on PM. These results suggest that the
+network learns transferable pairwise lensing signatures,
+such as waveform-morphology consistency and phase-
+coherence relations, rather than relying only on lens-
+model-specific features.
+5. DISCUSSION
+In this work, we show that PI-ResNet can extract
+lensing-related consistency features directly from 1D
+whitened detector strains, without manual feature en-
+gineering or time–frequency image construction. The
+results suggest that the learned representations encode
+pairwise consistency patterns associated with waveform
+morphology, magnification differences, and arrival-time
+or phase-evolution offsets between candidate images.
+5.1. Physical Implications of Cross-Regime Tests
+The cross-regime experiments show that PI-ResNet
+retains high performance when transferred between the
+SIS and PM datasets. As shown in Table 6, the PM-
+trained model achieves 94.10% accuracy on the SIS test
+set, while the SIS-trained model achieves 92.40% accu-
+racy on the PM test set. These results indicate partial
+transferability between the two lens models, suggesting
+that the classifier learns pairwise lensing-consistency sig-
+natures that are not entirely specific to a single lens pro-
+file.
+This interpretation should be made within the lim-
+its of the simulated parameter range. In particular,
+the SIS simulations in this work are restricted to a
+small-impact-parameter subset of the two-image regime,
+0.01 ≤ y ≤ 0.3, where lensing signatures are relatively
+pronounced. Therefore, the reported SIS performance
+should not be interpreted as a complete characteriza-
+tion of the full SIS parameter space. Extending the test
+to larger impact parameters and additional lens popula-
+tions will be necessary to assess the broader generality
+of the learned features.
+
+13
+5.2. Error Sources and SNR Dependence
+The SNR-dependent diagnostics show that missed
+lensed pairs are more frequent at low optimal SNR.
+This is expected because detector noise can ob-
+scure subtle pairwise consistency signatures, includ-
+ing magnification-related residual structures and phase-
+coherence differences. Conversely, the classifier reaches
+higher association eﬀiciency once the optimal SNR be-
+comes suﬀiciently large, indicating that these features
+are more reliably retained in stronger signals ( S. Sachdev
+et al. 2019).
+False positives may arise when stochastic fluctuations
+in the simulated detector noise produce waveform-like
+structures after whitening and preprocessing. These
+fluctuations can partially mimic short-time coherent fea-
+tures or chirp-like morphology, increasing the probabil-
+ity of spurious pairwise matches. Thus, the remaining
+errors should be interpreted partly as a consequence of
+limited signal information in noisy data, rather than as
+purely algorithmic failures.
+5.3. Limitations and Future Outlook
+The main limitation observed in this study is sensi-
+tivity to detector-domain shift. Although PI-ResNet
+performs best under ET design noise, its performance
+decreases under simulated LIGO H1–L1 Gaussian-
+noise conditions, reaching 84.03% accuracy for SIS and
+78.25% for PM. This indicates partial cross-detector
+generalization, but also shows that a model trained
+in one detector-noise regime may still require detector-
+domain adaptation before robust deployment in another
+PSD setting.
+Future work should therefore focus on detector-
+domain adaptation, multi-detector consistency model-
+ing, and validation on more realistic non-Gaussian strain
+data. In practical searches, PI-ResNet is best viewed
+as a fast preselection filter that can reduce the number
+of candidate pairs requiring computationally expensive
+Bayesian follow-up analyses, rather than as a replace-
+ment for full Bayesian lensing inference ( S. Magare et al.
+2024). Extending the framework beyond the SIS and
+PM lens models will further test whether the 1D strain-
+based representation remains effective for more diverse
+lens populations ( D. Li et al. 2026; E. Cuoco et al. 2020).
+6. CONCLUSION
+In this study, we presented PI-ResNet, a 1D strain-
+based neural framework for rapid pairwise verification
+of candidate lensed GW events. The model operates
+directly on whitened detector strains and combines a
+shared residual backbone, SE-based feature recalibra-
+tion, and a Physics-Fusion layer to model pairwise
+lensing-consistency signatures.
+Under ET design noise, PI-ResNet reaches accura-
+cies of 95.60% for SIS lenses and 93.80% for PM lenses.
+Under simulated LIGO H1–L1 Gaussian noise, the cor-
+responding accuracies are 84.03% for SIS and 78.25%
+for PM. These results suggest that the model retains
+useful cross-detector generalization, but its performance
+remains sensitive to detector-PSD domain shift. The
+ablation and cross-regime tests further show that the
+Physics-Fusion design contributes to stable pairwise ver-
+ification across the simulated lens settings.
+The proposed model provides millisecond-level pair-
+wise screening on a standard GPU and is therefore best
+viewed as a fast preselection filter before more expen-
+sive Bayesian lensing analyses ( K. Haris et al. 2018),
+rather than as a replacement for full parameter infer-
+ence. Future work will focus on detector-domain adap-
+tation, multi-detector extensions, validation on realistic
+non-Gaussian strain data, and more complex lens pop-
+ulations, including quadruply lensed systems ( K. Liao
+et al. 2017).
+ACKNOWLEDGMENTS
+FZ would like to thank the MIT LIGO Laboratory
+for its continuous support and advice. FZ is supported
+by the National Natural Science Foundation of China
+(Grant No. 62372409) and the Ministry of Science and
+Technology of the People’s Republic of China (Grant
+No. 2023ZD0120704 of Project No. 2023ZD0120700).
+The authors thank Jinxuan Wu for assistance with ex-
+perimental testing in this work.
+DATA AND CODE A V AILABILITY
+The algorithm code and data generation scripts are
+publicly available at: https://github.com/zqk-7k/PI-
+ResNet-GW-Lensing . For additional data access in-
+quiries, please contact the corresponding author.
+REFERENCES
+Aasi, J., Abbott, B., Abbott, R., et al. 2015, Classical and
+quantum gravity, 32, 074001
+Abbott, B. P., Abbott, R., Abbott, T. D., et al. 2016,
+Physical review letters, 116, 061102
+Abbott, B. P., Abbott, R., Abbott, T., et al. 2019, Physical
+Review X, 9, 031040
+
+14
+Abbott, R., Abbott, T. D., Abraham, S., et al. 2021, The
+Astrophysical Journal, 923, 14,
+doi: 10.3847/1538-4357/ac23db
+Abbott, R., Abe, H., Acernese, F., et al. 2023, arXiv
+preprint arXiv:2304.08393
+Ashton, G., Hübner, M., Lasky, P. D., et al. 2019,
+Astrophysical Journal Supplement, 241, 27,
+doi: 10.3847/1538-4365/ab06fc
+Astropy Collaboration. 2022, Astrophysical Journal, 935,
+167, doi: 10.3847/1538-4357/ac7c74
+Baker, T., & Trodden, M. 2017, Physical Review D, 95,
+063512
+Bromley, J., Guyon, I., LeCun, Y., Säckinger, E., & Shah,
+R. 1993, Advances in neural information processing
+systems, 6
+Chrysos, G. G., Wu, Y., Pascanu, R., Torr, P. H., &
+Cevher, V. 2025, IEEE Transactions on Pattern Analysis
+and Machine Intelligence, 47, 6531
+Cuoco, E., Powell, J., Cavaglià, M., et al. 2020, Machine
+Learning: Science and Technology, 2, 011002
+Cutler, C., & Flanagan, E. E. 1994, Phys. Rev. D, 49, 2658,
+doi: 10.1103/PhysRevD.49.2658
+Dai, L., Li, S.-S., Zackay, B., Mao, S., & Lu, Y. 2018,
+Physical Review D, 98, 104029
+Deguchi, S., & Watson, W. D. 1986, Astrophysical Journal,
+Part 1 (ISSN 0004-637X), vol. 307, Aug. 1, 1986, p.
+30-37., 307, 30
+Ehlers, J., & Schneider, P. 2005, in Relativistic Gravity
+Research With Emphasis on Experiments and
+Observations: Proceedings of the 81
+WE-Heraeus-Seminar Held at the Physikzentrum, Bad
+Honnef, Germany 2–6 September 1991, Springer, 1–45
+George, D., & Huerta, E. 2018, Physical Review D, 97,
+044039
+Goyal, S., Kapadia, S. J., & Ajith, P. 2021, Physical
+Review D, 104, 124057
+Hannuksela, O. A., Haris, K., Ng, K. K. Y., et al. 2019,
+Astrophys. J. Lett., 874, L2,
+doi: 10.3847/2041-8213/ab0c0f
+Haris, K., Mehta, A. K., Kumar, S., Venumadhav, T., &
+Ajith, P. 2018, arXiv preprint arXiv:1807.07062
+Hu, J., Shen, L., & Sun, G. 2018, in Proceedings of the
+IEEE conference on computer vision and pattern
+recognition, 7132–7141
+Janquart, J., Hannuksela, O. A., Haris, K., & Van
+Den Broeck, C. 2021, Monthly Notices of the Royal
+Astronomical Society, 506, 5430
+Khan, S., Chatziioannou, K., Hannam, M., & Ohme, F.
+2019, PhRvD, 100, 024059,
+doi: 10.1103/PhysRevD.100.024059
+Kim, K., Lee, J., Yuen, R. S. H., Hannuksela, O. A., & Li,
+T. G. F. 2021, Astrophys. J., 915, 119,
+doi: 10.3847/1538-4357/ac0143
+Li, D., Liu, T., Liu, A., et al. 2026, The Astrophysical
+Journal Supplement Series, 283, 31,
+doi: 10.3847/1538-4365/ae4340
+Li, S.-S., Mao, S., Zhao, Y., & Lu, Y. 2018, Mon. Not. R.
+Astron. Soc., 476, 2220, doi: 10.1093/mnras/sty411
+Liao, K., Fan, X.-L., Ding, X., Biesiada, M., & Zhu, Z.-H.
+2017, Nat. Commun., 8, 1148,
+doi: 10.1038/s41467-017-01152-9
+Magare, S., More, A., & Choudhary, S. 2024, Monthly
+Notices of the Royal Astronomical Society, 535, 990
+Messick, C., Blackburn, K., Brady, P., et al. 2017, Physical
+Review D, 95, 042001
+Ohanian, H. C. 1974, International Journal of Theoretical
+Physics, 9, 425
+Pagano, G., Hannuksela, O. A., & Li, T. G. 2020,
+Astronomy & Astrophysics, 643, A167
+Pang, P. T., Hannuksela, O. A., Dietrich, T., Pagano, G., &
+Harry, I. W. 2020, Monthly Notices of the Royal
+Astronomical Society, 495, 3740
+Planck Collaboration. 2020, Astronomy & Astrophysics,
+641, A6, doi: 10.1051/0004-6361/201833910
+Pratten, G., García-Quirós, C., Colleoni, M., et al. 2021,
+PhRvD, 103, 104056, doi: 10.1103/PhysRevD.103.104056
+Punturo, M., Abernathy, M., Acernese, F., et al. 2010,
+Classical and Quantum Gravity, 27, 194002
+Reitze, D., Adhikari, R. X., Ballmer, S., et al. 2019, arXiv
+preprint arXiv:1907.04833
+Sachdev, S., Caudill, S., Fong, H., et al. 2019, arXiv
+preprint arXiv:1901.08580
+Sereno, M., Sesana, A., Bleuler, A., et al. 2010, Physical
+review letters, 105, 251101
+Simonyan, K., & Zisserman, A. 2014, CoRR, abs/1409.1556.
+https://api.semanticscholar.org/CorpusID:14124313
+Takahashi, R., & Nakamura, T. 2003, Astrophys. J., 595,
+1039, doi: 10.1086/377430
+Usman, S. A., Nitz, A. H., Harry, I. W., et al. 2016,
+Classical and Quantum Gravity, 33, 215004

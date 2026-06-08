@@ -1,0 +1,894 @@
+Title: A Model Selection Criterion for Multidimensional Gaussian Processes: Application to Radial Velocities
+Authors: Barragán Oscar
+Published: 2026-06-03
+Categories: astro-ph.IM, astro-ph.EP, astro-ph.SR, physics.data-an, stat.ME
+
+MNRAS000, 1–6 (2026) Preprint 4 June 2026 Compiled using MNRAS L ATEX style file v3.3
+A Model Selection Criterion for Multidimensional Gaussian Processes:
+Application to Radial Velocities
+Oscar Barragán1,2★
+1 Department of Physics, University of Warwick, Coventry, CV4 7AL, UK
+2 Sub-department of Astrophysics, Department of Physics, University of Oxford, Oxford, OX1 3RH, UK
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+Multidimensional Gaussian Process (multi-GP) regression is widely used to disentangle stellar and planetary signals in radial
+velocities (RVs) by jointly modelling ancillary activity indicators. However, identifying the combination of indicators that best
+constrains the stellar signal in the RVs is non-trivial, as classical model comparison methods are not directly applicable when
+multi-GPs involve different time series combinations. In this work, we present an information criterion to compare multi-GP
+models based on their ability to explain the RV component,MGICrv. This metric combines the conditional RV likelihood with
+an effective parameter count that accounts for the regularisation imposed by the multi-GP model on the RV component. We
+demonstratethatMGIC rv providesaquantitativeandrobustframeworkformulti-GPmodelcomparison,identifyingtheactivity
+indicatorsthatmosteffectivelyconstraintheRVsignal.AlthoughdevelopedinthecontextofRVanalysis,theproposedcriterion
+is general and applicable to multi-GP problems in which the inference focuses on a specific observable.
+Key words:methods: statistical – methods: data analysis – techniques: radial velocities – stars: activity – planetary systems
+1 INTRODUCTION
+One of the central challenges in the detection of exoplanets using
+the radial velocity (RV) technique is the presence of stellar signals
+in the spectroscopic data. In particular, RV variations induced by
+stellar activity can mimic or obscure the Doppler signals caused by
+orbitingplanets,limitingthedetectabilityandthereliabilityofplan-
+etarydetections(e.g.,Quelozetal.2001;Rajpauletal.2016).These
+activity-inducedsignalsarisefromphenomenasuchasspots,plages,
+and magnetic cycles, and typically evolve on timescales comparable
+to stellar rotation and active-region lifetimes (see e.g., Dumusque
+et al. 2014; Rajpaul et al. 2015). The most popular methods to deal
+with this are based on modelling the activity-induced variability
+alongsidepotentialplanetarysignalsintheRVtimeseries(e.g.,Hay-
+wood et al. 2014; Rajpaul et al. 2015). In this context, Gaussian
+Processes (GPs) are among the preferred approaches.
+GaussianProcessesarewellsuitedtomodellingstellarsignalsbe-
+causetheyprovideaflexiblerepresentationoftimecorrelations(e.g.,
+Haywood et al. 2014; Aigrain & Foreman-Mackey 2023). However,
+this property can become a drawback if the GP is not sufficiently
+constrained, potentially leading to overfitting or the absorption of
+planetarysignalsintotheactivitymodel.Toavoidthisissue,Rajpaul
+etal.(2015)proposedamultidimensionalGP(multi-GP)regression
+approach that exploits the relation between RVs and ancillary activ-
+ity indicators (based on Aigrain et al. 2012) to constrain the stellar
+component in the RVs. Multi-GP regressions have since been shown
+to be effective in disentangling planetary and stellar signals in RV
+★ oscar.barragan@warwick.ac.uk
+data spanning a wide range of stellar activity levels (e.g., Barragán
+et al. 2023, 2026; Luque et al. 2023).
+Recentstudieshaveshownthatoneoftheadvantagesofmulti-GP
+regressions,incomparisontopureonedimensional(1D)ones,isthat
+they can lead to more precise planetary parameter estimates (e.g.,
+Barragán et al. 2022, 2023). While these results demonstrate the
+advantages of informing the RV time series with contemporaneous
+activityindicators,itisstillnotclearhowtochoosetheoptimalcom-
+bination of time series that best constrain the RV stellar activity sig-
+nal.Thiscouldbedonebyquantitativemodelcomparison.However,
+in the context of multi-GP regression this is a non-trivial problem.
+Classicalmodelcomparisoncriteria,suchastheAkaikeInformation
+Criterion (AIC; Akaike 1974) or Bayesian evidence, are designed to
+compare models applied to the same data set. As a result, they can-
+notbedirectlyappliedtomulti-GPmodelsthatincorporatedifferent
+time series combinations (see Ahrer et al. 2021; Rajpaul et al. 2021;
+Barragán et al. 2023). Several attempts have been made in the liter-
+ature to perform such comparisons (e.g., Rajpaul et al. 2021; Zhao
+et al. 2022), but none has proved fully satisfactory. More recently,
+Hara&Delisle(2025)demonstratedthatcross-validationcanbeused
+for model selection in multi-GP analyses. As cross-validation is the
+standard approach for comparing GP models through their predic-
+tive performance on held-out data (Rasmussen & Williams 2006),
+this result provides a promising avenue for multi-GP model com-
+parison. Furthermore, cross-validation and AIC have been shown to
+be asymptotically equivalent for model selection (e.g., Stone 1977).
+Motivatedbythisconnection,weintroduceanAIC-likeinformation
+criterion that exploits the joint multivariate Gaussian structure of
+multi-GPs to compare models according to their ability to explain
+the RV component.
+©2026 The Authors
+arXiv:2606.04875v1  [astro-ph.IM]  3 Jun 2026
+
+L2Barragán
+2 AN INFORMATION CRITERION FOR MULTI-GPS
+Inthissection,weintroduceamodelcomparisonframeworktailored
+tomulti-GPregressionsappliedtoRVsandstellaractivityindicators.
+WefocusontheabilityofeachmodeltoexplaintheRVobservations.
+Ourgoalistocomparemodelsthatmayusedifferentcombinationsof
+activitytimeseries,whileensuringthatthecomparisonisperformed
+on a common basis. We adopt an heuristic approach inspired by the
+AIC (Akaike 1974). Conceptually, the AIC consists of two parts: a
+likelihoodtermmeasuringhowwellthemodelexplainstheobserva-
+tions,andapenaltytermquantifyingthenumberofparametersused
+by the model. In the next subsections we describe how to compute
+these two terms to perform multi-GP comparison.
+2.1 Conditional likelihood on the RVs
+The central strategy of multi-GP regression is to reformulate the
+original multidimensional inference as a single, large-scale 1D GP
+regression.Thisisdonebyassemblingabigresidualvector,𝒓 big,and
+a corresponding covariance matrix,Kbig to build a likelihood (see,
+Rajpauletal.2015;Barragánetal.2022).Theresidualvector𝒓 big is
+constructedbyconcatenatingtheresidualvectorsforeachdimension
+𝑙:𝒓 𝑙 =𝒚 𝑙 −𝝁 𝑙, where the𝒚𝑙 and𝝁 𝑙 vectors denote the observation
+and mean vectors for each dimension𝑙, respectively. The associated
+covariancematrixK big isassembledfromsub-matricesK 𝑙,𝑚,which
+captureallcovariancesbetweentimeseries𝑙and𝑚.Wecanpartition
+the multi-GP framework into two blocks: one corresponding to the
+RVsandtheothertothefullsetofactivityindicators.Wewillusethe
+subscript “rv” to refer to the RV dimension, and “ai” to denote the
+combined activity indicator dimensions. The observed data vector
+can then be written as
+𝒚big =
+𝒚rv
+𝒚ai
+
+,(1)
+the mean vector
+𝝁big =
+𝝁rv
+𝝁ai
+
+,(2)
+and the covariance matrix
+𝑲big =
+𝑲rv,rv 𝑲rv,ai
+𝑲ai,rv 𝑲ai,ai
+
+.(3)
+The𝑲 𝑙,𝑚 matrices are constructed as
+𝑲𝑙,𝑚 =𝒌 𝑙,𝑚 +𝑹 𝑙,𝑚 ,(4)
+where𝒌 𝑙,𝑚 matrices are obtained by evaluating the kernel function
+at all pairs of observation times in dimensions𝑙and𝑚, and𝑹 𝑙,𝑚
+represents the observational noise covariance, with𝑹𝑙,𝑚 =0for𝑙≠
+𝑚anddiagonalblocks𝑹 𝑙,𝑙 containingthemeasurementuncertainties
+and jitter terms.
+For our model comparison, we are interested in computing the
+conditional probability of observing𝒚rv given the observations𝒚ai,
+writtenas𝑃(𝒚 rv |𝒚 ai).ForamultivariateGaussiandistribution,this
+is computed as (see Anderson 1984; Styan 1985)
+𝑃(𝒚 rv |𝒚 ai)=N  𝝁′
+rv,𝑲 ′
+rv,rv
+,(5)
+where
+𝝁′
+rv =𝝁 rv +𝑲 rv,ai 𝑲 −1
+ai,ai (𝒚 ai −𝝁 ai),(6)
+is the conditional mean vector for the RVs, and
+𝑲′
+rv,rv =𝑲 rv,rv −𝑲 rv,ai 𝑲 −1
+ai,ai 𝑲ai,rv ,(7)
+istheconditionalcovarianceoftheRVs,givenbytheSchurcomple-
+ment of the𝑲ai,ai sub-matrix (see Styan 1985; Lu & Shiou 2002).
+We can see eqs. (6) and (7) as corrections to the unconditioned
+mean and covariance of the RVs. The terms involving𝑲rv,ai 𝑲 −1
+ai,ai
+accountforthepartofthevariabilityintheRVsthatcanbeexplained
+by knowing the activity indicators. Equation (6) accounts for how
+well the joint model explains𝒚ai, and eq. (7) quantifies the extent
+to which the variability in𝒚rv is reduced by knowing𝒚ai. If there is
+no connection between RVs and activity indicators (i.e.,𝑲rv,ai =0)
+we recover the RVs unconditioned mean vector,𝝁′
+rv =𝝁 rv, and
+covariance matrix,𝑲 ′
+rv,rv =𝑲 rv,rv.
+We can then compute the conditional likelihood for the RV ob-
+servations, accounting for their joint distribution with the activity
+indicators, as
+lnL ′
+rv =− 1
+2
+
+𝑁rv ln 2𝜋+ln|𝑲 ′
+rv,rv | +r ′
+rv
+⊺ 𝑲′
+rv,rv
+−1r′
+rv
+
+,(8)
+where
+𝒓′
+rv =𝒚 rv −𝝁 ′
+rv,(9)
+and𝑁 rv isthenumberofRVobservations.Notehoweq.(8)doesnot
+dependonthenumberofdimensionsoronthenumberofactivityin-
+dicatorobservations.ThislikelihoodcomputeshowwelltheRVpart
+ofthemodelexplains𝒚 rv,incorporatingtheinformationprovidedby
+the activity indicators. However, this alone is insufficient for model
+comparison, models that incorporate additional activity indicators
+or more flexible covariance structures can achieve higher likelihood
+values simply through increased functional flexibility. We still need
+a penalty that balances goodness of fit against model complexity.
+2.2 Total number of parameters affecting the RV dimension
+In classical parametric models, the complexity penalty in the AIC is
+proportional to the number of free parameters. However, in multi-
+GP models, complexity arises from two sources. First, the explicit
+number of model parametersKp entering in the likelihood compu-
+tation. This includes the mean function parameters (e.g., Doppler
+semi-amplitudes, offsets, etc.), kernel hyperparameters, jitter terms.
+The second source of complexity comes from the flexibility of the
+GP component itself.
+To estimate the number of parameters due to the flexibility of a
+multi-GP, we will use the property of GPs being linear smoothers
+(see e.g., Rasmussen & Williams 2006). This means that the mean
+values of the big predictive distribution at the observing times,b𝒚big,
+are computed as a linear transformation of the observations as
+b𝒚big =𝝁 big +S big
+ 𝒚big −𝝁 big
+ ,(10)
+where
+Sbig =𝒌 big𝑲 −1
+big,(11)
+is the so-calledsmoother(orhat) matrix,
+𝒌big =
+𝒌rv,rv 𝒌rv,ai
+𝒌ai,rv 𝒌ai,ai
+
+,(12)
+is the kernel-only covariance matrix between all dimensions (i.e.,
+without the noise component), and𝑲 big is given in eq. (3). The
+smoother matrix characterises the linear mapping between observa-
+tional residuals and predicted values, quantifying the sensitivity of
+the model predictions to the data. In this sense,Sbig encodes the
+flexibility of the latent GP component. Larger diagonal elements
+wouldcorrespondtostrongerresponsivenessofthepredictivevalues
+MNRAS000, 1–6 (2026)
+
+A Model Selection Criterion for Multi-GPsL3
+toindividualobservations,whilesmallervaluesreflectstrongerregu-
+larisation.Forthisreason,thedegreesoffreedomoflinearsmoothers
+(like GPs) are obtained from the trace of the smoother matrix (for
+further details see e.g., Ye 1998; Hastie & Tibshirani 1990; Ras-
+mussen & Williams 2006). We would expect that if a given set of
+activity indicators truly explains the stellar signal, the RV compo-
+nentofthemodelshouldrequirefewereffectivedegrees-of-freedom
+(i.e. less flexibility) to explain𝒚rv. Since our objective is to compare
+multi-GP models based on their ability to explain RVs, we will use
+the smoother matrixS rv, that relates𝒚 rv with their corresponding
+predictive values
+b𝒚rv =𝝁 rv +S rv (𝒚rv −𝝁 rv) ,(13)
+where (see Appendix A)
+Srv =𝒌 rv,rv 𝑲′ −1
+rv,rv −𝒌 rv,ai 𝑲 −1
+ai,ai 𝑲ai,rv 𝑲′ −1
+rv,rv ,(14)
+and the smoothing-based degrees-of-freedom for the RVs is then
+Ks =tr (Srv) .(15)
+Equation (14) shows how conditioning on the activity indicators
+reducestheeffectivecovarianceoftheRVcomponent.Inthelimiting
+case where the activity indicators fully capture the stellar signal
+present in the RVs, the diagonal elements ofSrv approach to zero,
+andtr(S rv)tendstozero.Thus,S rv quantifiestheextenttowhichthe
+activity indicators regularise the RV activity signal and can be seen
+as a generalisation of the number of parameters to account for the
+model flexibility in the RV component. If we combine eq. (15) with
+thenumberofmodelparameters,K p,wecandefinethetotalnumber
+of effective parameters influencing the RV dimension
+Krv =K p + Ks.(16)
+2.3 An AIC-like information-criterion for multi-GPs
+Having defined the conditional RV likelihoodlnL ′
+rv (computed
+from the best fit parameters), and the effective parameter count for
+theRVdimensionK rv,wecannowconstructamulti-GPinformation
+criterion applied to the RV dimension as
+MGICrv =−2 lnL ′
+rv +2K rv.(17)
+We emphasise that this construction is heuristic. While the con-
+ditional likelihood is exact under the assumed Gaussian model, the
+number of parameters in a multi-GP setting is not uniquely defined.
+Thesmoothing-baseddegrees-of-freedomterm,K s,providesaprin-
+cipled approximation of model flexibility, extending established re-
+sults for linear smoothers to multi-GPs. We will interpret the unit
+differences inMGICrv as for the AIC. Differences less than 2 units
+are negligible, differences around 4 units offer some evidence in
+favour of the model with the lower value, and differences greater
+than10unitsprovidestrongevidence(Burnham&Anderson2002).
+These thresholds are compatible with the values we obtain in the
+criterion test in Sect. 3.1.
+3 TESTINGMGIC RV
+3.1 Test on synthetic data
+To evaluate the performance ofMGICrv introduced in Eq. (17), we
+designed synthetic data sets based on a multi-GP model. We fol-
+low the definitions of photometric and RV-like activity indicators
+introduced by Barragán et al. (2023). Specifically, we generated two
+synthetic time series:A 1, behaving as an RV-like signal, andA2,
+Table 1.Synthetic multi-GP models tested in this work.
+Model Description
+1A 1 =𝐴 1𝐺(𝑡),
+2A 1 =𝐴 1𝐺(𝑡) +𝐵 1 ¤𝐺(𝑡),A 2 =𝐴 2𝐺(𝑡)
+3A 1 =𝐴 1𝐺(𝑡) +𝐵 1 ¤𝐺(𝑡),A 2 =𝐴 2𝐺(𝑡) +𝐵 2 ¤𝐺(𝑡)
+4A 1 =𝐴 1𝐺(𝑡),A 2 =𝐴 2𝐺(𝑡)
+5A 1 =𝐴 1𝑆(𝑡) +𝐵 1 ¤𝑆(𝑡),A 2 =𝐴 2𝑆(𝑡)
+behaving as a photometry-like activity indicator. These time series
+are defined as
+A1 =𝐴 1𝐺(𝑡) +𝐵 1 ¤𝐺(𝑡) +𝜀 1 (𝑡),
+A2 =𝐴 2𝐺(𝑡) +𝜀 2 (𝑡), (18)
+where𝜀 𝑖 (𝑡)is a white noise term, the parameters𝐴𝑖 and𝐵 𝑖 serve as
+free coefficients that connect each time-series to the latent process.
+Here,𝐺(𝑡)is a latent function sampled using a quasi-periodic (QP)
+kernel defined as
+𝛾QP (𝑡𝑖, 𝑡 𝑗 )=exp
+"
+− sin2 [𝜋(𝑡 𝑖 −𝑡 𝑗 )/𝑃 GP]
+2𝜆2
+P
+− (𝑡𝑖 −𝑡 𝑗 )2
+2𝜆2e
+#
+,(19)
+where𝑃 GP is the characteristic GP period;𝜆P is the inverse of the
+harmonic complexity; and𝜆e is the evolution timescale.
+Wegeneratedsynthetictimeseriesusingthecitlalatonaccode
+(Barragán et al. 2022). For the QP kernel, we adopted𝑃GP =10d,
+𝜆p=0.7, and𝜆 e=25d. A total of 50 observations were simulated at
+randomepochswithina50dwindow.Wevariedthecoefficients𝐴 1,
+𝐵1, and𝐴 2 between 0 and 5 in steps of 1, resulting in 216 different
+timeseriescombinations.Allunitsarearbitrary.WeaddedGaussian
+white noise with standard deviation of 1 to all time series. These
+configurations include cases in which the time series are dominated
+bywhitenoise,aswellasscenarioswhereA 1 isdominatedbyeither
+the𝐺(𝑡)or ¤𝐺(𝑡)component.
+Our goal is to assess whetherMGICrv can correctly identify the
+multi-GP model that best describes theA1 time series. For each of
+the216syntheticdatasets,wethereforetestedfivemodelconfigura-
+tions. Model 1 consists of a one-dimensional GP regression onA1
+only,assumingA 1 =𝐴 1𝐺(𝑡).Model2correspondstodescribingA 1
+as𝐴 1𝐺(𝑡) +𝐵 1 ¤𝐺(𝑡)andA 2 as𝐴 2𝐺(𝑡)(thetrueunderlyingmodel).
+Model 3 describes bothA1 andA 2 as combinations of𝐺(𝑡)and
+¤𝐺(𝑡),makingitmorecomplexthanthetruemodel.Model4assumes
+that bothA1 andA 2 depend only on𝐺(𝑡), neglecting the contribu-
+tion from ¤𝐺(𝑡). Finally, Model 5 corresponds to describingA1 as
+𝐴1𝑆(𝑡) +𝐵 1 ¤𝑆(𝑡)andA 2 as𝐴 2𝑆(𝑡), where𝑆(𝑡)is generated using a
+squared-exponential(SE)kernel(asdefinedinBarragánetal.2022).
+AllmodelsaresummarisedinTable1.Together,theseconfigurations
+span true, oversimplified, over-complex, and incorrect models.
+Weranaseriesofmulti-GPregressionsusingpyaneti(Barragán
+etal.2019;Barragánetal.2022).Weused250walkersintheensem-
+bleMarkovchainMonteCarlo(MCMC)sampler(Foreman-Mackey
+et al. 2013). Posterior distributions were constructed from the fi-
+nal 5000 iterations of the converged chains. Thinning the chains by
+a factor of 10 resulted in 500 samples per walker, corresponding to
+125,000posteriorsamplesperparameter.WesampledfortheQPker-
+nelhyperparameters,thecorrespondingmulti-GPamplitudes,andan
+offsetandjittertermforeachtimeseries.Weadoptedbroaduniform
+priors for all the parameters.
+Figure 1 shows theΔMGIC rv values obtained for the different
+modelcomparisons,usingModel1asthereference(SeeAppendixB
+forabriefdiscussionusingModel2asreference).WechooseModel1
+becauseitrepresentsthestandard1DGPregressioncommonlyused
+MNRAS000, 1–6 (2026)
+
+L4Barragán
+531
+A1
+5 6 6 6 6 5
+5 5 6 6 6 5
+5 5 5 5 4 5
+4 5 6 5 3 3
+4 3 6 3 1 -1
+7 6 6 2 0 -1
+MGICrv Models 2 vs 1
+9 9 9 9 9 8
+9 9 9 9 9 8
+9 9 9 8 7 7
+9 9 10 8 6 6
+8 7 10 6 3 2
+9 10 10 6 3 1
+MGICrv Models 3 vs 1
+5 5 5 5 5 4
+5 5 5 6 5 5
+6 5 5 5 4 5
+6 6 6 5 5 5
+6 5 5 5 4 5
+1 5 6 5 4 4
+MGICrv Models 4 vs 1
+A2 = 0
+34 39 42 45 46 46
+32 34 38 42 44 44
+27 29 34 38 40 42
+22 25 30 34 36 37
+6 19 25 28 31 33
+-1 17 24 27 30 32
+MGICrv Models 5 vs 1
+531
+A1
+-8 -8 -8 -9 -10 -12
+-7 -7 -8 -10 -11 -13
+-6 -7 -9 -12 -13 -15
+-3 -7 -12 -14 -17 -18
+-4 -11 -14 -18 -21 -22
+0 -8 -12 -17 -19 -21
+-7 -9 -10 -11 -11 -13
+-8 -9 -11 -12 -13 -14
+-9 -11 -12 -13 -14 -15
+-10 -11 -12 -14 -16 -18
+-8 -13 -12 -16 -19 -21
+2 -5 -9 -14 -17 -18
+-11 -10 -8 -6 -3 -1
+-10 -9 -7 -3 1 3
+-10 -9 -4 1 5 7
+-9 -5 2 7 9 11
+-6 1 10 11 10 10
+-2 14 8 7 7 7
+A2 = 1
+20 24 3 33 38 42
+17 22 28 34 40 44
+13 19 28 36 43 48
+8 18 9 42 51 51
+-1 19 40 43 42 43
+-5 12 40 44 41 39
+531
+A1
+-22 -23 -24 -26 -28 -30
+-22 -24 -25 -27 -29 -31
+-22 -24 -27 -30 -32 -33
+-21 -26 -29 -32 -34 -36
+-18 -24 -29 -34 -37 -38
+-1 -14 -25 -32 -35 -37
+-22 -26 -27 -28 -29 -31
+-24 -27 -28 -29 -30 -33
+-24 -27 -29 -31 -33 -34
+-24 -26 -29 -32 -34 -36
+-19 -22 -27 -33 -36 -38
+1 -11 -22 -29 -33 -34
+-24 -23 -14 -1 14 28
+-25 -21 -9 9 28 44
+-25 -18 1 25 47 64
+-24 -11 19 52 73 83
+-20 0 51 86 86 76
+-3 14 84 18 15 15
+A2 = 2
+-2 3 12 29 46 62
+-6 2 18 38 59 77
+-10 2 25 53 77 96
+-15 4 9 97 100 103
+-17 7 83 92 98 87
+-5 12 83 91 97 101
+0 1 2 3 4 5
+B1
+531
+A1
+-50 -50 -52 -55 -57 -60
+-49 -50 -52 -55 -57 -60
+-47 -47 -51 -54 -58 -60
+-42 -42 -47 -52 -57 -61
+-26 -32 -39 -50 -57 -61
+-1 -18 -34 -46 -54 -58
+0 1 2 3 4 5
+B1
+-50 -54 -54 -56 -58 -61
+-51 -53 -54 -56 -59 -61
+-48 -51 -53 -56 -60 -61
+-43 -45 -49 -54 -58 -61
+-27 -35 -42 -51 -58 -61
+-1 -17 -34 -45 -52 -56
+0 1 2 3 4 5
+B1
+-52 -38 2 65 147 240
+-52 -34 15 93 193 306
+-49 -27 32 127 250 388
+-45 -17 52 165 316 489
+-28 -3 73 199 379 602
+-3 13 84 215 409 662
+0 1 2 3 4 5
+B1
+A2 = 5
+-42 -27 -30 150 162 155
+-44 -24 26 106 208 407
+-44 -21 40 137 262 412
+-42 -13 43 344 333 427
+-28 -2 75 202 408 397
+-4 13 83 215 409 430
+Figure 1.Heat maps ofΔMGICrv quantities as functions of𝐴1 and𝐵 1 for varying𝐴 2. Each row corresponds to a fixed𝐴2, and each column to a different
+ΔMGICrv taking Model 1 as reference. Colours represent normalised delta magnitudes, with annotations showing the exactΔMGICrv values.
+inRVanalyses.Thiscomparisonthereforeillustrateshow,andunder
+whichconditions,multi-GPmodelsimproveuponapurely1Dtreat-
+ment of the RV time series. It also shows howMGICrv responds to
+the inclusion of ancillary indicators.
+ThefirstnotableresultisthatMGIC rv stronglypenalisesModel5,
+despiteithavingthesamefunctionalformasthetruemodel.Model5
+differsonlyinitscovariancestructurebyassumingaSEkernel,while
+the data were generated with a QP kernel. This is reflected in the
+largeΔMGIC rv between Model 5 and Model 1 (column 4 of Fig. 1).
+Model 5 is preferred over Model 1 only in the limiting cases where
+the activity indicator has a strong signal (𝐴2 =5) and the derivative
+contribution to the RV-like time series is negligible (𝐵1 =0). Even
+in these cases, however, Model 5 remains disfavoured relative to
+Models2and3(seeFig.1andAppendixB).ThisshowsthatMGIC rv
+issensitivenotonlytothefunctionalstructureofthemulti-GPmodel
+(see below), but also to the choice of kernel. This suggest that the
+criterioncanthereforealsohelpidentifythecovariancestructurethat
+bestdescribesthedata.Fromnowon,wewilldiscussonlythemodels
+created using the correct kernel function.
+Anotherimportantresultisthatwhentheactivityindicatorisdom-
+inated by white noise (i.e.𝐴2 =0, first row of Fig. 1),MGICrv dis-
+favourstheinclusionofA 2.Infact,allmulti-GPmodelsareslightly
+penalised relative to the 1D case due to their increased complexity
+without a corresponding improvement in theA1 modelling. As the
+signal-to-noiseofA 2increases(larger𝐴 2values,wedonotshowthe
+resultsfor𝐴 2 valuesof3and4,buttheyfollowasimilartrend),then
+A2 beginstoaffecttheinferenceontheA 1 component,andtheseef-
+fectsarecapturedbyMGIC rv.Asimilarbehaviourisobservedwhen
+A1 itself becomes noise dominated (i.e.𝐴1 =𝐵 1 =0). In this case,
+theinclusionofA 2doesnotimprovethemodellingofA 1,regardless
+of the quality of the activity indicator. This suggest that informative
+ancillary time series cannot compensate for the absence of recov-
+erable information in the target dimension itself. The comparison
+between Models 1 and 2 (first column of Fig. 1) shows thatMGICrv
+consistentlyfavoursModel2,whichcorrespondstothetruemodelby
+construction.Thepreferencebecomesstrongerasthesignal-to-noise
+increases in both time series. Model 3 extends Model 2 by includ-
+ing an additional ¤𝐺(𝑡)component inA 2, introducing unnecessary
+complexity. Figure 1 shows that this additional flexibility does not
+significantly improveMGICrv, and Model 2 is therefore preferred.
+Finally, Model 4 provides the clearest illustration of the diagnostic
+powerofMGIC rv.Thismodeliscorrectonlywhen𝐵 1 =0,i.e.when
+A1 does not contain a ¤𝐺(𝑡)contribution. In this regime,MGIC rv
+correctly favours Model 4. However, as the contribution from¤𝐺(𝑡)
+becomes significant, the model rapidly becomes disfavoured. This
+demonstrates thatMGIC rv is not only sensitive to over-complexity,
+but can also identify activity indicators and/or models that do not
+fully capture the underlying process governing the RV-like signal.
+We also performed similar simulations including injected plane-
+tarysignalsintheRV-likedimension.Inallcases,MGIC rv continued
+tofavourthetrueunderlyingmodel,whichalsogavethemostprecise
+recoveryoftheDopplersemi-amplitude.Thisbehaviourisconsistent
+withpreviousqualitativeresults(seeBarragánetal.2022,2023, and
+next section). This shows howMGICrv is also sensitive to the mean
+function values vialnL′
+rv.
+Notethatthesetestsareintendedtoillustratethegeneralbehaviour
+ofMGIC rv under different scenarios within a specific synthetic con-
+figuration. Although similar trends are expected under comparable
+conditions, the quantitative values ofMGICrv will depend on the
+number of observations, the sampling strategy, and the adopted ker-
+nel and hyper-parameters.
+3.2 Test on real systems
+We have shown how theMGICrv metric can be used to compare
+multi-GP models to find the best combination of activity indicators
+when we know the underlying truth. We then tested the behaviour
+ofMGIC rv in real data sets. For all cases, we use the same MCMC
+MNRAS000, 1–6 (2026)
+
+A Model Selection Criterion for Multi-GPsL5
+Table 2.lnL ′
+rv,K p,K s, andMGICrv for multi-GPs for real data sets.
+time-serieslnL ′
+rv Kp Ks MGICrv
+K2-233
+RV 475 15 59 -802
+RV + FWHM 492 21 55 -831
+RV + FWHM + BIS 493 25 46 -845
+TOI-837
+RV 120 7 15 -195
+RV + FWHM 126 11 20 -190
+RV + FWHM + BIS 128 15 24 -174
+TOI-451
+RV 358 15 88 -509
+RV + FWHM 379 19 85 -552
+RV + NGTS 383 19 84 -561
+configuration inpyanetias in Sect. 3.1. The full list of systems,
+multi-GP combinations andMGICrv metrics are given in Table 2.
+We first revisit the results of Barragán et al. (2023) for K2-233
+usingMGIC rv. Hereafter, We adopt the terminology, where FWHM
+denotes the full width at half maximum and BIS the bisector inverse
+slope. We re-run their 1D (RV), 2D (RV + FWHM), and 3D (RV
++ FWHM + BIS) multi-GP models following the configuration de-
+scribed in their paper. They concluded that the best model is the 3D
+(RV + FWHM + BIS) multi-GP based on the ability of the model
+to give precise Doppler semi-amplitudes. As shown in Table 2, the
+model with the lowestMGICrv is the 3D-GP regression including
+both FWHM and BIS. While the conditional RV likelihoodlnL′
+rv
+is similar for the 2D and 3D cases, the improvement inMGICrv
+arises from a reduction inKs, indicating stronger regularisation of
+thestellaractivitysignalwhenBISisincluded.Inthiscase,MGIC rv
+quantitatively agrees with the qualitative assessment of Barragán
+et al. (2023), demonstrating that the additional indicators constrain
+the RV activity component for this particular data set.
+WenextanalysetheTOI-837datasetfromBarragánetal.(2024),
+who qualitatively argued that the activity indicators do not add in-
+formation in a multi-GP framework for the corresponding data set.
+Werepeattheir1D(RV),2D(RV+FWHM),and3D(RV+FWHM
++ BIS) analyses under the same setup. We find that the 1D model is
+favoured byMGICrv. AlthoughlnL ′
+rv remains similar across mod-
+els, the inclusion of activity indicators increasesKs. This suggests
+that additional flexibility is required from the RV dimension to ex-
+plain the activity signal in the indicator time series. Suggesting that
+activity indicators do not add information for the TOI-837 RV data
+set. Once again, the quantitative behaviour ofMGICrv reproduces
+the qualitative conclusions of the original study.
+Finally, we consider the multi-GP analysis of TOI-451 presented
+by Barragán et al. (2026), where contemporaneous Next-Generation
+TransitSurvey(NGTS;Wheatleyetal.2018)photometrywasfound
+to constrain the RV signal more effectively than spectroscopic indi-
+cators. We re-ran their 1D (RV), 2D (RV + FWHM), and 2D (RV
++ NGTS) models using their same configuration. As reported in Ta-
+ble 2, both 2D models improve upon the 1D case, and the RV +
+NGTS model yields the lowestMGICrv, quantitatively confirming
+thatcontemporaneousphotometryprovidesaslightlybestconstraint
+on the RV activity component for this system.
+Across these diverse systems,MGICrv consistently identifies the
+activity indicators that most effectively constrain the RV signal,
+reproducing previously established qualitative conclusions. This
+demonstrates the practical usefulness ofMGICrv as a quantitative
+tool for activity indicator selection in multi-GP analyses.
+4 CONCLUSIONS
+We have developed an information criterion for comparing multi-
+GP models according to their ability to explain the RV component.
+Exploiting the multivariate Gaussian structure of multi-GPs, we in-
+troduceMGIC rv,whichcombinestheconditionalRVlikelihoodwith
+aneffectiveparametercount.Thisparametercountincorporatesboth
+the explicitly estimated model parameters and the smoothing-based
+degrees-of-freedom of the GP component, balancing goodness of fit
+against model complexity in the RV dimension.
+We appliedMGICrv to both, synthetic data and several published
+multi-GP analyses to demonstrate its practical use. In all cases, the
+criterion quantitatively reproduces expected and previously estab-
+lished qualitative conclusions regarding the relevance of different
+activity indicators. Informative indicators are favoured through im-
+proved regularisation of the RV component, while noise-dominated
+or unrelated series are penalised. These results demonstrate that
+MGICrv provides a robust, objective, and reproducible framework
+for multi-GP model comparison. They also provide a first empir-
+ical calibration of theMGICrv scale. In our tests, models that are
+nearly indistinguishable by construction typically differ by less than
+10MGIC rv units,whiledifferences≳10indicateaclearpreference.
+This supports the AIC-based interpretation adopted in Sect. 2.3, but
+the threshold should be treated as indicative rather than universal.
+A formal investigation of theMGICrv threshold as well as its rela-
+tionship with cross-validation in multi-GP settings is left for future
+work.
+ItisalsoworthtomentionthatthemetricsusedtocomputeMGIC rv
+maybeusefulbeyondthecriterionitself.Theconditionallikelihood,
+lnL ′
+rv, provides a built-in way to evaluate how well different mean
+functions describe the RV dimension within a multi-GP framework
+(e.g. to test number of planetary signals). Similarly, the smoothing-
+baseddegreesoffreedom,K s,providesadirectmeasureoftheeffec-
+tiveflexibilityoftheGPcomponent.Makingitusefulforcomparing
+different covariance structures, both in one- and multi-GP analyses.
+BeyondRVapplications,theproposedinformationcriterionisgen-
+eralanddirectlyapplicabletoothermulti-GPproblems.Allequations
+shown in Sect. 2 are agnostic of the adopted multi-GP framework.
+Therefore,thiscriterionisgeneralandcanbeappliedtoanymulti-GP
+problem in which inference targets a specific dimension.
+ACKNOWLEDGEMENTS
+O.B.acknowledgesthathasreceivedfundingfromtheEuropeanRe-
+search Council (ERC) under the European Union’s Horizon 2020
+research and innovation programme (Grant agreement No. 865624).
+O.B. thanks Nathan Hara for his constructive referee report and in-
+sightful discussions, which significantly improved the quality and
+impactofthismanuscript.O.B.thanksSuzanneAigrain,ErikMeier,
+andThomasWilsonfortheirvaluablecommentsthathelptoimprove
+this manuscript. This work made use ofnumpy(Harris et al. 2020),
+matplotlib(Hunter 2007),seaborn(Waskom 2021) andpandas
+(pandas development team 2020) libraries.
+MNRAS000, 1–6 (2026)
+
+L6Barragán
+DATA AVAILABILITY
+The codes used in this work are publicly available athttps://
+github.com/oscaribv.Thedataanalysedinthisstudyarepublicly
+availableintheoriginalpublicationscitedthroughoutthemanuscript.
+REFERENCES
+Ahrer E., et al., 2021, MNRAS, 503, 1248
+Aigrain S., Foreman-Mackey D., 2023, ARA&A, 61, 329
+Aigrain S., Pont F., Zucker S., 2012, MNRAS, 419, 3147
+Akaike H., 1974, IEEE Transactions on Automatic Control, 19, 716
+Anderson T. W., 1984, An Introduction to Multivariate Statistical Analysis,
+2nd edn. John Wiley & Sons, New York
+Barragán O., Gandolfi D., Antoniciello G., 2019, MNRAS, 482, 1017
+Barragán O., Aigrain S., Rajpaul V. M., Zicher N., 2022, MNRAS, 509, 866
+Barragán O., et al., 2023, MNRAS, 522, 3458
+Barragán O., et al., 2024, MNRAS, 531, 4275
+Barragán O., et al., 2026, MNRAS, 546, stag087
+Burnham K. P., Anderson D. R., 2002, Model Selection and Multimodel In-
+ference:APracticalInformation-TheoreticApproach,2ndedn.Springer-
+Verlag, New York, doi:10.1007/b97636,https://link.springer.
+com/book/10.1007/b97636
+Dumusque X., Boisse I., Santos N. C., 2014, ApJ, 796, 132
+Foreman-Mackey D., Hogg D. W., Lang D., Goodman J., 2013, PASP, 125,
+306
+Hara N. C., Delisle J.-B., 2025, A&A, 696, A141
+Harris C. R., et al., 2020, Nature, 585, 357
+Hastie T. J., Tibshirani R. J., 1990, Generalized Additive Models. Chapman
+& Hall, London and New York
+Haywood R. D., et al., 2014, MNRAS, 443, 2517
+Hunter J. D., 2007, Computing in Science & Engineering, 9, 90
+Lu T.-T., Shiou S.-H., 2002, Computers & Mathematics with Applications,
+43, 119
+Luque R., et al., 2023, Nature, 623, 932
+Queloz D., et al., 2001, A&A, 379, 279
+RajpaulV.,AigrainS.,OsborneM.A.,ReeceS.,RobertsS.,2015,MNRAS,
+452, 2269
+Rajpaul V., Aigrain S., Roberts S., 2016, MNRAS, 456, L6
+Rajpaul V. M., et al., 2021, MNRAS, 507, 1847
+Rasmussen C. E., Williams C. K. I., 2006, Gaussian Processes for Machine
+Learning. MIT Press, Cambridge, MA
+Stone M., 1977, Journal of the Royal Statistical Society: Series B (Method-
+ological), 39, 44
+StyanG.P.H.,1985,inPukkilaT.,PuntanenS.,eds,ProceedingsoftheFirst
+International Tampere Seminar on Linear Statistical Models and their
+Applications. Department of Mathematical Sciences/Statistics, Univer-
+sity of Tampere, Tampere, Finland, pp 37–75
+Waskom M. L., 2021, Journal of Open Source Software, 6, 3021
+Wheatley P. J., et al., 2018, MNRAS, 475, 4476
+Ye J., 1998, Journal of the American Statistical Association, 93, 120
+Zhao L. L., et al., 2022, AJ, 163, 171
+pandas development team T., 2020, pandas-dev/pandas: Pandas,
+doi:10.5281/zenodo.3509134,https://doi.org/10.5281/zenodo.
+3509134
+APPENDIX A: EXPLICIT FORM OFSRV
+In this Section we will derive the explicit form ofSrv. Following
+equations (11), (3), and (12) we have
+𝑺big =
+𝒌rv,rv 𝒌rv,ai
+𝒌ai,rv 𝒌ai,ai
+ 𝑲rv,rv 𝑲rv,ai
+𝑲ai,rv 𝑲ai,ai
+ −1
+.(A1)
+Following equation (2.3) in Lu & Shiou (2002), and using the con-
+ditional covariance of the RVs,𝑲′
+rv,rv, given in eq. (7), then eq. (A1)
+can be rewritten as
+𝑺big =
+𝒌rv,rv 𝒌rv,ai
+𝒌ai,rv 𝒌ai,ai
+
+ 𝑲′ −1
+rv,rv −𝑲 ′ −1
+rv,rv 𝑲rv,ai 𝑲 −1
+ai,ai
+−𝑲 −1
+ai,ai 𝑲ai,rv 𝑲′ −1
+rv,rv 𝑲 −1
+ai,ai +𝑲 −1
+ai,ai 𝑲ai,rv 𝑲′ −1
+rv,rv 𝑲rv,ai 𝑲 −1
+ai,ai
+
+.
+(A2)
+Therefore
+𝑺rv =𝒌 rv,rv 𝑲′ −1
+rv,rv −𝒌 rv,ai 𝑲 −1
+ai,ai 𝑲ai,rv 𝑲′ −1
+rv,rv (A3)
+Itisworthnotingthatinthelimitwhereactivityindicatorsarenot
+connectedtotheRVs(i.e.,𝑲 rv,ai =0),then𝑺 rvreducesto𝒌 rv,rv 𝑲 −1
+rv,rv,
+as expected.
+APPENDIX B: COMPARISON RESPECT TO MODEL 2
+Figure B shows theΔMGIC rv values from Sect. 3.1, now using
+Model2asthereference.SinceModel2isthetruegenerativemodel
+byconstruction,thisprovidesadirectcheckofwhetherMGIC rviden-
+tifiestheexpectedmodel.Noalternativemodelobtainsasignificantly
+lowerMGIC rv than Model 2, showing that the criterion correctly al-
+low us to detect the best model. In addition, models that are nearly
+indistinguishablebyconstructiontypicallydifferbylessthan∼5–10
+MGICrv units. This behaviour is consistent with the AIC-based in-
+terpretation adopted in Sect. 2.3, where differences≳10are treated
+as strong evidence for one model over another.
+This paper has been typeset from a TEX/LATEX file prepared by the author.
+MNRAS000, 1–6 (2026)
+
+A Model Selection Criterion for Multi-GPsL7
+531
+A1
+-5 -6 -6 -6 -6 -5
+-5 -5 -6 -6 -6 -5
+-5 -5 -5 -5 -4 -5
+-4 -5 -6 -5 -3 -3
+-4 -3 -6 -3 -1 1
+-7 -6 -6 -2 0 1
+MGICrv Models 1 vs 2
+4 3 3 3 3 3
+4 4 3 3 3 3
+4 4 4 3 3 2
+5 4 4 3 3 3
+4 4 4 3 2 3
+2 4 4 4 3 2
+MGICrv Models 3 vs 2
+0 -1 -1 -1 -1 -1
+0 0 -1 0 -1 0
+1 0 0 0 0 0
+2 1 0 0 2 2
+2 2 -1 2 3 6
+-6 -1 0 3 4 5
+MGICrv Models 4 vs 2
+A2 = 0
+29 33 36 39 40 41
+27 29 32 36 38 39
+22 24 29 33 36 37
+18 20 24 29 33 34
+2 16 19 25 30 34
+-8 11 18 25 30 33
+MGICrv Models 5 vs 2
+531
+A1
+8 8 8 9 10 12
+7 7 8 10 11 13
+6 7 9 12 13 15
+3 7 12 14 17 18
+4 11 14 18 21 22
+0 8 12 17 19 21
+1 -1 -2 -2 -1 -1
+-1 -2 -3 -2 -2 -1
+-3 -4 -3 -1 -1 0
+-7 -4 0 0 1 0
+-4 -2 2 2 2 1
+2 3 3 3 2 3
+-3 -2 0 3 7 11
+-3 -2 1 7 12 16
+-4 -2 5 13 18 22
+-6 2 14 21 26 29
+-2 12 24 29 31 32
+-2 22 20 24 26 28
+A2 = 1
+28 32 11 42 48 54
+24 29 36 44 51 57
+19 26 37 48 56 63
+11 25 21 56 68 69
+3 30 54 61 63 65
+-5 20 52 61 60 60
+531
+A1
+22 23 24 26 28 30
+22 24 25 27 29 31
+22 24 27 30 32 33
+21 26 29 32 34 36
+18 24 29 34 37 38
+1 14 25 32 35 37
+0 -3 -3 -2 -1 -1
+-2 -3 -3 -2 -1 -2
+-2 -3 -2 -1 -1 -1
+-3 0 0 0 0 0
+-1 2 2 1 1 0
+2 3 3 3 2 3
+-2 0 10 25 42 58
+-3 3 16 36 57 75
+-3 6 28 55 79 97
+-3 15 48 84 107 119
+-2 24 80 120 123 114
+-2 28 109 50 50 52
+A2 = 2
+20 26 36 55 74 92
+16 26 43 65 88 108
+12 26 52 83 109 129
+6 30 38 129 134 139
+1 31 112 126 135 125
+-4 26 108 123 132 138
+0 1 2 3 4 5
+B1
+531
+A1
+50 50 52 55 57 60
+49 50 52 55 57 60
+47 47 51 54 58 60
+42 42 47 52 57 61
+26 32 39 50 57 61
+1 18 34 46 54 58
+0 1 2 3 4 5
+B1
+0 -4 -2 -1 -1 -1
+-2 -3 -2 -1 -2 -1
+-1 -4 -2 -2 -2 -1
+-1 -3 -2 -2 -1 0
+-1 -3 -3 -1 -1 0
+0 1 0 1 2 2
+0 1 2 3 4 5
+B1
+-2 12 54 120 204 300
+-3 16 67 148 250 366
+-2 20 83 181 308 448
+-3 25 99 217 373 550
+-2 29 112 249 436 663
+-2 31 118 261 463 720
+0 1 2 3 4 5
+B1
+A2 = 5
+8 23 22 205 219 215
+5 26 78 161 265 467
+3 26 91 191 320 472
+0 29 90 396 390 488
+-2 30 114 252 465 458
+-3 31 117 261 463 488
+Figure B1.Same as Figure 1 but taking Model 2 as reference.
+MNRAS000, 1–6 (2026)

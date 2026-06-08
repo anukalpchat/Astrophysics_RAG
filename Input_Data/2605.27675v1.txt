@@ -1,0 +1,1284 @@
+Title: A Probabilistic Calibration Procedure for the CORSAIR Polarimeter
+Authors: Alan Hsu, Jenna Samra, Steven Tomczyk, Maxim Kramar
+Published: 2026-05-26
+Categories: astro-ph.SR, astro-ph.IM
+
+SolarPhysics          (2026) 301:41 
+https://doi.org/10.1007/s11207-026-02630-4
+RESEARCH
+AProbabilisticCalibrationProcedurefortheCORSAIR
+Polarimeter
+AlanHsu1,2 ·JennaSamra1,2 ·StevenTomczyk3 ·MaximKramar4,5
+Received:17November2025/Accepted:8February2026
+©TheAuthor(s)2026
+Abstract
+We present a novel Bayesian model and a corresponding robust, probabilistic calibration
+procedure for the CORSAIR polarimeter that can be applied to other polarimeters. Our cal-
+ibration procedure combines existing Mueller matrix representations of polarimeters with
+Bayesian methods, and computes the posterior distribution of the parameters by collecting
+data from the polarimeter at different states. We show that the algorithm is able to converge
+and recover a well-constrained posterior of the free parameters with a credible interval that is
+consistent with the ground truth values. Posterior predictive checks indicate that our genera-
+tive model with inferred parameters can reproduce the calibration data within the predictive
+uncertainty, and captures the dominant systematic effects of the calibration procedure. We
+further show that we can propagate calibration uncertainties in the distributions to down-
+stream reconstructions of Stokes measurements and magnetic-ﬁeld estimates. We ﬁnd that
+the contribution of calibration uncertainty towards the reconstructed results is minimal rel-
+ative to that of the photon noise uncertainty, indicating that estimates using our Bayesian
+calibration algorithm can achieve photon noise-limited measurements in the magnetic-ﬁeld
+parameters. Finally, we test the Bayesian calibration algorithm on a lab prototype of the
+CORSAIR polarimeter, and show that it converges and closely recovers theoretical esti-
+mates of the free parameters from real-world measurements.
+Keywords Corona · Spectropolarimetry · Bayesian · Calibration · Magnetic ﬁelds
+1. Introduction
+Space-weather events, such as solar ﬂares and coronal mass ejections, arise from magnetic-
+reconnection events in the solar atmosphere and can cause large disruptions to modern
+✉A. Hsu
+alan.hsu@cfa.harvard.edu
+J. Samra
+jsamra@cfa.harvard.edu
+1 Department of Astronomy, Harvard University, Cambridge, MA 02138, USA
+2 Center for Astrophysics | Harvard & Smithsonian, Cambridge, MA 02138, USA
+3 Solar Scientiﬁc LLC, Boulder, CO, USA
+4 DKIST Science Support Center, National Solar Observatory, Pukalani, HI 96768, USA
+5 Institute for Astronomy, University of Hawaii at Manoa, Pukalani, HI 96768, USA
+
+
+   41 Page2of29 A.Hsuetal.
+technological systems on Earth (e.g. Parker 1979; Golub and Pasachoff 2009;A s c h w a n -
+den 2019). In order to understand and predict space weather, scientists model the magnetic
+ﬁelds that structure the corona and drive energy transport within it. Due to the challenge
+of measuring the coronal magnetic ﬁeld, these models are generally constrained by photo-
+spheric magnetic ﬁelds and guided by coronal images (e.g. Miki ´ce ta l . 1999; Riley et al.
+2006; van der Holst et al. 2014;S a v c h e v ae ta l .2015).
+Spectropolarimeters can provide line-of-sight (LOS) intensity-weighted observations of
+the coronal magnetic ﬁeld by measuring the Stokes polarization state of coronal emission
+lines (Judge et al. 2001). The linear polarization due to the Hanle Effect is captured in
+Stokes Q and U, while the circular polarization due to the Zeeman Effect is captured in
+Stokes V . Stokes Q and U can be used to constrain the vector ﬁeld orientation and to recover
+an estimate of the magnetic azimuth under the plane-of-sky (POS) assumption, subject to
+the 90
+◦ ambiguity of the Van Vleck Effect. Stokes V can provide a measurement of the
+LOS component of the ﬁeld strength (Judge et al. 2001; Casini and Judge 1999;L i na n d
+Casini 2000). These Stokes vectors can also be used in single-point inversions to estimate
+magnetic orientation and thermal properties of the plasma (e.g. Paraschiv and Judge 2022;
+Judge, Casini, and Paraschiv 2021), coronal seismology to estimate global POS magnetic
+ﬁeld values (e.g. Tomczyk and McIntosh2009;Y a n ge ta l .2020), and tomographic inversion
+techniques to estimate full vector coronal magnetic ﬁelds (e.g. Kramar, Inhester, and Solanki
+2006; Kramar and Inhester 2007;K r a m a re ta l .2013; Kramar, Lin, and Tomczyk 2016;
+Kramar and Lin 2026).
+The POS magnetic azimuth of the corona has been calculated regularly within the past
+two decades, such as from the Coronal Multichannel Polarimeter (CoMP, Tomczyk et al.
+2008) and its upgrade UCoMP (Landi, Habbal, and Tomczyk 2016; Tomczyk and Landi
+2019;T o m c z y ke ta l .2021) in the 1074.7 and 1079.8 nm Fe XIII lines. Deriving the coronal
+magnetic ﬁeld strength from the faint Stokes V signal is much more challenging. A mea-
+surement of the LOS magnetic ﬁeld strength from Stokes V (Schad et al.2024) was recently
+obtained using the Cryogenic NIR Spectropolarimeter (Cryo-NIRSP, Fehlmann et al.2023)
+of the Daniel K. Inouye Solar Telescope (DKIST, Rimmele et al. 2020). This measurement
+is the ﬁrst since the technique was demonstrated (Lin, Penn, and Tomczyk2000; Lin, Kuhn,
+and Coulter 2004) more than two decades ago. In the next few years, a new balloon-borne
+instrument called the Coronal Spectropolarimeter for Airborne Infrared Research (COR-
+SAIR, Samra et al. 2021) will complement these ground-based observatories by providing
+uninterrupted, high-altitude, spectropolarimetric measurements of the coronal emission up
+to one solar radius from the disk. CORSAIR seeks to be the ﬁrst to make continuous mea-
+surements of the global coronal Stokes V over a month-long solar rotation, a goal that poses
+signiﬁcant technical challenges. Not only does the instrument have to achieve a particular
+sensitivity to detect Stokes V signals, but it also has to be calibrated accurately enough so
+that the uncertainty in the recontructed Stokes vectors is limited by photon noise and not
+calibration errors.
+To measure the Stokes vectors, spectropolarimeters modulate the incoming intensity sig-
+nal by changing the optical state of the polarimeter to encode the linear and circular polariza-
+tion information in the intensity modulation, and recover the input Stokes vector by inverting
+the modulation process (e.g. del Toro Iniesta and Collados 2000). To achieve photon-noise-
+limited measurements of the Stokes vectors, polarimeter systematics must not limit the ac-
+curacy of the measured Stokes vectors. It is thus crucial to robustly calibrate the modulation
+sequence of the polarimeter.
+Current spectropolarimeter calibration algorithms such as those for UCoMP (e.g. Tom-
+czyk et al. 2008, Section 4) and Cryo-NIRSP (e.g. Harrington et al. 2023, Section 2.7) op-
+timize an objective function to compute point-estimates of the best ﬁtting parameters to the
+
+ProbabilisticCalibrationforCORSAIR Page3of29    41 
+Figure1 Schematic Diagram of
+the CORSAIR Polarimeter.
+Infrared light from the solar
+corona has an incident
+polarization of S
+in (left) and is
+sent through the polarimeter with
+a known modulation scheme,
+consisting of a rotating waveplate
+(WP) and a ﬁxed linear polarizer
+(LP). The detector measures the
+output modulated intensity I
+out.
+model. These methods cannot directly quantify the calibration uncertainty on these parame-
+ters, and can only compute them externally through other metrics. The UCoMP calibration
+procedure (see Appendix A) performs a Monte Carlo simulation on samples of measured
+Stokes vectors to compute a response matrix that characterizes how well the calibration per-
+forms on recovering the true Stokes vectors, and enforces that the calibration routine meet
+the error requirements on this matrix. Likewise, Cryo-NIRSP’s calibration meets the error
+requirements based on an error matrix that is satisﬁed by ﬁtting many parameters during the
+calibration sequence (e.g. Harrington et al. 2023, Section 2.8).
+In this paper, we present a novel Bayesian model for spectropolarimeters and a cor-
+responding probabilistic calibration procedure that computes the joint distribution of the
+parameters rather than point-estimates. Existing work in probabilistic calibrations of po-
+larimeters has seen success in capturing the uncertainty of the calibration process through
+Mueller Matrix entries (e.g. Suárez-Bermejo et al.2024). We extend on this work by predict-
+ing the uncertainty in the parameters of a Mueller Matrix model, and carry these distribu-
+tions through downstream computations to explicitly quantify the contributions of calibra-
+tion uncertainty towards the Stokes vectors and the magnetic ﬁeld estimates. In Section 2,
+we provide a background on spectropolarimetric inversion and magnetic ﬁeld estimates. In
+Section 3, we present our Bayesian model of the polarimeter and the calibration procedure
+to learn the joint distribution of the parameters. In Section 4, we show the robustness and
+accuracy of this calibration procedure using theoretical simulated data, and the propagation
+of the calibration uncertainties in downstream distributions of Stokes vectors and magnetic
+ﬁeld estimates. Finally, in Section 5 we test the convergence and accuracy of the calibration
+procedure on a lab prototype of the CORSAIR polarimeter.
+2. CoronalSpectropolarimetry
+Measuring the full polarization state of light with photons is a challenging problem, since
+detectors can only directly measure intensity. Spectropolarimeters are designed to transform
+information of the polarization state of incident light into a modulated intensity output that
+detectors can measure: by inverting the modulation scheme, the incident polarization state
+can be recovered.
+Figure 1 shows a schematic diagram of the CORSAIR Polarimeter, consisting of a wave-
+plate (WP) and a linear polarizer (LP). The rotating waveplate modulates the polarization
+state of the incident light, injecting information of the linear and circular polarization into
+the output modulated intensity. The beam is then sent through a spectrograph (not shown)
+and then recorded on a detector array.
+Assuming an ideal polarimeter and an ideal measurement setting, we can exactly model
+both the forward and inverse process using Mueller calculus (e.g. Goldstein and Chipman
+
+   41 Page4of29 A.Hsuetal.
+1990; Tomczyk, Stoltz, and Seagraves 1991; del Toro Iniesta and Collados 2000; Tomczyk
+et al. 2010), where the polarization of light is a Stokes vector and optical elements are matrix
+operators. We can model the polarimeter matrix operatorP as a combination of the Mueller
+matrices of the WP and the LP:
+Sout = P(θ,ϕ)Sin = MLPMWPSin, (1)
+where θ is a vector of angles that determine the orientation of the WP and LP, and ϕ is the
+retardance of the WP. Since the detector only measuresIout, the ﬁrst element ofSout, only the
+ﬁrst row of P is relevant, denoted as P0. As the waveplate θ rotates to discrete modulation
+states, the forward model P0(θ,ϕ) will change. Given n modulation states {θi}n
+i=1, we can
+construct an n by 4 modulation matrix ℳ that gives us the modulated intensity output by
+stacking P0 at each state:
+⎡
+⎢⎢⎢⎣
+P0(θ1)
+P0(θ2)
+...
+P0(θn)
+⎤
+⎥⎥⎥⎦ × Sin =
+⎡
+⎢⎢⎢⎣
+Iout,1
+Iout,2
+...
+Iout,n
+⎤
+⎥⎥⎥⎦ (2)
+ℳ × Sin = Imeas. (3)
+This is exactly the forward model of the polarimeter over one modulation period that
+maps the input Stokes vector Sin to a vector of measured modulated intensities Imeas.T h e
+inverse model is then the demodulation matrix 𝒟of the system which is the pseudoinverse
+of ℳ :
+˜Sin =𝒟Imeas = (ℳ T ℳ )−1ℳ T Imeas. (4)
+Since the spectrograph disperses the light onto the array, we can subsequently compute
+the incident polarization state as a function of wavelength, Sin(λ). The Stokes proﬁles can
+then be used to estimate the LOS strength and POS azimuth of the coronal magnetic ﬁeld.
+The magnetic azimuth Φ
+B can be computed using the wavelength-integrated linear polar-
+ization components Q and U:
+ΦB = 1
+2 arctan
+(︃U
+Q
+)︃
+. (5)
+The LOS ﬁeld strength BLOS, in the weak ﬁeld approximation, is a proportionality con-
+stant between the spectral intensity derivative and the wavelength-resolved circular polar-
+ization V( λ ):
+V( λ )= μ
+B
+hc λ2geff𝒦BLOS
+∂I
+∂λ, (6)
+where μB is the Bohr magneton, h is Planck’s constant, c is the speed of light, λ is the
+wavelength, geff is the effective Landè factor of the transition, and 𝒦 is a correction for
+atomic alignment (Casini and Judge 1999; Lin and Casini 2000; Judge et al. 2001). We can
+solve for the best-ﬁt BLOS using linear least-squares.
+
+ProbabilisticCalibrationforCORSAIR Page5of29    41 
+3. BayesianCalibration
+3.1. Motivation
+In practice, the exact form of the demodulation matrix 𝒟 is unknown: instrument-speciﬁc
+systematics, optical imperfections such as partial polarization, birefringence, depolariza-
+tion, and various sources of measurement and alignment noise can all cause the theoretical
+Mueller matrix model to deviate from the ground truth polarimeter. Thus, practical models
+of
+𝒟 have free parameters that are calibrated to capture all of these sources of deviations.
+Contrary to performing spectropolarimetry, where 𝒟is known and the modulated intensity
+signal is measured to recover the unknown incident Stokes vectorSin, calibrating a polarime-
+ter requires a known Stokes vector input and measuring the output intensity to estimate 𝒟.
+Generating a known Stokes vector input requires placing known polarization optics in front
+of the polarimeter, but in general these are not perfectly understood and need to be simulta-
+neously calibrated.
+Current standard techniques use numerical optimization subroutines to solve for a set
+of best parameters for
+𝒟 with respect to an objective function. For example, the UCoMP
+spectropolarimeter (Tomczyk et al. 2008) solves for the parameters of both the calibration
+optics in front of the polarimeter and the demodulation matrix by minimizing the L2-norm
+of the forward model Stokes vectors generated by the calibration optics and the inverse
+reconstructed Stokes vectors from a bootstrapped estimate of
+𝒟(see Appendix A for more
+details). These techniques may give different solutions in the parameter space based on the
+stability of the numerical algorithms used or computational random variance. They also
+require external metrics post-calibration to quantify the uncertainty of the parameters and to
+validate the performance of
+𝒟. Finally, since 𝒟 depends on the modulation scheme itself,
+the calibration output is limited to a speciﬁc modulation sequence that has to be enforced
+during spectropolarimetric measurements.
+In this section, we will present a novel Bayesian model of the polarimeter and a corre-
+sponding statistical calibration algorithm that quantiﬁes the calibration uncertainty of the
+solved parameters and propagates that to downstream estimates of the Stokes vectors and
+the magnetic ﬁelds. This method not only provides a robust convergence of parameters and
+their uncertainties, but is also independent of the modulation scheme used in downstream
+measurements.
+3.2. ProbabilisticModelsforPolarimeters
+Any existing parametric model of 𝒟, deﬁned by some set of free parameters 𝝎, can be
+mapped to an analogous probabilistic model by replacing the parameters 𝝎 with a joint
+probability distribution p(𝝎) over the same support: this new model uses an analogous dis-
+tribution p(𝒟) instead of a point-estimate.
+Existing calibration algorithms start the parameter search at some initial value𝝎0 and use
+calibration data C to solve for point-estimates 𝝎∗ once the optimization routine converges,
+or equivalently, a shiftΔ𝝎 = 𝝎∗ − 𝝎0. Analogously, calibrating a probabilistic model in the
+Bayesian formulation starts the parameters at some prior distribution p0(𝝎),a n ds o l v e sf o r
+a distribution shift by computing the likelihood of the data collected p(C|𝝎). The posterior
+distribution p(𝝎|C) on the parameters can then be computed from the likelihood as follows:
+p(𝝎|C) ∝ p(C|𝝎)p0(𝝎). (7)
+
+   41 Page6of29 A.Hsuetal.
+Figure2 Schematic Diagram of the calibration setup for the CORSAIR Polarimeter. Unpolarized lightSlamp
+from a lamp is sent through calibration optics to produce a known Stokes vector Sin. The polarimeter is then
+modulated to produce an output intensity signal Iout, which is used to estimate the parameters ω. In practice,
+w may also encompass imperfections in Slamp, such as deviations dQ and dU in Stokes Q and U.
+Figure 2 displays a schematic diagram of the CORSAIR polarimeter calibration. A cal-
+ibration unit, consisting of a linear polarizer (LP) and a waveplate (WP), is placed in front
+of the polarimeter to generate known Sin calibration Stokes vectors. The detector measures
+signal outputs Iout corresponding to different polarimeter conﬁgurations, and solves for the
+most statistically likely distribution of the free parameters.
+The schematic model can be mapped to a theoretical Mueller matrix forward model
+M(𝜽,𝝎), where the calibration unit (CU) and polarimeter (Pol) are represented by Mueller
+matrices that are functions of the orientation angle and free parameters to be calibrated, such
+as the birefringence, diattentuation, and physical offsets from the alignment procedures. The
+four orientation angles (two from CU and two from Pol) represent the state 𝜽 of the system,
+while the free parameters are stored in the vector 𝝎. In other words, our model M maps a
+polarimeter conﬁguration and a speciﬁc 𝝎 to an output measured intensity. The Bayesian
+model is constructed under the assumption that the measured intensity is Gaussian about the
+forward model output:
+I
+i = M(𝜽𝒊,𝝎) + σI ξi, (8)
+where Ii is the measured intensity from a speciﬁc model conﬁguration 𝜽𝒊, ξi ∼ 𝒩(0, 1) is
+a normal random variable with mean 0 and variance 1, and σI is a single, additional free
+parameter that represents the effective intensity measurement uncertainty.
+The Gaussian noise model is justiﬁed by the high signal-to-noise ratio achievable during
+calibration, for which the true Poisson photon noise is well-approximated by a normal dis-
+tribution. The σI parameter is an effective noise parameter that absorbs photon noise and all
+unmodeled noise sources that are propagated through the nonlinear forward modelM(𝜽,𝝎).
+Given the uniform exposure conditions and similar intensity scales across modulation states,
+a single σ
+I is the most natural choice that provides a concise and sufﬁcient description of the
+residual intensity scatter. Appendix C demonstrates that in the limit of pure photon noise,
+the inferred σI from our calibration accurately recovers the known noise level.
+During calibration, we adhere to this forward model assumption and collect data by rotat-
+ing the system to different conﬁgurations and measuring the output intensity. The collected
+data is thus a set of N measurements C ={ (Ii,𝜽i)}N
+i=1. Assuming i.i.d. data, the likelihood
+is given by
+P(C |𝝎,σI ) =
+N∏︂
+i=1
+1√︂
+2πσ2
+I
+exp
+[︃
+− (Ii − M(𝜽i,𝝎))2
+2σ2
+I
+]︃
+. (9)
+We deﬁne all our free parameters in𝝎 as physical offsets and imperfections in the system,
+and are thus independent from each other (for example, the retardance of the polarimeter
+
+ProbabilisticCalibrationforCORSAIR Page7of29    41 
+waveplate should not depend on that of the calibration waveplate). With these assumptions,
+the full log-posterior distribution of the free parameters post-calibration is given by
+logp(𝝎,σI |C) ∼ logp0(𝝎,σI ) − 1
+2σ2
+I
+N∑︂
+i=1
+[Ii − M(𝜽i,𝝎)]2 , (10)
+where logp0(𝝎,σI ) is a parameter-dependent log-prior that we set before the calibration.
+3.3. GenerativeModelSummary
+For clarity, we will summarize the generative model used throughout the work explicitly. For
+a polarimeter and calibration unit conﬁguration 𝜽i and set of free parameters 𝝎, the mea-
+sured intensity Ii is generated by a deterministic Mueller-matrix forward model M(𝜽i,𝝎)
+plus an additive noise term (Equation 8). We assume i.i.d. Gaussian noise with variance σ2
+I
+for measurements, leading to the likelihood (Equation 9) and the posterior (Equation 10).
+Independent priors are placed on each physical parameter 𝝎 and intensity uncertainty σI
+(Table 2), with supports motivated by physical tolerances (Table1).
+3.4. SpectropolarimetricBayesianInference
+Solving for the log-posterior of the free parameters during calibration provides a powerful
+tool for downstream inference of the Stokes vectors and the magnetic ﬁeld. During ob-
+servation, the calibration unit is removed and the data collected is a function of only the
+state of the polarimeter and the output modulated intensity. Given the modulation scheme
+of the observation, the log-posterior log p(𝝎,σ
+I |Ccal) can be mapped to a distribution of
+the demodulation matrix log p(𝒟|Ccal ). Equations 4–6 can then be used to produce poste-
+rior predictive distributions of the estimated Stokes vector and the magnetic ﬁeld parameters
+p(Sin|Ccal,C obs) and p(B|Ccal,C obs), respectively. The distributions are conditioned on both
+the calibration data Ccal as well as the observation data Cobs, with the parameter 𝝎 depen-
+dency integrated out.
+In practice, storing and using the full log-posterior of the parameters is unfeasible, largely
+due to the complex structure of the theoretical form and the high dimensional parameter
+space. Thus, we estimate the posterior distribution p(𝝎,σ
+I |Ccal) deﬁned by Equations 8-10
+using Hamiltonian Monte Carlo (HMC) with the No-U-Turn Sampler (NUTS) to estimate
+the posterior. This is a gradient-based Markov chain Monte Carlo (MCMC) method that di-
+rectly targets the posterior implied by our assumed Gaussian measurement model, sampling
+the posterior by simulating Hamiltonian dynamics on random walkers to produce represen-
+tative samples of the landscape over large chains (e.g. Brooks et al.2011; Hoffman and Gel-
+man 2014). The NUTS algorithm alters the original HMC algorithm by introducing adaptive
+path lengths that terminate if the walker makes a U-turn: this not only removes the need to
+manually set a path length, but it also more efﬁciently explores the posterior geometry and
+improves the mixing and convergence of the sampler.
+4. SimulationResults
+4.1. CORSAIRSimulationModel
+We validate our Bayesian calibration routine by simulating a model of CORSAIR and the
+data collection process. This allows us to specify and vary sources of noise, and compare
+
+   41 Page8of29 A.Hsuetal.
+Table1 Table of the free parameters𝝎 in our calibration model. We select physically-independent parameters
+and characterize imperfections on nominal values of these parameters. dQ and dU represent slight linear
+polarizations in the source lamp. dϕCU and dϕPol represent deviations from expected retardance values of
+the Calibration Unit and Polarimeter waveplates. dθCU and dθPol represent physical offsets from imperfect
+alignment of the waveplates. Ranges of tested values are listed in the rightmost column.
+Param Description Range
+dQ Lamp Q Imperfection [0, 0.05] of Lamp I
+dU Lamp U Imperfection [0, 0.05] of Lamp I
+dϕCU CU WP ϕ Imperfection [0, 1] radians
+dϕPol Pol WP ϕ Imperfection [0, 1] radians
+dθCU CU WP Offset [0, 0.05] radians
+dθPol Pol WP Offset [0, 0.05] radians
+the calibration results with ground truth parameters that would otherwise not be known in a
+real lab prototype.
+The CORSAIR calibration setup is modeled using a Mueller calculus representation of
+Figure 2, with six free parameters (𝝎 is a vector of length 6) that capture various optical im-
+perfections within the system, as described in Table1. The parameters are selected such that
+they are physically independent of one another, and describe realistic imperfections within
+the system that are expected in a practical setup. We introduce slight linear polarization ele-
+ments dQ and dU in the source lamp, imperfections dϕ
+CU, dϕPol in the expected waveplate
+retardance angles of both the Calibration Unit and Polarimeter, and physical offsets dθCU,
+dθPol in the waveplates that arise from imperfect alignments. Because these parameters 𝝎
+are physically independent, they are separately identiﬁable during the calibration and result
+in meaningful estimates. In practice, adding more parameters will need careful veriﬁcation:
+parameters that are highly correlated may result in data ﬁts that are unphysical. For example,
+having multiple angle offsets as free parameters for both the LP and WP may be redundant
+and introduce symmetries that the data cannot break. Likewise, adding a lamp V imperfec-
+tion is unnecessary as the ﬁrst CU LP is insensitive to the ciruclar polarization.
+To simulate data collection, we set up a ground truth model of the Calibration Unit and
+Polarimeter with ﬁxed parameters, and collect data by rotating the model to different states
+and recording the measured output intensity. While real-time usage of the polarimeter re-
+quires a speciﬁc modulation scheme, we choose to sample random states during calibration
+since we are estimating fundamental parameters and wish to break symmetries that may
+otherwise be hidden in particular modulation schemes. Realistic sources of Gaussian mea-
+surement noise in both the rotation angles of the optics and the measured intensity are added.
+The data is then fed into the calibration routine to compute a posterior distribution estimate
+of the parameters (the calibration routine has no access to the ground truth parameters.) The
+posterior distribution is saved via NUTS samples as implemented in the PyMC package
+(e.g. Abril-Pla et al. 2023), which are used to compute downstream estimates of Stokes and
+magnetic ﬁeld parameters during simulated observations.
+4.2. PosteriorDistributionofParameters
+We test the Bayesian routine with our simulation pipeline using 50 calibration data samples.
+This number was selected based on numerical estimates of the MCMC posterior conver-
+gence (see Appendix B for more details). Figure 3 shows a corner plot of the posterior
+
+ProbabilisticCalibrationforCORSAIR Page9of29    41 
+Figure 3 Corner plot for a calibration experiment on the simulated CORSAIR model. The diagonal plots
+show a kernel density estimate of the marginalized posterior density of the 6 optical parameters 𝝎 and the
+estimated intensity uncertainty σI , with the ground truth value (dashed red), the 94% highest density in-
+terval HDI (shaded blue), and the traditional point-estimate (dashed blue). The off-diagonal plots show the
+2D projected posterior distributions, using Hamiltonian Monte Carlo NUTS samples to estimate the posterior
+density. We see that the calibration produces a well-constrained posterior over the parameters, with uncertain-
+ties consistent with ground truth. The calibrated posterior mean is also in close agreement to those predicted
+by the baseline non-probabilistic model. In addition, the minimal ellipticity of the projected densities indi-
+cates a largely independent parameter space.
+distribution of the parameters computed by the Bayesian calibration routine. We plot a ker-
+nel density estimate, or KDE, (blue) of the true distribution using a Gaussian smoothing
+kernel on a histogram of the MCMC samples. The diagonal shows the marginalized prob-
+ability distribution for each parameter, while the off-diagonal plots are the pairwise 2-D
+projections of the parameters. We see that the ground truth values (dashed red) agree with
+the 94% highest density interval (HDI) spread (shaded blue) of the marginalized probabil-
+ities: the HDI is a Bayesian credible interval, stating that there is a 94% chance that the
+true parameter value lies within the interval after observing calibration data. It is the highest
+
+   41 Page10of29 A.Hsuetal.
+Table 2 Summary table of parameter values. The GT column is the ground truth value for the simulation
+model during data collection. The calibration model parameters are initialized to the prior given by the p0
+column, either U(min, max) for a uniform or HN(μ,σ) for half-normal. The post calibration center and
+spread of the posterior is given by the pest column.
+Param GT p0 pest
+dQ 0.0314 U(−0.1, 0.1) 0.0319+0.0007
+−0.0007
+dU 0.0112 U(−0.1, 0.1) 0.0111+0.0008
+−0.0009
+dϕCU 0.152 U(−1, 1) 0.1515+0.0016
+−0.0017
+dϕPol −0.384 U(−1, 1) −0.3852+0.0020
+−0.0018
+dθCU −0.034 U(−0.1, 0.1) −0.0341+0.0005
+−0.0006
+dθPol 0.022 U(−0.1, 0.1) 0.0217+0.0004
+−0.0004
+σI – HN( 0, 0.05) 0.0006+0.0001
+−0.0001
+density interval in that all points outside the shaded region have a lower posterior probability
+density than those within. Because the ground truth values for all 6 parameters lie within the
+94% HDI, it is a strong indication that the model learns a well-constrained posterior over
+the calibration parameters, with uncertainties consistent with ground truth. We also include
+a traditional point-estimate (dashed blue) for parameters predicted by the calibration model
+used by UCoMP, and we see close agreement between our recovered posterior and the base-
+line results. Because the baseline model only models and predicts the calibration optics and
+treats the polarimeter as a black box, only calibration optics parameters have a baseline
+estimate. Please refer to Appendix A for details on the baseline calibration algorithm.
+Additionally, because the ground truthσ
+I is a complex combination of both angle uncer-
+tainty through the forward model and photon noise, we do not have a deﬁnitive ground truth,
+and treat the recovered σI posterior as an additional output of our model. We also tested the
+simulated data with only photon noise, for which we have a deﬁnitive ground truth, and
+showed that the model could recover the value of σ
+I . Please see Appendix C for a detailed
+discussion on this.
+Table 2 summarizes the ground truth parameter values, the prior p0, the posterior mean
+pest, and 94% HDI values. The prior support is selected based on practical upper and lower
+bounds on these imperfections. All parameters have a uniform prior ( U), with the excep-
+tion of the σI parameter which has a half-normal prior ( HN ). The ground truth values in
+the ﬁrst column agree with the posterior mean and HDI interval in the last column. Given
+uniform distributions for these priors, the calibrated Gaussian-like peaks in posterior are an
+indication that the priors are not dominating, and the posterior is data-driven. With the peaks
+centered near the truths, we have a posterior that is locally identiﬁable, in that the calibra-
+tion data is able to pin down a unique solution and break any degeneracies. In this regime,
+NUTS sampling works very effectively to quickly capture the posterior, and our Bayesian
+calibration routine becomes very robust.
+4.3. PosteriorPredictiveChecks
+Before propagating the calibrated posterior to downstream Stokes vectors and magnetic-
+ﬁeld estimates, we verify that the inferred generative model reproduces the calibration data
+using posterior predictive checks (PPCs). To do so, we take the modulation states {𝜽
+i}N
+i=1
+
+ProbabilisticCalibrationforCORSAIR Page11of29    41 
+Figure4 Posterior predictive checks for the calibrated posterior. The left panel shows the reconstructedIpred
+plotted against the calibration data Iobs for all 50 samples. The blue dot indicates the posterior predictive
+median, while the black bars indicate the 94% PPI. A magniﬁed region is shown on the bottom left for
+visual clarity. The narrow ﬁt indicates that the generative model with inferred parameters reproduces the
+calibration data within the expected predictive uncertainty. The right panel shows the residual plotted against
+I
+pred, with the 94% PPI shaded in red. The residuals show no discernible structure or intensity dependence,
+indicating that the calibration model learns the dominant systematic effects. The 2/50 samples outside the PPI
+are consistent with statistical expectation.
+of the calibration data, and reproduce a distribution of Ipred using MCMC samples of the
+posterior p(𝝎,σI |Ccal), and see if it matches the observed data {Ii}N
+i=1.
+Figure 4 shows posterior predictive checks for the calibration intensities. The left panel
+shows the reconstructed Ipred plotted against the observed calibration dataIobs for all 50 cal-
+ibration states, with the Ipred = Iobs line dotted in red. Each point summarizes the full poste-
+rior predictive distribution (PPD)p(Ipred|Ccal) obtained by marginalizing over the calibrated
+parameter posterior. The blue marker indicates the posterior predictive median, and the black
+bars indicate the 94% posterior predictive interval (PPI), computed as the 94% HDI of the
+PPD. The PPIs are narrow, which is expected as it reﬂects the high SNR used in the simu-
+lated calibration measurements. A magniﬁed portion of the plot (around 0.24 <I
+pred < 0.27)
+is shown on the bottom right to make the PPIs more visible. Overall, the close agreement
+between Ipred and Iobs demonstrates that the generative model with the inferred parameters
+reproduces the calibration data within the expected predictive uncertainty.
+The right panel shows the residuals r = Iobs − Ipred plotted against Ipred. Under the as-
+sumed generative model, the residuals should be consistent with unstructured Gaussian noise
+if the calibrated model accounts for all the systematic effects. Indeed, we observed no struc-
+ture or intensity dependence in the residuals, indicating that the calibration model captures
+the dominant systematic effects. The region shaded in red is the 94% PPI of the residuals
+computed from the inferred noise parameter σ
+I : out of 50 samples, two fall outside this
+interval, consistent with statistical expectations of three (50 × (1 − 0.94) = 3). Together,
+these two diagnostics further conﬁrm that the calibrated posterior provides a good descrip-
+tion of the calibration data. See AppendixD for more posterior predictive checks on a larger
+calibration dataset.
+We then compute two downstream metrics that further validate the reconstruction per-
+formance of the Bayesian calibration procedure. First, we compute the log-posterior of the
+demodulation matrix log P(
+𝒟|Ccal) for a uniformly rotating modulation scheme sampling
+measurements at π/8 intervals (the CORSAIR modulation scheme). In Figure 5,w es h o w
+the posterior distributions for all the entries of the demodulation matrix, approximated by
+a Gaussian kernel density estimate (blue) and the corresponding 94% HDI (shaded blue).
+
+   41 Page12of29 A.Hsuetal.
+Figure 5 Posterior predictive distribution of the demodulation matrix recovered from the Bayesian calibra-
+tion. Each matrix entry shows a kernel density estimate of the posterior (blue) using the MCMC samples of
+the log-posterior, along with the 94% HDI interval (shaded blue), computed for a modulation scheme of eight
+evenly-spaced intervals from 0 toπ. The ground truth (dashed red) and the traditional point-estimate (dashed
+blue) are plotted in vertical lines. We see that across the 32 entries, 30 of them (approximately 94% as ex-
+pected) have the ground truth within the HDI, indicating that our Bayesian calibration algorithm captures the
+spread of the values due to calibration uncertainties and offers more information than a point estimate.
+Alongside the KDE we also show the ground truth value (dashed red) as well as the baseline
+point estimate (dashed blue). On average, we ﬁnd an RMS Z-score value of 1.298 across all
+32 matrix entries, indicating that our model is slightly under-conﬁdent and thus conserva-
+tive, and the posterior can be made tighter with more samples or a more optimized sampling
+procedure. However, we ﬁnd that exactly 2 out of the 32 (93 .75%) ground truth values fall
+out of the 94% credible interval, which is a very strong indication that our model is capturing
+the true value at the expected frequency.
+Second, we compute the log-posterior of the error matrix logP(
+𝒟ℳ∗|Ccal), which gives
+the distribution of an operator that maps an incident Stokes vector Sin onto the Polarimeter
+to the reconstructed Stokes vector Sest:𝒟ℳ∗Sin = Sest. This operator is computed by taking
+the experimentally recovered demodulation matrix𝒟and multiplying it by the ground truth
+modulation matrix ℳ ∗. In practice, to estimate this posterior distribution we take each of
+the MCMC samples of𝒟and multiply it byℳ ∗.I nT a b l e3, we show the posterior mean of
+the error matrix entries with the 94% HDI uncertainties. For an ideal calibration, the error
+matrix should be the identity matrix. The rows indicate the fractional cross-talk of the input
+Stokes vectors into the elements of the reconstructed Stokes vectors. Our recovered error
+matrix has values close to one on the diagonal and close to zero off the diagonal, indicating
+that we have a calibration that is very close to ideal.
+
+ProbabilisticCalibrationforCORSAIR Page13of29    41 
+Table 3 Posterior mean values of error matrix entries and 94% HDI uncertainties from the Bayesian cali-
+bration. 𝒪(ϵ)indicates machine precision. We see that the diagonal terms are close to one, and off-diagonal
+terms are close to zero, indicating good Stokes vector reconstruction capabilities of the calibrated posterior
+distribution. We can interpret a particular row as the fractional contribution of the input Stokes vector to the
+output Stokes element of that row. We see that the cross talks on the bottom row are negligible, which is
+particularly important as the V signal is much smaller than the Q and U signals.
+Iin Qin Uin Vin
+Iout 1 ±𝒪(ϵ) −0.0007+0.0011
+−0.0010 −0.0002+0.0004
+−0.0004 𝒪(ϵ)
+Qout 𝒪(ϵ) 1.0010+0.0010
+−0.0011 0.0009+0.0014
+−0.0015 𝒪(ϵ)
+Uout 𝒪(ϵ) 0.0009+0.0015
+−0.0014 1.0010+0.0010
+−0.0011 𝒪(ϵ)
+Vout 𝒪(ϵ) 𝒪(ϵ) 𝒪(ϵ) 0.9994+0.0010
+−0.0008
+4.4. UncertaintyQuantiﬁcationoftheStokesVectorsandMagneticField
+Measurements
+We assess the downstream performance of the Bayesian calibration results by testing the
+method on simulated spectropolarimetric measurements to reconstruct Stokes and magnetic
+ﬁeld values. Our data consist of LOS-integrated Stokes vectors simulated using the sec-
+ond version of the Coronal Line Emission (CLE) code (e.g. Judge and Casini 2001; Judge,
+Low, and Casini 2006; Judge 2007). This code ingests 3D distributions of electron den-
+sity, temperature, magnetic ﬁeld, etc. and uses atomic data from CHIANTI (e.g. Dere et al.
+1997, 2019) to generate LOS-integrated full Stokes vector observations for coronal emis-
+sion lines. The 3D data is provided by the Magnetohydrodynamics Around a Sphere (MAS)
+model from Predictive Science, Inc. (PSI) (e.g. Miki ´ce ta l . 2007; Lionello, Linker, and
+Miki´c 2008).
+The ﬁrst row of Figure 6 shows the spectropolarimetric data synthesized using CLE 2.0
+and fed into our calibration model. The second row shows the Stokes vectors as a function of
+the wavelength at one particular pixel of the image. This dataset cube S
+GT spans 400 × 400
+pixels over 4 × 4 solar radii in the spatial domain and 15 pixels in the spectral domain,
+enough to cover the line proﬁle out to ∼ 3σ.
+To test our calibration, we send these measurements pixel-wise through the simulated
+polarimeter with ground truth calibration parameters to simulate the modulated intensity
+observations 𝒞obs . The observation exposure rates, which set the Poisson photon noise, are
+30 seconds for I , 10 minutes for Q and U, and 1 hour for V . These exposure times are
+selected based on experimental estimates of the SNR strength needed to reconstruct down-
+stream magnetic ﬁeld estimates, and what we expect to need for actual CORSAIR data. We
+then take our Bayesian calibration model and use the log-posterior distribution of the de-
+modulation matrix log P(
+𝒟|𝒞cal ) (see Figure 5) to invert the measured modulated intensity
+to recover the log-posterior of the input Stokes vector log P(Sest |𝒞cal ,𝒞obs ). We then com-
+pute statistical metrics on this distribution and compare our results with SGT . In practice,
+the computation of these log-posteriors is done using MCMC samples from the calibra-
+tion.
+Figure 7 shows sample reconstruction images of the PSI dataset integrated over wave-
+length. The plotted values are globally normalized such that the maximum intensity in the
+ground truth is unity for visual clarity. The ﬁrst row shows the ground truth PSI datasetS
+GT .
+The second row shows the statistical mean values μγ across 160 noisy samples of modu-
+lated intensity observation 𝒞obs : this can be interpreted as a perfect calibration where the
+
+   41 Page14of29 A.Hsuetal.
+Figure 6 Spectropolarimetric measurements generated from the PSI MAS model for Carrington Rotation
+2149, which took place near solar maximum in April 2014. The ﬁrst row shows LOS and wavelength in-
+tegrated images of spectropolarimetric measurements, in photons s
+−1 cm−2 ster−1, in the 3.9 µm Si IX
+emission line generated using CLE 2.0. The second row shows the Stokes vectors as a function of wavelength
+at a particular pixel in photons s
+−1, assuming the effective area and solid angle of CORSAIR. We test the
+reconstruction of these synthesized spectropolarimetric observations using our calibrated polarimeter.
+posterior distribution is a Dirac delta distribution on the ground truth values, and the only
+noise source is due to the Poisson photon noise. The third row shows the statistical mean
+values μc across 160 MCMC samples of the calibration parameter posterior: this is the error
+due to systematics captured by the Bayesian calibration algorithm, independent of photon
+noise.
+The fourth and ﬁfth rows show the mean squared error due to photon noise (MSE
+γ)a n d
+calibration error (MSEc), respectively. The MSE is a good performance proxy for the re-
+construction of Stokes vectors and magnetic ﬁeld estimates because it is an easy-to-interpret
+scalar value that can incorporate different noise sources used in the simulations. Because
+our reconstruction method is not an unbiased estimator of the Stokes vector nor the mag-
+netic ﬁeld, for a given noise source we need to account for both the variance and bias.
+Using calibration error as an example, the overall mean-squared error for the calibration
+noise reconstruction is given by MSE
+c = σ2
+c + b2
+c ,w h e r eσ2
+c is the contribution of the vari-
+ance from the samples, computed over the MCMC samples, and b2
+c is the mean-squared
+bias given by b2
+c = (GT − μc)2. By displaying the MSE on the same color scale, we see
+that across all four Stokes elements, the photon noise MSE is on average larger than the
+calibration error MSE, indicating our calibration noise will not dominate the photon mea-
+surements.
+We can further test the reconstruction of magnetic ﬁeld LOS intensity and azimuth by
+comparing our estimated posterior distributions of these parameters with ground truth val-
+ues from the input dataset. Using Equations 5 and 6, we can map Stokes vector measure-
+ments to the LOS ﬁeld strength B
+LOS and the POS magnetic azimuth ΦB . Figure 8 shows
+reconstructed images of BLOS and ΦB .T h eﬁ r s tr o wGT shows the ground truth values
+
+ProbabilisticCalibrationforCORSAIR Page15of29    41 
+Figure7 Reconstruction of the PSI dataset of the solar corona, with Stokes vectors shown in each column.
+All pixels are normalized such that the maximum value of IGT is unity intensity so that relative comparison
+between panels can be easily made. The exposure times for mock observations are 30 seconds for I ,1 0
+minutes for Q and U, and 1 hour for V , which are approximately the cadences required for a reasonable
+signal. The ground truth GT (ﬁrst row) shows the raw data from the dataset. The second and third rows show
+the estimated mean of the reconstructed stokes vectors with only photon noise ( μγ) and calibration error
+(μc), respectively. The mean squared error due to photon noise ( MSEγ) and that due to calibration error
+(MSEc) are shown on the fourth and ﬁfth rows with the same color scale, with yellow being the largest noise
+scale and violet being the smallest noise scale. We see that across all four Stokes elements, the photon noise
+MSE is on average larger than the calibration error MSE, indicating our calibration noise will not dominate
+the photon measurements.
+computed directly from the ground truth stokes vector dataset SGT (ﬁrst row of Figure 7).
+The second (μγ) and third (μc) rows show the mean reconstruction due to photon noise and
+calibration error, respectively. The fourth and ﬁfth rows show the photon noise and calibra-
+tion error MSE, respectively. Similar to Figure 7, we ﬁnd that for both B
+LOS and ΦB ,t h e
+calibration error MSE is smaller, on average, than the photon noise error, indicating that our
+measurements will not be calibration noise dominated.
+Table 4 contains a summary of key statistical metrics used to evaluate the performance
+of our calibration reconstruction. We are ultimately interested in the contribution of calibra-
+
+   41 Page16of29 A.Hsuetal.
+Figure8 Reconstruction of the
+coronal magnetic LOS intensity
+(left column) and the magnetic
+azimuth (right column). The
+ground truth (ﬁrst row) shows the
+raw data computed from the PSI
+dataset using equations 5 and 6.
+The second and third rows show
+the mean of the reconstructed
+ﬁeld with only photon noise (μ
+γ)
+and calibration error (μc),
+respectively. The photon noise
+and calibration error MSE are
+shown on the fourth and ﬁfth
+rows, respectively. We again
+observe that the photon noise
+dominates our calibration error
+MSE, which indicates that the
+probabilistic calibration produces
+a well-enough calibrated
+polarimeter.
+tion uncertainty to the total uncertainty of calibration and photon noise for Stokes vector
+and b-ﬁeld estimates. The ﬁrst row of the table shows the pixel-wise average ⟨⟩of MSEc,
+and the second row shows the pixel-wise average due to photon noise MSEγ. Noting that
+these two noise sources are independent, we compute the aggregate uncertainty as the sum
+MSEc+γ = MSEc + MSEγ. The last row shows the contribution of MSEc to the total ag-
+gregate MSEc+γ, respectively. We see that the contribution from calibration uncertainties is
+minimal in our expected photon noise level, which quantitatively indicates that predictions
+of the Stokes and b-ﬁeld using posteriors calibrated by our Bayesian algorithm reach the
+photon-noise limited regime.
+
+ProbabilisticCalibrationforCORSAIR Page17of29    41 
+Table 4 Summary statistics for the performance of our calibration model on downstream Stokes elements
+(ﬁrst 3 rows) and magnetic ﬁeld estimates (last 3 rows), where⟨⟩denotes a 97% percentile pixel-wise average
+across the coronal pixels. The ﬁrst row is the mean-squared error for the calibration noise estimate MSEc,
+the second row shows the mean-squared error for the photon noise estimate MSEγ, and the last row shows
+the fractional contribution of MSEc to the combined MSEc+γ. We see that the overall contribution of the
+calibration uncertainty to the total uncertainty is very small. This shows that predictions of the Stokes vectors
+and b-ﬁeld using posteriors calibrated by our Bayesian algorithm reach the photon-noise limited regime.
+I (30 s) Q (10 min) U (10 min) V (1 hr)
+⟨MSEc⟩ 1.54 × 10−10 2.39 × 10−10 5.44 × 10−10 2.79 × 10−16
+⟨MSEγ⟩ 2.10 × 10−7 3.13 × 10−8 3.13 × 10−8 3.56 × 10−9
+⟨MSEc⟩/⟨MSEc+γ⟩ 7.35 × 10−4 7.59 × 10−3 1.71 × 10−2 7.84 × 10−8
+BLOS (1 hr) ΦB (10 min)
+⟨MSEc⟩ 4.67 × 10−7 3.47 × 10−7
+⟨MSEγ⟩ 6.14 × 102 1.48 × 10−5
+⟨MSEc⟩/⟨MSEc+γ⟩ 7.61 × 10−10 2.29 × 10−2
+Figure9 Laboratory setup for the CORSAIR polarimeter calibration prototype. The unpolarized lamp source
+(red box) consists of a white light lamp, a 670 nm ﬁlter, an iris, and a 40 mm CaF2 Plano-convex collimator.
+The Calibration Unit consists (green box) consists of a 400 - 700 nm linear polarizer, and a quarter waveplate
+at 670 nm. The Polarimeter (blue box) consists of a 630 nm quarter waveplate, and a 400 - 700 nm linear
+polarizer. Finally, the Detector (purple box) consists of an adjustable focus lens and the detector itself. Both
+waveplates and the Calibration Unit linear polarizer are placed on rotation stages to allow for any angular
+conﬁguration in the system.
+5. LabDemonstration
+5.1. PrototypeSetup
+While the previous section demonstrates that our calibration method is able to recover the
+parameters from a simulated polarimeter, it is equally important to demonstrate that the
+method is robust enough to recover parameters from actual measurements from a lab pro-
+totype with real-world uncertainties. We build a lab prototype to calibrate the CORSAIR
+polarimeter, and demonstrate that our probabilistic calibration method is able to recover
+both the parameters and the calibration uncertainty.
+In Figure 9, we show a labeled image of our laboratory setup. We generate 670 nm
+collimated light from the lamp source (red box) using a broadband lamp, a ﬁlter, and a
+collimator. The light is then passed through a calibration unit (green box) consisting of a
+linear polarizer and a 670 nm quarter waveplate. Light from the calibration unit is then
+fed into the polarimeter (blue box) consisting of a 633 nm quarter waveplate and a linear
+polarizer (the analyzer). Because the actual CORSAIR waveplate retardance changes for the
+
+   41 Page18of29 A.Hsuetal.
+wavelengths planned to be measured, we choose to replicate this by using a 633 nm quartz
+multi-order quarter-waveplate: the retardance of the waveplate at 670 nm is approximately
+2.434 radians predicted by the retardance equation ϕ(λ):
+ϕ(λ)= 2π
+λ Δn(λ)t, (11)
+where Δn(λ) is the material-dependent birefringence computed using the Sellmeier equa-
+tion, and t is the optic thickness. To evaluate Δn , we used Sellmeier coefﬁcients provided
+by Ghosh (1999).
+Finally, we record the modulated intensity using a detector (purple box) consisting of
+a focus lens and a camera. Since we need access to all possible angle conﬁgurations of
+the calibration unit and polarimeter during data collection for calibration, we place both
+waveplates and the calibration unit linear polarizer in rotation mounts. As all polarization
+measurements are made with respect to the polarization axis of the analyzer, we align the
+other elements to the analyzer before proceeding with the calibration.
+5.2. ExperimentalResults
+Unlike calibration experiments using simulated data, laboratory experiments do not have
+access to the ground truth parameter values. Thus, to validate the performance of the cali-
+bration routine from laboratory measurements, we compare the recovered distribution with
+best theoretical estimates of the parameters. In particular, we make sure that the calibration
+is searching for offsets in the parameters that are larger than the various noise sources from
+lab measurements.
+In our demonstration, we try to recover the waveplate retardances for both the calibration
+unit and polarimeter, and the intensity uncertainty from the measurements. Our best theoret-
+ical estimates for the retardances areϕ
+∗
+CU = π/2 for the calibration unit andϕ∗
+Pol = 2.434 for
+the polarimeter, and detector calibrations using 8-bit pixels indicate a noise level of around
+σ
+∗
+I = 0.02 normalized to a reference polarimeter and calibration unit state. Our dataset con-
+sists of 100 samples of random conﬁgurations of the calibration unit and polarimeter and the
+corresponding output intensity, which we feed through our probabilistic calibration pipeline.
+We set our pipeline to have two unknown optical parameters, the waveplate retardance off-
+set of the calibration unit and that of the polarimeter, and the σ
+I intensity uncertainty used
+in Equation 8. To show that our algorithm converges, we initialize the prior mean of these
+unknown parameters to values greater than the angular measurement noise of the prototype
+system.
+In Figure 10, we show the resulting corner plot of the estimated joint posterior, with
+the kde estimates and 94% HDI intervals in blue on the diagonal. Table 5 compares the
+calibrated predictions with our theoretical guesses of the values. We see that the ϕCU distri-
+bution agrees with the theoretical estimate, but our predicted ϕPol and σI are different. We
+can expect our theoretical guess for ϕCU to be fairly accurate, as it is a quarter waveplate
+made speciﬁcally for 670 nm. For ϕPol, the systematic shift from the theoretical ϕS = 2.43
+radians to the inferredϕlab = 2.59 radians is well-explained by the uncertainty in the theoret-
+ical retardance prediction, as shown in the error budget in the next section. Thus, we believe
+our Bayesian calibrated posterior is computing a more accurate estimate of the polarimeter
+waveplate retardance at 670 nm. Finally, while our predicted σ
+I was around 0.02 but the
+recovered one was 0.03, this makes sense, as our theoretical estimate does not account for
+angle measurement noise that can be ampliﬁed after passing it through the Muller matrix
+forward model. Thus, we show that our Bayesian calibration algorithm converges on real,
+noisy data collected from a lab prototype of the CORSAIR polarimeter.
+
+ProbabilisticCalibrationforCORSAIR Page19of29    41 
+Figure 10 Corner plot for a lab calibration experiment on the prototype model. The diagonal plots show
+the marginalized posterior density of the calibration unit and polarimeter unit waveplates ϕCU and ϕPol,
+and the estimated intensity uncertainty σI , with the 94% Highest Density Interval (shaded blue). The off-
+diagonal plots show the 2D projected posterior distributions, using Hamiltonian Monte Carlo NUTS samples
+to estimate the posterior density. There is close agreement between the calibrated estimates and our theoretical
+guesses for these parameters.
+Table 5 Summary table of estimates and theoretical parameter values for the lab demonstration. The Lab
+column indicates the estimated mean and 94% HDI values. The Theory column indicates the theoretical
+estimates for each parameter value. We see that the ϕ
+CU estimate matches our guess, but the other two do
+not. We believe that the theoretical estimate for ϕPol using the retardance equation may not appropriately
+capture the true underlying birefringence of the waveplate, and that our estimate of the intensity uncertainty
+does not include angle measurement noise that could be ampliﬁed through the forward Mueller matrix model.
+Param Lab Theory
+ϕCU 1.5791+0.0540
+−0.0489 1.5708
+ϕPol 2.5872+0.0507
+−0.0476 2.4338
+σI 0.0292+0.0041
+−0.0038 0.02
+
+   41 Page20of29 A.Hsuetal.
+Table6 Error budget summary for the waveplate retardances. Four major contributions and the RSS total are
+provided by the rows for both ϕCU and ϕPol. Columns show both the native uncertainty in units of the noise
+sources, and the corresponding propagated uncertainty in the retardance space. ForϕCU, the dominant source
+is the vendor retardance tolerance at 0.06 radians, while for ϕPol the dominant source is the ﬁlter bandwidth
+uncertainty at 0.390 radians. We ﬁnd that the RSS error for ϕCU is consistent with the posterior predicted
+uncertainty, and that the RSS error forϕPol explains the systematic offset in the posterior mean relative to the
+theoretical estimate.
+ϕCU ϕPol
+Native uncertainty σϕ Native uncertainty σϕ
+Angle Setting 0 .5◦ 0.006 rad 0 .5◦ 0.006 rad
+Vendor Tolerance – 0 .063 rad – –
+Sellmeier Model – – 10 −6 0.009 rad
+Filter Bandwidth 10 nm 0 .007 rad 10 nm 0 .390 rad
+Total (RSS) – 0 .064 rad – 0 .390 rad
+5.3. ErrorBudget
+To further interpret the recovered waveplate retardances from the lab calibration, we con-
+struct an error budget summarizing the dominant sources of uncertainty in the prototype
+setup. Table 6 shows the error budget for four main sources of noise in the rows: the angle
+setting, vendor tolerance, theoretical Sellmeier model, and ﬁlter bandwidth. For each of the
+two parameters, we show both the native uncertainty in the units of the noise source, and
+uncertainty σ
+ϕ propagated to retardance space.
+The angle setting was done by hand using rotation stages with 1◦ tick marks. Therefore,
+we take the angle uncertainty to be 0 .5◦. Propagating this through using MCMC samples
+results in a retardance uncertainty of about 0 .006 radians for both ϕCU and ϕPol. Likewise,
+the vendor tolerance of the CU waveplate is λ/100: converting this to retardance space by
+multiplying by 2π/λgives 2π/100, or around 0.06 radians, which is an order of magnitude
+larger than the angular setting contribution. For the Pol waveplate, since we are not operating
+at the manufacturer-speciﬁed wavelength, we compute the error on the birefringence using
+published comparisons between experimental and calculated values. For quartz, values in-
+dicated by Table 8 of (Ghosh 1999) give an uncertainty of 10
+−6 at 670 nm, and propagating
+this through the retardance equation gives σϕ ≈ 0.009 radians.
+The ﬁlter bandwidth is reported to be 10 nm by the manufacturer, or±5 nm. We compute
+σϕ by using a theoretical error propagation through the retardance equation (see AppendixE
+for more details). For ϕCU, this amounts to 0.007 radians, which is of the same order as the
+angular setting contribution. However, forϕPol the error gives 0.390 radians: the polarimeter
+waveplate is many-waves thick at 670 nm, and thus is sensitive to a small change in the
+wavelength in the range of the ﬁlter bandwidth.
+Finally, we also considered the error from lamp jitter. A live-feed of the source intensity
+during calibration indicates no change in an 8-bit quantization of the lamp measurements,
+which translates to a maximum ADC step error of Δ = 1/255 when pixels are normalized
+to [0, 1]. Assuming uniform distribution for the jitter over the range[−Δ/ 2,+Δ/ 2], the un-
+certainty in intensity space is Δ/
+√
+12, or in our case around 0.0011 in normalized intensity
+units. Since our posterior predicts a σI ≈ 0.03 which is over an order of magnitude larger,
+we conclude that quantization is not a limiting noise source, and do not include it in the RSS
+error budget and let the posterior σ
+I be an effective intensity-noise term that includes this
+effect.
+
+ProbabilisticCalibrationforCORSAIR Page21of29    41 
+We combine the dominant four error contributions in the last row using a root sum
+of squares (RSS), and ﬁnd that the dominant source of error is the vendor tolerance for
+ϕCU,a n dt h eR S Si s0 .064 radians, which is consistent with the posterior predicted un-
+certainty around 0 .05 radians. For ϕPol, we compute an RSS of 0 .390 radians, with the
+dominant contribution from the ﬁlter bandwidth uncertainty. To check if this theoretical
+prediction σϕ,RSS = 0.390 radians is consistent with our experimental posterior uncertainty
+σϕ,post ≈ 0.05 radians, we assume independence in these effects and compute the combined
+uncertainty σcomb =
+√︂
+σ2
+ϕ,RSS + σ2
+ϕ,post, and a corresponding z-score for the systematic shift
+we ﬁnd from the lab calibration:
+z = ΔϕPol
+σcomb
+. (12)
+Taking ΔϕPol ≈ 0.1 radians as the systematic shift computed from Table 5,a n dc o m -
+puting σcomb = 0.393 radians, we get a z-score of 0 .42, indicating the measured systematic
+difference is well-within the combined uncertainty due the error budget RSS and the poste-
+rior. We therefore treat the 0 .1 radians as a systematic offset that is explained by the RSS
+error budget.
+6. Conclusion
+We present a novel Bayesian model for spectropolarimeters and a corresponding proba-
+bilistic calibration algorithm for the CORSAIR polarimeter that is able to propagate cali-
+bration uncertainties through posterior distributions of calibration parameters, Stokes mea-
+surements, and magnetic ﬁeld measurements. The probabilistic model combines existing
+Mueller matrix representations of polarimeters with probabilistic parameters that represent
+physical imperfections we believe to be present in the actual system.
+To calibrate the system, we place a calibration unit in front of the polarimeter to generate
+known polarized light, and collect data consisting of output intensities from the calibration
+unit and polarimeter rotated to different states. The calibration process modiﬁes the initial
+probability distribution of the parameters (prior) into a more likely distribution (posterior)
+based on the collected data. The posterior distribution captures the complex uncertainties
+and covariances between the different parameters that would otherwise be very hard to ex-
+plicitly model.
+We test the accuracy and convergence of our calibration algorithm by using a simulated
+polarimeter and calibration unit to collect data. We ﬁnd that our Bayesian calibration algo-
+rithm is able to converge, and produces a well-constrained posterior over the parameters,
+with uncertainties consistent with ground truth. Posterior predictive checks are done to fur-
+ther validate that the generative model can reproduce the calibration data within the expected
+predictive uncertainty, and learn the dominant sources of systematic effects.
+We further show that the calibration algorithm enables us to propagate the calibration
+error and uncertainties to downstream predictions. Using the posterior distribution of the
+parameters, we are able to compute the distribution of demodulation matrix entries, which
+allows us to further reconstruct the Stokes and the magnetic ﬁeld LOS strength and POS
+azimuth. We test the uncertainty propagation by simulating spectropolarimetric observations
+from a magnetohydrodynamic model of the solar corona. We ﬁnd that the contribution of
+calibration uncertainty towards the reconstructed results is minimal relative to that of the
+photon noise uncertainty, indicating that estimates using our Bayesian calibration are within
+the photon-noise-limited regime.
+
+   41 Page22of29 A.Hsuetal.
+Finally, we test the convergence of our calibration algorithm on lab-collected data from
+a CORSAIR prototype. Our algorithm is able to converge to a posterior distribution that
+has peaks close to theoretical estimates of the parameters, demonstrating that this algorithm
+works on real data. We further validate the statistical consistency of our posterior distribution
+by comparing it to a concise error budget that theoretically predicts the dominant sources of
+noise.
+Future work will be done to reﬁne both the probabilistic model and the calibration pro-
+cess. We plan to add additional parameters, such as diattenuation and birefringence terms
+directly into the Mueller matrix model that more accurately reﬂect optical imperfections
+within the system. Likewise, we plan to use more sophisticated and efﬁcient sampling pro-
+cesses to estimate the parameter posterior. We also plan to further study the combination
+of both photon noise uncertainty and calibration uncertainty in downstream magnetic ﬁeld
+measurements, as opposed to comparing them separately, and reﬁning our calibration algo-
+rithm so that the ﬁnal reconstructed magnetic ﬁeld measurements are photon-noise-limited.
+Additionally, these magnetic ﬁeld reconstructions rely on the POS approximation and do not
+marginalize over line-of-sight integration effects that smooth the complex 3D magnetic ﬁeld
+geometries. Future work can be done to address the systematic biases for LOS-generated
+coronal emission by incorporating a forward model of coronal polarization into the Bayesian
+inference pipeline. Finally, we will apply and reﬁne this calibration procedure towards the
+actual CORSAIR polarimeter once its construction is completed.
+AppendixA: UCoMPCalibrationAlgorithm
+The UCoMP calibration algorithm was designed by Steven Tomczyk, and focuses on re-
+covering the demodulation matrix of the polarimeter by performing a boot-strapped opti-
+mization process to solve for the calibration inputs. First, data is collected and stored. For
+each calibration input generated from the calibration optics, we modulate the polarimeter to
+through n
+mod states to produce varying output intensities. Withncal different inputs, our data
+can be arranged in a Imeas matrix that is nmod × ncal, where each column are the modulated
+intensities for each calibration input.
+In Figure 11, we show a schematic diagram of the iterative calibration process. The input
+unpolarized light is modeled as a Stokes vector Sc, which in theory should be [1, 0, 0, 0]T
+but in reality contains imperfections from the diffuse source. With assumptions about the
+calibration optics, we can then compute the 4×ncal calibration matrix C,w h e r ec o l u m nj is
+the calibration input into the polarimeter that produces the modulated intensities in column
+j of I
+meas.F r o mC we can compute the demoulation matrix of the polarimeter D,w h i c hw e
+then use to back-compute the 4 × ncal calibration matrix labeled as Scal .
+The calibration process minimizes the root-mean-square error between forward model
+calibration matrix C, and the inverse model calibration matrix Scal. The forward model is
+effectively the theoretical model of the calibration optics that produces C from an input
+light source. The inverse model utilizes both C from the forward pass and the calibration
+data Imeas to back-compute C which we will call Scal. The demodulation matrix D,w h i c h
+characterizes the modulation states of the polarimeter, is computed in an intermediate step
+during the inverse model.
+The state space is a 6-dimensional vector θ=[ Q,U,V,ϕ,T,δϕ ],w h e r e[Q,U,V ] are
+the Stokes values of Sc, ϕ is the retardance angle of the calibration retarder, T is the trans-
+mission of the calibration optics, andδϕis the retarder offset. In other words, the calibration
+
+ProbabilisticCalibrationforCORSAIR Page23of29    41 
+Figure11 Schematic diagram of the UCoMP calibration process.
+Figure12 Plot of σp/|μp|,t h e
+uncertainty-to-mean ratio, for
+each parameter as a function of
+|C
+cal|, the number of calibration
+data samples. We see that the
+calibration precision converges at
+around 100 samples, but the
+behavior is well-captured even at
+50 samples.
+process can be formulated as an optimization problem given by
+θ∗ = min
+θ
+∥C − Scal∥2,
+and speciﬁcally for UCoMP the algorithm uses a Powell Minimization scheme to solve
+for the optimal θ∗. In our results in Figure 3, we use a derivative-free optimization algo-
+rithm called the Covariance Matrix Adaptation Evolution Strategy (e.g. Hansen, Müller, and
+Koumoutsakos 2003; Igel, Suttorp, and Hansen 2006;H a n s e na n dR o s2010), but other-
+wise utilize the same optimization strategy as described in this section as the baseline point
+estimates of the parameters.
+AppendixB: FractionalUncertaintyofParameters
+To determine the number of calibration samples needed for a reasonable probabilistic ﬁt, we
+test the Bayesian routine with our simulation pipeline with different amounts of calibration
+data |C
+cal|, and plot the fractional uncertainty for each parameter. The fractional uncertainty
+is the posterior standard deviation divided by the posterior mean with magnitude σp/|μp|,
+and it is a dimensionless measure of the calibration precision for each parameter.
+Figure 12 shows the results for all 6 parameters. We see that most of the convergence be-
+havior is captured within 50 samples, and after 100 samples the change is almost negligible.
+Note that the lamp polarization offsets dQ and dU have a high error: this is expected, as
+they have the weakest identiﬁability among the 6 parameters, but at 50 samples the largest
+
+   41 Page24of29 A.Hsuetal.
+Figure 13 Corner plot for a calibration experiment on the simulated CORSAIR model with only photon
+noise. The diagonal plots show the marginalized posterior density (blue) of the 2 optical parameters dϕPol
+and dϕCU and the estimated intensity uncertainty σI , with the ground truth value (dashed red) and the 94%
+Highest Density Interval (shaded blue). The off-diagonal plots show the 2D projected posterior distributions,
+using Hamiltonian Monte Carlo NUTS samples to estimate the posterior density. We see that that the cali-
+bration model accurately captures the ground truth values of all 3 parameters to the shaded credible interval.
+This experiment demonstrates that the Bayesian calibration algorithm can correctly recover the intensity un-
+certainty from simulated data.
+fractional change (dU ) is already with 5%. In Section 4, we will choose to use 50 calibra-
+tion data samples for our analysis: this captures most of the convergence while also being
+computationally efﬁcient for downstream tasks.
+AppendixC: PhotonNoiseExperiments
+To test whether or not our Bayesian model can learn the intensity uncertainty σI (Equation
+8), we set all other sources of measurement noise added throughout the simulator to zero and
+only add photon noise to the observed modulated intensities. The σI posterior recovered by
+the Bayesian calibration algorithm is thus an estimate of the photon noise we add. In our
+
+ProbabilisticCalibrationforCORSAIR Page25of29    41 
+Figure 14 Posterior predictive checks for the calibrated posterior. The predicted-vs-observed intensity plot
+(top left) shows that the generative model and inferred parameters can reproduce the calibration data within
+the expected predictive uncertainty. The residuals plot (top right) shows that there is no structure or intensity
+dependence of the residuals, indicating that the calibration model learns the dominant systematic effects.
+The residual histogram (bottom left) shows that the normalized residuals are approximately centered at zero
+and consistent with a standard normal distribution. The QQ plot (bottom right) shows that the normalized
+residuals are consistent with the Gaussian noise model assumption, and the slight deviation at the tails are
+consistent with the ﬁnite-sample variability of 100 calibration measurements.
+experiment, we calibrate the system with three free parameters:dϕPol and dϕCU retardances
+(see Table 1 for details), and σI . We set the Gaussian noise to be 0.0001, or a SNR of about
+10000, which we can expect to reach with a reasonable exposure time in the lab. In Figure13,
+we show the resulting corner plot for the recovered posterior with 3 free parameters: we
+see that the HDI interval (shaded blue) of the posterior on the diagonal plots contains the
+ground truth (dashed red) values. More importantly, this experiment shows the ability for the
+Bayesian calibration algorithm to correctly recover σ
+I , which is helpful in scenarios where
+we cannot fully forward model the noise.
+AppendixD: AdditionalPosteriorPredictiveChecks
+In this section, we provide two additional posterior predictive checks along with the Ipred
+vs Iobs and residual plots shown in Figure 4. Together, these diagnostics comprehensively
+validate the predictive data reproduction, residual structure, and noise distribution of the
+posterior predictive abilities of the calibrated Bayesian model.
+
+   41 Page26of29 A.Hsuetal.
+In Figure 14, we show 4 plots that validate the correctness of the calibrated posterior,
+using a larger 100 sample calibration dataset rather than the 50 used in the analysis. For
+this larger dataset, we observe a similar behavior in the top row plots: the I
+pred vs Iobs close
+agreement indicates that generative model is able to reproduce the high SNR calibration
+measurements within the expected predictive uncertainty, and the structureless residuals in-
+dicate that the generative model is able to capture the dominant systematic effects in the
+calibration procedure. The bottom left panel overlays a standard normal distribution on the
+histogram of the residuals, which provides a complementary view of the residuals, show-
+ing that the normalized residuals are approximately centered at zero and consistent with a
+standard normal distribution. Finally, we show a quantile-quantile (QQ) plot in the bottom
+right panel. For most of the range, the normalized residuals are consistent with the Gaussian
+noise assumption, with slight deviations in the tails that are consistent with ﬁnite-sample
+variability of 100 calibration measurements.
+Finally, as an additional quantitative check of the likelihood model, we compute the RMS
+of the calibration residualsr
+i = Iobs,i − Ipred,i normalized by the inferred noise parameterσI :
+RMS
+σI
+=
+√︂
+1
+N
+∑︁r2
+i
+σI
+(13)
+We expect the RMS/σI to be close to unity if the assumed Gaussian noise model ad-
+equately describes the data. Indeed, we ﬁnd that RMS/σI ≈ 0.96: this means that the ob-
+served residual scatter is consistent with the noise level implied by the likelihood model.
+AppendixE: FilterBandwidthErrorPropagation
+To determine the errorσϕ due to ﬁlter bandwidthσλ, we will assume small uncertainties and
+propagate error through a linearization of ϕ(λ):
+σϕ ≈
+⃓⃓⃓⃓
+∂ϕ
+∂λ
+⃓⃓⃓⃓σλ. (14)
+Differentiating Equation 11 and substituting into Equation 14 gives
+σϕ ≈ σλ
+⃓⃓⃓⃓− ϕ(λ)
+λ + 2πt
+λ
+d(Δn(λ))
+dλ
+⃓⃓⃓⃓. (15)
+In our prototype setup, the ﬁlter bandwidth is 10 nm, and assuming a uniform distribution
+over this range, the uncertainty in λ is given by σλ = 10/
+√
+12 nm.
+For ϕCU, we assume that since the optic is a quarter waveplate operating at the designed
+wavelength 670 nm, the deviations due to the birefringence is negligible compared to the
+leading order term ϕ/λ.T h u s ,w i t hσ
+λ = 10/
+√
+12 nm and ϕ(670 nm) = π/2 radians, we get
+an uncertainty of σϕ = 0.007 radians.
+For ϕPol, we evaluate both terms in Equation 15 since the birefringence may change
+signiﬁcantly at 670 nm since the quarter waveplate was originally designed to operate at
+633 nm. The birefringence term Δn =| n
+e − no| is computed using empirically tabulated
+ordinary no and extraordinary ne refractive indices of Crystalline Quartz at 670 nm found on
+the Refractive Index Database (Ghosh 1999). We evaluate Equation 15 with σλ = 10/
+√
+12,
+ϕ(670 nm) ≈ 2.434, and t = 996.11 microns, and numerically evaluate the derivative of
+Δn . We get that the derivative terms is negligible compared to the leading order term ϕ/λ,
+and get an uncertainty of σϕ,Pol = 0.390 radians.
+
+ProbabilisticCalibrationforCORSAIR Page27of29    41 
+Acknowledgments Support for Alan Hsu is provided by a grant from the Brinson Foundation. CORSAIR is
+supported by NASA awards 80NSSC21K0809 and 80NSSC26M0007. This paper is a direct extension on the
+previous work done in Hsu et al. (2025).
+Authorcontributions A.H. wrote the full paper, including the text, ﬁgures, references, and appendices, with
+all other authors contributing by reviewing and providing suggestions to various parts of the manuscript. J.S.
+provided the main guidance for Alan Hsu throughout the research, and largely contributed to the structure of
+the paper, the scientiﬁc context on which the research is conducted, and the implications of having computed
+the calibration uncertainty. S.T. provided the background to existing solar polarimeter calibration methods,
+and particularly helped with the technical aspects of Appendix A (UCoMP calibration). M.K. generated the
+LOS-integrated polarization maps plotted in Figure 5. This data was also used in Section 4 to validate the
+reconstruction of the magnetic ﬁeld values.
+DataAvailability No datasets were generated or analysed during the current study.
+Declarations
+Competinginterests The authors declare no competing interests.
+OpenAccess This article is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives
+4.0 International License, which permits any non-commercial use, sharing, distribution and reproduction
+in any medium or format, as long as you give appropriate credit to the original author(s) and the source,
+provide a link to the Creative Commons licence, and indicate if you modiﬁed the licensed material. You do
+not have permission under this licence to share adapted material derived from this article or parts of it. The
+images or other third party material in this article are included in the article’s Creative Commons licence,
+unless indicated otherwise in a credit line to the material. If material is not included in the article’s Creative
+Commons licence and your intended use is not permitted by statutory regulation or exceeds the permitted
+use, you will need to obtain permission directly from the copyright holder. To view a copy of this licence,
+visit http://creativecommons.org/licenses/by-nc-nd/4.0/.
+References
+Abril-Pla, O., Andreani, V ., Carroll, C., Dong, L., Fonnesbeck, C.J., Kochurov, M., Kumar, R., Lao, J., Luh-
+mann, C.C., Martin, O.A., Osthege, M., Vieira, R., Wiecki, T., Zinkov, R.: 2023, PyMC: a modern, and
+comprehensive probabilistic programming framework in Python. PeerJ Comput. Sci. 9, e1516. DOI.
+Aschwanden, M.J.: 2019, New Millennium Solar Physics, Springer, Berlin. DOI.
+Brooks, S., Gelman, A., Jones, G., Meng, X.-L.: 2011, Handbook of Markov Chain Monte Carlo, Chapman
+& Hall, London. DOI.
+Casini, R., Judge, P.G.: 1999, Spectral lines for polarization measurements of the coronal magnetic ﬁeld. II.
+Consistent treatment of the Stokes vector for magnetic-dipole transitions. Astrophys. J. 522, 524. DOI.
+del Toro Iniesta, J.C., Collados, M.: 2000, Optimum modulation and demodulation matrices for solar po-
+larimetry. Appl. Opt. 39, 1637. DOI. https://opg.optica.org/ao/abstract.cfm?URI=ao-39-10-1637.
+Dere, K.P., Landi, E., Mason, H.E., Monsignori Fossi, B.C., Young, P.R.: 1997, CHIANTI – an atomic
+database for emission lines. Astron. Astrophys. Suppl. Ser.125, 149. DOI.
+Dere, K.P., Del Zanna, G., Young, P.R., Landi, E., Sutherland, R.S.: 2019, CHIANTI—an atomic database
+for emission lines. XV . Version 9, improvements for the X-ray satellite lines. Astrophys. J. Suppl. Ser.
+241, 22. DOI. ADS.
+Fehlmann, A., Kuhn, J.R., Schad, T.A., Scholl, I.F., Williams, R., Agdinaoay, R., Berst, D.C., Craig, S.C.,
+Giebink, C., Goodrich, B., Hnat, K., James, D., Lockhart, C., Mickey, D.L., Oswald, D., Puentes, M.M.,
+Schickling, R., de Vanssay, J.-B., Warmbier, E.A.: 2023, The Daniel K. Inouye Solar Telescope (DKIST)
+Cryogenic Near-Infrared Spectro-Polarimeter. Sol. Phys. 298. DOI.
+Ghosh, G.: 1999, Dispersion-equation coefﬁcients for the refractive index and birefringence of calcite and
+quartz crystals. Opt. Commun. 163, 95. DOI.
+Goldstein, D.H., Chipman, R.A.: 1990, Error analysis of a Mueller matrix polarimeter. J. Opt. Soc. Am. A 7,
+693. DOI. https://opg.optica.org/josaa/abstract.cfm?URI=josaa-7-4-693.
+Golub, L., Pasachoff, J.M.: 2009, The Solar Corona. ADS.
+Hansen, N., Müller, S.D., Koumoutsakos, P.: 2003, Reducing the time complexity of the derandomized evo-
+lution strategy with Covariance Matrix Adaptation (CMA-ES). Evol. Comput. 11,1 . DOI.
+
+   41 Page28of29 A.Hsuetal.
+Hansen, N., Ros, R.: 2010, Benchmarking a weighted negative covariance matrix update on the BBOB-
+2010 noiseless testbed. In: Proceedings of the 12th Annual Conference Companion on Genetic and
+Evolutionary Computation, GECCO ’10, Assoc. Comput. Mach., New York, 1673.DOI.
+Harrington, D.M., Sueoka, S.R., Schad, T.A., Beck, C., Eigenbrot, A.D., de Wijn, A.G., Casini, R., White,
+A.J., Jaeggli, S.A.: 2023, Systems Approach to Polarization Calibration for the Daniel K. Inouye Solar
+Telescope (DKIST). Sol. Phys. 298. DOI.
+Hoffman, M.D., Gelman, A.: 2014, The No-U-turn sampler: adaptively setting path lengths in Hamiltonian
+Monte Carlo. J .M a c h .L e a r n .R e s .15, 1593.
+Hsu, A., Samra, J., Tomczyk, S., Kramar, M.: 2025, A probabilistic calibration procedure for the CORSAIR
+polarimeter. In: Kupinski, M.K., Shaw, J.A. (eds.) Polarization Science and Remote Sensing XII 36,
+SPIE, Bellingham. DOI.
+Igel, C., Suttorp, T., Hansen, N.: 2006, A computational efﬁcient covariance matrix update and a (1 + 1)-
+CMA for evolution strategies. In: Proceedings of the 8th Annual Conference on Genetic and Evolution-
+ary Computation GECCO 453,A C M ,N e wY o r k .
+Judge, P.G.: 2007, Spectral lines for polarization measurements of the coronal magnetic ﬁeld. V . Information
+content of magnetic dipole lines. Astrophys. J. 662, 677. DOI. ADS.
+Judge, P.G., Casini, R.: 2001, A synthesis code for forbidden coronal lines. In: Sigwarth, M. (ed.) Advanced
+Solar Polarimetry – Theory, Observation, and Instrumentation, Astronomical Society of the Paciﬁc Con-
+ference Series 236, 503. ADS.
+Judge, P., Casini, R., Paraschiv, A.R.: 2021, On single-point inversions of magnetic dipole lines in the corona.
+Astrophys. J. 912, 18. DOI. ADS.
+Judge, P.G., Low, B.C., Casini, R.: 2006, Spectral lines for polarization measurements of the coronal magnetic
+ﬁeld. IV . Stokes signals in current-carrying ﬁelds.Astrophys. J. 651, 1229. DOI. ADS.
+Judge, P.G., Casini, R., Tomczyk, S., Edwards, D.P., Francis, E.: 2001, Coronal Magnetometry: a Feasibility
+Study. Technical Report, PB2002-102493; NCAR/TN-466-STR.ADS.
+Kramar, M., Inhester, B.: 2007, Inversion of coronal Zeeman and Hanle observations to reconstruct the coro-
+nal magnetic ﬁeld. Mem. Soc. Astron. Ital. 78, 120. ADS.
+Kramar, M., Inhester, B., Solanki, S.K.: 2006, Vector tomography for the coronal magnetic ﬁeld. I. Longitu-
+dinal Zeeman effect measurements. Astron. Astrophys. 456, 665. DOI. ADS.
+Kramar, M., Lin, H.: 2026, Validation of linear polarization tomographic inversion for the 3D reconstruction.
+Astrophys. J. 997(1), 69. DOI.
+Kramar, M., Lin, H., Tomczyk, S.: 2016, Direct observation of solar coronal magnetic ﬁelds by vector to-
+mography of the coronal emission line polarizations. Astrophys. J. Lett. 819, L36. DOI. ADS.
+Kramar, M., Inhester, B., Lin, H., Davila, J.: 2013, Vector tomography for the coronal magnetic ﬁeld. II.
+Hanle effect measurements. Astrophys. J. 775, 25. DOI. ADS.
+Landi, E., Habbal, S.R., Tomczyk, S.: 2016, Coronal plasma diagnostics from ground-based observations. J.
+Geophys. Res. Space Phys. 121, 8237. DOI.
+Lin, H., Casini, R.: 2000, A classical theory of coronal emission line polarization. Astrophys. J. 542, 528.
+DOI.
+Lin, H., Kuhn, J.R., Coulter, R.: 2004, Coronal magnetic ﬁeld measurements. Astrophys. J. 613, L177.
+Lin, H., Penn, M.J., Tomczyk, S.: 2000, A new precise measurement of the coronal magnetic ﬁeld strength.
+Astrophys. J. 541, L83.
+Lionello, R., Linker, J.A., Miki´c, Z.: 2008, Multispectral emission of the sun during the ﬁrst whole sun month:
+magnetohydrodynamic simulations. Astrophys. J. 690, 902. DOI.
+Miki´c, Z., Linker, J.A., Schnack, D.D., Lionello, R., Tarditi, A.: 1999, Magnetohydrodynamic modeling of
+the global solar corona. Phys. Plasmas 6, 2217. DOI. ADS.
+Miki´c, Z., Linker, J.A., Lionello, R., Riley, P., Titov, V .: 2007, Predicting the structure of the solar corona
+for the total solar eclipse of March 29, 2006. In: Demircan, O., Selam, S.O., Albayrak, B. (eds.) Solar
+and Stellar Physics Through Eclipses, Astronomical Society of the Paciﬁc Conference Series 370, 299.
+ADS.
+Paraschiv, A.R., Judge, P.G.: 2022, Efﬁcient and automated inversions of magnetically sensitive forbidden
+coronal lines: CLEDB – the coronal line emission DataBase magnetic ﬁeld inversion algorithm. Sol.
+Phys. 297, 63. DOI. ADS.
+Parker, E.N.: 1979, Cosmical magnetic ﬁelds: Their origin and their activity.ADS.
+Riley, P., Linker, J.A., Miki´c, Z., Lionello, R., Ledvina, S.A., Luhmann, J.G.: 2006, A comparison between
+global solar magnetohydrodynamic and potential ﬁeld source surface model results. Astrophys. J. 653,
+1510. DOI. ADS.
+Rimmele, T.R., Warner, M., Keil, S.L., Goode, P.R., Knölker, M., Kuhn, J.R., Rosner, R.R., McMullin, J.P.,
+Casini, R., Lin, H., Wöger, F., von der Lühe, O., Tritschler, A., Davey, A., de Wijn, A., Elmore, D.F.,
+Fehlmann, A., Harrington, D.M., Jaeggli, S.A., Rast, M.P., Schad, T.A., Schmidt, W., Mathioudakis, M.,
+Mickey, D.L., Anan, T., Beck, C., Marshall, H.K., Jeffers, P.F., Oschmann, J.M., Beard, A., Berst, D.C.,
+
+ProbabilisticCalibrationforCORSAIR Page29of29    41 
+Cowan, B.A., Craig, S.C., Cross, E., Cummings, B.K., Donnelly, C., de Vanssay, J.-B., Eigenbrot, A.D.,
+Ferayorni, A., Foster, C., Galapon, C.A., Gedrites, C., Gonzales, K., Goodrich, B.D., Gregory, B.S.,
+Guzman, S.S., Guzzo, S., Hegwer, S., Hubbard, R.P., Hubbard, J.R., Johansson, E.M., Johnson, L.C.,
+Liang, C., Liang, M., McQuillen, I., Mayer, C., Newman, K., Onodera, B., Phelps, L., Puentes, M.M.,
+Richards, C., Rimmele, L.M., Sekulic, P., Shimko, S.R., Simison, B.E., Smith, B., Starman, E., Sueoka,
+S.R., Summers, R.T., Szabo, A., Szabo, L., Wampler, S.B., Williams, T.R., White, C.: 2020, The Daniel
+K. Inouye Solar Telescope – Observatory Overview.Sol. Phys. 295. DOI.
+Samra, J., Cheimets, P., DeLuca, E., Zanna, G.D., Golub, L., Judge, P., Kramar, M., Lin, H., Madsen, C.,
+Marquez, V ., Testa, P., Tomczyk, S.: 2021, A balloon-borne infrared coronagraph and spectropolarimeter
+for magnetic ﬁeld measurements of the solar corona. In:Heliophysics 2050 Workshop. http://helio2050.
+ipostersessions.com/Default.aspx?s=7A-97-38-8A-2D-6F-7D-38-EE-7D-CE-18-14-79-BE-D5.
+Savcheva, A., Pariat, E., McKillop, S., McCauley, P., Hanson, E., Su, Y ., Werner, E., DeLuca, E.E.: 2015,
+The relation between solar eruption topologies and observed ﬂare features. I. Flare ribbons. Astrophys.
+J. 810, 96. DOI. ADS.
+Schad, T.A., Petrie, G.J.D., Kuhn, J.R., Fehlmann, A., Rimmele, T., Tritschler, A., Woeger, F., Scholl, I.,
+Williams, R., Harrington, D., Paraschiv, A.R., Szente, J.: 2024, Mapping the Sun’s coronal magnetic
+ﬁeld using the Zeeman effect. Sci. Adv. 10, eadq1604. DOI. https://www.science.org/doi/abs/10.1126/
+sciadv.adq1604.
+Suárez-Bermejo, J.C., Gorgas, J., Pascual, S., Santarsiero, M., de Sande, J.C.G., Piquero, G.: 2024, Bayesian
+inference approach for full Poincaré Mueller polarimetry. Opt. Laser Technol. 168, 109983. DOI.
+Tomczyk, S., Landi, E.: 2019, Upgraded Coronal Multi-channel Polarimeter (UCoMP). In: Solar Helio-
+spheric and INterplanetary Environment (SHINE 2019) 131.
+Tomczyk, S., McIntosh, S.W.: 2009, Time-distance seismology of the solar corona with CoMP.Astrophys. J.
+697, 1384. DOI.
+Tomczyk, S., Stoltz, P., Seagraves, P.: 1991, Systematic errors in polarimeter calibration due to imperfect
+calibration optics. In: November, L.J. (ed.) Solar Polarimetry 142. ADS.
+Tomczyk, S., Card, G.L., Darnell, T., Elmore, D.F., Lull, R., Nelson, P.G., Streander, K.V ., Burkepile, J.,
+Casini, R., Judge, P.G.: 2008, An instrument to measure coronal emission line polarization. Sol. Phys.
+247, 411. DOI. ADS.
+Tomczyk, S., Casini, R., de Wijn, A.G., Nelson, P.G.: 2010, Wavelength-diverse polarization modulators for
+Stokes polarimetry. Appl. Opt. 49, 3580. DOI. https://opg.optica.org/ao/abstract.cfm?URI=ao-49-18-
+3580.
+Tomczyk, S., Landi, E., Berkey, B., Burkepile, J., Cotter, M., Gallaher, D., Galloy, M.D., Graves, R., Oakley,
+P., Perez-Gonzalez, L., Sewell, S., de Toma, G., Zmarzly, P.: 2021, First images from the Upgraded
+Coronal Multi-channel Polarimeter (UCoMP). In: AGU Fall Meeting Abstracts 2021 2089. ADS.
+van der Holst, B., Sokolov, I.V ., Meng, X., Jin, M., Manchester, I.W.B., Tóth, G., Gombosi, T.I.: 2014, Alfvén
+Wave Solar Model (AWSoM): coronal heating.Astrophys. J. 782, 81. DOI. ADS.
+Yang, Z., Bethge, C., Tian, H., Tomczyk, S., Morton, R., Del Zanna, G., McIntosh, S.W., Karak, B.B., Gibson,
+S., Samanta, T., He, J., Chen, Y ., Wang, L.: 2020, Global maps of the magnetic ﬁeld in the solar corona.
+Science 369, 694. DOI.
+Publisher’sNote
+Springer Nature remains neutral with regard to jurisdictional claims in published maps and
+institutional afﬁliations.

@@ -1,0 +1,2397 @@
+Title: Efficient computation of the galaxy angular bispectrum in redshift space
+Authors: Zucheng Gao, Zvonimir Vlah, Anthony Challinor
+Published: 2026-05-28
+Categories: astro-ph.CO
+
+Prepared for submission to JCAP LAPTH-026/26
+RBI-ThPhys-2025-14
+Efficient computation of the galaxy
+angular bispectrum in redshift space
+Zucheng Gao a Zvonimir Vlah d,c,b Anthony Challinor b,c,e
+aLaboratoire d’Annecy de Physique Théorique, CNRS, 9 Chemin de Bellevue, 74940 Annecy,
+France.
+bInstitute of Astronomy, Madingley Road, Cambridge, CB3 0HA, UK,
+cKavli Institute for Cosmology Cambridge, Madingley Road, Cambridge, CB3 0HA, UK,
+dDivision of Theoretical Physics, Ruđer Bošković Institute, Zagreb HR-10000, Croatia,
+eDAMTP, Centre for Mathematical Sciences, Wilberforce Road, Cambridge CB3 0WA, UK,
+E-mail: zg285@cantab.ac.uk, zvlah@irb.hr, a.d.challinor@ast.cam.ac.uk
+Abstract. Efficient computation of the angular bispectrum is an essential part of modelling
+large-scale structure observations, but it still remains an extremely challenging task. In this work,
+we compute the tree-level, unequal-time angular bispectrum in both real and redshift space. By
+deriving full-sky results, we show that the bispectrum can be expressed as a sum of products of
+two angular power spectra, enabling the use of our recently developed flat-sky approximation to
+enhance computational efficiency significantly. This flat-sky formalism preserves key line-of-sight
+mode information while discarding extraneous full-sky contributions. We validate our approach
+by comparing it with direct full-sky integration, finding excellent agreement across a wide range
+of scales and redshifts for all bispectrum configurations. At redshiftz = 1, we achieve sub-percent
+agreement (for multipoles ℓ ≳ 5) between full-sky and flat-sky results for equilateral, squeezed,
+and folded configurations, using narrow Gaussian radial window functions (σz = 0 .01) in both
+equal-time and unequal-time scenarios. On small scales, where direct full-sky integration becomes
+computationally prohibitive, our results align with the Limber approximation (where applicable),
+confirming the robustness and accuracy of our implementation. To facilitate future studies, we
+provide a Python implementation of our results, which is publicly available onGitHub.
+Keywords: bispectrum, galaxy clustering, redshift space distortions
+arXiv:2605.30246v1  [astro-ph.CO]  28 May 2026
+
+Contents
+1 Introduction 1
+2 Angular bispectrum in real space 3
+2.1 Real space overdensity and the angular bispectrum 3
+2.2 Tree-level results 5
+2.3 Numerical evaluation with flat-sky approximation 6
+2.4 Limber approximation 8
+2.5 Results 9
+3 Angular bispectrum in redshift space 11
+3.1 Density fields in redshift space 12
+3.2 Angular bispectrum in redshift space 16
+3.3 Limber approximation in redshift space 18
+3.4 Results 19
+4 Conclusion 20
+A Non-distant-observer correction terms 23
+B Extended Limber approximation for the squeezed limit 24
+B.1 Real-space case 24
+B.2 Redshift-space 25
+B.3 Numerical results 26
+1 Introduction
+With powerful new galaxy surveys with instruments such as Euclid [1] and DESI [2] underway,
+and the imminent Rubin Observatory [3] and launch of the Roman Telescope [4], we have entered
+a new era of precision cosmology. These surveys have large sky coverage and high survey depth,
+resulting in a high number of detected galaxies. To extract cosmological information reliably from
+these large datasets, the theoretical modeling needs to be highly accurate and computationally
+efficient.
+The three-point correlation function, or bispectrum (its Fourier counterpart), is an impor-
+tant quantity to study primordial non-Gaussianity and other potential additions to the standard
+ΛCDM model, such as modified gravity. Even within the standard model, the bispectrum can
+play an important role in breaking degeneracies between the growth of structure and galaxy
+bias. Including redshift space distortions (RSD) is essential in modelling the bispectrum since
+their effect can partly mimic other large-scale signals of interest, such as local-model primordial
+non-Gaussianity. The 3D bispectrum (in Cartesian Fourier coordinates) with RSD included has
+– 1 –
+
+been investigated intensively in the literature [5–9]. These calculations usually assume the plane-
+parallel (flat-sky) approximation, which makes the subsequent addition of wide-angle effects a
+daunting task [10, 11].
+Alternatively, the full-sky angular bispectrum (which is directly observable) intrinsically in-
+cludes these projection effects, and can be naturally extended to include the full set of relativistic
+effects [12–14]. However, the direct computation of the angular bispectrum is a computation-
+ally challenging task, so it is seldom used in practical data analysis. Even in its simplest form,
+considering only second-order biasing, modelling the projected full-sky angular bispectrum is com-
+putationally demanding. To address this, reference [15] introduced an FFTLog-based approach
+that leverages the separability of the tree-level bispectrum to accelerate computations. Despite
+this improvement, the method still depends on complex hypergeometric functions, which are
+expensive to evaluate. Subsequently, reference [16] extended this work to redshift space, while
+reference [14] incorporated a set of the relativistic effects. In practice, additional integration
+of survey-specific radial window functions is needed to obtain the observed angular bispectrum,
+making this process too slow for a practical Markov Chain Monte Carlo (MCMC) analysis. To
+overcome these difficulties, one may turn to machine learning interpolation and emulation tech-
+niques, though these inevitably come with additional drawbacks, like lack of physical insights
+and lead to a lack of interpretability. We focus on alternative strategies based on analytical and
+computational simplifications.
+In our previous work [17], we showed that the flat-sky result (derived as a leading contribution
+in the asymptotic expansion) can approximate the full-sky angular power spectrum (two-point
+correlation function) to a percent-level even on the largest scales. At the same time, it can be
+computed numerically very efficiently, making it especially suitable for the MCMC analysis. In
+this work, we apply our flat-sky approximation to the angular bispectrum. We first (re)derive
+the general form for the tree-level full-sky angular bispectrum with RSD, starting from the ob-
+served galaxy number counts in redshift space at second order in perturbation theory, which also
+includes wide-angle effects and non-distant-observer corrections. We start directly from the full-
+sky angular bispectrum and approximate integrals over wavenumber, which involve products of
+spherical Bessel functions, with their flat-sky Fourier equivalents by generalising results from Gao
+et al. [18]. This method naturally results in a set of correction terms, which improve the accuracy
+in approximating the full-sky angular bispectrum. In other words, by using the correspondence
+between full- and flat-sky integrals on the general result for the full-sky angular bispectrum, we
+naturally obtain correction terms for wide-angle effects.
+The paper is organised as follows: in section 2, we first present our real-space results for the
+unequal-time angular bispectrum. We extend these to redshift space in section 3. We conclude
+in section 4. In appendix A, we check the validity of the distant-observer approximation.
+We work with thePlanck, flat, ΛCDM cosmology [19], with CDM densityΩch2 = 0 .11933,
+baryon density Ωbh2 = 0 .02242, Hubble constant H0 = 100 hkms −1Mpc−1 with h = 0 .6766,
+scalar spectral index ns = 0.9665, and fluctuation amplitudeσ8 = 0.8103. All results presented
+here were obtained using thePython code that we made publicly available onGitHub.1
+1https://github.com/GZCPhysics/Bispectrum.git
+– 2 –
+
+2 Angular bispectrum in real space
+In this section, we focus on the real-space angular bispectrum of a biased tracer at leading order
+(tree-level) in cosmological perturbation theory. We outline the derivation of the full-sky angu-
+lar bispectrum and detail the numerical optimisation techniques employed in its computation.
+Additionally, we compare with the Limber approximation (while we discuss an extended version
+specifically for the squeezed limit in appendix B). Finally, we present numerical results for the
+real-space bispectrum, highlighting key features and implications.
+2.1 Real space overdensity and the angular bispectrum
+To obtain the tree-level bispectrum results, let us first consider the expansion of the overdensity
+field of a biased tracer up to the second-order:
+δ(x; z) = δ(1)(x; z) + δ(2)(x; z) + · · · , (2.1)
+where each order can be related to the linear matter overdensity field,δG (the subscript “G”
+indicates that the field is Gaussian). In Fourier space, we have
+δ(1)(k; z) = b10(z)δG(k; z) , (2.2)
+δ(2)(k; z) =
+Z d3k1
+(2π)3
+d3k2
+(2π)3 (2π)3δD(k − k1 − k2)K2(k1, k2; z)δG(k1; z)δG(k2; z) , (2.3)
+where we introduced the second-order tracer kernel
+K2(k1, k2; z) = b10(z)F2(k1, k2) + b20(z) + bK2(z)S2(k1, k2) . (2.4)
+Alongside the quadratic bias term (b20), this contains the second-order matter kernelF2 and shear
+kernel S2, explicitly given by
+F2(k1, k2) = 5
+7 + 1
+2
+k1 · k2
+k1k2
+ k1
+k2
++ k2
+k1
+
++ 2
+7
+ k1 · k2
+k1k2
+2
+= 5
+14 − 5
+28
+k2
+1
+k2
+2
+− 5
+28
+k2
+2
+k2
+1
++ 3
+28
+k2
+k2
+1
++ 3
+28
+k2
+k2
+2
++ 1
+14
+k4
+k2
+1k2
+2
+, (2.5)
+S2(k1, k2) = (k1 · k2)2
+k2
+1k2
+2
+− 1
+3
+= 1
+6 + 1
+4
+k2
+1
+k2
+2
++ 1
+4
+k2
+2
+k2
+1
+− 1
+2
+k2
+k2
+2
+− 1
+2
+k2
+k2
+1
++ 1
+4
+k4
+k2
+1k2
+2
+, (2.6)
+where we have implicitly used the triangle relation, k = k1 + k2, to write the kernels in a
+separable form. Note that we have made the quasi-EdS approximation for the time-dependence
+of the second-order matter density in writing down a time-independent matter kernelF2. In
+addition to the deterministic bias contributions, we can also add the two stochastic operatorsϵ
+(both first- and second- order) andϵ(1)
+δ δG (second-order), which contribute up to the second order
+in the field [9, 20, 21].
+We consider the projection of an overdensity field on the sky
+δ(ˆn) =
+Z
+dχ W(χ)δ(x; η0 − χ) ≡
+Z
+χ
+δ(x; η0 − χ), (2.7)
+– 3 –
+
+where W (χ) is the radial window function (selection function),η0 is the conformal time of the
+present universe andχ is the look-back time, which has a one-to-one relation with the redshift.
+We note that|x| = χ. We also introduce a simplified notation
+R
+χ to indicate the integration over
+the radial window function.
+Spherical-harmonic decomposition on the projected fields gives field multipole coefficients
+δℓm =
+Z
+d2 ˆn δ(ˆn)Y ∗
+ℓm(ˆn) , (2.8)
+which for the first-order real-space overdensity, eq. (2.2), reads
+δ(1)
+ℓm =
+Z
+χ
+Z
+d2 ˆx Y ∗
+ℓm (ˆx)
+Z d3k
+(2π)3 eik·xδ(1)(k; z[χ])
+= 4πiℓ
+Z
+χ
+Z d3k
+(2π)3 jℓ (kχ) δ(1)(k; z[χ])Y ∗
+ℓm(ˆk) , (2.9)
+where we applied the plane-wave expansion. Similarly, we calculate the harmonic expansion of
+the second-order field, eq. (2.3):
+δ(2)
+ℓm =
+Z
+χ
+Z
+d2 ˆx Y ∗
+ℓm (ˆx)
+Z d3k
+(2π)3 eik·xδ(2)(k; z[χ])
+= (4π)4X
+ℓ1m1
+X
+ℓ2m2
+iℓ1+ℓ2Gmm1m2
+ℓℓ1ℓ2
+Z
+χ
+Z k2dk
+(2π)3 jℓ (kχ)
+Z
+r2dr
+Z d3k1
+(2π)3
+d3k2
+(2π)3 jℓ (kr) jℓ1 (k1r) jℓ2 (k2r)
+× K2(k1, k2; z[χ])δG(k1; z[χ])δG(k2; z[χ])Yℓ1m1(ˆk1)Yℓ2m2(ˆk2) , (2.10)
+where we have introduced the (real-valued) Gaunt coefficient
+Gm1m2m3
+ℓ1ℓ2ℓ3 =
+Z
+d2 ˆn Yℓ1m1 (ˆn) Yℓ2m2 (ˆn) Yℓ3m3 (ˆn)
+=
+r
+(2ℓ1 + 1)(2ℓ2 + 1)(2ℓ3 + 1)
+4π
+ 
+ℓ1 ℓ2 ℓ3
+0 0 0
+! 
+ℓ1 ℓ2 ℓ3
+m1 m2 m3
+!
+. (2.11)
+Once we have an explicit form of the projected fields, we are ready to compute the angular
+correlations. The leading-order (tree-level) angular three-point correlator is then given by
+⟨δℓ1m1δℓ2m2δℓ3m3⟩ =
+D
+δ(1)
+ℓ1m1δ(1)
+ℓ2m2δ(2)
+ℓ3m3
+E
++ 2 perms. (2.12)
+=
+ 2
+π
+3
+Gm1m2m3
+ℓ1ℓ2ℓ3
+Z
+χ1χ2χ3
+Z
+r2dr
+3Y
+i=1
+Z
+k2
+i dkijℓi(kir)jℓi(kiχi)
+× 2K2(k1, k2; z3)b10(z1)b10(z2)PL(k1; z1, z3)PL(k2; z2, z3) + 2 perms.
++ stochastic ,
+where we give the explicit form of the stochastic terms later on in eq. (2.17). We note that
+K2(k1, k2) should be thought of as a function ofk1, k2 and k3 in this expression, with k3 =
+−(k1 + k2). Defining the (reduced) angular bispectrum as
+⟨δℓ1m1δℓ2m2δℓ3m3⟩ = Gm1m2m3
+ℓ1ℓ2ℓ3 Bℓ1ℓ2ℓ3 , (2.13)
+– 4 –
+
+and introducing theunequal-time angular bispectrum
+Bℓ1ℓ2ℓ3 =
+Z
+χ1χ2χ3
+Bℓ1ℓ2ℓ3(χ1, χ2, χ3) , (2.14)
+we can explicitly write
+Bℓ1ℓ2ℓ3(χ1, χ2, χ3) =
+ 2
+π
+3Z  3Y
+i=1
+k2
+i dkijℓi(kiχi)
+!
+Dℓ1ℓ2ℓ3(k1, k2, k3)
+× B (k1, k2, k3; z[χ1], z[χ2], z[χ3]) , (2.15)
+thus connecting the angular bispectrum and the 3D bispectrum. In the expression above we use
+a geometrical projection function
+Dℓ1ℓ2ℓ3(k1, k2, k3) =
+Z
+r2dr jℓ1(k1r)jℓ2(k2r)jℓ3(k3r) , (2.16)
+which projects the unequal-time 3D bispectrum to the angular bispectrum. We also used the
+explicit tree-level form of the unequal-time 3D bispectrum
+B (k1, k2, k3; z1, z2, z3) = 2K2(k1, k2; z3)b10(z1)b10(z2)PL(k1; z1, z3)PL(k2; z2, z3) + 2 perms.
++ b10(z1)PL(k1; z1, z3)Pϵϵδ(z2, z3) + 5 perms.
++ Bϵ(z1, z2, z3) , (2.17)
+even though it is straightforward to show that eq. (2.15) is valid in general and does not rely on
+the tree-level perturbative solution. The second and the third lines in eq. (2.17) arise from the
+stochastic contributions in the biased tracer field and involve the cross-power spectrum between
+ϵ(1) and ϵ(1)
+δ and the 3D bispectrum ofϵ, respectively, which are both assumed to be independent
+of k. Note also that the angular bispectrum, as given in eq. (2.14), reduces to the unequal-time
+angular bispectrum Bℓ1ℓ2ℓ3 in the limit of narrow window functionsW (χ), i.e., when the integral
+over the window functions becomes trivial.
+2.2 Tree-level results
+From now on, we use the linear theory of the 3D power spectrum, where we can separate the scale
+and time dependence PL(k; z1, z2) = D(z1)D(z2)PL(k), where D(z) is the linear growth factor
+and PL(k) the linear matter power spectrum atz = 0. In fact, the unequal-time power spectrum
+de-correlates much faster than linear theory suggests, as the long displacement dispersion dampens
+short scales [22]. Our angular bispectrum thus reduces to the following form
+Bℓ1ℓ2ℓ3 =
+ 2
+π
+3Z
+χ1χ2χ3
+D1D2D2
+3
+3Y
+i=1
+Z
+k2
+i dkijℓi(kiχi)
+Z
+r2dr jℓ1 (k1r) jℓ2 (k2r) jℓ3 (k3r)
+× 2K2(k1, k2; z3)b10(z1)b10(z2)PL(k1)PL(k2) + 2 perms. + stochastic , (2.18)
+where we include the permutations among three indices, and we also define the linear growth
+factor Di ≡ D(z[χi]). We also take the redshift evolution of bias into account.
+– 5 –
+
+The unequal-time tree-level angular bispectrum can thus be written as the linear combination
+of terms
+Bn1n2n3
+ℓ1ℓ2ℓ3 (χ1, χ2, χ3) ≡ 2D1D2D2
+3
+Z
+r2dr Cn1(ℓ1, r, χ1)Cn2(ℓ2, r, χ2)In3(ℓ3, r, χ3) , (2.19)
+where we introduced
+Cn(ℓ, r, χ) ≡ 2
+π
+Z
+k2dk jℓ(kr)jℓ(kχ)k2nPL(k) , (2.20)
+In(ℓ, r, χ) ≡ 2
+π
+Z
+k2dk jℓ(kr)jℓ(kχ)k2n . (2.21)
+Combining all the terms, the tree-level angular bispectrum for theK2 kernel is then given by
+Bℓ1ℓ2ℓ3(χ1, χ2, χ3)
+= b10(χ1)b10(χ2)
+  5
+7 b10 + b20 + 1
+3 bK2
+
+(χ3)B000
+ℓ1ℓ2ℓ3 + b10(χ1)b10(χ2)
+ 
+− 5
+14 b10 + 1
+2 bK2
+
+(χ3)B1−10
+ℓ1ℓ2ℓ3
++ b10(χ1)b10(χ2)
+ 
+− 5
+14 b10 + 1
+2 bK2
+
+(χ3)B−110
+ℓ1ℓ2ℓ3 + b10(χ1)b10(χ2)
+  3
+14 b10 − bK2
+
+(χ3)B−101
+ℓ1ℓ2ℓ3
++ b10(χ1)b10(χ2)
+  3
+14 b10 − bK2
+
+(χ3)B0−11
+ℓ1ℓ2ℓ3 + b10(χ1)b10(χ2)
+  1
+7 b10 + 1
+2 bK2
+
+(χ3)B−1−12
+ℓ1ℓ2ℓ3
++ 2 perms. (2.22)
+Notice that onlyn = −1, 0, 1 cases of theCn terms contribute to the full bispectrum expression,
+while for In terms, we requiren = 0, 1, 2. To obtain the final projected bispectrum, one needs to
+do the final integral over the window functions, eq. (2.13). Up to this point, the results presented
+for the deterministic bias contributions are equivalent to the ones obtained in [15], what differs is
+the method of computation of these terms, which we discuss in the next subsection.
+In addition to the deterministic bias terms, we also have stochastic contributions. However,
+their form is significantly simpler and we can write
+Bstoch.
+ℓ1ℓ2ℓ3 = 2
+Z dχdχ′
+χ′2 W1(χ)W2(χ′)W3(χ′) b10(χ)D(χ)D(χ′)Pϵϵδ(χ′, χ′)C0(ℓ1, χ, χ′) + 2 perms.
++
+Z dχ
+χ4 W1(χ)W2(χ)W3(χ)Bϵ(χ, χ, χ) , (2.23)
+where we notice that the scale dependence of the first term comes solely from oneC0(ℓ1), while
+the second (purely stochastic) term exhibits no scale dependence, as expected.
+2.3 Numerical evaluation with flat-sky approximation
+In our previous work [17, 18], we showed thatCn(ℓ) terms in eq. (2.20) could be approximated
+by a flat-sky expression (to sub-percent level), thus providing an efficient computational method.
+Here, we again apply the flat-sky approximation for the evaluation of the unprojected power
+spectra Cn(ℓ). As a brief reminder, we approximate
+Cn(ℓ, r, χ) ≈ 1
+rχ
+Z dk∥
+2π eik∥(χ−r)
+
+k2
+∥ + ˜ℓ2
+n
+PL
+q
+k2
+∥ + ˜ℓ2
+
+, (2.24)
+– 6 –
+
+where we defined˜ℓ2 ≡ ℓ(ℓ + 1)/(rχ). We can utilize the FFTLog expansionPL(k) =P
+i αikνi of
+the linear power spectrum, where the coefficientsαi carry all the dependence on cosmology, and
+the νi are complex powers. The unprojected angular power spectrum can then be evaluated as
+Cn(ℓ, r, χ) =
+X
+i
+αi˜ℓ1+νi+2nM (0)
+νi+2n(x) , (2.25)
+where x = ˜ℓ(χ − r). Here,
+M (0)
+νi+2n(x) ≡ 2
+1
+2 (1+νi)+n
+√πΓ(− νi
+2 − n) x− 1
+2 (1+νi)−nK 1
+2 (1+νi)+n(x) , (2.26)
+where Kν(x) are modified Bessel functions of the second kind. One of the advantages of this
+approach is that the series of functionsM (0)
+ν (x) can be precomputed and stored in memory, thus
+providing a convenient and rapid evaluation method. The superscript(0) is for later convenience
+since the functionsM (m)
+ν generalize later once we consider redshift space distortions.
+Care is needed forn = 1. In this case, the (Basset) integral that gives rise to eq. (2.25) requires
+Re(νi) < −2. However, this conflicts with the requirementRe(νi) > −2for the FFTLog expansion
+to represent PL(k) accurately given its asymptotic behaviourPL(k) ∼ k−3 ln2(k/keq), where keq
+is the equality scale. Indeed, we found then = 1 results to be numerically unstable. Thus, we
+do not directly use this representation forCn=1. Instead, we use the differential equation for the
+spherical Bessel function,
+
+− ∂2
+∂r 2 − 2
+r
+∂
+∂r + ℓ(ℓ + 1)
+r2
+
+jℓ(kr) = k2jℓ(kr) , (2.27)
+in eq. (2.20) to obtain the relation
+Cn=1(ℓ, r, χ) =
+
+− ∂2
+∂r 2 − 2
+r
+∂
+∂r + ℓ(ℓ + 1)
+r2
+
+Cn=0(ℓ, r, χ) . (2.28)
+This provides us with a representation ofC1 via the differential operator acting onC0 that can be
+evaluated using our flat-sky FFTLog-based methods above. We can then evaluate the differential
+operator either numerically or analytically.
+Since there is no power spectrum involved inIn terms, we can keep the full-sky form and the
+three terms are given as
+In (ℓ, r, χ) =
+
+− ∂2
+∂χ2 − 2
+χ
+∂
+∂χ + ℓ(ℓ + 1)
+χ2
+n 1
+χ2 δD(χ − r)
+
+, (2.29)
+with n = 0, 1, 2. Note that this equation is symmetric inr and χ, and, thus, one is free to swap
+the variables in the differential operator. Written in terms ofχ, we can apply integration-by-parts
+on the window function and linear growth factor. For example, the integral of eq. (2.19) over the
+– 7 –
+
+radial window functions becomes
+Bn1n2n3
+ℓ1ℓ2ℓ3 = 2
+Z
+dχ1dχ2dχ3W1D1W2D2
+
+− ∂2
+∂χ2
+3
++ ∂
+∂χ3
+2
+χ3
++ ℓ3(ℓ3 + 1)
+χ2
+3
+n3 
+W3D2
+3
+
+×
+Z
+r2dr Cn1(ℓ1, r, χ1)Cn2(ℓ2, r, χ2) 1
+χ2
+3
+δD(χ3 − r)
+= 2
+Z
+dχ1dχ2dχ3W1D1W2D2
+
+− ∂2
+∂χ2
+3
++ ∂
+∂χ3
+2
+χ3
++ ℓ3(ℓ3 + 1)
+χ2
+3
+n3 
+W3D2
+3
+
+× Cn1(ℓ1, χ3, χ1)Cn2(ℓ2, χ3, χ2) . (2.30)
+If, instead, we write the differential operator in terms ofr, integration-by-parts acts on the product
+of two unprojected angular power spectra, which gives us
+Bn1n2n3
+ℓ1ℓ2ℓ3 = 2
+Z
+dχ1dχ2dχ3W1D1W2D2W3D2
+3
+×
+
+− ∂2
+∂r 2 − 2
+r
+∂
+∂r + ℓ3(ℓ3 + 1)
+r2
+n3
+Cn1(ℓ1, r, χ1)Cn2(ℓ2, r, χ2)
+
+r=χ3
+, (2.31)
+where have used the fact that the differential operator in eq. (2.27) is self-adjoint with respect to
+the weight functionr2. In this work, we use eq. (2.30), given that we are using (smooth) Gaussian
+window functions. However, in the case of general window functions, it may be preferable to use
+eq. (2.31) instead. Note also that the boundary terms from integrating-by-parts can be non-zero
+when we consider lensing kernels in eq. (2.30), but eq. (2.31) works in all cases (requiringℓ > 1).
+2.4 Limber approximation
+Care needs to be taken when we consider the Limber approximation for the angular bispectrum,
+especially for the squeezed limit. A simple, but not conceptually rigorous, way of effecting the
+Limber approximation is by setting
+jℓ(kχ) ∼
+r π
+2ℓ δD (kχ − ℓ) , ℓ → ∞ (2.32)
+in eq. (2.18). If we apply this approximation to all three multipoles we obtain the familiar Limber
+result (see, e.g., [23])
+BLim.
+ℓ1ℓ2ℓ3 =
+Z dr
+r4 W1(r)W2(r)W3(r)B
+ ℓ1
+r , ℓ2
+r , ℓ3
+r ; z[r], z[r], z[r]
+
+. (2.33)
+We emphasize that this Limber approximation is only valid when all three multipoles are large,
+such that 1/ℓi is small compared to the fractional width of theith window functionWi(r). This
+can be problematic for the squeezed limit of the bispectrum, where one mode is large scale. In
+particular, we find that one cannot then apply eq. (2.32) to all three spherical Bessel functions
+in the geometrical projection function eq. (2.16), while the approximation is also invalid for the
+spherical Bessel function associated with the soft mode. We provide alternative partial-Limber
+approximations for the squeezed limit in appendix B.
+– 8 –
+
+ℓ
+ℓ
+ℓ ℓ ℓ ℓ ℓ
+2ℓ
+1+ℓ/10
+Figure 1: From left to right, we illustrate the equilateral, squeezed (with the soft multipole equal
+to 1 + ℓ/10) and folded angular bispectrum configurations.
+2.5 Results
+We now present numerical results for the real space angular bispectrum. We compare our results
+using the flat-sky approximations of section 2.3 to brute-force computations of the full-sky results2
+and to the regular Limber approximation. We restrict our investigation to three triangle shapes:
+equilateral (ℓ1 = ℓ2 = ℓ3 = ℓ); folded (ℓ1 = ℓ2 = ℓ3/2 = ℓ); and squeezed (ℓ1 = ℓ2 = ℓ,
+ℓ3 = 1 + ℓ/10). These cover the most diverse configuration choices, and any other configuration
+can, of course, be obtained in a similar way. We illustrate these three configurations in figure 1.
+For all the results in this paper, we choose the parameters estimated for the Euclid spectroscopic
+survey, table 3 in [24]. We chooseb10 = 1.46 and take the two other biases to be zero (b20 = 0
+and bK2 = 0). As discussed earlier, this does not reduce the generality of our results since all the
+scale-dependent operators associated with these two bases are already contained in theF2 kernel
+required for theb10 result.
+For the stochastic terms, we pedagogically choose the leading-order contribution as
+Pϵϵ(χ, χ′) = Pϵϵδ(χ, χ′) = 1
+¯n , (2.34)
+where we take the galaxy number density¯n = 6.86 × 10−4 h3Mpc−3 [24]. We do not explicitly
+include the purely stochastic term fromBϵ ≈ 1/¯n2, since this is scale-independent in 3D, and also
+when projected to the angular bispectrum. For the equal-time configuration discussed below, the
+contribution from Bϵ to the angular bispectrum is around1 × 10−12, which is much smaller than
+other terms on large scales.
+2We evaluate the unprojected angular power spectra Cn, eq. (2.20), by direct numerical integration. The
+treatement of In is kept to be full-sky for both full-sky and flat-sky calculations since there is no power spectrum
+involved.
+– 9 –
+
+10 12
+10 10
+10 8
+B 1 2 3
+Equilateral
+Flat-sky
+Full-sky
+10 11
+10 10
+10 9
+10 8
+Squeezed
+Limber
+Stoch.
+10 11
+10 10
+10 9
+10 8
+Folded
+101 102 103
+10
+0
+10
+Rel. Err. [%]
+ 101 102 103
+10
+0
+10
+101 102
+10
+0
+10
+Figure 2: Real space angular bispectrum with equal-time radial Gaussian window functions
+(centered at zi = 1 and with σz = 0 .05) with b10 = 1 .46, b20 = bK2 = 0 and ¯n = 6 .86 ×
+10−4 h3Mpc−3. From left to right, each panel represents a different configuration: equilateral,
+squeezed and folded, as illustrated in figure 1. In all three panels, we compare the flat-sky
+approximation (blue solid line), the Limber approximation (orange dashed line), and the brute-
+force full-sky (green stars) results. Note that we do not include the stochastic terms in these
+lines. Instead, we separately demonstrate the (scale-dependent) stochastic contribution by the
+dash-dotted gray lines. In the bottom panels, we show the fractional residuals compared to the
+flat-sky results. We note that in the left and the middle panels, we show the multipole range
+ℓ = 2–1000, while for the right panel (folded), we showℓ = 2–500.
+In figure 2, we show equal-time results for the three bispectrum configurations. We adopt
+three equal redshift bins centred atz1 = z2 = z3 = 1.0, with a narrow Gaussian radial window
+function (σz = 0.05). We find excellent agreement between our flat-sky approximation and the
+brute-force full-sky computation for all multipoles and configurations. The agreement is better
+than one percent where the full-sky results are converged and a few percent as we approach
+higher multipoles, where the full-sky direct integration becomes difficult (and consequently less
+accurate). We also see that the Limber approximation can only reach this accuracy for multipoles
+larger than ℓ ≈ 250, with an additional caveat that for our squeezed configuration, one cannot
+use the canonical Limber approximation (except at very highℓ, where the soft mode1 + ℓ/10
+becomes large). The partial-Limber approximation developed in appendix B is applicable to
+lower multipoles; see figure 7. However, this partial-Limber approximation is computationally
+less convenient than our flat-sky approximation. The stochastic terms have a non-negligible
+contribution across all scales. They are almost constant on large scales, while becoming dominant
+for ℓ ≳ 300.
+In figure 3, we show results for unequal radial window functions for our three configurations.
+Here, we set z1 = 1 .0, z2 = 1 .05 and z3 = 1 .1, with equal widths of σz = 0 .1 (broader than
+adopted for the equal-time case above). Similarly to the equal-time case, we again see an ex-
+cellent agreement between our flat-sky approximation and the brute-force full-sky computation
+for all multipoles and configurations. The agreement is around several percent forℓ ≲ 10 and
+less than one percent on scales smaller than that. The Limber approximation can achieve such
+– 10 –
+
+10 14
+10 13
+10 12
+10 11
+10 10
+B 1 2 3
+Equilateral
+Flat-sky
+Full-sky
+10 12
+10 11
+10 10
+Squeezed
+Limber
+Stoch.
+10 12
+10 11
+10 10
+Folded
+101 102 103
+5
+0
+5
+Rel. Err. [%]
+ 101 102 103
+5
+0
+5
+101 102
+5
+0
+5
+Figure 3: Similar to figure 2, but for unequal radial Gaussian window functions withz1 = 1.0,
+z2 = 1 .05 and z3 = 1 .1 and width σz = 0 .1. Note that both full-sky and flat-sky angular
+bispectrum go negative aroundℓ = 3 (the absolute value is plotted).
+agreement only on scalesℓ ≳ 100 (with the usual caveat for the squeezed configuration). Note,
+however, that the accuracy of the Limber approximation depends in detail on the central values
+and widths of the window functions as these determine the degree of overlap. We also notice that
+the Limber approximation becomes more accurate in this case with broader window function.
+The broadness of window functions in this unequal-time case is compensating the inaccuracy of
+Limber approximation due to unequal-time effects.
+In general, we see that the canonical Limber approximation converges to the flat-sky results on
+small scales in all cases, as we would expect. We also note that our full-sky results start to diverge
+from the flat-sky results on small scales. Given the agreement between the flat-sky and Limber-
+approximated results on these scales, we expect that inaccuracies in the full-sky computation
+are becoming apparent there. Since we perform a direct integration over the spherical Bessel
+functions when calculating the full-sky results, the required numerical accuracy for integrating
+over the highly oscillatory integrands can be hard to achieve. Thus, we expect the flat-sky
+numerical results to be more trustworthy and accurate on these small scales than our full-sky
+computations. However, we note that the small differences at lowℓ reflect genuine inaccuracies
+in the flat-sky approximation.
+3 Angular bispectrum in redshift space
+In this section, we add the effects of redshift space distortions (RSD) to the tree-level bispectrum.
+To do so, we first derive the second-order contributions of RSD to the tracer overdensity field. We
+then apply these results to compute the RSD contributions to the tree-level angular bispectrum.
+We extend the flat-sky approximations of the previous section to account for RSD, and compare
+numerical flat-sky results with full-sky results on large scales (lowℓ). Finally, we discuss some
+limitations of the Limber approximation in the presence of RSD.
+– 11 –
+
+3.1 Density fields in redshift space
+The redshift space distortions (RSD) are caused by the peculiar velocity of tracersv, where the
+observed redshift is composed of cosmological redshift (due to the Hubble flow) and the kinetic
+Doppler effect (due to peculiar velocity),
+1 + zpec = γ(1 + v/c) ≈ 1 + v/c , (3.1)
+1 + zobs = (1 + zcosmo)(1 + zpec) , (3.2)
+where γ is the Lorenz factor for|v| and we have temporarily restored factors of the speed of light,
+c. The observed radial position, in a flatΛCDM (up to first order inv/(Hχ), which is an excellent
+approximation at cosmological distances), is
+s = x + v · ˆn
+H ˆn = x + f uˆn ˆn , (3.3)
+where H is the comoving Hubble parameter,ˆn is the line-of-sight direction,f ≡ d ln D/d ln a is
+the logarithmic growth rate, v is the peculiar velocity, and we defineduˆn ≡ v · ˆn/(f H). The
+projected overdensity field of galaxies within some radial window function3 W (χ) is
+n(ˆn) =
+Z
+dχ W(χ)ng,s(s; η0 − χ) =
+Z
+χ
+ng,s(s; η0 − χ) , (3.4)
+where ng,s is the observed density in redshift space, and we have takenχ as the amplitude ofs.
+Thus, our immediate task is to express the redshift space overdensityδs (defined asδs ≡ ns/¯ns −1,
+with the mean density¯ns), in terms of the overdensity in real spaceδr. We can achieve this by
+imposing the conservation of the number of tracers at some fixed redshiftz under the mapping
+given in eq. (3.3). We have
+[1 + δs(s, z)] d3s = [1 + δr(x, z)] d3x , (3.5)
+where we have assumed no evolution of the background density, so that¯ns = ¯nr, and ignored other
+O(v · ˆn/c) terms arising from time derivatives off uˆn and other kinematic effects; see, e.g., [25]
+for additional terms that arise from these. Expanding eq. (3.5) up to the second order in the field
+3We assume that selection is in redshift space, i.e., we have a window functionWz(zobs). The equivalent radial
+window function W (χ) is defined with the usual unperturbed relation between redshift and comoving distanceχ,
+with the remapping due to RSD taken account of through the redshift space overdensity (see eq. 3.5 below).
+– 12 –
+
+uˆn gives
+1 + δs(s) =
+Z
+d3x [1 + δr(x)] δD(s − x − f uˆn ˆn)
+=
+Z
+q
+Z
+d3x [1 + δr(x)] eiq·(s−x−f uˆn ˆn)
+=
+∞X
+n=0
+(f)n
+n!
+Z
+q
+eiq·s
+Z
+d3x [1 + δr(x)] un
+ˆn∂n
+x e−iq·x
+=
+∞X
+n=0
+(−f)n
+n!
+Z
+d3x 1
+x2 ∂n
+x
+ 
+x2 [1 + δr(x)] un
+ˆn
+
+δD(s − x)
+≈ 1 + δr|{z}
+n=0
+−f (1 + δr) ∂suˆn − f(∂sδr) uˆn − 2
+s (1 + δr) f uˆn
+| {z }
+n=1
++f 2 (1 + δr)
+
+(∂suˆn)2 + uˆn∂2
+s uˆn
+
++ 2f 2(∂sδr) uˆn∂suˆn + f 2
+2 (∂2
+s δr) u2
+ˆn
+| {z }
+n=2
++2f 2
+s
+
+(∂sδr) u2
+ˆn + 2 (1 +δr) uˆn∂suˆn
+
++ f 2
+s2 (1 + δr) u2
+ˆn
+| {z }
+n=2
+, (3.6)
+where all the quantities are evaluated at a positions, in redshift space. The real-space overdensity
+can be found in eqs. (2.1–2.3), while the peculiar velocity term, up to the second order, can be
+written as
+uˆn(x) = − 1
+f H
+Z
+k
+ik · ˆn
+k2
+
+θ(1)(k) + θ(2)(k)
+
+eik·x, (3.7)
+where θ is the divergence of the peculiar velocity.
+We consider δs up to the second order in the linear matter density contrastδ(1), and thus we
+can organize the redshift space overdensity field perturbatively asδs = δ(1)
+s + δ(2)
+s , where
+δ(1)
+s = δ(1)
+r − f ∂su(1)
+ˆn − 2f
+s u(1)
+ˆn , (3.8)
+and
+δ(2)
+s = δ(2)
+r − f ∂su(2)
+ˆn − f δ(1)
+r ∂su(1)
+ˆn − f
+
+∂sδ(1)
+r
+
+u(1)
+ˆn + f 2
+
+∂su(1)
+ˆn
+2
++ f 2u(1)
+ˆn ∂2
+s u(1)
+ˆn
+− 2f
+s u(2)
+ˆn − 2f
+s δ(1)
+r u(1)
+ˆn + 4f 2
+s u(1)
+ˆn ∂su(1)
+ˆn + f 2
+s2
+
+u(1)
+ˆn
+2
+. (3.9)
+The term −2f u(1)
+ˆn /s in eq. (3.8), as well as all of the terms in the second line of eq. (3.9), origi-
+nate from a variation of the line of sight across the volume, i.e., they come from the expansion of
+the x2/s2 terms at the positions. Consequently, we can label these terms non-distant-observer
+corrections (nDOC). In theΛCDM universe, as we probe distancesz ≳ 0.3, these observer correc-
+tions become negligible (less than around1% even on the largest scales), and we can rely on the
+distant-observer approximation. This is equivalent to the flat-sky approximation, i.e., assuming
+a fixed ˆn direction in eq. (3.6). In appendix A, we explicitly show that these terms are indeed
+– 13 –
+
+negligible in the case whenz = 1.0, confirming our estimates. Thus, in the rest of this work, we
+will neglect the nDOC contributions.
+We also need to add stochastic contributions to the terms given above. As we saw in the case
+of real space in section 2, to the first-order density field we need to add the leading stochasticϵ(1)
+contribution, while at the second order, besides the purely stochastic termϵ(2), we have a mixed
+term ϵ(1)
+δ δ(1). In redshift space, there is an additional mixed second-order term−f ∂s(ϵ(1)u(1)
+ˆn )
+that also contributes to the tree-level bispectrum.
+The velocity field can be related to the linear matter overdensity fields via
+θ(1) = −f HδG , (3.10)
+and
+θ(2) = −f H
+Z d3k1
+(2π)3
+d3k2
+(2π)3 δD(k − k1 − k2)G2(k1, k2)δG(k1; z)δG(k2; z) , (3.11)
+where the second-order velocity kernelG2 is
+G2(k1, k2) = 3
+7 + 1
+2
+k1 · k2
+k1k2
+ k1
+k2
++ k2
+k1
+
++ 4
+7
+ k1 · k2
+k1k2
+2
+= 3
+14 − 3
+28
+k2
+1
+k2
+2
+− 3
+28
+k2
+2
+k2
+1
+− 1
+28
+k2
+3
+k2
+1
+− 1
+28
+k2
+3
+k2
+2
++ 1
+7
+k4
+3
+k2
+1k2
+2
+. (3.12)
+Here, in the second line, we give the separable form similar to eqs. (2.5) and (2.6).
+To compute the angular bispectrum, we need to obtain the harmonic coefficients, as defined in
+eq. (2.8), for the field in redshift space. Using eqs. (3.8) and (3.9) we derive the leading-order and
+next-to-leading-order harmonic coefficientsδ(1)
+ℓm and δ(2)
+ℓm in redshift space. These can be obtained
+analogously to the real space eqs. (2.9) and (2.10), where theik · ˆn factors in the velocity can be
+treated as derivatives of theexp(iχk · ˆs). We thus have
+δ(1)
+ℓm =
+Z
+χ
+Z
+d2ˆs Y ∗
+ℓm(ˆs)
+Z d3k
+(2π)3
+
+δ(1)(k) − f(ik · ˆn)u(1)
+ˆn (k)
+
+eik·s
+=
+Z
+χ
+Z
+d2ˆs Y ∗
+ℓm(ˆs)
+Z d3k
+(2π)3
+
+δ(1)(k) + θ(1)(k) 1
+k2
+1
+H
+∂2
+∂χ2
+
+eik·s
+= 4πiℓ
+Z
+χ
+Z d3k
+(2π)3 Y ∗
+ℓm(ˆk)
+
+jℓ (kχ) δ(1)(k) + j′′
+ℓ (kχ) 1
+H θ(1)(k)
+
+, (3.13)
+where everything is expressed in terms of the real-space linear galaxy overdensity and velocity
+divergence fields (We drop the subscriptr from the real-space density from hereon.). In addition,
+we have a single stochastic contribution at first order
+δ(1)
+ℓm,stoch. = 4πiℓ
+Z
+χ
+Z d3k
+(2π)3 Y ∗
+ℓm(ˆk)jℓ (kχ) ϵ(1)(k) . (3.14)
+– 14 –
+
+Similarly, for the second-order harmonic coefficients, we have
+δ(2)
+ℓm =
+Z
+χ
+Z
+d2ˆs Y ∗
+ℓm(ˆs)
+"Z d3k
+(2π)3
+
+δ(2)(k) − f(ik · ˆn)u(2)
+ˆn (k)
+
+eik·s
++
+Z d3k1
+(2π)3
+d3k2
+(2π)3
+
+− f [i (k1 + k2) · ˆn] δ(1)(k1)u(1)
+ˆn (k2)
++ f 2
+(ik1 · ˆn)(ik2 · ˆn) + (ik2 · ˆn)2
+u(1)
+ˆn (k1)u(1)
+ˆn (k2)
+
+ei(k1+k2)·s
+#
+. (3.15)
+We can rewrite the first line above in the same way as at linear order, i.e.,
+
+δ(2)(k) − f(ik · ˆn)u(2)
+ˆn (k)
+
+eik·s =
+
+δ(2)(k) + θ(2)(k) 1
+k2
+1
+H
+∂2
+∂χ2
+
+eiχk·ˆn , (3.16)
+while the remaining part, in the second and third lines, can be written as
+
+− f (ik12 · ˆn) δ(1)(k1)u(1)
+ˆn (k2) − f 2
+(k1 · ˆn)(k2 · ˆn) + (k2 · ˆn)2
+u(1)
+ˆn (k1)u(1)
+ˆn (k2)
+
+eik12·s
+=
+"
+1
+H
+1
+k2
+2
+ ∂2
+∂χ2
+2
++ ∂2
+∂χ1∂χ2
+
+ei(χ1k1+χ2k2)· ˆnδ(1)(k1)θ(1)(k2)
++ 1
+H2
+1
+k2
+1k2
+2
+ ∂4
+∂χ2
+1∂χ2
+2
++ ∂4
+∂χ1∂χ3
+2
+
+ei(χ1k1+χ2k2)· ˆnθ(1)(k1)θ(1)(k2)
+#
+χ1=χ2=χ
+, (3.17)
+where k12 ≡ k1 + k2 and we used the fact thats = χˆn. Combining all these, and using the
+plane-wave expansion, we obtain
+δ(2)
+ℓm = 4πiℓ
+Z
+χ
+Z d3k
+(2π)3 Y ∗
+ℓm(ˆk)
+
+jℓ(kχ)δ(2)(k)| {z }
+SOD
++ j′′
+ℓ (kχ) 1
+H θ(2)(k)
+| {z }
+SOV
+
++ (4π)2X
+ℓ1m1
+X
+ℓ2m2
+iℓ1+ℓ2Gmm1m2
+ℓℓ1ℓ2
+Z
+χ
+Z d3k1
+(2π)3
+d3k2
+(2π)3 Y ∗
+ℓ1m1(ˆk1)Y ∗
+ℓ2m2(ˆk2)
+× 1
+2
+
+
+1
+H
+
+jℓ1(k1χ)j′′
+ℓ2(k2χ) + k1j′
+ℓ1(k1χ) 1
+k2
+j′
+ℓ2(k2χ)
+
+δ(1)(k1)θ(1)(k2) + perm1↔2
+| {z }
+DV
++ 1
+H2
+
+j′′
+ℓ1(k1χ)j′′
+ℓ2(k2χ) + 1
+k1
+j′
+ℓ1(k1χ)k2j′′′
+ℓ2(k2χ)
+
+θ(1)(k1)θ(1)(k2) + perm1↔2
+| {z }
+VV
+
+ , (3.18)
+where in the last two lines we have symmetrised ink1 and k2 for later convenience. We can
+identify four different components in the second-order redshift-space tracer overdensity: second-
+order density (SOD), second-order velocity (SOV), density–velocity (DV) and velocity–velocity
+(VV).Itisconvenienttowritedownthebispectrumseparatelywiththesefourterms. Asisevident
+– 15 –
+
+from these results, the velocity terms introduce derivatives of the spherical Bessel functions. In
+fact, the Bessel function terms in the SOV, DV and VV components are all total derivatives with
+respect to χ, up to time derivatives of the real-space density and velocity divergence fields. This
+behaviour is inherited from the relevant terms in the first line of eq. (3.9). As at first order, this
+suppresses the RSD contributions to the second-order projected density at highℓ after integrating
+over broad window functions (i.e., the Limber limit).
+Stochastic contributions at second order give
+δ(2)
+ℓm,stoch. = 4πiℓ
+Z
+χ
+Z d3k
+(2π)3 Y ∗
+ℓm(ˆk)jℓ(kχ)ϵ(2)(k)
++ (4π)2X
+ℓ1m1
+X
+ℓ2m2
+iℓ1+ℓ2Gmm1m2
+ℓℓ1ℓ2
+Z
+χ
+Z d3k1
+(2π)3
+d3k2
+(2π)3 Y ∗
+ℓ1m1(ˆk1)Y ∗
+ℓ2m2(ˆk2)
+× 1
+2
+"
+jℓ1(k1χ)jℓ2(k2χ)ϵ(1)
+δ (k1)δ(1)(k2) + perm1↔2
++ 1
+H
+
+jℓ1(k1χ)j′′
+ℓ2(k2χ) + k1j′
+ℓ1(k1χ) 1
+k2
+j′
+ℓ2(k2χ)
+
+ϵ(1)(k1)θ(1)(k2) + perm1↔2
+#
+. (3.19)
+3.2 Angular bispectrum in redshift space
+Given the results for the first- and second-order harmonic coefficients of the redshift space overden-
+sity, we proceed to obtain the angular bispectrum in redshift space. Similarly to the derivations
+presented in eq. (2.12) for real space, we can identify four contributions to the redshift space
+bispectrum arising from the different terms contributing to the second-order eq. (3.18). We can
+write
+Bℓ1ℓ2ℓ3 = BSOD
+ℓ1ℓ2ℓ3 + BSOV
+ℓ1ℓ2ℓ3 + BDV
+ℓ1ℓ2ℓ3 + BVV
+ℓ1ℓ2ℓ3 + BStoch.
+ℓ1ℓ2ℓ3 , (3.20)
+where each of the components is given explicitly below.
+1. Second-order density
+BSOD
+ℓ1ℓ2ℓ3 = 2
+ 2
+π
+3Z
+χ1χ2χ3
+D1D2D2
+3
+Z
+r2dr
+Z
+k2
+1dk1k2
+2dk2k2
+3dk3 K2(k1, k2; χ3)PL(k1)PL(k2)
+×
+ 
+b10jℓ1(k1χ1) − f1j′′
+ℓ1(k1χ1)
+ 
+b10jℓ2(k2χ2) − f2j′′
+ℓ2(k2χ2)
+
+jℓ3(k3χ3)
+× jℓ1(k1r)jℓ2(k2r)jℓ3(k3r) +2 perms. (3.21)
+2. Second-order velocity
+BSOV
+ℓ1ℓ2ℓ3 = −2
+ 2
+π
+3Z
+χ1χ2χ3
+D1D2D2
+3f3
+Z
+r2dr
+Z
+k2
+1dk1k2
+2dk2k2
+3dk3 G2(k1, k2)PL(k1)PL(k2)
+×
+ 
+b10jℓ1(k1χ1) − f1j′′
+ℓ1(k1χ1)
+ 
+b10jℓ2(k2χ2) − f2j′′
+ℓ2(k2χ2)
+
+j′′
+ℓ3(k3χ3)
+× jℓ1(k1r)jℓ2(k2r)jℓ3(k3r) +2 perms. (3.22)
+– 16 –
+
+3. Density-velocity
+BDV
+ℓ1ℓ2ℓ3 = −
+ 2
+π
+2Z
+χ1χ2χ3
+D1D2D2
+3f3
+Z
+k2
+1dk1k2
+2dk2 PL(k1)PL(k2)
+×
+
+jℓ1(k1χ3)j′′
+ℓ2(k2χ3) + k1j′
+ℓ1(k1χ3) 1
+k2
+j′
+ℓ2(k2χ3) + perm1↔2
+
+×
+ 
+b10jℓ1(k1χ1) − f1j′′
+ℓ1(k1χ1)
+ 
+b10jℓ2(k2χ2) − f2j′′
+ℓ2(k2χ2)
+
++2 perms. (3.23)
+4. Velocity-velocity
+BVV
+ℓ1ℓ2ℓ3 =
+ 2
+π
+2Z
+χ1χ2χ3
+D1D2D2
+3f 2
+3
+Z
+k2
+1dk1k2
+2dk2 PL(k1)PL(k2)
+×
+
+k1j′′′
+ℓ1(k1χ3) 1
+k2
+j′
+ℓ2(k2χ3) + 1
+k1
+j′
+ℓ1(k1χ3)k2j′′′
+ℓ2(k2χ3) + 2j′′
+ℓ1(k1χ3)j′′
+ℓ2(k2χ3)
+
+×
+ 
+b10jℓ1(k1χ1) − f1j′′
+ℓ1(k1χ1)
+ 
+b10jℓ2(k2χ2) − f2j′′
+ℓ2(k2χ2)
+
++2 perms. (3.24)
+5. Stochastic
+BStoch.
+ℓ1ℓ2ℓ3 =
+ 2
+π
+2Z
+χ1,χ2,χ3
+D1D3
+Z
+k2
+1dk1k2
+2dk2 PL(k1)
+×
+
+b10(χ1)jℓ1 (k1χ1) − f1j′′
+ℓ1 (k1χ1)
+
+jℓ2 (k2χ2)
+×
+
+jℓ1(k1χ3)jℓ2(k2χ3)Pϵϵδ(χ2, χ3)
+− f3
+
+jℓ2(k2χ3)j′′
+ℓ1(k1χ3) + k2j′
+ℓ2(k2χ3) 1
+k1
+j′
+ℓ1(k1χ3)
+
+Pϵϵ(χ2, χ3)
+
++ (1 ↔ 2)
++2 perms. (3.25)
+We note, again, that we do not explicitly show the scale-invariant stochastic contribution to the
+angular bispectrum from Bϵ, which is a constant, and is not affected by the RSD effect. The
+SOD term contains the real space angular bispectrum (discussed in section 2), with additional
+(Kaiser [26]) terms in the first-order density field when considering the RSD effect. The SOV
+term contains the second-order velocity contributions, while the DV and VV terms take care of
+the second-order density–velocity and velocity–velocity contributions.
+All these tree-level terms can be written in a separable form similar to eq. (2.19), the only
+difference being the partial derivatives acting on the spherical Bessel functions. We can treat
+these by taking the derivatives of the unprojected angular power spectrum
+2
+π
+Z
+k2dk j ℓ(kr)j(m)
+ℓ (kχ)k2nPL(k) = ∂m
+∂χm Cn− m
+2
+(ℓ, r, χ) . (3.26)
+This treatment allows us again to use our flat-sky approximation described in section 2.3. The
+derivatives can then be treated analytically, acting directly on the special functions in the ex-
+pansion given in eqs. (2.25) and (2.26). Alternatively, they can be taken numerically by first
+evaluating Cn− m
+2
+. We adopt the latter approach in this work.
+Furthermore, the SOD and SOV terms involve an integral over thek3 momentum while lacking
+a dependence on the linear power spectrum. This is expected, as similar terms also appear in the
+– 17 –
+
+real space case, giving rise toIn terms as defined in eq. (2.20). The origin of these contributions
+to the SOD and SOV terms lies in the non-trivial structure of the K and G kernels. When
+expressed in a separable form, these kernels introduce an additional dependence onk3, leading to
+In contributions for n ̸= 0. Notably, the In terms are absent in the DV and VV contributions,
+as only I0 contributes in these cases. This integral is trivial and can be evaluated directly, thus
+simplifying these terms.
+Moreover, the SOV term contains an additional second-order derivative of the spherical Bessel
+function, i.e., we have (generalizing to higher derivatives)
+2
+π
+Z
+k2dk j ℓ(kr)j(m)
+ℓ (kχ)k2n = ∂m
+∂χm In− m
+2
+(ℓ, r, χ) . (3.27)
+The k2n factor in the integrand arises from theG2 kernel; the indexn can take values of0, 1, 2.
+However, the action of the second-order derivative effectively reduces the index ofIn− m
+2
+below
+zero for n = 0, which requires a separate treatment. We instead use
+∂2
+∂χ2 I−1(ℓ, r, χ) =
+ 2
+π
+ ∂2
+∂χ2
+Z
+dk j ℓ(kr)jℓ(kχ)
+= 1
+2ℓ + 1
+∂2
+∂χ2
+
+χ−ℓ−1rℓΘH(χ − r) + r−ℓ−1χℓΘH(r − χ)
+
+, (3.28)
+where ΘH(χ − r) is the Heaviside step function, withΘH(0) = 1 /2. For the remaining cases we
+have
+∂2
+∂χ2 I0(ℓ, r, χ) =
+ 2
+π
+ ∂2
+∂χ2
+Z
+k2dk j ℓ(kr)jℓ(kχ) = ∂2
+∂χ2
+ 1
+rχ δD(χ − r)
+
+, (3.29)
+∂2
+∂χ2 I1(ℓ, r, χ) =
+ 2
+π
+ ∂2
+∂χ2
+Z
+k2dk k 2jℓ(kr)jℓ(kχ)
+= ∂2
+∂χ2
+
+− ∂2
+∂χ2 − 2
+χ
+∂
+∂χ + ℓ(ℓ + 1)
+χ2
+ 1
+χ2 δD(χ − r)
+
+. (3.30)
+In this work, we choose to use integration-by-parts to move theχ derivatives onto the window
+function when dealing with eqs. (3.28–3.30). This is effective for the Gaussian radial window
+functions, which we have chosen for an ideal galaxy-clustering scenario. However, we emphasize
+again that for a non-smooth window function, or a window function that does not go to zero on
+the boundaries, one needs to be careful with the boundary terms or, alternatively, use integration-
+by-parts to transfer the derivatives to the unequal-time angular power spectra, as discussed in
+section 2.3.
+3.3 Limber approximation in redshift space
+We can ignore all terms involving derivatives of the spherical Bessel functions in the Limber
+limit, as explained after eq. (3.18). In other words, we can ignore redshift space distortions in
+this limit and simply use the Limber approximation in real space (eq. 2.33). We verify this
+numerically in section 3.4. Partial-Limber approximations for squeezed configurations can be
+found in appendix B.
+– 18 –
+
+3.4 Results
+We consider the same three bispectrum configurations that were discussed in section 2.5, and
+we again look at the equivalent equal- and unequal-time setups. We show the equal-time results
+in figure 4, while the unequal-time results are shown in figure 5. In all cases, we compare the
+full-sky results (obtained by brute-force numerical integration for low multipoles) with our flat-
+sky approximation, finding percent-level agreement over all scales of interest. The exceptions
+are scales ℓ ≳ 200 in the unequal-time squeezed configuration, where the agreement is several
+percent, which is consistent with the expected errors of our brute-force numerical integration for
+these multipoles. These findings are consistent with those obtained for the real space bispectrum,
+presented in section 2.5. Moreover, on small scales, the Limber approximation converges to the
+flat-sky results, confirming the accuracy of these results. Percent-level agreement of the two is
+typically achieved aroundℓ ≳ 100 in all of our configurations.
+As already discussed in section 2.5, the unequal-time angular bispectrum without RSD (the
+solid blue lines in the third row of figure 5, labelled SOD real) crosses zero on very large scales.
+We see that the full SOD term including RSD (solid orange lines labelled SOD RSD in the
+figure), along with the SOV and DV terms, are all positive, however, while the VV term is
+negative on all scales (the magnitude is shown in the figure). Nonetheless, the total RSD angular
+bispectrum remains positive. In both the equilateral and folded configurations, and for the equal-
+time and unequal-time cases, the SOD RSD converges to SOD real on small scales. This is
+expected as the RSD corrections are suppressed on scales small compared to the radial width of
+the window functions; from figures 4 and 5, we see that the linear Kaiser corrections (the terms
+involving j′′
+ℓ (kχ) in eq. 3.21) start to become negligible aroundℓ ∼ 100. For z = 1, this multipole
+corresponds to a scale aboutℓ/χ = k ≈ 0.04 hMpc−1, related to the widthσz ≈ 0.05, which is
+consistent with the numerical results. Similarly, the other RSD-generated terms, SOV, DV and
+VV, become negligible on small scales. On the other hand, on large scales the RSD corrections
+can be significant, with The VV term, however, is a small contributor on almost all scales (except
+for the largest scales in the equal-time case). Even though these trends are, in detail, dependent
+on the specific window function configurations, they provide a qualitative insight into the relative
+importance of the various terms.
+Lastly, let us look at the squeezed-limit results. Here, RSD contributions to the SOD term in
+the bispectrum remain important to larger multipoles than in the other bispectrum configurations.
+(The SOD RSD in orange in the lower middle panels in figures 4 and 5 is above the SOD real,
+in blue, on all scales.) The reason for this is that there is always a permutation where the
+linear RSD Kaiser term is on the soft mode and this is less suppressed by integration through
+the radial window function. The SOV term behaves in the squeezed limit similarly to the other
+configurations: it is important on large scales but drops off rapidly on smaller scales. This is
+because an appreciable small-scale SOV bispectrum in the squeezed configuration would require
+the second-order velocity to be associated with one of the two hard modes, but as this is a total
+radial derivative it is then suppressed by the window-function integration. The DV term has
+similar large-scale behaviour, reaching the same amplitude as SOD real forℓ ≲ 10. However, on
+smaller scales, the DV term is sub-dominant but not negligible.
+– 19 –
+
+101 102 103
+10 12
+10 11
+10 10
+10 9
+10 8
+B 1 2 3
+Equilateral
+Flat-sky
+Limber
+Full-sky
+101 102 103
+10 11
+10 10
+10 9
+10 8
+Squeezed
+101 102
+10 11
+10 10
+10 9
+10 8
+Folded
+101 102 1035
+0
+5
+Rel. Err. [%]
+ 101 102 1035
+0
+5
+101 1025
+0
+5
+101 102 103
+10 20
+10 17
+10 14
+10 11
+10 8
+B 1 2 3
+SOD real
+SOD RSD
+SOV
+DV
+|VV|
+Stoch.
+101 102 103
+10 17
+10 15
+10 13
+10 11
+10 9
+10 7
+Limber SOD
+Limber Stoch.
+101 102
+10 18
+10 15
+10 12
+10 9
+101 102 103
+0
+2
+4Ratio
+101 102 103
+0
+2
+4
+101 102
+0
+2
+4
+Figure 4: Angular bispectrum including the RSD effect forequal-time radial Gaussian window
+functions centred onz1 = z2 = z3 = 1.0 and with equal widthsσz = 0.05. These, and the bias
+and mean galaxy number density, are the same as in figure 2. The columns show the equilateral,
+squeezed and folded configurations (left to right). In the first row, we show the tree-level angular
+bispectrum, where we compare the flat-sky (blue solid line), the Limber approximation (orange
+dashed line) and the full-sky (green stars) results. (We note that these results include the scale-
+dependent stochastic contributions.) In the second row, we show the fractional differences relative
+to the flat-sky results, showing the excellent agreement between the flat- and full-sky results. In
+the third row, the solid lines show the contributions to the flat-sky results from the different
+redshift components in eq. (3.20). For the SOD term, we show the full contribution (SOD RSD;
+orange) as well as the part without RSD (SOD real; blue), which is the same as in figure 2.
+The SOV (green), DV (red), magnitude of VV (purple) and stochastic (Stoch.; brown) terms
+are also shown. We also show the Limber approximations to the SOD term (pink dashed) and
+to the stohastic term (Limber Stoch.; gray dashed). The final row shows the ratio of all these
+components to SOD real to demonstrate the scale dependence of the different RSD terms.
+4 Conclusion
+Computation of the full-sky angular bispectrum is a difficult task due to its inherent complexity
+and the lack of efficient, robust implementations. In Ref. [18], we demonstrated that the flat-
+sky approximation of the angular power spectrum can be rigorously derived from the full-sky
+– 20 –
+
+101 102 10310 13
+10 12
+10 11
+10 10
+B 1 2 3
+Equilateral
+Flat-sky
+Limber
+Full-sky
+101 102 103
+10 11
+10 10
+Squeezed
+101 102
+10 12
+10 11
+10 10
+Folded
+101 102 1035
+0
+5
+Rel. Err. [%]
+ 101 102 1035
+0
+5
+101 1025
+0
+5
+101 102 103
+10 21
+10 18
+10 15
+10 12
+B 1 2 3
+SOD real
+SOD RSD
+SOV
+DV
+|VV|
+Stoch.
+101 102 103
+10 19
+10 17
+10 15
+10 13
+10 11
+Limber SOD
+Limber Stoch.
+101 102
+10 20
+10 18
+10 16
+10 14
+10 12
+10 10
+101 102 103
+0
+2
+4Ratio
+101 102 103
+0
+2
+4
+101 102
+0
+2
+4
+Figure 5: Angular bispectrum with RSD included for unequal-time radial Gaussian window
+functions centred onz1 = 1.0, z2 = 1.05 and z3 = 1.1 with equal widthsσz = 0.1. The description
+of the lines and panels is the same as for figure 4. Note, however, that we show here the absolute
+value of the VV term since it is negative across all scales.
+formalism as the leading-order asymptotic expansion under the distant-observer limit and small
+surveyangles. Buildingontheseresults, weshowedhowtheFFTLogexpansion[27]canbeutilized
+tofacilitatethefastandaccuratecomputationoftheunequal-timeangularpowerspectrum Cℓ (see
+[17]). Here, we extended these methodologies to compute the angular bispectrum within the flat-
+sky approximation, including the effect of redshift space distortions, using tree-level perturbative
+resultsforgeneralbiasedtracers. Wealsocarefullydiscusshowthestochasticityenterstheangular
+bispectrum and calculated its contribution.
+In the first part of this work, we started by neglecting redshift space distortions for simplicity
+of presentation. We rederived the tree-level full-sky angular bispectrum (analogous to the results
+presented in [15]), which requires the second-order perturbative expansion of the biased tracer
+field. The angular bispectrum was decomposed into the survey-independent unequal-time bispec-
+trum, Bℓ1ℓ2ℓ3 (the unprojected angular bispectrum), and the integration over arbitrary survey-
+dependent window functions. As also shown in [15], the separability of the tree-level bispectrum
+stems from the properties of the second-order biasing kernel,K2. This allows the angular bis-
+pectrum to be expressed as a sum of products of two angular power spectrum terms,Cn(ℓ, r, χ),
+each involving an integral over wavenumber of a modified linear power spectrum multiplied by a
+– 21 –
+
+given kn factor, along with an additional radial integration over one of the distance variables in
+Cn(ℓ, r, χ). To ensure computational efficiency and robust numerical evaluation, we approximate
+these constituent angular power spectra,Cn, using the flat-sky approximation described in [17].
+This step is critical to achieving an accurate and efficient evaluation of the angular bispectrum.
+In presenting our results, we examined both equal-time and unequal-time (at and near toz = 1)
+radial window function scenarios while analyzing three characteristic bispectrum configurations:
+equilateral, squeezed, and folded. Across all cases, we observed excellent agreement, at the percent
+level, between brute-force full-sky calculations and our flat-sky approximation. Furthermore, in
+the small-scale regime, where direct numerical evaluation of the full-sky results becomes infeasible,
+we demonstrated the convergence of our flat-sky results with the Limber approximation. This
+reaffirms the accuracy and practical utility of our approach for efficient bispectrum computations
+on all scales (at the redshifts we considered).
+In the second part of this paper, we extended our analysis to include redshift space distortions.
+Startingwiththefull-skybispectrum, wederivedthetree-levelresultsbyexpandingthetracerfield
+to second order. Under the distant-observer approximation, we classifed the angular bispectrum
+contributions into four components:second-order density, second-order velocity, density–velocity,
+and velocity–velocityterms. The latter three arise only because of redshift space distortions.
+Similarly to the case without redshift space distortions, each component can be expressed in
+a separable form. Redshift-space distortions introduce additional correlations in the angular
+bispectrum, which can also be represented as products of twoCn(ℓ) terms, now also modified
+by several radial derivatives. Using our flat-sky approximation for these terms, we computed
+results for both equal-time and unequal-time radial scenarios (near z = 1) across equilateral,
+squeezed, and folded bispectrum configurations. Once again, we found excellent agreement, at
+the percent level, between the full-sky and flat-sky results across nearly all scales of interest. As
+when neglecting redshift space distortions, the brute-force computation of full-sky results becomes
+unreliable at small scales, whereas our flat-sky results were shown to converge with the Limber
+approximation. This convergence establishes the accuracy and robustness of our flat-sky results
+across all relevant scales (at the considered redshift), demonstrating their utility for efficient and
+precise bispectrum analysis.
+In examining the limitations of the Limber approximation for the angular bispectrum, we first
+observed that its reliability on small scales largely arises from the dominance of the second-order
+density (SOD) term over other contributions, which are suppressed by integrating over radial
+window functions, in most bispectrum configurations. Additionally, redshift space distortion ef-
+fects become important only on relatively larger scales, precisely where the Limber approximation
+begins to fail. In the squeezed configuration, when one mode is much softer than the others, the
+canonical Limber approximation is inherently inaccurate (except at high multipoles where our
+choice of soft leg,1+ ℓ/10, becomes sufficiently large). We present an extension of the Limber ap-
+proximation for the squeezed configuration in appendix B, which achieves better performance but
+is more complicated to evaluate. Beyond these observations, which are primarily based on tree-
+level results, we anticipate that on sufficiently small scales nonlinear contributions will become
+significant.
+To the best of our knowledge, the methods presented in this work provide the most efficient
+approach for computing the galaxy angular bispectrum across a wide range of scales and red-
+– 22 –
+
+shifts of interest. Regarding computational performance, evaluating theCn(ℓ, r, χ) at 100 points
+in r and 200 in χ, and encompassing all three permutations, our flat-sky approach (utilizing
+400 FFTLog frequencies, which is a very conservative choice; reducing this number would sig-
+nificantly reduce the computational time) requires only 30 seconds per triplet on a single CPU
+thread (2.3GHz). In contrast, the direct brute-force numerical evaluation of the full-sky results
+takes tens of hours. Specifically, achieving percent-level accuracy with the full-sky approach re-
+quired 17 hours for low multipoles and up to 29 hours for high multipoles, even when parallelized
+across three CPU threads. To accompany this paper, we are releasing our Python implementation
+designed for the tree-level angular bispectrum of galaxy clustering including redshift space distor-
+tions4. This implementation facilitates efficient and optimized usage of the angular bispectrum in
+MCMC analyses for upcoming spectroscopic and photometric surveys. Additionally, we believe
+the computational performance of our approach could be further improved through enhanced
+coding practices, with substantial algorithmic gains possible by adopting optimized decomposi-
+tions for the linear power spectrum, as demonstrated in implementations such as COBRA [28].
+Since [28] has shown that using about14 eigenfunctions is enough for representing the 3D matter
+power spectrum, we estimate an improvement in computational time by around a factor of 14
+with COBRA implemented.
+Acknowledgments
+Z.G. acknowledges support from theAgence Nationale de la Recherche(ANR) under grant No.
+ANR-23-CPJ1-0160-01. Z.V. acknowledges the support of the Kavli Foundation and Croatian
+Science Foundation (grant number IP-2025-02-1338). A.C. acknowledges support from the STFC
+(grant number ST/S000623/1).
+A Non-distant-observer correction terms
+In the main text, we ignored the non-distant-observer corrections (nDOC) to redshift space dis-
+tortions (RSD); see the discussion after eqs. (3.8) and (3.9). In this appendix, we calculate how
+large these corrections are for the angular power spectrum.
+In linear theory, the angular power spectrum including nDOC is
+Cℓ =
+ 2
+π
+2Z
+χ1χ2
+D1D2
+Z
+k2dk
+
+b10jℓ(kχ1) − f j′′
+ℓ (kχ1) − 2f
+kχ1
+j′
+ℓ(kχ1)
+
+×
+
+b10jℓ(kχ2) − f j′′
+ℓ (kχ2) − 2f
+kχ2
+j′
+ℓ(kχ2)
+
+P (k)
+
+. (A.1)
+We separate the equation asCℓ = CRSD
+ℓ + CnDOC
+ℓ , where
+CRSD
+ℓ =
+ 2
+π
+2Z
+χ1χ2
+D1D2
+Z
+k2dk
+
+b10jℓ(kχ1) − f j′′
+ℓ (kχ1)
+
+b10jℓ(kχ1) − f j′′
+ℓ (kχ2)
+
+P (k) (A.2)
+is the commonly used Kaiser RSD part, whileCnDOC
+ℓ is the part arising from the distant-observer
+correction.
+4https://github.com/GZCPhysics/AngularBispectrum_RSD.git
+– 23 –
+
+10 10
+10 8
+10 6
+C
+CRSD
+CnDOC
+101
+102
+1
+0
+1
+Rel. err. [%]
+Figure 6: Non-distant observer correction (nDOC) to the angular power spectrum for sources
+around z = 1 .0 (blue, solid lines), compared to the canonical result ignoring these corrections
+(black, dot-dashed lines). We setσz = 0.05 and b10 = 1. The nDOC contributes only up to0.5%
+of the canonical RSD spectrum.
+As shown in figure 6, the nDOC RSD term contributes less than0.5% to the angular power
+spectrum for sources aroundz = 1.0. Thus, this effect can be ignored given that we are considering
+redshifts around and above this value.
+Although we focused only on the angular power spectrum, we argue that since the tree-level
+angular bispectra receive contributions from the products of pairs of (unprojected) angular power
+spectra, the contribution of nDOC to angular bispectra should be negligible as well. Therefore,
+we do not explicitly evaluate the nDOC terms for the angular bispectra. Note that it is products
+of unprojected spectra, though, for the bispectrum, but figure 6 is for projected angular power
+spectrum.
+B Extended Limber approximation for the squeezed limit
+B.1 Real-space case
+For squeezed configurations, we need to be more careful with the Limber approximation. Since one
+of the multipoles (ℓ3, say) is chosen to be soft, the typical fluctuation wavelengthχ3/ℓ3 may not be
+narrow compared to the width of the window functionW3(χ3) and the Limber approximation may
+not hold. We found that simply making the replacement in eq. (2.32) for all occurrences of the
+spherical Bessel functions for the hard modesℓ1 and ℓ2 is not accurate. A better approximation
+is obtained by replacing only thejℓi(kiχi) for i = 1, 2, but not the spherical Bessel functions in
+the geometrical projection functionDℓ1ℓ2ℓ3. Thus, choosingℓ3 to be the soft mode, we adopt the
+– 24 –
+
+following Limber-like approximation for the squeezed configuration:
+BLim.
+ℓ1ℓ2ℓ3 =
+ 2
+π
+3Z
+χ1χ2χ3
+2Y
+i=1
+  ℓi
+χi
+2r π
+2ℓi
+1
+χi
+!Z
+k2
+3dk3jℓ3(k3χ3)
+×
+Z
+r2drjℓ1
+ ℓ1
+χ1
+r
+
+jℓ2
+ ℓ2
+χ2
+r
+
+jℓ3 (k3r) B
+ ℓ1
+χ1
+, ℓ2
+χ2
+, k3; z[χ1], z[χ2], z[χ3]
+
+. (B.1)
+B.2 Redshift-space
+In redshift space, besides the issues discussed in section B.1, we also need to include the RSD
+corrections for the soft mode. First, we consider the SOD term, which dominates on the scales of
+interest. By choosingℓ3 as the soft mode, we have
+BSOD,Lim.
+ℓ1ℓ2ℓ3 =
+ 2
+π
+3Z
+χ1χ2χ3
+"
+D1D2D2
+3b10(χ1)b10(χ2)
+2Y
+i=1
+  ℓi
+χi
+2r π
+2ℓi
+1
+χi
+!Z
+k2
+3dk3jℓ3(k3χ3)
+×
+Z
+r2drjℓ1
+
+ℓ1
+χ1
+r
+
+jℓ2
+
+ℓ2
+χ2
+r
+
+jℓ3 (k3r) K2
+
+ℓ1
+χ1
+, ℓ2
+χ2
+, k3; χ3
+
+PL
+
+ℓ1
+χ1
+
+PL
+
+ℓ2
+χ2
+
++ 2D1D2
+2D3b10(χ1)
+ ℓ1
+χ1
+2r π
+2ℓ1
+1
+χ1
+Z
+k2
+2dk2 jℓ2 (k2χ2)
+×
+Z
+k2
+3dk3
+ 
+b10jℓ3(k3χ3) − f3j′′
+ℓ3(k3χ3)
+
+×
+Z
+r2drjℓ1
+
+ℓ1
+χ1
+r
+
+jℓ2 (k2r) jℓ3 (k3r) K2
+
+ℓ1
+χ1
+, k3, k2; χ2
+
+PL (k3) PL
+
+ℓ1
+χ1
+#
++perm1↔2 . (B.2)
+Note that the first term arises from second-order corrections to the soft mode and so is expected
+to be subdominant.
+Moreover, in the squeezed-limit configuration, we also find numerically that the DV term has
+a non-negligible contribution on small scales. Thus, we need to include this term in the partial-
+Limber approximation as
+BDV,Lim.
+ℓ1ℓ2ℓ3 = −
+ 2
+π
+2Z
+χ1χ2χ3
+"
+D1D2D2
+3f3b10(χ3)
+2Y
+i=1
+  ℓi
+χi
+2r π
+2ℓi
+1
+χi
+b10(χi)
+!
+×
+
+jℓ1
+
+ℓ1
+χ1
+χ3
+
+j′′
+ℓ2
+
+ℓ2
+χ2
+χ3
+
++ ℓ1
+ℓ2
+χ2
+χ1
+j′
+ℓ1
+
+ℓ1
+χ1
+χ3
+
+j′
+ℓ2
+
+ℓ2
+χ2
+χ3
+
+PL
+
+ℓ1
+χ1
+
+PL
+
+ℓ2
+χ2
+
++ D1D2
+2D3f2b10(χ2)
+ ℓ1
+χ1
+2r π
+2ℓ1
+1
+χ1
+Z
+k2
+3dk3
+ 
+b10jℓ3(k3χ3) − f3j′′
+ℓ3(k3χ3)
+
+×
+
+jℓ1 (k1χ2) j′′
+ℓ3 (k3χ2) + k1
+k3
+j′
+ℓ1 (k1χ2) j′
+ℓ3(k3χ2) + perm1↔3
+
+k1= ℓ1
+χ1
+PL
+
+ℓ1
+χ1
+
+PL (k3)
+#
++ perm1↔2 . (B.3)
+Due to their complexity, these partial-Limber expressions for the squeezed limit are no longer
+very convenient and simple to evaluate numerically and thus do not provide any practical benefit
+– 25 –
+
+compared to our full results. However, we do present them in our numerical results in the next
+subsection for completeness. These numerical results include a Limber version of the (scale-
+dependent) stochastic term given by
+BStoch.Lim.
+ℓ1ℓ2ℓ3 = 2
+Z
+dχ3
+W1(χ3)W2(χ3)W3(χ3)
+χ4
+3
+D2(χ3)PL
+ ℓ1
+χ3
+
+b2
+10(χ3)Pϵϵδ(χ3, χ3) + perm1↔2
++ 2
+ 2
+π
+Z
+dχ1dχ3
+W1(χ3)W2(χ3)W3(χ1)
+χ2
+3
+D(χ1)D(χ3)
+×
+Z
+k2
+1dk1PL(k1)
+ 
+b10(χ1)jℓ3(k1χ1) − f(χ1)j′′
+ℓ3(k1χ1)
+ 
+b10(χ3)jℓ3(k1χ3) − f(χ3)j′′
+ℓ3(k1χ3)
+
+.
+(B.4)
+B.3 Numerical results
+We compare results for our partial-Limber approximation to the canonical Limber approximation
+for the squeezed configuration in figure 7. We consider equal- and unequal-time cases with the
+same parameters as in figures 4 and 5, respectively.
+We find that in both cases, the partial-Limber approximation extends the agreement with the
+flat-sky (or full-sky) results to lower multipoles compared to the canonical Limber approximation,
+albeit at greater computational cost. We also note that the poorer performance of the canonical
+Limber approximation on small scales in the RSD cases compared to real space is due to the
+neglect of all RSD corrections.
+References
+[1] R. Laureijs, J. Amiaux, S. Arduini, J.L. Auguères, J. Brinchmann, R. Cole et al., Euclid Definition
+Study Report, arXiv e-prints (2011) arXiv:1110.3193 [ 1110.3193].
+[2] DESI Collaboration, A. Aghamousa, J. Aguilar, S. Ahlen, S. Alam, L.E. Allen et al., The DESI
+Experiment Part I: Science,Targeting, and Survey Design, arXiv e-prints (2016) arXiv:1611.00036
+[1611.00036].
+[3] LSST Dark Energy Science collaboration, The N5K Challenge: Non-Limber Integration for
+LSST Cosmology, Open Journal of Astrophysics6 (2023) 1 [ 2212.04291].
+[4] D. Spergel, N. Gehrels, C. Baltay, D. Bennett, J. Breckinridge, M. Donahue et al., Wide-Field
+InfrarRed Survey Telescope-Astrophysics Focused Telescope Assets WFIRST-AFTA 2015 Report,
+arXiv e-prints (2015) arXiv:1503.03757 [ 1503.03757].
+[5] H. Gil-Marín, J. Noreña, L. Verde, W.J. Percival, C. Wagner, M. Manera et al., The power
+spectrum and bispectrum of SDSS DR11 BOSS galaxies – I. Bias and gravity, Mon. Not. Roy.
+Astron. Soc.451 (2015) 539 [ 1407.5668].
+[6] H. Gil-Marín, W.J. Percival, L. Verde, J.R. Brownstein, C.-H. Chuang, F.-S. Kitaura et al., The
+clustering of galaxies in the SDSS-III Baryon Oscillation Spectroscopic Survey: RSD measurement
+from the power spectrum and bispectrum of the DR12 BOSS galaxies, Mon. Not. Roy. Astron. Soc.
+465 (2017) 1757 [ 1606.00439].
+[7] G. Cabass, M.M. Ivanov, O.H.E. Philcox, M. Simonović and M. Zaldarriaga, Constraints on
+Single-Field Inflation from the BOSS Galaxy Survey, Phys. Rev. Lett.129 (2022) 021301
+[2201.07238].
+– 26 –
+
+10 11
+10 10
+10 9
+10 8
+B 1 2 3
+Real-space
+Flat-sky
+Limber
+10 11
+10 10
+10 9
+10 8
+Redshift-space
+Partial-Limber
+101 102 103
+10
+0
+10
+Rel. Err. [%]
+ 101 102 103
+10
+0
+10
+(a) Equal-time
+10 12
+10 11
+10 10
+B 1 2 3
+Real-space
+Flat-sky
+Limber
+10 11
+10 10
+Redshift-space
+Partial-Limber
+101 102 103
+5
+0
+5
+Rel. Err. [%]
+ 101 102 103
+5
+0
+5
+(b) Unequal-time
+Figure 7: Comparison of results for the partial-Limber approximation (red dashed lines) and the
+canonical Limber approximation (orange dashed line), as used in the main text, in the squeezed
+limit. The flat-sky and (brute-force) full-sky results are shown as blue lines and green stars,
+respectively. The first row is the equal-time case, as in figure 4, while the second row is unequal-
+time, as in figure 5. The results in the left-hand plots do not include RSD while the right-hand
+plots do.
+[8] M.M. Ivanov, O.H.E. Philcox, G. Cabass, T. Nishimichi, M. Simonović and M. Zaldarriaga,
+Cosmology with the galaxy bispectrum multipoles: Optimal estimation and application to BOSS
+data, Phys. Rev. D107 (2023) 083515 [ 2302.04414].
+[9] V. Desjacques, D. Jeong and F. Schmidt, The Galaxy Power Spectrum and Bispectrum in Redshift
+Space, JCAP 12 (2018) 035 [ 1806.04015].
+[10] K. Pardede, E. Di Dio and E. Castorina, Wide-angle effects in the galaxy bispectrum, JCAP 09
+(2023) 030 [ 2302.12789].
+[11] J.N. Benabou, A. Testa, C. Heinrich, H.S. Grasshorn Gebhardt and O. Doré, Galaxy bispectrum in
+the spherical Fourier-Bessel basis, Phys. Rev. D109 (2024) 103507 [ 2312.15992].
+[12] J. Yoo and M. Zaldarriaga, Beyond the Linear-Order Relativistic Effect in Galaxy Clustering:
+– 27 –
+
+Second-Order Gauge-Invariant Formalism, Phys. Rev. D90 (2014) 023513 [ 1406.4140].
+[13] E. Di Dio, R. Durrer, G. Marozzi and F. Montanari, The bispectrum of relativistic galaxy number
+counts, JCAP 01 (2016) 016 [ 1510.04202].
+[14] T. Montandon, E. Di Dio, C. Rampf and J. Adamek, Angular bispectrum of matter number counts
+in cosmic structures, 2501.05422.
+[15] V. Assassi, M. Simonović and M. Zaldarriaga, Efficient evaluation of angular power spectra and
+bispectra, JCAP 11 (2017) 054 [ 1705.05022].
+[16] E. Di Dio, R. Durrer, R. Maartens, F. Montanari and O. Umeh, The Full-Sky Angular Bispectrum
+in Redshift Space, JCAP 04 (2019) 053 [ 1812.09297].
+[17] Z. Gao, Z. Vlah and A. Challinor, Flat-sky angular power spectra revisited, Journal of Cosmology
+and Astroparticle Physics2024 (2024) 003.
+[18] Z. Gao, A. Raccanelli and Z. Vlah, Asymptotic connection between full- and flat-sky angular
+correlators, Phys. Rev. D108 (2023) 043503 [ 2306.02993].
+[19] Planck collaboration, Planck 2018 results. VI. Cosmological parameters, Astron. Astrophys.641
+(2020) A6 [ 1807.06209].
+[20] R. Angulo, M. Fasiello, L. Senatore and Z. Vlah, On the Statistics of Biased Tracers in the Effective
+Field Theory of Large Scale Structures, JCAP 09 (2015) 029 [ 1503.08826].
+[21] T. Fujita, V. Mauerhofer, L. Senatore, Z. Vlah and R. Angulo, Very Massive Tracers and Higher
+Derivative Biases, JCAP 01 (2020) 009 [ 1609.00717].
+[22] A. Raccanelli and Z. Vlah, Observed power spectrum and frequency-angular power spectrum, Phys.
+Rev. D 108 (2023) 043537 [ 2306.00808].
+[23] M.A. Troxel and M. Ishak, The Intrinsic Alignment of Galaxies and its Impact on Weak
+Gravitational Lensing in an Era of Precision Cosmology, Phys. Rept. 558 (2014) 1 [ 1407.6990].
+[24] Euclid collaboration, Euclid preparation. VII. Forecast validation for Euclid cosmological probes,
+Astron. Astrophys.642 (2020) A191 [ 1910.09273].
+[25] A.J.S. Hamilton, Linear redshift distortions: A Review, in Ringberg Workshop on Large Scale
+Structure, 8, 1997, DOI [ astro-ph/9708102].
+[26] N. Kaiser, Clustering in real space and in redshift space, MNRAS 227 (1987) 1.
+[27] A.J.S. Hamilton, Uncorrelated modes of the nonlinear power spectrum, Mon. Not. Roy. Astron. Soc.
+312 (2000) 257 [ astro-ph/9905191].
+[28] T. Bakx, N.E. Chisari and Z. Vlah, COBRA: Optimal Factorization of Cosmological Observables,
+2407.04660.
+– 28 –

@@ -1,0 +1,880 @@
+Title: Exact Mass Conservation in Binary Neutron Star Merger Simulations
+Authors: Boris Daszuta, Sebastiano Bernuzzi, Joan Fontbuté, Ruocheng Zhai, Alan Tsz-Lok Lam, Jacob Fields, David Radice
+Published: 2026-05-28
+Categories: gr-qc, astro-ph.HE
+
+Exact Mass Conservation in Binary Neutron Star Merger Simulations
+Boris Daszuta 1, Sebastiano Bernuzzi 1, Joan Fontbut´ e1, Ruocheng
+Zhai2,4, Alan Tsz-Lok Lam 2,3, Jacob Fields 5, and David Radice 2,3,4
+1Theoretisch-Physikalisches Institut, Friedrich-Schiller-Universit¨ at Jena, 07743, Jena, Germany
+2Institute for Gravitation and the Cosmos, The Pennsylvania State University, University Park PA 16802, USA
+3Department of Physics, The Pennsylvania State University, University Park PA 16802, USA
+4Department of Astronomy & Astrophysics, The Pennsylvania State University, University Park PA 16802, USA and
+5Institute for Advanced Study, Princeton, NJ 08540, USA
+(Dated: June 1, 2026)
+A long-standing problem in the simulation of neutron star spacetimes is the treatment of vacuum
+regions outside the stars. The use of an artificial low-density atmosphere is a common robust ap-
+proach within Eulerian hydrodynamics that, however, introduces baryon-mass violation even with
+conservative numerical schemes. We propose a simple numerical algorithm that ensures exact mass
+conservation by means of an appropriate local rescaling of the atmosphere. The scheme is combined
+with a low-order flux correction and it can be further augmented by a pseudo-vacuum treatment
+that enforces strict vacuum in the outer regions far from the central objects. We demonstrate
+the effectiveness of these vacuum treatments with binary neutron star merger simulations spanning
+multiple orbits and the postmerger phase, and including a microphysical equation of state. The
+rescaling algorithm guarantees mass and electron number conservation to round-off precision. The
+pseudo-vacuum treatment shows slightly larger but approximately constant violations and can im-
+prove the computation of fast tail ejecta as well as provide convergent gravitational waves of quality
+comparable to the standard atmosphere. Overall, results from different atmosphere treatments and
+a two-code comparison suggest that current computations of gravitational waves and (dynamical)
+ejecta in the presence of an artificial atmosphere are robust, provided that conservative adaptive
+mesh refinement with flux correction is employed.
+I. INTRODUCTION
+The simulation of neutron star spacetimes requires
+handling vacuum regions and the dynamical transition
+between vacuum and fluid on the computational domain,
+see e.g. discussions in [1–5]. For example, the exterior
+spacetime of a compact star is vacuum and needs to be
+included in the computational domain. Vacuum encom-
+passes the spatial regions distant from the strong-field
+regime of a binary neutron star merger (BNSM), where
+gravitational waves (GWs) are extracted. Matter ejecta
+unbound during the merger dynamics expand and fill
+these vacuum regions along the evolution. Vacuum re-
+gions can also appear after black hole formation as matter
+flows in and accretes onto the black hole. The treatment
+of vacuum regions is a central practical issue to obtain
+successful numerical-relativity simulations of astrophysi-
+cal interest.
+The most common approach to neutron star simula-
+tions is conservative Eulerian hydrodynamics with high-
+resolution shock capturing schemes. In this context, it is
+standard practice to substitute vacuum with a dilute at-
+mosphere and let the numerical scheme handle sharp gra-
+dients at the matter-vacuum interface. While robust so-
+lutions are available, this procedure introduces artifacts.
+Baryon (rest) mass violation is commonly observed even
+when finite volume (FV) schemes and conservative adap-
+tive mesh refinement (AMR) techniques are employed.
+This violation may, in principle, impact the accurate
+computation of mass ejecta and gravitational waves and
+introduce a slowly (if at all) converging systematic error
+in the computations. Similarly, sound waves, velocity
+gradients up to∼0.6c and temperature gradients up to
+a few MeV can develop at matter-vacuum interfaces in
+BNSM altering the thermodynamical state of the simu-
+lated matter, e.g. [6, 7], and potentially affecting micro-
+physics (ejecta composition, weak-reaction rates, etc).
+In Newtonian hydrodynamics the matter-vacuum tran-
+sition can be handled by specific Riemann solvers and/or
+level set methods [8, 9]. However, this approach signif-
+icantly complicates the algorithms, especially with non-
+trivial grid geometries or AMR. This is even more serious
+in presence of gravity, where the treatment of vacuum re-
+gions can alter hydrostatic equilibria between the fluid’s
+pressure and the gravity pull. Specific well-balanced nu-
+merical schemes have been introduced to exactly preserve
+hydrostatic equilibrium solutions, and were found essen-
+tial to simulate astrophysical fluids, e.g. [10–12] and ref-
+erences therein.
+In general-relativistic hydrodynamics, numerical issues
+are amplified by the errors introduced during the nu-
+merical inversion of conservative to primitive variables.
+Such transformation is (typically) not analytical and fail-
+ures during the inversion (even floating-point drift) han-
+dled via flooring can cause violation of mass conserva-
+tion. Non-conservative AMR treatment is another cause
+of mass conservation violation [13–15].
+While these are very well known problems for prac-
+titioners, no rigorous and robust alternative exists so
+far and the use of an artificial atmosphere is the most
+common approach in neutron stars simulations. A vac-
+uum treatment has been proposed in Poudelet al.[16]
+(see also [17]) indicating some advantages for neutron
+arXiv:2605.30430v1  [gr-qc]  28 May 2026
+
+2
+star simulations with theBAMcode [4, 18]. However,
+the method still violates mass conservation. More re-
+cently, the first-order flux correction (FOFC) approach
+of Lemaster and Stone [19] has been applied to BNSM
+simulations withAthenaK[20, 21]. The method signif-
+icantly reduced mass violation and appears to improve
+simulation robustness.
+In this paper, we explore a new numerical algorithm
+to ensure exact mass conservation in neutron star space-
+time simulations. The scheme relies on an appropriate
+rescaling of the standard atmosphere treatment and can
+be easily incorporated in existing codes. It can be fur-
+ther augmented by a pseudo-vacuum treatment that en-
+forces strict vacuum in the outer regions far from the
+central objects. These methods are implemented in the
+GR-Athena++AMR code together with a low-order flux
+correction [5, 22, 23].
+The paper is organized as follows. Section II intro-
+duces the details of the rescaling algorithm, of the low-
+order flux correction and the pseudo-vacuum treatment.
+Section III presents first results for BNSM simulations
+with a focus on mass ejecta and GWs. A direct compar-
+ison withAthenaKis also discussed. Conclusions are in
+Sec. IV
+II. METHOD
+We focus on the (3+1)D balance-law formula-
+tion of Eulerian general-relativistic hydrodynamics
+(GRHD) [24]. The local conservation law for the Eu-
+lerian mass-density 1,
+∂t eD+∂ iF (i)
+D = 0 (1)
+whereF eD is the appropriate flux, guarantees baryon
+(rest) mass conservation,
+Mb =
+Z
+Σt
+d3x eD, ˙Mb(t) = 0,(2)
+if the integral is taken on the entire 3D spatial hypersur-
+face Σ t. When the fluid composition is incorporated in
+the equation of state (EOS), as common, hydrodynamics
+equations are augmented by conservation or balance laws
+for particle species. For example, the number of electrons
+per baryons (nucleons)Q e is conserved according to the
+local conservation law for the electron fractionY e,
+∂t( eDYe) +∂ iF (i)
+Ye = 0.(3)
+If neutrino radiation is simulated (outside the scope of
+this paper),Y e evolves based on weak-interaction rates
+introduced as source terms at the r.h.s. of Eq. (3).
+1 Tilde always indicates densitization by the spatial 3-metricγ ij;
+i.e. eD= √detγD. Einstein’s index-summation convention is
+understood withi= 1,2,3.
+Conservative FV methods are designed precisely to
+preserve these continuum properties at the discrete level.
+Nonetheless during numerical computations, the values
+ofM b andQ e can (and usually do) drift beyond what
+can be ascribed to outflow through the computational
+domain. The origin of the violation is usually the treat-
+ment of vacuum region and the use of non-conservative
+AMR. Note that violations are not limited to floating-
+point errors but are often due to failures during primi-
+tive reconstruction, in particular if the variable inversion
+is handled with flooring [5, 6].
+A. Standard atmosphere
+A standard approach to deal with vacuum regions is
+to adjust the initial data through the introduction of an
+unphysical, static atmosphere, over each cell where the
+matter density is zero. The atmosphere points are then
+evolved in the same way as the other fluid cells. Atmo-
+sphere floors may be applied at various steps of the evo-
+lution in order to avoid division by zero and prevent the
+evolution towards unphysical states. A common choice is
+to enforce atmosphere floors during the conservative to
+primitive variable inversion. Here, a fluid cell that has
+evolved below atmosphere level is reset to a floor value.
+In case the numerical inversion fails, a point may also be
+reset to the atmosphere floors.
+The choice of floor values is implementation dependent
+and based on experimentation with hydrostatic prob-
+lems, e.g. spherical neutron stars spacetimes. The spe-
+cific implementation adopted inGR-Athena++and con-
+sidered for our work is described in [5, 6] and available
+open source 2. For a composition-dependent equation of
+state (EOS), usually supplied in tabular form, the at-
+mosphere at a point is fixed by imposing mass-density
+and temperature floors, and settingY e to a prescribed
+(atmosphere) value,
+(Dfl, T fl, Y e,atm ).
+The choice of density and temperature floors is based
+on the minimum tabulated value. In atmosphere, zero
+fluid velocity is assumed and all the other quantities are
+computed consistently with the EOS.
+B. Rescaling
+As a remedy to drifts inM b andQ e we propose a
+simple rescaling procedure of the atmosphere that keeps
+under control the violation in conserved quantities. At
+any timestep we compute the violation in conservation
+based on the difference between current and initial value,
+2 https://computationalrelativity.github.io/grathenacode/
+
+3
+δMb(t) =M b(t)−M b(0) (and similarly forQ e.) After a
+timestep, the violation is then driven to zero,δM b →0,
+by rescaling the atmosphere over regions containing mat-
+ter at near-atmosphere levels. To achieve this we proceed
+with an iterative prescription.
+We define the “cutoff integral”
+I[D;f D] :=
+Z
+D<fD min( eD)
+d3x eD,(4)
+where the parameterf D >1 serves the role of control-
+ling the upper bound for data that will be rescaled. For
+a chosen cutofff D we iteratively setf D ←f 2
+D until
+I(D;f D)> δM b is satisfied 3. Finally, at all points such
+thatD≤f D min(D) the mass density is rescaled by
+eD← eD× Mb(0)− I[D;f D]
+Mb(t)− I[D;f D] .(5)
+The overall procedure is terminated if the mass (orQ e)
+violation deviates excessively from its initially recorded
+value. This is determined by monitoring the absolute rel-
+ative error of the corresponding conserved quantity with
+respect to its initial value. A threshold of 10 −4 was cho-
+sen to disable rescaling for all salient runs. We stress that
+the rescaling assumes no outflow from the computational
+domain and absence of sources or sinks in the domain of
+integration.
+The rescaling we have described may be combined with
+standard atmosphere treatments. It may also be used
+in conjunction with the approach described in Sec. II C
+which we term pseudo-vacuum.
+C. Pseudo-vacuum
+One alternative to global imposition of atmosphere is
+to only introduce floors in regions local to matter. Prior
+to evaluation of a time-integrator stage, cells withD >0
+are flagged as “matter containing”. Floors are then only
+imposed on the remaining cells if any nearest-neighbour4
+cell contains matter. This introduces a thin layer of at-
+mosphere. The time sub-step is then calculated for the
+flagged cells, with the layer providing support for flux
+computations. After a full time-step, any cell whose den-
+sity falls below a prescribed cutoffD cut is reset to strict
+vacuum; no rescaling is imposed during sub-steps.
+Applying the above procedure, allows matter to flow
+into regions initially without matter, with spatial extent
+developing dynamically according to the simulation. In
+vacuum regions, the matter field evolution is thereby en-
+tirely trivialized, which also serves to reduce computa-
+tional cost of the matter sector evaluation in proportion
+3 We evaluate this via a numerical quadrature and employ Kahan-
+Babushka-Neumaier compensated summation [25].
+4 Our implementation leaves this freely specified; here we only
+consider immediate nearest-neighbours.
+to the relative size of the inactive region. A similar strat-
+egy is implemented in theBAMcode, although we note
+thatBAMAMR is not exactly conservative [4, 15, 16].
+D. AMR implementation with Low-order Flux
+correction
+The algorithms described above have been im-
+plemented in theGR-Athena++code [5, 22, 23].
+GR-Athena++employs high-resolution shock-capturing
+(HRSC) schemes based on conservative FV methods
+and block-based AMR. The code has been extended
+with a low-order flux-correction (LOFC), further supple-
+mented by an approximate discrete-maximum-principle
+(DMP) [26], as motivated by improved robustness and
+conservation properties observed with the first-order flux
+correction (FOFC) in [20, 21]. We briefly summarize the
+procedure below.
+At each time sub-step, numerical fluxes at interfaces
+are assembled based on (primitive) reconstruction (here
+WENO5Z [27]), and combined according to the local-
+Lax-Friedrichs (LLF) prescription [28]. This gives rise to
+a candidate state vector for the conserved Eulerian vari-
+ables (prior to addition of any geometric source-terms).
+If the candidate state does not satisfy DMP, or would
+require atmosphere flooring (Sec. II A), the cell is flagged
+for LOFC. If flagged, for all interfaces adjacent to the
+problem-cell, we switch to low order primitive reconstruc-
+tion (here PLM-van Leer [29]), and recompute the LLF
+fluxes. This flux correction remains conservative, and is
+used to propagate the state instead. The LOFC is ap-
+plied to all simulations presented below.
+III. APPLICA TION TO BNSM
+We now compare the standard, rescaling, and pseudo-
+vacuum (PV) atmosphere treatments discussed in Sec. II
+in BNSM simulations. To this end, we consider the evo-
+lution of equal-mass quasicircular irrotational BNS data
+with massM= 2.7 M ⊙; initial data are prepared based
+on theLorenesolver [30]. Neutron star matter is de-
+scribed by the temperature-dependent DD2 EOS [31].
+The DD2 binary evolves for∼4.5 orbits and produces
+a long-lived remnant; the simulations are further con-
+ducted until at least 20 ms postmerger.
+The computational domain is a Cartesian mesh over
+the volume defined by [−2268,2268] 3 km with AMR
+setup that closely follows the cell-centered setup of
+Daszutaet al.[23]. The domain is sampled withN M =
+96 or 144 points in each dimension, decomposed in mesh
+blocks of fixed sampling 16 3 points and recursively re-
+fined (at 2 : 1 refinement-ratio) until a target, minimum
+resolution is achieved. The finest resolutions considered
+for three setups areδx c ≃492.2 m,δx m ≃369.2 m, and
+δxf ≃246.1 m. No mesh symmetries are imposed. Time
+stepping is performed with strong-stability preserving
+
+4
+0
+200
+400 RSC
+ SAS
+ RSC
+ SAS
+ RSC
+ SAS
+−400
+−200
+0
+PV
+ PVa
+ PV
+ PVa
+ PV
+ PVa
+ρ [g cm□3]
+104
+106
+108
+1010
+1012
+1014
+y [km]
+0
+200
+400 RSC
+ SAS
+ RSC
+ SAS
+ RSC
+ SAS
+−500 0
+−400
+−200
+0
+PV
+0 500
+PVa
+−500 0
+PV
+0 500
+PVa
+−500 0
+PV
+0 500
+PVa
+T [MeV]
+100
+101
+x [km] x [km] x [km]
+y [km]
+FIG. 1. Rest-mass densityρ(top) and temperatureT(bottom) evolution in the orbital plane for four atmosphere treatments.
+Each column shows a snapshot of the remnant at fixed time where column-wise we have:t−t mrgr ≃(−4.8,0.4,4.2) ms. At
+fixed time, four quadrants are displayed forρandT. For each variable we show in the (upper right quadrant) the standard
+atmosphere treatment (SAS), (upper left) rescaling, (lower left) pseudo-vacuum (PV) withD cut = 9.7×10 3g cm−3, and (lower
+right) PV with more aggressiveD cut = 32×10 3g cm−3 denoted (PVa). For theTpanels we additionally overlay isodensity
+contours at:ρ= 10 12 g cm−3 (dark blue),ρ= 10 7 g cm−3 (pale green), andρ= 5×10 5 g cm−3 (pale yellow). Data depicted
+here correspond to simulations with grid-setup featuring finest level resolution ofδx f.
+Runge-Kutta SSPRK(3,3) [32] and Courant-Friedrich-
+Lewy condition of 0.25 is set.
+We next discuss results for simulations performed at
+the three common resolutions for four distinct atmo-
+sphere treatments: (i) the standard atmosphere treat-
+ment (denoted SAS), (ii) the rescaling algorithm with
+fD = 10 =f Ye (denoted RSC), (iii) the pseudo-vacuum
+algorithm withf D andf Ye as in RSC, and cut cho-
+sen asD cut = 9.7×10 3g cm−3 (denoted PV), and
+(iv) the PV algorithm with a more aggressive choice of
+Dcut = 32×10 3g cm−3 (denoted PVa). For all sim-
+ulations, floor and atmosphere parameters are set as
+(Dfl, T fl, Y e,atm ) = (6×10 3 g cm−3,0.1 MeV,0.5). We
+emphasize that each of these four setups is otherwise
+identical to the others, only differing in the details of
+the atmosphere treatment.
+A. Mass and Electron number conservation
+Snapshots at distinct times of the evolution of the
+(fluid-frame) density together with temperature in the
+orbital plane for the DD2 binary are shown in Fig. 1 for
+the four atmosphere treatments. As is common in all
+BNSM simulations, matter leaks out from the star sur-
+faces before merger and fills a region around the stars at
+densitiesabovethe atmosphere threshold and tempera-
+tures of a few MeV. The rescaling algorithm cannot avoid
+this effect, which is observed with all treatments. At
+merger, matter compresses and bounces while the two
+cores fuse to form a remnant with maximum densities
+ρremnant
+max ∼1.3ρ NS
+max, whereρ NS
+max is the initial maximum
+density of the isolated NS. Pressure waves propagating
+outwards steepen into shock waves with densities≲ρ NS
+max
+and peak temperaturesT∼70 MeV [33]. These waves
+develop into spiral density waves [34] and rapidly fill the
+entire computational domain with matter densities above
+the atmosphere. These dynamics are observed for all
+atmosphere treatments with negligible quantitative dif-
+ference. Notably, even the PV treatments do not alter
+the picture: the orbital motion and hydrodynamics flow
+around remnants are all consistent at densities above at-
+mosphere.
+Figure 2 shows the relative error in the baryon
+mass and electron number conservation. The conser-
+vative AMR and standard atmosphere treatment in
+GR-Athena++guarantees relative baryon mass violations
+≲10−6 at the (moderate) resolution considered for these
+simulations. The violation constitutes massgain. For the
+runs presented here, with the standard atmosphere treat-
+
+5
+FIG. 2. Evolution of the relative error in baryon (rest) mass and electron number conservation for the four vacuum algorithms
+at fixed finest resolutionδx f. Dashed (solid) lines highlight mass or electron number gains (losses). The plot demonstrates
+exact (to round off error) conservation for both quantities with the rescaling algorithm (RSC) introduced in our work, and an
+approximately constant violation≲10 −11 with both variants of pseudo-vacuum (PV, PVa) algorithm. The standard atmosphere
+treatment (SAS) introduces relative gains of order∼10−6 in both mass and electron number conservation. Simulations involving
+the lower resolutionsδx c andδx m display comparable behaviour (not depicted here).AthenaKdata obtained with a very similar
+simulation setup asGR-Athena++SAS are shown in black.
+ment, this can be understood as follows. In regions exte-
+rior to the binary constituents, prior to significant gener-
+ation of mass ejecta, matter is typically near-atmosphere.
+During the evolution, atmosphere accretes, thereby push-
+ingDbelowD fl. This in turn, leads to artificial injection
+of matter as floors are applied. On the other hand, the
+rescaling algorithm delivers mass conservation to round
+off precision, with exterior regions falling below the dy-
+namically inferred cut that enters the algorithm (f D).
+The PV treatment shows similar mass conservation but
+to≲10 −11 level. This larger violation compared to the
+rescaling is related to the mass violation during a time
+integrator timestep.
+The conservation of electron number is also shown in
+Fig. 2, bottom panel. The behaviour closely mirrors the
+behaviour of the mass, indicating that the largest viola-
+tions in this quantity are also due to the vacuum treat-
+ment.
+FIG. 3. Evolution of theL 2-norm of the Z4c collective con-
+straint monitorC(t) for DD2 BNS simulations, at a variety of
+resolutions, and different atmosphere treatments. The stan-
+dard treatment (solid lines) and the rescaled (dashed lines)
+atmosphere treatments are seen to agree well, for runs with
+grids involving finest resolutionsδx c,δx m, andδx f.
+
+6
+GR-Athena++employs the Z4c free evolution scheme
+for the spacetime evolution [35, 36]. The numerical so-
+lution of free-evolution schemes introduces violation of
+the Einstein constraints as well as other constraints re-
+lated to the specific hyperbolic formulation of Einstein
+field equations. It is therefore important to assess that
+the new vacuum treatments do not introduce further vi-
+olations of such constraints.
+Figure 3 shows the evolution of theL 2 norm of the
+collective Z4c constraint monitorCfor the standard and
+rescaled atmosphere treatment at the three mesh reso-
+lutions. The specific expression forCincludes Hamilto-
+nian and momentum constraints as well as the fourZ-
+constraints, see Eq. (40) of [37] for its expression. Note
+the calculation of the norm of the constraint monitor ex-
+cludes points towards grid boundaries where approximate
+Sommerfeld boundary can lead to relatively large local
+violations (while being stable.) The constraint monitor
+for the two treatments are consistent with each other
+and converge to zero as resolution is increased. The
+constraint violation in these simulations is largely dom-
+inated by hydrodynamical truncation errors that are, in
+turn, dominated by the bulk fluid motion (i.e. not by
+the constant atmosphere.) The postmerger dynamics in
+particular is characterized by a more complex flow and
+shocks and therefore typically shows slower convergence.
+Our novel treatment does not significantly impact on con-
+straint violations. Similar results are found for PV treat-
+ments, not shown in the figure.
+B. Ejecta
+During the first core bounce, part of the matter be-
+comes unbound and generates dynamical ejecta [38]. Fig-
+ure 4 shows the evolution of the ejecta mass (top) and
+the mass-averaged asymptotic velocity (bottom) for the
+lowest resolution simulations. These quantities are com-
+puted by flagging fluid elements that reach a sphere at
+coordinate radiusR≃591 km with outwards-pointing
+velocity using either the Bernoulli criterion, i.e.hu t <
+−hmin, wherehandh min are the specific and minimum
+(of the EOS table) enthalpies, andut the time component
+of the fluid 4-velocity, or the geodesic criterion,u t <−1.
+At earlier timest−t mrgr <5 ms the mass ejection
+is spurious and mainly related to low density material
+around the stars. Here, the Bernoulli criterion signifi-
+cantly overestimates the ejecta, cf. [39]. The standard
+and rescaled atmosphere treatments behave very simi-
+larly, while the PV treatment reduces the early, spurious
+mass ejection since no significant mass is present at the
+extraction sphere. Note, however, the PV treatments can
+exhibit a larger velocity peak due to clumps of material
+propagating in the pseudo vacuum.
+The bulk of the dynamical ejecta reaches the coordi-
+nate sphere att∼5 ms postmerger. At these times the
+mass rises quickly by about an order of magnitude to
+∼10−4 M⊙ and the averaged asymptotic velocity peaks
+FIG. 4. Evolution of ejecta mass (top) and mass-averaged
+velocity (bottom) for the four atmosphere algorithms. Un-
+bound mass is monitored either according to Bernoulli crite-
+rion (solid lines) or geodesic criterion (dashed line) and ex-
+tracted at a sphere of coordinate radiusR≃591 km. Com-
+mon (finest) resolution of these runs isδx f.AthenaKdata
+obtained with a very similar simulation setup asGR-Athena++
+SAS are shown in black.
+at∼0.4−0.6 c, independently of the atmosphere treat-
+ment. The dynamical ejecta quickly saturate afterwards
+to a total mass of∼5×10 −3 M⊙. Their velocity rapidly
+decreases towards zero (more on this below). At later
+postmerger timest≳20 ms, the dynamical ejecta ter-
+minates, and all simulations show the beginning of the
+early spiral-wave wind from the remnant. The latter is
+captured only by the Bernoulli criterion.
+In order to verify that all atmosphere treatments re-
+produce the same ejecta, we compute the mass-weighted
+histograms of the angular distribution in the latitude an-
+gleϑwith respect to the orbital plane and of the asymp-
+totic mass-averaged velocity. These quantities are shown
+in Fig. 5. As expected for equal-mass mergers, the bulk
+ejecta is concentrated around the orbital plane with half
+opening angle of∼30 degrees. The different vacuum
+treatments inGR-Athena++do not significantly alter the
+spatial distribution of the ejecta.
+The asymptotic mass-averaged velocities also behave
+very similarly when different vacuum treatments are con-
+sidered (bottom panel of Fig. 5.). Main differences are
+present in the fast tail of the ejecta. The more ag-
+gressive pseudo-vacuum treatment (PVa) can resolve fast
+tails with velocities up to≲0.8c at the considered reso-
+lution, while standard atmosphere treatment resolves up
+to∼0.65c in this simulation. Fast tails are composed of
+low density material just above the atmosphere level; the
+launch and propagation of this material is facilitated by
+the higher cutting value for the vacuum thresholdD cut
+in PVa.
+
+7
+FIG. 5. Mass-weighted histograms of ejecta angular distri-
+bution (top) and asymptotic velocity (bottom). Unbound
+mass is monitored according to the Bernoulli criterion and ex-
+tracted at a sphere of coordinate radiusR≃591 km. The cu-
+mulative histograms are computed att−t mrgr = 21 ms. Com-
+mon (finest) resolution of these runs inδx f.AthenaKdata ob-
+tained with a very similar simulation setup asGR-Athena++
+SAS are shown in black.
+We remark that in the presented results the bulk of the
+ejecta is mostly contained on the computational grid and
+start to outflow at∼20 ms postmerger, see Fig. 2. For
+the simulated timescale, this does not significantly affect
+the rescaling algorithm. However, for significantly longer
+evolution it may be necessary to dynamically change the
+rescaling parameters according to the physical mass out-
+flowing the domain. This does not pose major conceptual
+difficulties and could also be adopted for matter accreting
+onto (through) an apparent horizon.
+C. Gravitational W aves
+We next explore the computation of gravitational
+waves in simulations with different atmosphere treat-
+ment. Figure 6 compares the dominant mode of the
+strain and the instantaneous wave frequency computed
+with the standard atmosphere and rescaling algorithm
+at different resolutions. Minor differences in the wave
+amplitudes and phases are visible only at the highest res-
+olution and in the postmerger part of the wave. In par-
+ticular, the use of the rescaling algorithm appears to pro-
+duce a slightly more compact remnant towards the end
+of the gravitational-wave dominated postmerger phase at
+these resolutions. In turn, the waveform’s amplitude is
+slightly larger (less damped) at aroundt∼6 ms post-
+merger. Similar results are found for the pseudo-vacuum
+treatments.
+Waveform’s phase self-convergence plots are shown in
+FIG. 6. Gravitational waves strain and instantaneous fre-
+quency. Real part and instantaneous frequency of the (ℓm) =
+(22) mode of the strain, based on evolution with the stan-
+dard atmosphere treatment (SAS) in (blue, solid lines), and
+rescaling (RSC), in (orange, dashed lines). Top, middle, and
+bottom panels are computed from simulations involving finest
+resolutions ofδx c,δx m, andδx f respectively. Waves are ex-
+tracted at a sphere of coordinate radiusR≃295.3 km.
+Fig. 7. All the atmosphere treatments give consistent
+second-order convergent results in the inspiral phase of
+the evolution. In the postmerger phase, the standard
+atmosphere treatment leads to second-order convergent
+waveforms, differently from what previously observed in
+[22, 23]. This we attribute to LOFC, which was not pre-
+viously available. Waveform convergence progressively
+degrades in the postmerger phase for the RSC and PV
+treatments at the considered resolution. The more ag-
+gressive PVa treatment, however, does achieve approx-
+imate second-order convergence. These results indicate
+that the combination of atmosphere treatment and AMR
+flux-correction scheme are potentially key to achieve
+postmerger waveform convergence already at the mod-
+erate resolutions considered here.
+D. Comparison withAthenaK
+We finally compare the vacuum treatments in
+GR-Athena++withAthenaK. The same simulations pre-
+sented above have been repeated using a very simi-
+
+8
+FIG. 7. Self convergence of the phase of the gravitational
+wave’s leading mode extracted atR≃295.3 km for the dif-
+ferent atmosphere treatments: SAS, RSC, PV and PVa from
+top to bottom respectively.
+lar, although not identical setup in theAthenaKcode.
+The atmosphere treatment is very similar to the one
+inGR-Athena++. However,AthenaKconservative AMR
+implements a different flux-correction: the FOFC de-
+scribed in [19–21]. The grid setup closely mirrors
+theGR-Athena++setup, but the AMR criterion is
+slightly different [21]. In particular, the resolution
+at the wave (ejecta) extraction sphere ofAthenaKis
+∼3.94,5.91,3.94 km (∼7.88,11.81,7.88 km) for the three
+resolutions, while inGR-Athena++is∼7.88,5.91,7.88 km
+(∼15.75,11.81,15.75 km). Outflows are computed us-
+ing a latitude-longitude grid on the extraction sphere
+withN θ = 256,N ϕ = 512 points and coordinate ra-
+diusR≃591 km. Both codes extract GWs on geodesic
+grids at the extraction spheres (GR-Athena++uses 9002
+vertices andAthenaK1002) by computing the Weyl pseu-
+doscalarψ 4 and integrating via fixed frequency integra-
+tion (FFI) [40].
+The violation of baryon mass and lepton number con-
+servation with the standard atmosphere treatments in
+GR-Athena++andAthenaKis shown in Fig. 2. De-
+spite implementation differences in the AMR and flux-
+correction the performances of the two codes are very
+comparable. While performing this comparison, we dis-
+covered an issue with scalar conservation inAthenaK,
+which produced violations at the 10 −3 level. These
+emerged becauseY e could become smaller than the min-
+imum value allowed by the EOS and would be floored.
+To improve mass conservation, we have augmented the
+FOFC scheme with a positivity preserving limiter, fol-
+lowing the approach in [41]. Figure 2 shows the results
+obtained after having implemented this fix.
+Ejecta properties are contrasted in Fig. 4 and Fig. 5.
+AthenaKsimulation shows sustained ejecta velocity af-
+ter∼10ms postmerger while, as mentioned above,
+GR-Athena++ejecta velocity goes more rapidly to zero.
+This is due to the different structures of the AMR Carte-
+sian grid, which results in a coarserGR-Athena++grid
+towards and at the extraction spheres of approximately
+a factor 2. As the low density ejecta propagate outwards
+they are practically absorbed into the atmosphere or the
+vacuum. At the same time, the comparison confirms that
+the RSC and PV treatments help to better resolve the
+fast tail of the bulk of dynamical ejecta (see above).
+Regarding the gravitational waveforms, Fig. 8 shows
+the phase and amplitude (relative) differences of the lead-
+ing mode of the signal betweenAthenaKand the four
+atmosphere treatments implemented inGR-Athena++at
+the highest considered resolutionδx f. During the in-
+spiral, the phase differences are consistently lower than
+0.1rad (and flat) while amplitude relative differences are
+below 1%. These differences are comparable to (or
+smaller than) truncation errors at the considered reso-
+lution. As anticipated by Fig. 6, differences are more
+prominent in the postmerger phase.AthenaKdata are
+closer to theGR-Athena++RSC and PV treatments.
+Larger differences are found with SAS and PVa at later
+times, which however achieve convergence at the consid-
+ered resolutions (cf. Fig. 7). We note that, while the
+AMR criterion inAthenaKguarantees higher resolution
+at the extraction spheres than inGR-Athena++, it does
+not generate a grid hierarchy that is suitable for a con-
+sistent three-level convergence test in the wave zone.
+IV. CONCLUSION
+In this paper, we proposed a simple yet efficient al-
+gorithm to ensure exact mass conservation in Eulerian
+general-relativistic simulations of neutron star space-
+times. In its simplest form, the scheme is a dynamical
+rescaling of the low-density atmosphere floors that can
+be easily incorporated in existing codes. Such a rescaling
+can be coupled with a pseudo-vacuum treatment that
+enforces strict vacuum in exterior regions and reduces
+simulation cost proportionally to the extent of the latter.
+
+9
+FIG. 8. Gravitational waves phase (top) and amplitude (bot-
+tom) differences of the four atmosphere treatments (SAS-
+blue, RSC-orange, PV-green and PVa-red) implemented in
+GR-Athena++with respect toAthenaKdata. Waves are ex-
+tracted at a sphere of coordinate radiusR≃295.3 km. Sim-
+ulations are at resolutionδx f.
+We demonstrated the effectiveness of these vacuum
+treatments with BNSM simulations spanning multiple or-
+bits and the GW-driven postmerger phase, and includ-
+ing a microphysical equation of state. The comparison
+of gravitational waves and (dynamical) ejecta computed
+with different atmosphere treatments indicates that these
+observables are only very mildly affected by the vacuum
+treatment and are therefore robust. The comparison be-
+tweenGR-Athena++andAthenaKclearly highlights that
+implementation details matter. Moreover we found cru-
+cial the use of conservative AMR with flux corrections
+for achieving robust conservation of baryonic mass (and
+more broadly, other extant conserved charges).
+The proposed rescaling and pseudo-vacuum treatment
+may be relevant in long-term evolutions of BNSM, also in
+the presence of neutrino radiation. Improved mass con-
+servation and pseudo-vacuum treatment can improve the
+accuracy of mass-outflow computation when typical den-
+sities reach value comparable to the density floors. Such
+simulations may require monitoring mass outflowing from
+the computational domain and dynamically correcting
+the algorithmic parameters, (M b(0), fD) in Eq. (5). A
+similar adjustment could be required in presence of black
+hole formation, in order to improve the remnant disc evo-
+lution.
+The proposed scheme also allows exact electron num-
+ber conservation in absence of neutrino radiation. In
+presence of the latter, the scheme should be adjusted
+taking into account the source terms in the electron frac-
+tion balance law. Ultimately, the scheme may lead to an
+improved lepton number conservation. Analogously to
+the dynamical mass adjustment discussed above, there is
+no immediate difficulty incorporating these changes but
+extensive experimentation is likely needed. These explo-
+rations are ongoing.
+ACKNOWLEDGMENTS
+BD, JF and SB acknowledge support by the EU Hori-
+zon under ERC Consolidator Grant, no. InspiReM-
+101043372. DR acknowledges support from the U.S. De-
+partment of Energy, Office of Science, Division of Nu-
+clear Physics under Award Number(s) DE-SC0021177
+and DE-SC0024388; and from the National Science Foun-
+dation under Grants No. PHY-2020275, PHY-2116686,
+PHY-2407681, and PHY-2512802. DR and JMF ac-
+knowledge support from NASA under Award Number
+80NSSC25K7213.
+GR-Athena++simulations were performed on the na-
+tional HPE Apollo Hawk (Hunter) at the High Perfor-
+mance Computing Center Stuttgart (HLRS). The au-
+thors acknowledge HLRS for funding this project by pro-
+viding access to the supercomputer HPE Apollo Hawk
+(Hunter) under the grant numbers INTRHYGUE/44215
+and MAGNETIST/44288. Simulations were also per-
+formed on SuperMUC NG at the Leibniz-Rechenzentrum
+(LRZ) Munich. The authors acknowledge the Gauss Cen-
+tre for Supercomputing e.V. (www.gauss-centre.eu) for
+funding this project by providing computing time on
+the GCS Supercomputer SuperMUC-NG at LRZ (alloca-
+tionspn67xo,pn76li,pn68wiandpn36jo). The authors
+gratefully acknowledge the computing time provided on
+the high-performance computer Lichtenberg II at TU
+Darmstadt, funded by the German Federal Ministry of
+Research, Technology and Space (BMFTR), and the
+State of Hesse Ministry of Science and Research, Art and
+Culture (HMWK).AthenaKsimulations were performed
+on Aurora at the Argonne Leadership Computing Facil-
+ity, which is a DOE Office of Science User Facility sup-
+ported under Contract DE-AC02-06CH11357. An award
+of computer time was provided by the INCITE program.
+AthenaKsimulations were also performed on Perlmutter,
+at the National Energy Research Scientific Computing
+Center (NERSC), a Department of Energy User Facil-
+ity, using NERSC award ERCAP0031370. Postprocess-
+ing and development runs were performed on the ARA
+cluster at Friedrich Schiller University Jena. The ARA
+cluster is funded in part by DFG grants INST 275/334-1
+FUGG and INST 275/363-1 FUGG, and ERC Starting
+Grant, grant agreement no. BinGraSp-714626.
+[1] J. A. Fontet al., Phys. Rev.D65, 084024 (2002),
+arXiv:gr-qc/0110047.
+[2] H. Dimmelmeier, J. A. Font, and E. M¨ uller, Astron.
+
+10
+Astrophys.388, 917 (2002), arXiv:astro-ph/0204288.
+[3] L. Baiotti, I. Hawke, P. J. Montero, F. Loffler, L. Rez-
+zolla,et al., Phys.Rev.D71, 024035 (2005), arXiv:gr-
+qc/0403029 [gr-qc].
+[4] M. Thierfelder, S. Bernuzzi, and B. Br¨ ugmann,
+Phys.Rev.D84, 044012 (2011), arXiv:1104.4751 [gr-qc].
+[5] W. Cook, B. Daszuta, J. Fields, P. Hammond, S. Al-
+banesi, F. Zappa, S. Bernuzzi, and D. Radice, Astrophys.
+J. Suppl.277, 3 (2025), arXiv:2311.04989 [gr-qc].
+[6] W. Kastaun, J. V. Kalinani, and R. Ciolfi, Phys. Rev.
+D103, 023018 (2021), arXiv:2005.01821 [gr-qc].
+[7] P. Hammond, I. Hawke, and N. Andersson, Phys. Rev.
+D104, 103006 (2021), arXiv:2108.08649 [astro-ph.HE].
+[8] E. F. Toro,Riemann Solvers and Numerical Methods for
+Fluid Dynamics, 2nd ed. (Springer-Verlag, 1999).
+[9] R. J. LeVeque,Finite Volume Methods for Hyperbolic
+Problems(Cambridge University Press, 2002).
+[10] P. Chandrashekar and C. Klingenberg, SIAM Jour-
+nal on Scientific Computing37, B382 (2015),
+https://doi.org/10.1137/140984373.
+[11] J. P. Berberich, R. K¨ appeli, P. Chandrashekar, and
+C. Klingenberg, arXiv e-prints , arXiv:2005.01811 (2020),
+arXiv:2005.01811 [math.NA].
+[12] P. V. F. Edelmann, L. Horst, J. P. Berberich, R. An-
+drassy, J. Higl, G. Leidi, C. Klingenberg, and
+F. K. R¨ opke, Astron. and Astrophys.652, A53 (2021),
+arXiv:2102.13111 [astro-ph.SR].
+[13] W. E. East, F. Pretorius, and B. C. Stephens, Phys.Rev.
+D85, 124010 (2012), arXiv:1112.3094 [gr-qc].
+[14] C. Reisswig, R. Haas, C. D. Ott, E. Abdikamalov,
+P. M¨ osta, D. Pollney, and E. Schnetter, Phys. Rev.D87,
+064023 (2013), arXiv:1212.1191 [astro-ph.HE].
+[15] T. Dietrich, S. Bernuzzi, M. Ujevic, and B. Br¨ ugmann,
+Phys. Rev.D91, 124041 (2015), arXiv:1504.01266 [gr-
+qc].
+[16] A. Poudel, W. Tichy, B. Br¨ ugmann, and T. Dietrich,
+Phys. Rev. D102, 104014 (2020), arXiv:2009.06617 [gr-
+qc].
+[17] W. Tichy, L. Ji, A. Adhikari, A. Rashti, and M. Pirog,
+Class. Quant. Grav.40, 025004 (2023), arXiv:2212.06340
+[gr-qc].
+[18] B. Br¨ ugmann, J. A. Gonzalez, M. Hannam, S. Husa,
+U. Sperhake,et al., Phys.Rev.D77, 024027 (2008),
+arXiv:gr-qc/0610128 [gr-qc].
+[19] M. N. Lemaster and J. M. Stone, Astrophys. J.691, 1092
+(2009), arXiv:0809.4005 [astro-ph].
+[20] J. M. Stone, P. D. Mullen, D. Fielding, P. Grete,
+M. Guo, P. Kempski, E. R. Most, C. J. White, and
+G. N. Wong, arXiv e-prints , arXiv:2409.16053 (2024),
+arXiv:2409.16053 [astro-ph.IM].
+[21] J. Fields, H. Zhu, D. Radice, J. M. Stone, W. Cook,
+S. Bernuzzi, and B. Daszuta, Astrophys. J. Suppl.276,
+35 (2025), arXiv:2409.10384 [astro-ph.HE].
+[22] B. Daszuta and W. Cook, “GR-Athena++: Magnetohy-
+drodynamical Evolution with Dynamical Space-Time,”
+(2025) arXiv:2406.05126 [gr-qc].
+[23] B. Daszuta, W. Cook, P. Hammond, J. Fields, E. M.
+Guti´ errez, S. Bernuzzi, and D. Radice, Phys. Rev. D
+112, 103006 (2025), arXiv:2406.09139 [gr-qc].
+[24] F. Banyuls, J. A. Font, J. M. A. Ibanez, J. M. A. Marti,
+and J. A. Miralles, Astrophys. J.476, 221 (1997).
+[25] A. Neumaier, ZAMM - Journal of Applied Math-
+ematics and Mechanics / Zeitschrift f¨ ur Ange-
+wandte Mathematik und Mechanik54, 39 (1974),
+https://onlinelibrary.wiley.com/doi/pdf/10.1002/zamm.19740540106.
+[26] B. Daszuta, S. Bernuzzi, M. Jacobi, E. M. Guti´ errez,
+P. Hammond, W. Cook, and D. Radice, (2026),
+arXiv:2602.18290 [gr-qc].
+[27] R. Borges, M. Carmona, B. Costa, and W. S. Don, Jour-
+nal of Computational Physics227, 3191 (2008).
+[28] L. D. Zanna and N. Bucciantini, Astron. Astrophys.390,
+1177 (2002), arXiv:astro-ph/0205290.
+[29] B. van Leer, Journal of Computational Physics14, 361
+(1974).
+[30] E. Gourgoulhon, P. Grandclement, K. Taniguchi, J.-
+A. Marck, and S. Bonazzola, Phys.Rev.D63, 064029
+(2001), arXiv:gr-qc/0007028 [gr-qc].
+[31] M. Hempel, T. Fischer, J. Schaffner-Bielich, and
+M. Liebendorfer, Astrophys. J.748, 70 (2012),
+arXiv:1108.0848 [astro-ph.HE].
+[32] S. Gottlieb and C.-W. Ketcheson, David I.and Shu, Jour-
+nal of Scientific Computing38, 251 (2009).
+[33] A. Perego, S. Bernuzzi, and D. Radice, Eur. Phys. J.
+A55, 124 (2019), arXiv:1903.07898 [gr-qc].
+[34] V. Nedora, S. Bernuzzi, D. Radice, A. Perego, A. En-
+drizzi, and N. Ortiz, Astrophys. J.886, L30 (2019),
+arXiv:1907.04872 [astro-ph.HE].
+[35] S. Bernuzzi and D. Hilditch, Phys. Rev.D81, 084003
+(2010), arXiv:0912.2920 [gr-qc].
+[36] D. Hilditch, S. Bernuzzi, M. Thierfelder, Z. Cao,
+W. Tichy, and B. Bruegmann, Phys. Rev.D88, 084057
+(2013), arXiv:1212.2901 [gr-qc].
+[37] A. Weyhausen, S. Bernuzzi, and D. Hilditch, Phys. Rev.
+D85, 024038 (2012), arXiv:1107.5539 [gr-qc].
+[38] D. Radice, A. Perego, K. Hotokezaka, S. A. Fromm,
+S. Bernuzzi, and L. F. Roberts, Astrophys. J.869, 130
+(2018), arXiv:1809.11161 [astro-ph.HE].
+[39] W. Kastaun and F. Galeazzi, Phys.Rev.D91, 064027
+(2015), arXiv:1411.7975 [gr-qc].
+[40] C. Reisswig and D. Pollney, Class.Quant.Grav.28,
+195015 (2011), arXiv:1006.1632 [gr-qc].
+[41] D. Radice, L. Rezzolla, and F. Galeazzi,
+Class.Quant.Grav.31, 075012 (2014), arXiv:1312.5004
+[gr-qc].

@@ -1,0 +1,2162 @@
+Title: On the origin of anomalous dissipation in simulations of tidal disruption events
+Authors: Chris Nixon, Eric R. Coughlin, Zachary L. Andalman
+Published: 2026-05-19
+Categories: astro-ph.HE, astro-ph.GA, astro-ph.SR, physics.comp-ph
+
+Draft version May 21, 2026
+Typeset using LATEX twocolumn style in AASTeX7.0.1
+On the origin of anomalous dissipation in simulations of tidal disruption events
+C. J. Nixon
+ ,1 Eric R. Coughlin
+ ,2 and Zachary L. Andalman
+ 3
+1School of Physics and Astronomy, University of Leeds, Sir William Henry Bragg Building, Woodhouse Ln., Leeds LS2 9JT, UK
+2Department of Physics, Syracuse University, Syracuse, NY 13210, USA
+3Department of Astrophysical Sciences, Princeton University, 4 Ivy Lane, 08540,Princeton, NJ, USA
+ABSTRACT
+In a tidal disruption event (TDE), a star is destroyed by the tidal field of a supermassive black hole.
+The stellar debris is initially placed on highly elliptical orbits, and a longstanding question in TDE
+theory is: How does the stellar debris circularize into a disc and accrete? The originally proposed
+answer to this question is self-intersection shocks, where relativistic apsidal precession results in a
+strong collision between the incoming and outgoing material. However, global simulations of TDEs
+tend to find enhanced hydrodynamical dissipation prior to any intersections of the debris orbits, with
+the material “fanning out” into a wide-angle and partially-unbound outflow upon passing through
+pericenter. We show that this dissipation is numerical in origin and arises from a combination of 1) the
+change in the kinematics of the debris as it passes through pericenter, with its velocity profile along the
+stream transitioning from strongly diverging pre-pericenter to strongly converging post-pericenter, and
+2) the dependence of numerical algorithms (viscosity switches for particle-based methods and Riemann
+solvers for Godunov-based schemes) on the diverging vs. converging nature of the fluid. We support
+this conclusion with analytical and numerical modeling. We discuss possible resolutions to these issues
+as well as the implications of our findings in the context of observations.
+Keywords: Astrophysical black holes (98) ; Supermassive black holes (1663) ; Black hole physics (159) ;
+Hydrodynamics (1963) ; Tidal disruption (1696) ; Computational methods (1965)
+1. INTRODUCTION
+Tidal disruption events (TDEs) occur when a star is
+torn apart by the tidal field of a massive black hole
+(Hills 1975; Lacy et al. 1982; Rees 1988; Gezari 2021).
+The stellar debris that is bound to the black hole is
+placed onto highly eccentric orbits that – through sev-
+eral poorly understood processes – forms an accretion
+flow. Some of the accretion power likely generates out-
+flows and some of it escapes as radiation (directly or re-
+processed by surrounding gas) that we observe, as borne
+out by numerous observations (e.g., Bloom et al. 2011;
+Cenko et al. 2012; Gezari et al. 2012; Arcavi et al. 2014;
+Alexander et al. 2016; Kara et al. 2016; Pasham & van
+Velzen 2018; Holoien et al. 2019; Nicholl et al. 2019,
+2020; Cendes et al. 2021; Horesh et al. 2021; Hung et al.
+2021; Sazonov et al. 2021; van Velzen et al. 2021; An-
+dreoni et al. 2022; Goodwin et al. 2023; Hammerstein
+et al. 2023; Pasham et al. 2023; Yao et al. 2023; Christy
+et al. 2024; Wevers et al. 2024; Ajay et al. 2025; Ho et al.
+Corresponding author: C. J. Nixon
+Email: c.j.nixon@leeds.ac.uk, ecoughli@syr.edu
+2025; Sfaradi et al. 2025; Yao et al. 2025; Christy et al.
+2026; Hammerstein et al. 2026).
+Our basic understanding of TDE dynamics was set
+forth by Hills (1975); Lacy et al. (1982); Rees (1988)
+and is as follows: If the debris followed Keplerian el-
+lipses without significant internal (i.e., fluid-dynamical)
+dissipation, an elliptical disc would form with a small
+range of pericentre distances and a large range of apoc-
+entre distances. However, as the pericentres are typ-
+ically tens of Schwarzschild radii, the orbits undergo
+relativistic precession, leading the gas orbits to inter-
+sect and shock. These shocks circularize the flow by re-
+moving orbital energy but not angular momentum, and
+the accretion flow is then expected to proceed in the
+way envisaged in Shakura & Sunyaev (1973) for super-
+Eddington flows, such that the mass flow rate on to the
+black hole is maintained at the Eddington limit with the
+remainder expelled in a disc wind. 4
+4 It is also possible that self-intersections lead to the ejection of
+material, i.e., some of the shocked material is unbound at the
+expense of more tightly binding other material ( Jiang et al.
+2016; Bonnerot & Lu 2020, but see Huang et al. 2024).
+arXiv:2605.20327v1  [astro-ph.HE]  19 May 2026
+
+2 Nixon et al.
+Rees (1988) also discusses the possibility that the Ed-
+dington limit is obviated by the accretion of low-binding-
+energy, low-angular-momentum orbits that plunge ∼ di-
+rectly into the black hole, thereby releasing effectively
+none of their orbital energy as they do so. How much
+stellar debris is directly accreted in this fashion, accreted
+through a disc-like flow, or expelled from the disc in a
+wind (or from circularization shocks; see Footnote 4)
+likely depends sensitively on the parameters of the TDE,
+including the pericenter of the stellar orbit, the physical
+properties of the star, and the black hole mass and spin.
+Since these original works, there have been many at-
+tempts to characterize these dependencies and under-
+stand the overall eﬀiciency of circularization, many of
+which have been via three-dimensional hydrodynamical
+simulations. There are some aspects of the “numerical
+TDE problem” – TDE dynamics analyzed with three-
+dimensional hydrodynamical simulations – for which
+there is overall agreement in the literature, such that dif-
+ferent codes with the same numerical methodology, and
+different codes with different numerical methodologies,
+yield the same answer. For example, the maximum ra-
+dius at which a star is completely destroyed (e.g. Guillo-
+chon & Ramirez-Ruiz 2013; Gafton et al. 2015; Mainetti
+et al. 2017; Miles et al. 2020; Coughlin & Nixon 2022a)
+and the energy distribution of the debris when the star
+does not plunge too deeply within the tidal radius (e.g.
+Lodato et al. 2009; Guillochon & Ramirez-Ruiz 2013;
+Norman et al. 2021) are widely agreed upon.
+But, there are aspects of the TDE problem that are
+known to present diﬀiculties for numerical simulations,
+even at modern day resolution. For example, Norman
+et al. (2021) and Coughlin & Nixon (2022b) showed that
+SPH simulations of deeply plunging TDEs can include
+substantial numerical error—even when 128 million par-
+ticles are included—in the breadth of the debris energy
+distribution and the amount of thermal heating incurred
+by the gas.
+Another example, which is the focus of the present
+investigation, is the hydrodynamics of the stream as it
+returns to pericenter: the debris stream expands pre-
+dominantly radially and cools, connoting the idea that
+the circularization and disc formation is initiated by
+the collision of the geometrically thin, kinetic-energy-
+dominated outgoing stream with the (also thin and cold)
+incoming stream at effectively a single point. However,
+while the dynamics of the incoming stream have been
+found (numerically) to reflect this set of notions and an-
+alytical predictions thereof ( Kochanek 1994; Coughlin
+et al. 2016), both finite-mass and finite-volume meth-
+ods have found that the returning stream is substan-
+tially thermodynamically and kinematically modified
+(e.g., Lee & Kim 1996; Ayal et al. 2000; Bogdanović et al.
+2004; Guillochon et al. 2014; Shiokawa et al. 2015; Ryu
+et al. 2023; Steinberg & Stone 2024; Price et al. 2024)
+upon passing through pericenter: the debris spreads lat-
+erally into a wide-angle “fan,” it is significantly hotter,
+and a fraction of it ( Ayal et al. 2000 suggested as much
+as 75% of the material initially bound to the black hole,
+or ∼ 37% of the material overall) is ejected on unbound
+orbits.
+There have been suggestions that all of these effects
+are numerical in origin ( Bonnerot & Lu 2022; Huang
+et al. 2024), and that their magnitude depends on resolu-
+tion has been directly demonstrated with Smoothed Par-
+ticle Hydrodynamics (SPH). For example, Kubli et al.
+(2025) presented a sequence of simulations ranging from
+106 to 1010 particles, studying the return of the material
+from a 5/3-polytrope (with a solar mass and radius) be-
+ing destroyed a 106M⊙ black hole (the same setup used
+in, e.g., Bicknell & Gingold 1983; Evans & Kochanek
+1989; Ayal et al. 2000). They found that the anomalous
+fanning, or “spraying,” of the material as it returns to
+pericenter is effectively absent at 1010 particles. The
+same authors also showed that the total amount of dis-
+sipation, i.e., the fraction of kinetic energy dissipated
+through numerical viscosity, was converging in that it
+declined monotonically with increasing resolution, but
+had not yet converged.
+Despite these strong intimations of the non-physical
+nature of the anomalous dissipation recovered by numer-
+ical methods, the precise reasons as to where and why
+these methods fall short—both that SPH and grid-based
+methods have struggled to achieve converged stream
+properties near pericentre at extreme resolution—have
+not been identified. It is our intent here to try to elu-
+cidate, or at least shed some light on, the origin of the
+numerical dissipation found in simulations of TDEs. In
+Section 2 we develop an analytical model, which com-
+bines past approaches and uses both Eulerian and La-
+grangian techniques, to understand the hydrodynamic
+properties of the stream as it returns to the black hole.
+In Section 3 we use this model alongside hydrodynamical
+simulations to assess the origin of the fanning and heat-
+ing of the debris as it returns, which we argue stems
+primarily from the diverging-to-converging and highly
+supersonic nature of the velocity field along the stream
+near pericenter, coupled with the dependence of fluid-
+dynamical algorithms (specifically those for handling
+multi-valued velocity fields) on these aspects of the flow.
+We also assess the accuracy of these hypotheses with
+SPH simulations, and show that when the β-viscosity
+term is excluded from the SPH algorithm, there is no
+spraying of the material. In Section 4 we discuss poten-
+
+Anomalous dissipation in TDEs 3
+tial solutions to these issues and approaches that have
+been tried but lead to unphysical results, such as the
+particle splitting method ( Ayal et al. 2000 and Hu et al.
+2026, see also Appendix 5), and we also demonstrate
+that both outcomes envisaged by Rees (1988)—quasi-
+circular accretion vs. near-parabolic infall—can be re-
+covered from SPH simulations, depending on the parti-
+cle number and the choice of viscosity parameters. We
+summarize in Section 5.
+2. ANALYTIC MODEL OF THE DEBRIS
+HYDRODYNAMICS
+The stream of debris resulting from a TDE evolves
+non-trivially, owing to the continued post-disruption in-
+fluence of pressure and self-gravity. This aspect of the
+problem was highlighted by Kochanek (1994), who used
+a Lagrangian approach alongside an aﬀine prescription
+for the transverse structure of the stream to study its dy-
+namics under the influence of gas pressure, self-gravity,
+hydrogen recombination, viscous effects, and relativistic
+gravity. This same general methodology has since been
+used by other authors ( Bonnerot et al. 2022; Andalman
+et al. 2025). In contrast, it was pointed out in Cough-
+lin et al. (2016) that, since all the debris originates very
+near the marginally bound (i.e., zero-Keplerian-energy)
+radius, one can accurately treat the Eulerian velocity
+along the stream self-similarly, such that the dynamics
+depend only on time relative to the local dynamical time.
+They then showed that the Eulerian density profile can
+be recovered by considering the behavior of the stream
+width, the evolution of which changes qualitatively in
+the bound vs. unbound segments of the stream.
+To understand the stream evolution, here we combine
+these two approaches: we treat the stream as extending
+purely radially from the black hole 5 and assume that
+the motion along the stream is purely kinematic and
+dominated by the black hole’s gravitational field. Then
+from Coughlin et al. (2016) we know that the velocity
+field can be described self-similarly, i.e., we write
+v = V (t)f (ξ) , ξ = r
+R(t) , V (t) = dR
+dt =
+s
+2GM•
+R(t) ,
+(1)
+where v is the Eulerian radial velocity, M• is the black
+hole mass, and R(t) is the marginally bound radius that
+5 More generally, one can define the radial direction as a curvilin-
+ear axis that extends in the direction of the maximum-density
+curve, and curvature and centrifugal terms that incorporate
+the finite angular momentum of the debris remain small until
+the stream returns to near pericenter; see Coughlin (2023) for
+more details.
+satisfies (from the right-most equality in Equation 1)
+R(t) = Ri
+ 
+1 + 3
+2
+√2GM•
+R3/2
+i
+t
+!2/3
+(2)
+with Ri some scale radius that is comparable to the
+tidal radius. This states that the velocity depends only
+on the relative distance from the zero-energy-Keplerian-
+orbit, R(t), which is a good approximation if the stream
+starts out relatively localized (which it obviously does;
+see Coughlin et al. 2016 for a comparison between this
+solution and hydrodynamical simulations). Then the
+equation for f (ξ) that comes from the radial momen-
+tum equation is
+(f − ξ) d f
+dξ = 1
+2
+
+f − 1
+ξ2
+
+. (3)
+We require the continuity of the velocity and its deriva-
+tive at the marginally bound radius; the former yields
+f (1) = 1 . This boundary condition establishes a critical
+point in Equation ( 3), and using L’Hopital’s rule and
+the fact that the velocity should increase with increas-
+ing distance from the black hole (i.e., unbound material
+is moving faster than bound) shows
+d f
+dξ
+
+ξ=1
+= 2. (4)
+These boundary conditions are suﬀicient to numerically
+integrate Equation ( 3).
+To establish the other properties of the stream, such as
+its width and density profile (with both distance along
+and perpendicular to the stream axis), it is more conve-
+nient to adopt a Lagrangian description. The equation
+of motion along the stream is then
+∂r
+∂t
+
+r0
+= V (t)f (ξ)
+⇒ ∂ξ
+∂τ
+
+ξ0
+= f − ξ, τ = ln
+ R(t)
+Ri
+
+.
+(5)
+Here ξ0 = r0/Ri is the initial radial coordinate of a fluid
+element relative to Ri, which satisfies 0.99 ≲ ξ0 ≲ 1.01
+for typical TDEs. We let the stream adopt a cylindrical
+cross-section and assume the Lagrangian position r is
+independent of the initial cylindrical distance s0, which
+effectively removes the possibility of circulation in the
+stream. We could relax this assumption and model the
+latter effect perturbatively, but we expect its impact
+to be small: bulk motion along the stream (i.e., inde-
+pendent of initial cylindrical radius) should primarily
+establish its hydrodynamical evolution. With these as-
+
+4 Nixon et al.
+sumptions, the density is given by
+ρ(s0, r0, t) = ρ0(s0, z0)
+ s
+s0
+−1 ∂s
+∂s0
+−1 ∂r
+∂r0
+−1
+,
+(6)
+where ρ0 is the initial stream density profile. We will
+also assume that the stream behaves adiabatically, 6 in
+which case the pressure is established by entropy con-
+servation:
+p(s0, r0, t) = p0(s0, r0)
+ ρ
+ρ0
+γ
+= p0(s0, r0)
+ s
+s0
+−γ ∂s
+∂s0
+−γ ∂r
+∂r0
+−γ
+,
+(7)
+where p0 is the initial pressure profile and γ is the adi-
+abatic index of the gas.
+Barring the assumption of the independence of r on
+s0, the preceding expressions for the density and pres-
+sure are general, and must be coupled to the Poisson
+and cylindrical-radial momentum equations. We addi-
+tionally assume that the motion is homologous in the
+cylindrical-radial direction, such that
+s(s0, r0, t) = H(r0, t)s0, (8)
+where H(r0, t) is a function that is determined from the
+momentum equation in the cylindrical-radial direction.
+We know that this parameterization is self-consistent
+near the marginally bound radius (see Appendix A of
+Coughlin 2023) and captures the bulk evolution of the
+stream. Then the density and pressure are
+ρ = ρ0(s0, r0)H −2
+ ∂r
+∂r0
+−1
+,
+p = p0(s0, r0)H −2γ
+ ∂r
+∂r0
+−γ
+.
+(9)
+The cylindrical-radial equation of motion contains
+gradients in terms of s. Because we are not allowing
+for circulation in the stream, it follows that
+∂r0
+∂r =
+ ∂r
+∂r0
+−1
+, ∂s0
+∂s =
+ ∂s
+∂s0
+−1
+= 1
+H , (10)
+and hence
+∂
+∂s = ∂s0
+∂s
+∂
+∂s0
+= 1
+H
+∂
+∂s0
+. (11)
+6 Radiative recombination heats the stream, moves fluid el-
+ements to different adiabats, and can increase the stream
+thickness relative to the adiabatic value by a factor of a few
+(Kochanek 1994; Kasen & Ramirez-Ruiz 2010; Coughlin et al.
+2016; Coughlin 2023; Steinberg & Stone 2024; Andalman et al.
+2025), but these effects do not alter our conclusions.
+The gravitational potential contains contributions from
+the black hole and the gas, where the former is
+Φ• = − GM•√
+s2 + r2 ⇒ ∂Φ•
+∂s ≃ GM•s0H
+r3 , (12)
+and the final equality ignores terms of the order ∼
+s3/r3 ≪ 1. We will also let the initial density profile
+be uniform for simplicity, 7 such that ρ0(s0, r0) = ρc, in
+which case the self-gravitational potential satisfies
+∂Φ
+∂s = 2πGρcH −1
+ ∂r
+∂r0
+−1
+s0. (13)
+Finally, we assume that the initial pressure profile across
+the stream is
+p0(s0, r0) = pc
+
+1 − s2
+0
+H 2
+i
+
+, (14)
+where Hi is the initial stream width and the quadratic
+term is necessary to balance the self-gravitational force
+(i.e., this is the leading-order in s0, self-consistent form
+for the pressure profile across the stream; cf. Coughlin
+& Nixon 2022b).
+With all of this, the equation for H that follows self-
+consistently (i.e., such that all dependence on s0 cancels)
+is
+∂2H
+∂t2 − 2pc
+ρcH 2
+i
+H 1−2γ
+ ∂r
+∂r0
+1−γ
+= − GM•H
+r3 − 2πGρcH −1
+ ∂r
+∂r0
+−1
+. (15)
+The first term on the left-hand side is the Lagrangian
+acceleration of H (i.e., ∂/∂t is the Lagrangian time
+derivative), the second term on the left-hand side arises
+from the pressure gradient, the first term on the right-
+hand side is the tidal potential of the black hole, and
+the second term on the right originates from the self-
+gravitational field of the stream. H(r0, t) is dimension-
+less and satisfies H(r0, t = 0) = 1 , i.e., the preceding
+equation is dimensionally correct. Given that the mo-
+tion along the stream was written in terms of ξ and τ , it
+is reasonable to use these same coordinates in our equa-
+tion for H, which becomes
+7 The uniform-density assumption can be trivially relaxed under
+the present set of approximations, but the precise density pro-
+file depends on the early non-self-similar stream evolution, the
+finite angular momentum, and self-gravity along the stream,
+and the uniform-density solution is suﬀicient for our purposes
+here; see the discussion at the end of this section and the sim-
+ulations in Section 3.1 that address the importance of the vari-
+ation in the density along the stream.
+
+Anomalous dissipation in TDEs 5
+2 ¨H − 3 ˙H − 2pcR3
+i
+ρcH 2
+i GM•
+H 1−2γe(4−γ)τ
+ ∂ξ
+∂ξ0
+1−γ
+= − H
+ξ3 − 2πρcR3
+i
+M•
+e2τ H −1
+ ∂ξ
+∂ξ0
+−1
+. (16)
+Here dots denote differentiation with respect to τ .
+To integrate Equation ( 16) we also require an initial
+condition for the transverse velocity, i.e., ˙H(0). To this
+end, we note that there is an exact, “equilibrium” solu-
+tion to Equation ( 16) near the marginally bound radius,
+where we can Taylor expand ξ as ξ = 1 + ξ0eτ (note
+that this follows self-consistently from Equation 5, and
+ξ0 ≲ R⋆/rt ≲ 0.01, i.e., this is highly accurate at early
+times), which is
+γ = 5/3, pc
+πGρ2cH 2
+i
+= 1, H (ξ0, τ) = eτ /2. (17)
+Note that γ = 5 /3 should be accurate before and, to a
+lesser extent, after hydrogen recombination ( Andalman
+et al. 2025), and the second relation is effectively the
+one satisfied by hydrostatic balance in the original star,
+i.e., these conditions should automatically be upheld to
+high accuracy (this equilibrium solution was described in
+Coughlin 2023, and is the one about which their pertur-
+bation analysis was performed). Equation ( 17), and the
+fact that it should be approximately satisfied in general,
+then motivates the following simplifications and initial
+conditions: let γ = 5 /3, let pc, ρc, and Hi be related
+via Equation ( 17), and let H(0) = 1 and ˙H(0) = 1 /2,
+implying that the stream begins in quasi-hydrostatic
+balance effectively everywhere (i.e., when the stream is
+still highly localized around the marginally bound or-
+bit). With this set of conditions the equation for H is
+2 ¨H − 3 ˙H + H
+ξ3
+= µ
+ 
+−e2τ H −1
+ ∂ξ
+∂ξ0
+−1
++ H −7/3e7τ /3
+ ∂ξ
+∂ξ0
+−2/3!
+,
+(18)
+where
+µ = 2πρcR3
+i
+M•
+(19)
+is the ratio of the stream density to the “black hole den-
+sity” M•/R3
+i at the initial marginally bound radius. Be-
+cause the fluid elements in the bound segment of the
+stream eventually start to return to the black hole, the
+stream width H(ξ0, τ) will evolve in a way that is not
+simply given by eτ /2, but that can nonetheless be de-
+termined from the numerical solution to Equation ( 18),
+given ξ(ξ0, τ) from Equation ( 5).
+From the solution for H(ξ0, τ) we can assess its Mach
+number and causal connectedness: the sound-crossing
+time over the stream width is given approximately by
+tsc = 2HiH
+cs
+= 2√γπGρ c
+H 5/3eτ /3
+ ∂ξ
+∂ξ0
+1/3
+, (20)
+where τ corresponds to the position of the marginally
+bound radius when we impose some perturbation to the
+stream (note that the dimensionless stream width H and
+∂ξ/∂ξ 0 are also evaluated at τ ) and recall that Hi is the
+initial stream width. The causal connectedness of the
+stream as concerns its ability to smooth out perturba-
+tions is established by the ratio of tsc to the time taken
+for the fluid element to return to the origin tret, which
+is
+tsc
+tret
+≃
+H 5/3eτ /3
+
+∂ξ
+∂ξ0
+1/3
+e3τ /2 − e3τ1/2 , (21)
+where τ1 is the position of the marginally bound ra-
+dius when the fluid element reaches the origin, measured
+from τ = 0. If this ratio is greater than one, the stream
+is causally disconnected transversely.
+The left panel of Figure 1 gives the solution to Equa-
+tion ( 18) for µ = 4 , which is the expected value for a
+low-mass star given the ratio of its central to average
+density and the tidal radius ( Coughlin & Nixon 2022a;
+Coughlin 2023), as a function of ξ0 for the τ shown
+in the legend. Note that ξ0 ranges from 0.99 to 1.01,
+which is appropriate to a black hole with mass 106M⊙.
+The initial behavior (for τ ≲ 4) is a monotonic increase
+in H that is independent of ξ0, which is simply a re-
+flection of the fact that H ≃ eτ /2 (independent of ξ0)
+while each fluid element is on nearly the same, effectively
+marginally bound orbit. After reaching apocenter and
+upon returning to the black hole, the tidal field com-
+presses the stream, resulting in a width that approaches
+H ≃ 1 as the material reaches pericenter. Unbound seg-
+ments of the stream become dominated by self-gravity,
+which is the origin of the non-monotonic behavior for
+ξ0 > 1.
+The right panel of this figure shows the ratio of the
+sound-crossing time to the return time as a function of
+τ , which can be thought of as the time at which some
+fictitious perturbation is applied that then “crosses” the
+stream, for µ = 4, where the different curves are for fluid
+elements specified by the ξ0 in the legend. Each curve is
+terminated when ξ = 1, as at this point the finite angu-
+lar momentum of the debris becomes important and the
+width approaches a non-zero minimum. The vertical,
+dashed lines delimit the times at which the fluid ele-
+ments reach their apocenters. This figure demonstrates
+that even though the fluid elements are tidally com-
+pressed as they return to pericenter (as shown by the left
+
+6 Nixon et al.
+0.990 0.995 1.000 1.005 1.010
+0
+10
+20
+30
+40
+50
+60
+ξ0
+H
+τ = 8
+τ = 6.5
+τ = 5.5
+τ = 4.5
+τ = 4
+τ = 2
+τ = 0
+0 2 4 6 8
+10-4
+0.1
+100
+10
+τ
+t
+ t ξ0 = 0.9999
+ξ0 = 0.999
+ξ0 = 0.997
+ξ0 = 0.993
+ξ0 = 0.99
+Figure 1. Left: The stream width, which in this set of approximations is the cross-sectional radius, as a function of initial
+(dimensionless) Lagrangian position ξ0 evaluated at the dimensionless times τ (recall τ = ln R(t)/Ri ∝ ln t) in the legend.
+The early-time behavior is characterized by a near-uniform increase at a rate that scales as ∝ eτ /2, while at later times the
+bound fluid elements, which have ξ0 < 1, return; the curves are stopped at the τ when H = 1 , as at this point the stream has
+returned to pericenter and the finite angular momentum resists further compression. The unbound fluid elements, which have
+ξ0 > 1, show non-monotonic and oscillatory behavior, which is due to the dominance of self-gravity over the tidal potential in
+the unbound tail. Right: The ratio of the transverse sound-crossing time, tsc, to the debris return time, tret, as a function of τ .
+The vertical, dashed lines indicate the times at which the fluid elements reach their apocenters. The time at which any of the
+curves exceeds unity (shown by the horizontal, solid black line) is the time after which the fluid element is causally disconnected
+across its width, which in all cases coincides nearly with when the fluid element reaches apocenter.
+panel), the intense shear along the stream results in a
+monotonically increasing ratio tsc/tret that equals unity
+just after apocenter. The stream is therefore causally
+disconnected at all radii for which the radial velocity
+is negative and for which the fluid elements are post-
+apocenter.
+We can also determine the radial Mach number (i.e.,
+the Mach number associated with the velocity along the
+stream): from Equation ( 1) we have
+Mr = |v|
+cs
+=
+s
+2GM•
+RiH 2
+i
+1√γπGρ c
+H 2/3e−τ /6|f (ξ)|
+ ∂ξ
+∂ξ0
+1/3
+≃
+ M•
+M⋆
+1/3
+H 2/3e−τ /6|f (ξ)|
+ ∂ξ
+∂ξ0
+1/3
+,
+(22)
+where in the last line we let Ri = rt, Hi = R⋆, and
+dropped order-unity factors. Figure 2 shows the Mach
+number as a function of τ for the same fluid elements as
+in the right panel of Figure 1; here we let M•/M⋆ = 10 6
+and otherwise the parameters are the same as those cho-
+sen for Figure 1. For each fluid element the Mach num-
+ber starts at a value of 100, which is expected from the
+fact that the tidal radius is only ∼ 50 gravitational radii
+for a sun-like star and a 106M⊙ black hole (and hence
+the star’s speed at pericenter is ∼ 0.2c, compared to its
+escape speed of ∼ 0.002c). Each curve then reaches a
+relative maximum before dropping to zero at apocenter,
+becoming hypersonic again as pericenter is reached.
+0 2 4 6 80.1
+1
+10
+100
+1000
+104
+10
+τ
+ℳr
+ξ0 = 0.9999
+ξ0 = 0.999
+ξ0 = 0.997
+ξ0 = 0.993
+ξ0 = 0.99
+Figure 2. The Mach number associated with the radial ve-
+locity for the fluid elements with initial positions given in
+the legend; here we let M•/M⋆ = 10 6, and otherwise the
+parameters are the same as those used in Figure 1. The
+Mach number rises as the sound speed declines, reaches a
+relative maximum before equaling zero at apocenter, and
+rapidly rises again to become highly supersonic near peri-
+center. The curves are stopped when ξ = 1 , i.e., when the
+fluid elements return to pericenter.
+Finally, the cylindrical-radial component of the fluid
+velocity, i.e., in the s-direction, is
+vs = ∂H
+∂t s0 =
+√2GM•
+R3/2
+i
+e−3τ /2 ∂H
+∂τ s0
+≃
+r
+2GM⋆
+R⋆
+e−3τ /2 ∂H
+∂τ ,
+(23)
+
+Anomalous dissipation in TDEs 7
+where we used Ri = rt in the final line and set s0 = R⋆,
+corresponding to a fluid element at the initial stellar sur-
+face, while the Mach number associated with this com-
+ponent of the velocity is
+MH = |vs|
+cs
+≃ e−7τ /6
+ ∂ξ
+∂ξ0
+1/3
+∂H
+∂τ
+ . (24)
+As for Equation ( 22) above, the ≃ arises from drop-
+ping order-unity factors (which, because of our simpli-
+fying assumption of an initially uniform density along
+the stream, are inaccurate compared to the realistic sit-
+uation anyway). Figure 3 shows the cylindrical-radial
+velocity relative to the stellar escape speed in the left
+panel, and the Mach number associated with this com-
+ponent of the velocity in the right, for the same set of
+ξ0 as in Figures 1 and 2. We see that the speed in the
+transverse direction never exceeds ∼ the stellar escape
+speed (which is trivially and immediately satisfied if one
+ignores the thermal energy of the gas, as the motion is
+then ballistic in a conservative potential), and the Mach
+number – while large in an absolute sense – is corre-
+spondingly much smaller than that associated with the
+radial velocity.
+We assumed that the density is independent of posi-
+tion along the stream (i.e., of ξ0), which was done for
+simplicity – including additional variation from, e.g., the
+initial density profile of the star (e.g., via the method-
+ology in Lodato et al. 2009) is trivial if the pressure
+gradient and self-gravitational field are not included self-
+consistently in the dynamics. A more realistic density
+profile, such that the sound speed approaches zero at the
+radial extremities of the stream, would lead to the ra-
+tio tsc/tret falling below unity at earlier times and being
+considerably larger upon returning to pericenter than
+is indicated for ξ0 = 0 .99 in the right panel of Figure
+1; similarly, the Mach number of the most-bound fluid
+elements for a more realistic TDE debris stream would
+be much higher than the (already-large) values shown
+in Figure 2, and this can be seen directly from Figure 5
+below. These features have strong bearing on the ability
+of numerical methods to resolve the stream dynamics as
+it returns to pericenter, which we now discuss.
+3. THE ORIGIN OF THE ANOMALOUS
+DISSIPATION
+Figure 2 highlights that the Mach number associated
+with the in-plane motion of the returning debris is at
+least ≳ 103. However, supersonic motion is obviously
+a necessary but not suﬀicient condition for the forma-
+tion of shockwaves and hydrodynamic dissipation, as
+(e.g.) the initial star suffers no such dissipation despite
+having a Mach number ≳ 100 as it passes through peri-
+center. The additional requirement is that the relative
+motion of fluid elements be supersonic, which is (also ob-
+viously) absent when the entire star moves nearly with
+the same velocity.
+Because of its hypersonic nature, the returning debris
+is moving (for all intents and purposes) ballistically, and
+hence the only shocks that form will do so as a result
+of caustics. One such caustic is in the out-of-plane di-
+rection (i.e., in the direction parallel to the orbital an-
+gular momentum vector of the original star), which has
+been the subject of extensive discussion and debate (e.g.,
+Kochanek 1994; Guillochon et al. 2014; Bonnerot & Lu
+2022; Andalman et al. 2025). Figure 3 illustrates that
+the out-of-plane motion never exceeds the stellar escape
+speed, but the Mach number can still be appreciable,
+and hence there can be shocks 8 that form as the stream
+is compressed (though radiative recombination will raise
+the temperature relative to the adiabatic one assumed
+here, which will increase the sound speed and reduce
+the effective Mach number; see Andalman et al. 2025).
+Nevertheless, because the speed itself is 2-3 orders of
+magnitude smaller than the in-plane speed and dissipa-
+tion will at most yield a thermal pressure comparable
+to the vertical ram pressure, its impact on the in-plane
+motion is ignorable; this conclusion agrees with the re-
+sults of, e.g., Guillochon et al. (2014); Bonnerot & Lu
+(2022); Andalman et al. (2025).
+There is no analogous caustic formation within the
+plane (this is clear kinematically and as we show im-
+minently, but see also Kubli et al. 2025, whose 1010-
+particle simulation shows that there is little-to-no spray-
+ing or dissipation at pericenter), and hence the only
+site of (weak) dissipation should be that associated with
+the vertical motion, implying that a dynamically cold
+stream should emerge from the pericenter passage and
+impact the incoming stream at effectively a single point.
+However, it is near pericenter that the nature of the
+in-plane velocity field changes qualitatively and in a
+way that is problematic for standard numerical meth-
+ods. Specifically, as the stream is returning to but has
+not yet reached pericenter, the velocity along the stream
+is hypersonic and diverging implying that numerically
+8 Note that this is not a given, nor is it addressable with the
+model developed in Section 2, because a homologous velocity
+profile (which we assumed) yields a one-to-one mapping be-
+tween the initial and current Lagrangian positions of each fluid
+element and precludes shock formation. Indeed, shocks formed
+from the gravitational compression of gas are typically much
+weaker than simple Mach-number-based estimates imply, as
+the increasing density leads to adiabatic heating and the in-
+creasing sound speed works to resist the formation of a shock
+(cf. Norman et al. 2021; Coughlin & Nixon 2022b).
+
+8 Nixon et al.
+0 2 4 6 8
+-0.4
+-0.2
+0.0
+0.2
+0.4
+v
+ 2 G M
+ R
+ξ0 = 0.9999
+ξ0 = 0.999
+ξ0 = 0.997
+ξ0 = 0.993
+ξ0 = 0.99
+0 2 4 6 8
+10-4
+0.01
+1
+100
+τ
+ℳ H
+Figure 3. The cylindrical-radial velocity relative to the original stellar escape speed (left) and the cylindrical-radial Mach
+number (right) as functions of dimensionless time for the same ξ0 as in Figure 2. This shows that the velocity out of the
+plane never exceeds ∼ the stellar escape speed and that the Mach number can be large in an absolute sense, but it is orders of
+magnitude smaller than that associated with the radial velocity (as shown in Figure 2).
+induced viscous effects (i.e., numerical dissipation) are
+negligible: the artificial viscosity in an SPH simulation
+is not applied to receding particle pairs (e.g., Price et al.
+2018, for the specific implementation in phantom; see
+also the next subsection), while the solution to the Rie-
+mann problem at the interface between two cells in a
+Godunov-based scheme is two rarefaction fans. Upon
+reaching pericenter, the velocity profile along the stream
+changes from diverging to converging, as fluid elements
+start to decelerate and undergo their second orbit about
+the black hole. In the limit of a parabolic orbit (for
+simplicity and because it is highly accurate for typical
+massive black hole-star encounters), the component of
+the velocity that is perpendicular to the direction of peri-
+center and within the orbital plane of the original star
+is
+v(y) =
+s
+2GM
+rp
+ 
+1 − 1
+4
+ y
+rp
+2!
++ O
+h
+(y/rp)4
+i
+, (25)
+where y is in the direction parallel to v and rp ≃ rt is
+the pericenter distance. Therefore and in the limit of in-
+finite resolution, the kinematic in-plane velocity profile
+does not lead to the formation of a shock in the imme-
+diate vicinity of pericenter at y = 0 . However, with fi-
+nite resolution and particularly if the particle smoothing
+length is comparable in size to the pericenter distance
+– which will typically be the case for the leading edge
+of the stream that originated near the stellar surface
+– a large convergence in the velocity field (i.e., across
+neighboring particles) can be spuriously produced, lead-
+ing to correspondingly large viscous forces on the par-
+ticles with precise magnitudes that vary stochastically
+with time. Analogously, with an insuﬀiciently small cell
+size near pericenter, the finite difference in velocities of
+neighboring cells will lead to strong-shock solutions to
+the Riemann problem because of the highly supersonic
+nature of the flow, leading to non-physical dissipation
+and heating of the gas.
+We can more directly and analytically investigate the
+nature of the velocity field of the returning debris, but
+the model in the preceding section adopts a purely ra-
+dial morphology of the gas, i.e., it is one-dimensional
+both in terms of the spatial and velocity distributions of
+the fluid and therefore cannot be used self-consistently
+to this end. However, Coughlin (2023) and Coughlin
+& Nixon (2025) formulated a model that is still one-
+dimensional from the standpoint that there is only a
+single direction that is “along the stream,” but is two-
+dimensional in that this direction is curvilinear and pa-
+rameterized by the initial positions of fluid elements un-
+der the frozen-in prescription, and it therefore captures
+the finite angular momentum of the material (but it ex-
+cludes pressure gradient and self-gravitational forces in
+the transverse direction). Specifically, the debris satis-
+fies the usual frozen-in condition initially (e.g., Lodato
+et al. 2009), but the density profile is collapsed into a
+one-dimensional line that extends purely in the direction
+of pericenter; see Coughlin & Nixon (2025) for more de-
+tails. From this model, the divergence of the velocity
+field along the stream is
+∇ · v =
+∂X
+∂X0
+∂2X
+∂t∂X 0
++ ∂Y
+∂X0
+∂2Y
+∂t∂X 0
+
+∂X
+∂X0
+2
++
+
+∂Y
+∂X0
+2 . (26)
+Here X0 is the initial Lagrangian position of
+the fluid element with current Lagrangian position
+{X(X0, t), Y (X0, t)}, which satisfy Equations (19) and
+(20) from Coughlin & Nixon (2025), ∂/∂t is the La-
+grangian time derivative (i.e., for a given X0), and this
+expression (i.e., Equation 26) arises from taking the La-
+
+Anomalous dissipation in TDEs 9
+grangian time derivative of Equation (23) in Coughlin
+& Nixon (2025).
+Figure 4 shows the predicted (from this model) dis-
+tribution of the debris at three different times post-
+disruption, two prior to the return of the most-bound
+debris and one after, following the disruption of a solar-
+like star by a 106M⊙ black hole. The coloration of
+the curves scales with the local value of ∇ · v (given
+by Equation 26), such that purple coincides with re-
+gions of diverging flow ( ∇ · v > 0), while blue, green,
+yellow, orange, and red represent regions of converging
+(∇ · v < 0) flow and in order of increasing magnitude
+of convergence. The inset provides a zoom-in on the
+fluid that has returned to pericenter. The right panel of
+this figure shows the local divergence of the fluid veloc-
+ity, measured in units of the inverse of the dynamical
+time at the tidal radius, as a function of the angle of
+the orbit that is measured with respect to the direction
+of pericenter, ϕ, i.e., the true anomaly. The coloration
+in this panel reflects that in the left panel: the fluid
+elements experience a strong convergence as they pass
+back through pericenter, resulting in the compression of
+the gas. However, the magnitude of ∇ · v remains fi-
+nite everywhere, indicating that there is no caustic and
+hence no shock formation within the flow – the ordering
+of the fluid elements is preserved and there is no inter-
+penetration of the gas. The dashed curve in this panel is
+the prediction that follows from zero-energy Keplerian
+orbits, being
+∇ · v = − 1
+4
+s
+GM•
+2r3
+t
+sin ϕ (1 + cos ϕ)
+≃ −
+s
+GM•
+8r3
+t
+y
+rt
+.
+(27)
+Note that this is a factor of 2 smaller compared to what
+is obtained by taking ∂v/∂y with v given by Equation
+(25), because there is an x-component of the velocity
+that increases as the gas recedes to larger radii, i.e.,
+Equation (26) correctly accounts for both the magnitude
+and the direction of the velocity as one moves along the
+curvilinear axis represented by the stream. The small
+differences between Equation ( 26) (the exact solution)
+and ( 27) are from the small but non-zero binding ener-
+gies of the fluid elements.
+We propose that it is the qualitative change in the
+stream velocity profile through pericenter (shown by
+Equations 26 & 27 and Fig. 4), alongside the under-
+resolved nature of the simulations and the very weakly
+bound nature of the debris – such that the work done
+by the spurious viscous forces on the fluid elements is
+large compared to their binding energies – that results
+in the “fanning” and heating of the material as it re-
+turns to pericenter. Aside from increasing the particle
+number, either locally in the case of Ayal et al. (2000)
+or globally as done in Kubli et al. (2025), to test this
+hypothesis one can simply reduce the magnitude of the
+artificial viscosity employed in the SPH algorithm and
+investigate the differences that arise. We perform this
+exercise in the next subsection.
+3.1. Numerical simulations
+We test our hypothesis by running and analyzing a
+set of simulations with the phantom SPH code. To
+model the relativistic apsidal precession of the debris
+we employ the Einstein potential 9 for the gravitational
+field of the black hole, given by ( Nelson & Papaloizou
+2000)
+Φ(r) = − GM
+r
+
+1 + 3Rg
+r
+
+, (28)
+where Rg = GM•/c2 is the gravitational radius. We
+also include an accretion radius of 4Rg, inside of which
+particles are removed from the simulation. The star is
+taken to be an n = 3 /2 polytrope with a solar mass
+and solar radius, and placed on a parabolic orbit with
+pericentre equal to the tidal radius rt = (M/M⋆)1/3R⋆.
+The equation of state for the gas is P = Kρ γ where
+γ = 5 /3 is a fixed constant. The entropy function K is
+fixed in simulations that exclude heating from the artifi-
+cial viscosity terms (i.e., the entropy equation is trivially
+˙K = 0), while for simulations that include heating from
+the artificial viscosity, K is evolved to include this effect
+(see Price et al. 2018, for details). We perform the sim-
+ulations at 105, 106 and 107 particles to simultaneously
+investigate the effects of resolution.
+Since our main interest here is to understand the im-
+pact of the artificial viscosity on the simulation results,
+we briefly summarize its standard implementation in the
+SPH algorithm. Specifically, the artificial viscosity is
+composed of two terms: a linear (quadratic) term that
+is linear (quadratic) in the fluid velocity. For each par-
+ticle, a, its pressure, Pa, is augmented in the equation
+of motion (i.e., the momentum equation) by an amount
+qa
+ab (Equation 34 in Price et al. 2018), where qa
+ab is given
+by
+qa
+ab =
+8
+<
+:
+− 1
+2 αA V
+a ρavsig,avab · ˆrab vab · ˆrab < 0
+0 otherwise
+. (29)
+9 The details of the self-intersection obviously depend on the
+choice and accuracy of the pseudo-Newtonian potential (e.g.,
+Tejeda & Rosswog 2013), but these details are not the point
+of the present investigation, and the Einstein potential suﬀices
+for our purposes.
+
+10 Nixon et al.
+Figure 4. Left: the stream of debris predicted from the one-dimensional model in Coughlin & Nixon (2025) at three different
+times post-disruption, following the disruption of a solar-like star by a 106M⊙ black hole. Each curve is color-coded in a way
+that scales with the local value of ∇ · v, such that purple coincides with regions of diverging flow ( ∇ · v > 0) while blue-to-red
+have converging flow ( ∇ · v < 0). The inset provides a zoom-in on the fluid elements that have already returned to pericenter
+and highlights the fact that they are in regions of converging flow. Right: the divergence of the fluid elements, in units of the
+inverse of the dynamical time at the tidal radius, as a function of the angle ϕ that is measured from the direction of pericenter
+(a.k.a. the true anomaly). The coloration corresponds to that in the left panel, highlighting that there is a region of strong
+convergence as the fluid elements pass through pericenter, and the black-dashed curve gives the analytical prediction for a
+zero-energy Keplerian orbit (Equation 27).
+Here the signal velocity vsig,a = cs,a + βA V|vab · ˆrab|,
+vab = va − vb, and ˆ rab = ( ra − rb)/|ra − rb|. As men-
+tioned above, there is only a viscous contribution to the
+equation of motion when the relative velocity between
+two particles is negative, i.e., when the flow is compres-
+sive and vab · ˆrab < 0. Also note that Equation ( 29) rep-
+resents a slight adaptation to Equations (40) and (41) in
+Price et al. (2018) to include the Cullen-Dehnen switch
+(used to reduce the value of αA V
+a away from regions not
+conducive to shock formation; see Equation 30 below
+and the discussion thereof) in the quadratic term as
+well as the linear term ( Cullen & Dehnen 2010; Chen &
+Nixon 2025).10 From this we can see that the linear term
+scales as ∼ csv and the quadratic term scales as ∼ v2
+(cf. e.g. Monaghan 1997; Lodato & Price 2010), with
+the proportionality constant being αA V for the linear
+term and the product of αA V and βA V for the quadratic
+term. As shown in Section 2 (see also Figure 5 below),
+the Mach number of the debris stream, M = v/cs ≫ 1,
+and therefore we can expect that where artificial viscos-
+ity is applied it is the quadratic term that dominates.
+However, when heating due to artificial viscosity is in-
+cluded, any strong shocks in the flow will raise the sound
+speed such that cs ∼ v, at which point the linear and
+quadratic viscosities have comparable magnitudes.
+Given these considerations, we perform an SPH simu-
+lation with αA V = βA V = 0 (no artificial viscosity), and
+10 Although, in this case, whether or not the switch is applied to
+the quadratic term makes little difference in practice as αA V ≃
+1 for all particles that have returned close enough to the black
+hole.
+five additional simulations in which the value of βA V is
+varied from zero to the standard value of 2. In the ad-
+ditional five simulations the value of αA V ∈ [0, 1] varies
+for each particle and is set via the Cullen-Dehnen switch
+(with the specific implementation as outlined in Section
+2.2.9 of Price et al. 2018). This leads to the αA V for
+each particle being set to a value of αA V
+loc , given by
+αA V
+loc = min
+ 10h2
+c2s
+χ max
+
+− d
+dt (∇ · v) , 0
+
+, αA V
+max
+
+,
+(30)
+where χ is the Balsara (1995) limiter given by
+χ = |∇ · v|2
+|∇ · v|2 + |∇ × v|2 (31)
+and we take αA V
+max = 1 , or, if the value of αA V for the
+particle from the previous timestep is greater than αA V
+loc ,
+then αA Vis evolved (decayed) as ˙αA V = −(αA V−αA V
+loc )/τ
+where τ = 10h/cs.
+Figure 5 illustrates the fluid Mach number as a func-
+tion of distance from the black hole (in units of gravita-
+tional radii) from the simulation with αA V = βA V = 0
+and 106 particles. This distribution of particles coin-
+cides with the time at which the most-bound fluid ele-
+ment, which is in the top-left corner of the figure with a
+Mach number of ∼ 107, has just returned to pericenter.
+In agreement with the analytical model in Section 2,
+this figure demonstrates that the fluid is highly super-
+sonic, especially for the low-density tails of the debris
+that comprise fluid elements that were initially near the
+stellar surface at the time of disruption.
+In Figure 6 we show the debris stream structure in
+simulations with these viscosity coeﬀicients and 106 SPH
+
+Anomalous dissipation in TDEs 11
+r [Rg]
+log (Mach number)
+       
+0 5000 1×10 4
+2
+4
+6
+Figure 5. The Mach number of the fluid elements following
+the disruption of a solar-type, 5/3-polytrope by a 106M⊙ su-
+permassive black hole, at a time when the most-bound fluid
+element is just returning to pericenter (roughly 18.5 days
+since the star was at its original point of closest approach
+to the black hole); this fluid element is in the top-left corner
+of the plot and has a Mach number of ∼ 107. The parti-
+cle number is 106. The horizontal axis gives the distance of
+the fluid elements from the black hole in units of gravita-
+tional radii, and here the artificial viscosity parameters are
+αA V = βA V = 0. In agreement with the estimates in Section
+2, this illustrates that the flow is hypersonic upon returning
+to pericenter.
+particles, and for which the heating due to viscosity is
+not included in the thermal energy of the gas. The fig-
+ures show a snapshot at a time of 0.13 years after the
+initial disruption of the star, by which time a signifi-
+cant amount of debris has returned to pericentre (and
+some of the material has returned twice). In the top-left
+panel with αA V = βA V = 0 (i.e., no artificial viscosity
+is included in the simulation), there is no spraying of
+the debris as it passes through pericenter. This figure
+also shows that there is no interaction of the fluid when
+the streams cross; this unphysical outcome is why artifi-
+cial viscosity should be included in SPH simulations, as
+it prevents inter-particle penetration (i.e. multi-valued
+velocity fields) that should correspond physically to the
+formation of shocks in the flow. As expected, the same
+structure arises in the simulation with only the linear
+αA V term (the top-middle panel). A small quadratic
+term ( βA V = 0 .002) results in a noticeable broadening
+of the stream, as shown in the top-right panel, and for
+larger βA V values (the bottom row of this figure) the
+stream is widened into the standard “fan” that is typi-
+cal of simulations of returning TDE debris streams (and
+that Kubli et al. 2025 showed does not occur once suﬀi-
+cient resolution is reached).
+Figure 7 is the same as Figure 6, but in this case the
+heating from the artificial viscosity terms is included.
+The no-artificial-viscosity case (and thus no heating)
+proceeds as before. However, all the other cases dis-
+play a similar morphology. As discussed above, the lin-
+ear term is strongly augmented by the heating of the
+gas, such that it is comparable to the quadratic term.
+In these cases, increasing the quadratic term serves pri-
+marily to increase the size of the “cloud” of debris that
+is generated, though there are also morphological differ-
+ences that arise from changes to βA V.
+Figure 8 shows the debris distribution with βA V = 2 ,
+artificial viscosity heating included, and at a time of
+0.066 yr ≃ 24 days for 105 (left), 106 (middle), and 107
+(right) SPH particles. The bottom row is the same as
+the top row, but zoomed out to show the entire range
+of scales to which particles have propagated. This fig-
+ure demonstrates that there is a large amount of dis-
+sipation that occurs near pericenter, i.e., before any
+self-intersection of the incoming and outgoing debris
+streams, and in a way that is qualitatively different from
+one resolution to the next.
+4. DISCUSSION
+The simulations described in the preceding section
+demonstrate that artificial viscosity is entirely responsi-
+ble for the simultaneous heating and fanning effect that
+is consistently recovered in SPH simulations (e.g., Ayal
+et al. 2000), with the morphology of the material chang-
+ing qualitatively in going from large-to-small viscosity.
+Indeed, with only 105 particles (and probably fewer) the
+stream can be kept narrow by removing the SPH arti-
+ficial viscosity entirely, i.e., by setting αA V = βA V = 0 ,
+while its inclusion requires at least billions of particles
+to recover accurate simulations ( Kubli et al. 2025).
+Of course, simply setting αA V = βA V = 0 does not
+serve to completely remedy the issue, because by sim-
+ulating a highly supersonic flow with no artificial vis-
+cosity we are, in effect, studying the evolution of non-
+interacting dust in a fixed gravitational potential – not
+a fluid. To maintain the fluid nature of the simula-
+tion, and thus to adequately describe the true dissipa-
+tion that occurs as the stream is compressed vertically
+near pericenter and at the self-intersection point, inter-
+particle penetration must be prevented via the inclusion
+of some viscous-type parameterization. Nevertheless, it
+was shown in Section 2 (and in various other investiga-
+tions, e.g., Guillochon et al. 2014; Bonnerot & Lu 2022;
+Andalman et al. 2025) that the speed of the stream in
+the out-of-plane direction, and as it is compressed near
+pericenter, is on the order of the original stellar escape
+speed. This speed is ∼ 2−3 orders of magnitude smaller
+
+12 Nixon et al.
+y [Rg]
+       
+-2000
+0
+2000 t=0.13 yrs AV = AV = 0
+       
+t=0.13 yrs AV = 0
+       
+t=0.13 yrs AV = 0.002
+y [Rg]
+x [Rg]
+       
+-4000 -2000 0
+-2000
+0
+2000 t=0.13 yrs AV = 0.02
+x [Rg]
+       
+-4000 -2000 0
+t=0.13 yrs AV = 0.2
+x [Rg]
+       
+-4000 -2000 0
+t=0.13 yrs AV = 2
+Figure 6. The returning stream structure with varying amounts of quadratic artificial viscosity, denoted by the value of βA V
+given in the panels, for a 5/3-polytropic star disrupted by a 106M⊙ black hole. In all simulations shown the star was modeled
+with 106 SPH particles. In each case the stream enters from the bottom left (coinciding with {x, y} ≈ {− 5, 000, −1, 500}) with
+particles moving toward the black hole, which is located at (0, 0). By the time depicted in the plots ( 0.13 yrs after the initial
+disruption of the star) the most bound material has had time to do ≈ 2.5 orbits around the black hole. For each simulation
+the linear artificial viscosity is included by employing the default Cullen-Dehnen switch, except for the top-left panel where it is
+manually set to zero. For βA V ≲ 0.2 the stream intersection shock is not captured adequately, i.e., for βA V ≲ 0.002 the stream
+largely passes through itself. In this set of simulations the heating of the gas due to the artificial viscosity is not included, and
+thus the fanning of the debris is entirely due to the communication of the velocity field in the debris by the artificial viscosity
+terms.
+than the in-plane velocity, and hence even if high-Mach-
+number shocks form from the vertical and tidal compres-
+sion of the black hole, the resulting thermal pressure
+is ∼ 4 − 6 orders of magnitude smaller than the ram
+pressure within the plane, i.e., it is dynamically unim-
+portant and the viscous-less evolution is much closer to
+reality than when the artificial viscosity is included (as
+demonstrated directly in Kubli et al. 2025). One could
+therefore conceive of a spatially dependent viscosity pa-
+rameterization, such that the αA V and βA V terms are
+“turned on” only when the material is near the self-
+intersection radius, and the inviscid flow is effectively
+used to establish realistic initial conditions to study the
+self-intersection process. We defer further investigation
+of this possibility to future work.
+A second option is to increase the particle number
+globally (i.e., throughout the duration of the simula-
+tion) to the point that the particle density remains high
+enough near pericenter that spurious viscous forces are
+absent. The recent work by Kubli et al. (2025) demon-
+strates that, upon increasing from 106 to 1010 parti-
+cles, the dissipation near pericenter continuously de-
+clines to values that are consistent with the expectations
+from Section 2 (see their Figure 3), but a converged
+amount of dissipation was not reached. Additionally,
+while such high-particle-number simulations may offer
+the most accurate and direct means of understanding
+the disc formation problem in TDEs, it is – even with
+high-performance computing and eﬀicient GPU-enabled
+algorithms – expensive, and performing, e.g., parameter
+studies is infeasible.
+A third option, as originally investigated by Ayal et al.
+(2000) (see also Hu et al. 2026), is to use a particle-
+splitting technique, wherein individual SPH particles are
+divided into lower-mass “daughter particles” in under-
+resolved regions of the flow. Given that the returning
+
+Anomalous dissipation in TDEs 13
+y [Rg]
+       
+-1×104
+0
+1×104
+2×104
+3×104
+t=0.13 yrs AV = AV = 0
+       
+t=0.13 yrs AV = 0
+       
+t=0.13 yrs AV = 0.002
+y [Rg]
+x [Rg]
+       
+-2×104 0 2×10 4
+-1×104
+0
+1×104
+2×104
+3×104
+t=0.13 yrs AV = 0.02
+x [Rg]
+       
+-2×104 0 2×10 4
+t=0.13 yrs AV = 0.2
+x [Rg]
+       
+-2×104 0 2×10 4
+t=0.13 yrs AV = 2
+Figure 7. Same as Figure 6, but here the heating from the artificial viscosity terms is included in the simulations and we have
+increased the spatial range of each axis to illustrate the spread of particles. With no artificial viscosity (top-left panel) there is
+no evolution of the stream beyond orbital dynamics. For βA V = 0 (top-middle panel) there is significant heating and expansion
+of the stream compared to the analogous panel in Figure 6; this is because the gas is heated by the linear viscosity term until
+cs ∼ v, at which point the linear term ( ∼ csv) is elevated to the same velocity dependence (and level of importance) as the
+quadratic term ( ∼ v2). The morphology of the flow depends on the level of artificial viscosity employed, i.e. the βA V value, and
+the size of the emitted cloud monotonically increases with increasing βA V.
+flow is hypersonic, if one adopts this methodology and
+effectively up-samples particle distribution by placing
+enough fluid elements on neighboring free-particle tra-
+jectories, which is obviously accurate in hypersonic and
+diverging regions of the flow where pressure and viscos-
+ity are ignorable by definition, then the velocity field
+approaches a suﬀicient level of continuity that its local
+divergence remains small.
+The issue with this approach is that particle splitting
+imparts noise to the density distribution that is com-
+pounded with each additional level of refinement, as de-
+scribed in e.g. Feldman & Bonet (2007). If the ratio of
+the sound crossing time over the stream width to the
+return time of the debris were small, these splitting-
+induced perturbations could be smoothed out prior to
+reaching pericenter. However, the right panel of Figure
+1 illustrates that this ratio grows and greatly exceeds
+unity as the fluid elements pass their apocenters, imply-
+ing that splitting particles upon their ingress will lead
+to persistent and unphysical noise that negates the pos-
+sibility of recovering physically robust and numerically
+consistent levels of dissipation. This noise is apparent
+from Figure 5 of Ayal et al. (2000), who note in the
+caption of this figure that the clumping is a direct con-
+sequence of the splitting method. While it is not as im-
+mediately evident because it is a rendering of the density
+with a restricted range, the bottom-right panel of Fig-
+ure 2 in Hu et al. (2026) exhibits similar and noticeable
+splitting-induced artifacts, and in Appendix 5 we use
+the data directly from their simulations (obtained from
+the public repository Hu 2025) to highlight the presence
+of these artifacts.
+In further support of this conclusion (i.e., in addition
+to the analytical arguments in Section 2 and the artifacts
+apparent in Figure 5 of Ayal et al. 2000 and Figures 12
+& 13 below), one can impose noise on the TDE debris
+stream at various times and simply investigate its evolu-
+tion. Using the same numerical approach as described in
+Section 3.1, but in this case with an n = 3 polytrope and
+a pericenter distance of rt/2 to ensure its complete dis-
+
+14 Nixon et al.
+y [Rg]
+x [Rg]
+       
+-2000 -1000 0
+-1000
+0
+1000
+2000
+t=0.066 yrs N p = 105
+x [Rg]
+       
+-2000 -1000 0
+t=0.066 yrs N p = 106
+x [Rg]
+       
+-2000 -1000 0
+t=0.066 yrs N p = 107
+y [Rg]
+x [Rg]
+       
+-1×104 0 1×10 4
+0
+1×104
+2×104
+t=0.066 yrs N p = 105
+x [Rg]
+       
+-1×104 0 1×10 4
+t=0.066 yrs N p = 106
+x [Rg]
+       
+-1×104 0 1×10 4
+t=0.066 yrs N p = 107
+Figure 8. Returning stream structures in simulations with varying particle number, from 105 (left), to 106 (middle) and
+107 (right). In each case βA V = 2 and heating from the artificial viscosity terms is included, i.e. the right hand panels here
+correspond to the bottom right panel in Figure 7, albeit at an earlier time. The top row of plots demonstrates that TDE
+simulations of the returning debris with up to 106 particles are not converged: the debris morphology changes significantly with
+each change in resolution. The bottom row shows a zoomed-out version of the expanding cloud of debris – its mass, volume
+and shape change as a function of particle number. The overall trend is that higher resolution leads to less material ejected to
+large scales, and a less spherical distribution of that debris.
+ruption, to this end we performed two tests: one where
+we imposed a perturbation to the stream at approxi-
+mately 9.5 hrs (here and below, all times quoted are
+post-initial-pericentre-passage of the centre of mass of
+the star), being well before any fluid element has receded
+to its apocenter, and a second where the perturbation
+was imposed at a time of 6.8 days, which is well after
+apocenter for a substantial fraction of the bound mate-
+rial. The perturbation is added by first finding the par-
+ticles with the largest and smallest radii from the black
+hole with a density above 0.02 g/cm3 (6 × 10−6 g/cm3)
+for the first (second) case, and then using the positions of
+these particles to define an approximate direction vector,
+xs, along the stream. Each particle above the density
+cut is then shifted by an amount ∆x = A cos(ri/H)xs,
+which effectively introduces a sinusoidal density mod-
+ulation along the stream, while its velocity is left un-
+changed. For the first (second) case we take A = 0.1(1),
+H = 0.1(1).
+The perturbed streams and their evolution are shown
+in Figures 9 and 10, with each panel of these figures cen-
+tred on the same particle with the viewing window mov-
+ing to stay centred on the same patch of fluid. In the first
+case shown in Fig. 9, where the perturbation is included
+before the debris reaches apocentre, the perturbation
+clearly evolves with time: each density peak spreads,
+overlaps with its neighbour, and appears to smooth out
+after a factor of ∼ 5 in time (bottom middle panel).
+In the second case shown in Figure 10, we see that –
+even over substantially longer timescales than those de-
+picted in Figure 9 – the perturbations are not smoothed
+out. Instead, they are frozen into the flow and stretched
+and squeezed by the near-ballistic motion of the stream
+(note that in both figures the size of each box is kept the
+same, and it is the shear along the stream that reduces
+
+Anomalous dissipation in TDEs 15
+y [Rg]
+       
+-535 -530
+225
+230
+6
+8
+10
+log column density [g/cm2]
+t=0.4 days
+y [Rg]
+       
+-575 -570
+235
+240
+6
+8
+10
+log column density [g/cm2]
+t=0.44 days
+y [Rg]
+       
+-670 -665
+255
+260
+6
+8
+10
+log column density [g/cm2]
+t=0.54 days
+x [Rg]
+y [Rg]
+       
+-935 -930
+300
+305
+6
+8
+10
+log column density [g/cm2]
+t=0.85 days
+x [Rg]
+y [Rg]
+       
+-1420 -1415
+370
+375
+6
+8
+10
+log column density [g/cm2]
+t=1.54 days
+x [Rg]
+y [Rg]
+       
+-3505 -3500
+580
+585
+6
+8
+10
+log column density [g/cm2]
+t=5.7 days
+Figure 9. Stream structure at various times following the introduction of a perturbation to the density along the stream before
+the debris reaches apocentre. Each panel is centred on the same particle in the simulation, and thus the boxes move with the
+stream. The size of each box in the x and y directions is kept constant, meaning that over time the debris shears out and
+while many perturbations are present in the first panel, there are less and less as time goes by; with time increasing from left
+to right and then top to bottom through the six panels. The time of each snapshot is printed on the figure. In this figure we
+see the induced perturbations propagating, smearing out and leaving a relatively smooth stream. The final panel shows that
+the perturbations are suﬀicient to destabilise the stream to the gravitational instability and the stream contains many roughly
+equally spaced fragments of which one is depicted.
+y [Rg]
+       
+-2150 -2100 -2050 -2000
+-100
+-50
+0
+50
+3
+4
+5
+log column density [g/cm2]
+t=6.79 days
+y [Rg]
+       
+-2050 -2000 -1950 -1900
+-200
+-150
+-100
+-50
+3
+4
+5
+log column density [g/cm2]
+t=7.93 days
+y [Rg]
+       
+-1850 -1800 -1750 -1700
+-250
+-200
+-150
+-100
+3
+4
+5
+log column density [g/cm2]
+t=9.07 days
+x [Rg]
+y [Rg]
+       
+-1500 -1450 -1400 -1350
+-300
+-250
+-200
+-150
+3
+4
+5
+log column density [g/cm2]
+t=10.2 days
+x [Rg]
+y [Rg]
+       
+-1000 -950 -900 -850 -800
+-300
+-250
+-200
+-150
+3
+4
+5
+log column density [g/cm2]
+t=11.3 days
+x [Rg]
+y [Rg]
+       
+-200 -150 -100 -50
+-200
+-150
+-100
+-50
+3
+4
+5
+log column density [g/cm2]
+t=12.2 days
+Figure 10. Same as Fig. 9, except here the perturbation to the density is applied after the debris reaches apocentre. This
+figures shows that the induced perturbations are not causally connected to each other, despite being spaced much closer than
+the thickness of the stream, and are sheared out along the stream. The density perturbations are still present as the stream
+returns to pericentre.
+
+16 Nixon et al.
+the number of peaks and troughs present at later times).
+We also see that the ratio of the extents of the peaks and
+troughs along the stream is essentially constant, indicat-
+ing that there is effectively no communication between
+them, and by the time the debris reaches pericentre (just
+after the bottom right panel) the stream still bears the
+clear imprint of the perturbation induced thousands of
+gravitational radii away from the black hole.
+Figure 9 demonstrates a second unintended conse-
+quence of seeding the stream with noise: even though
+the perturbations appear to have been smoothed out by
+the bottom-middle panel, at a later point in time the
+stream has fragmented into a number of distinct knots,
+one of which is shown in the bottom-right panel of this
+figure. This outcome is absent from the perturbation-
+less stream at the same time, but does occur at a much
+later time, and is generally the result of its weakly
+gravitationally unstable nature alongside numerically in-
+duced (at the particle level) noise. Specifically, the
+initial perturbation had a wavelength suﬀiciently short
+that it was stable, but as the stream sheared apart the
+lengthscale of the perturbation increased until it was
+within the range of unstable wavenumbers for a 5/3-
+polytropic cylinder (see Coughlin & Nixon 2015, 2020;
+Coughlin 2023, for additional discussion of the gravita-
+tional instability of TDE debris streams).
+Hydrogen (helium, etc.) recombination may prevent
+the stream from fragmenting or at least mitigate the
+destabilizing influence of self–gravity ( Coughlin 2023;
+Andalman et al. 2025), but the fact remains that the
+stream is in a gravitationally precarious state until the
+debris begins its return to pericenter, and hence particle
+splitting – either before or after apocenter is reached –
+should not be used as an alternative to achieving higher
+resolution.
+A fourth (and final, at least as concerns this paper)
+possibility is to use an analytical methodology, such as
+the one developed in Section 2, Kochanek (1994), An-
+dalman et al. (2025), etc., to inject SPH particles with
+accurately known hydrodynamic (and thermodynamic)
+properties, variants of which have been employed in, e.g.,
+Jiang et al. (2016); Curd (2021); Bonnerot et al. (2021);
+Huang et al. (2024). In this case, the injection site
+(which could be time-dependent) must be larger than
+the largest self-intersection radius of the simulated de-
+bris.
+The form of Equation ( 30) provides a high value of
+αA V in regions of the flow that are compression-, rather
+than shear-, dominated (through the Balsara (1995)
+switch, given in Equation 31) and only applied to regions
+of the flow in which the rate of convergence is increasing
+(the last term), which indicates a non-linear increase in
+the density and is typically thought of a precursor to
+a shock ( Cullen & Dehnen 2010). However, the veloc-
+ity structure of the debris (Equation 25) through peri-
+centre passage has a large (positive) value of the time
+derivative of −∇ · v without any corresponding shocks
+(cf. Equation 27 and Kubli et al. 2025), and the artificial
+viscosity is therefore being switched on in regions of the
+flow that do not need it. 11 There may therefore be some
+mileage in employing a shock indicator such as the one
+proposed by Rosswog (2020), which does not depend (at
+least directly) on the velocity structure of the flow, or
+one that is built around the existence of shockwaves as
+a byproduct of the Riemann problem between particles,
+i.e., Godunov SPH ( Inutsuka 1994).
+Finally, in Figure 11 we show that some of the simu-
+lations (without heating from artificial viscosity) lead
+to eﬀicient disc formation. The number of particles
+used and the βA V viscosity coeﬀicient are given in the
+panel legend. The top panels show the βA V = 0 .2 and
+βA V = 2 cases with 105 particles. For βA V = 2 , and
+also βA V = 0 .02 (not shown), the stream returning to
+pericentre does not maintain a coherent structure and
+emerges in a wide-angle fan. However, βA V = 0 .2 ap-
+pears to represent a “sweet spot” where the breadth of
+the fan is suﬀiciently small, but the interaction with
+the incoming stream suﬀiciently strong, that the debris
+rapidly forms a small-scale disc at roughly the circu-
+larisation radius of the debris. Conversely in the lower
+panels – which are identical to the top panels except in
+particle number – the material in the βA V = 0 .2 sim-
+ulation is more directly aimed at the black hole, with
+a significant amount of material directly swallowed on
+high-eccentricity orbits and a fraction of it forming a
+smaller-scale (i.e., smaller than the circularisation radius
+of the initial stream) disc. Thus, with suitable choice of
+the artificial viscosity parameters and particle number
+(resolution), we can obtain (1) rapid circularisation into
+a disc, (2) direct accretion of high-energy orbits with
+little energy released, or (3) delayed accretion with ma-
+terial expelled in a low-density, hot fan/bubble. Un-
+fortunately, not one of these exciting results stands up
+to the scrutiny of convergence testing. We are there-
+fore seemingly no closer to determining the amounts of
+stellar debris that accrete through a disc, accrete from
+high eccentricity orbits, or escape in a wind, as these
+11 We conjecture that this, i.e. the unnecessary application of
+large artificial viscosity due to the “detection” of shocks that
+are not actually present, is responsible for maintaining the large
+and anomalous energy spread observed in high- β (i.e. deep)
+TDEs even at high resolution ( Norman et al. 2021).
+
+Anomalous dissipation in TDEs 17
+y [Rg]
+       
+-1000
+-500
+0
+500 t=0.16 yrs
+Np = 105; AV = 0.2
+       
+t=0.16 yrs
+Np = 105; AV = 2
+y [Rg]
+x [Rg]
+       
+-2000 -1500 -1000 -500 0
+-1000
+-500
+0
+500 t=0.16 yrs
+Np = 106; AV = 0.2
+x [Rg]
+       
+-2000 -1500 -1000 -500 0
+t=0.16 yrs
+Np = 106; AV = 2
+Figure 11. Example debris morphologies showing the range of possible outcomes by varying numerical parameters; top panels
+show simulations with 105 particles and bottom panels show corresponding simulations with 106 particles, while left panels show
+simulations with βA V = 0 .2 and right panels show simulations with βA V = 2 . In some cases (e.g. top left) we see rapid and
+eﬀicient circularisation of the debris into a near-circular disc. In some cases (e.g. bottom left) there is substantial amounts of
+direct accretion of high-eccentricity orbits. However, the flow morphology shows substantial dependence on both the artificial
+viscosity parameter and the resolution employed.
+fractions depend on numerical parameters; the various
+possibilities spelled out in Rees (1988) remain.
+5. SUMMARY
+With the overarching theme of establishing a frank
+and open narrative of some of the issues in modelling
+TDE debris flows with 3D numerical hydrodynamical
+algorithms, in this paper we have (1) provided a rel-
+atively simple analytical model that enables an under-
+standing of the velocity and thermodynamic structure of
+the TDE debris stream as it returns to pericenter (Sec-
+tion 2); (2) highlighted the inherent diﬀiculties presented
+by this structure in terms of often-adopted numerical hy-
+drodynamical algorithms, which leads to the numerical
+nature of some of the properties of TDE flows present in
+the literature (Section 3), and (3) elucidated the ways
+in which the numerical methodology can be improved to
+enable low-cost, high-accuracy simulations (Section 4).
+While we have focussed on the SPH method, we have
+tried to make it clear throughout that the discussion
+also applies to grid-based codes: while modern finite-
+volume codes do not typically employ explicit viscous
+dissipation, the shocks that form between underresolved
+grid cells as a byproduct of the Riemann problem effect
+the same outcome. We emphasize that our motivation
+and aim for this discussion is not to denigrate the meth-
+ods themselves, or to imply that they cannot be used to
+study these phenomena (indeed, Kubli et al. 2025 have
+shown that with suﬀicient resolution the flow structure
+can be accurately modelled with 3D SPH), but to ex-
+plore where and how the methods can be improved. We
+hope we have achieved these aims.
+
+18 Nixon et al.
+ACKNOWLEDGMENTS
+CJN acknowledges support from the Leverhulme
+Trust (grant No. RPG-2021-380) and from the Sci-
+ence and Technology Facilities Council (grant No.
+ST/Y000544/1). ERC acknowledges support from
+the National Aeronautics and Space Administration
+through the Astrophysics Theory Program, grant
+80NSSC24K0897. ZLA was supported by the U.S. De-
+partment of Energy, Oﬀice of Science, Oﬀice of Ad-
+vanced Scientific Computing Research, Department of
+Energy Computational Science Graduate Fellowship un-
+der Award Number DE-SC0024386. This report was
+prepared as an account of work sponsored by an agency
+of the United States Government. Neither the United
+States Government nor any agency thereof, nor any of
+their employees, makes any warranty, express or im-
+plied, or assumes any legal liability or responsibility
+for the accuracy, completeness, or usefulness of any
+information, apparatus, product, or process disclosed,
+or represents that its use would not infringe privately
+owned rights. Reference herein to any specific commer-
+cial product, process, or service by trade name, trade-
+mark, manufacturer, or otherwise does not necessarily
+constitute or imply its endorsement, recommendation,
+or favoring by the United States Government or any
+agency thereof. The views and opinions of authors ex-
+pressed herein do not necessarily state or reflect those
+of the United States Government or any agency thereof.
+We used splash (Price 2007) for some of the figures.
+Some of this work was undertaken on the Aire HPC
+system at the University of Leeds, UK. Some of this
+work used the DiRAC Data Intensive service DIaL3 at
+the University of Leicester, managed by the University
+of Leicester Research Computing Service on behalf of
+the STFC DiRAC HPC Facility (www.dirac.ac.uk). The
+DiRAC service at Leicester was funded by BEIS, UKRI
+and STFC capital funding and STFC operations grants.
+DiRAC is part of the UKRI Digital Research Infrastruc-
+ture.
+REFERENCES
+Ajay, Y., Pasham, D. R., Wevers, T., et al. 2025, ApJL,
+981, L14, doi: 10.3847/2041-8213/adae03
+Alexander, K. D., Berger, E., Guillochon, J., Zauderer,
+B. A., & Williams, P. K. G. 2016, ApJL, 819, L25,
+doi: 10.3847/2041-8205/819/2/L25
+Andalman, Z. L., Quataert, E., Coughlin, E. R., & Nixon,
+C. J. 2025, arXiv e-prints, arXiv:2512.08928,
+doi: 10.48550/arXiv.2512.08928
+Andreoni, I., Coughlin, M. W., Perley, D. A., et al. 2022,
+Nature, 612, 430, doi: 10.1038/s41586-022-05465-8
+Arcavi, I., Gal-Yam, A., Sullivan, M., et al. 2014, ApJ, 793,
+38, doi: 10.1088/0004-637X/793/1/38
+Ayal, S., Livio, M., & Piran, T. 2000, ApJ, 545, 772,
+doi: 10.1086/317835
+Balsara, D. S. 1995, Journal of Computational Physics, 121,
+357, doi: 10.1016/S0021-9991(95)90221-X
+Bicknell, G. V., & Gingold, R. A. 1983, ApJ, 273, 749,
+doi: 10.1086/161410
+Bloom, J. S., Giannios, D., Metzger, B. D., et al. 2011,
+Science, 333, 203, doi: 10.1126/science.1207150
+Bogdanović, T., Eracleous, M., Mahadevan, S., Sigurdsson,
+S., & Laguna, P. 2004, ApJ, 610, 707,
+doi: 10.1086/421758
+Bonnerot, C., & Lu, W. 2020, MNRAS, 495, 1374,
+doi: 10.1093/mnras/staa1246
+—. 2022, MNRAS, 511, 2147, doi: 10.1093/mnras/stac146
+Bonnerot, C., Lu, W., & Hopkins, P. F. 2021, MNRAS,
+504, 4885, doi: 10.1093/mnras/stab398
+Bonnerot, C., Pessah, M. E., & Lu, W. 2022, ApJL, 931,
+L6, doi: 10.3847/2041-8213/ac6950
+Cendes, Y., Alexander, K. D., Berger, E., et al. 2021, ApJ,
+919, 127, doi: 10.3847/1538-4357/ac110a
+Cenko, S. B., Krimm, H. A., Horesh, A., et al. 2012, ApJ,
+753, 77, doi: 10.1088/0004-637X/753/1/77
+Chen, C., & Nixon, C. J. 2025, MNRAS, 540, 2465,
+doi: 10.1093/mnras/staf881
+Christy, C. T., Alexander, K. D., Margutti, R., et al. 2024,
+ApJ, 974, 18, doi: 10.3847/1538-4357/ad675b
+Christy, C. T., Alexander, K. D., Laskar, T., et al. 2026,
+ApJ, 1001, 211, doi: 10.3847/1538-4357/ae5249
+Coughlin, E. R. 2023, MNRAS, 522, 5500,
+doi: 10.1093/mnras/stad1347
+Coughlin, E. R., & Nixon, C. 2015, ApJL, 808, L11,
+doi: 10.1088/2041-8205/808/1/L11
+Coughlin, E. R., Nixon, C., Begelman, M. C., & Armitage,
+P. J. 2016, MNRAS, 459, 3089,
+doi: 10.1093/mnras/stw770
+Coughlin, E. R., & Nixon, C. J. 2020, ApJS, 247, 51,
+doi: 10.3847/1538-4365/ab77c2
+—. 2022a, MNRAS, 517, L26, doi: 10.1093/mnrasl/slac106
+—. 2022b, ApJ, 926, 47, doi: 10.3847/1538-4357/ac3fb9
+—. 2025, MNRAS, 542, L110, doi: 10.1093/mnrasl/slaf076
+
+Anomalous dissipation in TDEs 19
+Cullen, L., & Dehnen, W. 2010, MNRAS, 408, 669,
+doi: 10.1111/j.1365-2966.2010.17158.x
+Curd, B. 2021, MNRAS, 507, 3207,
+doi: 10.1093/mnras/stab2172
+Evans, C. R., & Kochanek, C. S. 1989, ApJL, 346, L13,
+doi: 10.1086/185567
+Feldman, J., & Bonet, J. 2007, International Journal for
+Numerical Methods in Engineering, 72, 295,
+doi: 10.1002/nme.2010
+Gafton, E., Tejeda, E., Guillochon, J., Korobkin, O., &
+Rosswog, S. 2015, MNRAS, 449, 771,
+doi: 10.1093/mnras/stv350
+Gezari, S. 2021, ARA&A, 59, 21,
+doi: 10.1146/annurev-astro-111720-030029
+Gezari, S., Chornock, R., Rest, A., et al. 2012, Nature, 485,
+217, doi: 10.1038/nature10990
+Goodwin, A. J., Alexander, K. D., Miller-Jones, J. C. A.,
+et al. 2023, MNRAS, 522, 5084,
+doi: 10.1093/mnras/stad1258
+Guillochon, J., Manukian, H., & Ramirez-Ruiz, E. 2014,
+ApJ, 783, 23, doi: 10.1088/0004-637X/783/1/23
+Guillochon, J., & Ramirez-Ruiz, E. 2013, ApJ, 767, 25,
+doi: 10.1088/0004-637X/767/1/25
+Hammerstein, E., van Velzen, S., Gezari, S., et al. 2023,
+ApJ, 942, 9, doi: 10.3847/1538-4357/aca283
+Hammerstein, E., Cenko, S. B., Andreoni, I., et al. 2026,
+ApJ, 996, 143, doi: 10.3847/1538-4357/ae1838
+Hills, J. G. 1975, Nature, 254, 295, doi: 10.1038/254295a0
+Ho, A. Y. Q., Yao, Y., Matsumoto, T., et al. 2025, ApJ,
+989, 54, doi: 10.3847/1538-4357/ade8f2
+Holoien, T. W.-S., Vallely, P. J., Auchettl, K., et al. 2019,
+ApJ, 883, 111, doi: 10.3847/1538-4357/ab3c66
+Horesh, A., Cenko, S. B., & Arcavi, I. 2021, Nature
+Astronomy, 5, 491, doi: 10.1038/s41550-021-01300-8
+Hu, F. 2025, Dumps and data for ’Converged simulations of
+the nozzle shock in tidal disruption events’, Zenodo,
+doi: 10.5281/zenodo.17225834
+Hu, F. F., Mandel, I., Nealon, R., & Price, D. J. 2026,
+ApJL, 996, L21, doi: 10.3847/2041-8213/ae27cc
+Huang, X., Davis, S. W., & Jiang, Y.-f. 2024, ApJ, 974,
+165, doi: 10.3847/1538-4357/ad6c39
+Hung, T., Foley, R. J., Veilleux, S., et al. 2021, ApJ, 917, 9,
+doi: 10.3847/1538-4357/abf4c3
+Inutsuka, S. 1994, Mem. Soc. Astron. Italiana, 65, 1027
+Jiang, Y.-F., Guillochon, J., & Loeb, A. 2016, ApJ, 830,
+125, doi: 10.3847/0004-637X/830/2/125
+Kara, E., Miller, J. M., Reynolds, C., & Dai, L. 2016,
+Nature, 535, 388, doi: 10.1038/nature18007
+Kasen, D., & Ramirez-Ruiz, E. 2010, ApJ, 714, 155,
+doi: 10.1088/0004-637X/714/1/155
+Kochanek, C. S. 1994, ApJ, 422, 508, doi: 10.1086/173745
+Kubli, N., Franchini, A., Coughlin, E. R., et al. 2025, arXiv
+e-prints, arXiv:2510.26663,
+doi: 10.48550/arXiv.2510.26663
+Lacy, J. H., Townes, C. H., & Hollenbach, D. J. 1982, ApJ,
+262, 120, doi: 10.1086/160402
+Lee, H. M., & Kim, S. S. 1996, Journal of Korean
+Astronomical Society, 29, 195,
+doi: 10.48550/arXiv.astro-ph/9611183
+Lodato, G., King, A. R., & Pringle, J. E. 2009, MNRAS,
+392, 332, doi: 10.1111/j.1365-2966.2008.14049.x
+Lodato, G., & Price, D. J. 2010, MNRAS, 405, 1212,
+doi: 10.1111/j.1365-2966.2010.16526.x
+Mainetti, D., Lupi, A., Campana, S., et al. 2017, A&A, 600,
+A124, doi: 10.1051/0004-6361/201630092
+Miles, P. R., Coughlin, E. R., & Nixon, C. J. 2020, ApJ,
+899, 36, doi: 10.3847/1538-4357/ab9c9f
+Monaghan, J. J. 1997, Journal of Computational Physics,
+136, 298, doi: 10.1006/jcph.1997.5732
+Nealon, R., & Price, D. J. 2025, PASA, 42, e016,
+doi: 10.1017/pasa.2024.88
+Nelson, R. P., & Papaloizou, J. C. B. 2000, MNRAS, 315,
+570, doi: 10.1046/j.1365-8711.2000.03478.x
+Nicholl, M., Blanchard, P. K., Berger, E., et al. 2019,
+MNRAS, 488, 1878, doi: 10.1093/mnras/stz1837
+Nicholl, M., Wevers, T., Oates, S. R., et al. 2020, MNRAS,
+499, 482, doi: 10.1093/mnras/staa2824
+Norman, S. M. J., Nixon, C. J., & Coughlin, E. R. 2021,
+ApJ, 923, 184, doi: 10.3847/1538-4357/ac2ee8
+Pasham, D. R., & van Velzen, S. 2018, ApJ, 856, 1,
+doi: 10.3847/1538-4357/aab361
+Pasham, D. R., Lucchini, M., Laskar, T., et al. 2023, Nature
+Astronomy, 7, 88, doi: 10.1038/s41550-022-01820-x
+Price, D. J. 2007, PASA, 24, 159, doi: 10.1071/AS07022
+Price, D. J. 2012, in Astronomical Society of the Pacific
+Conference Series, Vol. 453, Advances in Computational
+Astrophysics: Methods, Tools, and Outcome, ed.
+R. Capuzzo-Dolcetta, M. Limongi, & A. Tornambè, 249
+“Smoothed Particle Hydrodynamics: Things I Wish My
+Mother Taught Me”, doi: 10.48550/arXiv.1111.1259
+Price, D. J., Liptai, D., Mandel, I., et al. 2024, ApJL, 971,
+L46, doi: 10.3847/2041-8213/ad6862
+Price, D. J., Wurster, J., Tricco, T. S., et al. 2018, PASA,
+35, e031, doi: 10.1017/pasa.2018.25
+Rees, M. J. 1988, Nature, 333, 523, doi: 10.1038/333523a0
+Rosswog, S. 2020, ApJ, 898, 60,
+doi: 10.3847/1538-4357/ab9a2e
+Ryu, T., Krolik, J., Piran, T., Noble, S. C., & A vara, M.
+2023, ApJ, 957, 12, doi: 10.3847/1538-4357/acf5de
+
+20 Nixon et al.
+Sazonov, S., Gilfanov, M., Medvedev, P., et al. 2021,
+MNRAS, 508, 3820, doi: 10.1093/mnras/stab2843
+Sfaradi, I., Margutti, R., Chornock, R., et al. 2025, ApJL,
+992, L18, doi: 10.3847/2041-8213/ae0a26
+Shakura, N. I., & Sunyaev, R. A. 1973, A&A, 24, 337
+Shiokawa, H., Krolik, J. H., Cheng, R. M., Piran, T., &
+Noble, S. C. 2015, ApJ, 804, 85,
+doi: 10.1088/0004-637X/804/2/85
+Steinberg, E., & Stone, N. C. 2024, Nature, 625, 463,
+doi: 10.1038/s41586-023-06875-y
+Tejeda, E., & Rosswog, S. 2013, MNRAS, 433, 1930,
+doi: 10.1093/mnras/stt853
+van Velzen, S., Gezari, S., Hammerstein, E., et al. 2021,
+ApJ, 908, 4, doi: 10.3847/1538-4357/abc258
+Wevers, T., Guolo, M., Pasham, D. R., et al. 2024, ApJ,
+963, 75, doi: 10.3847/1538-4357/ad1878
+Yao, Y., Ravi, V., Gezari, S., et al. 2023, ApJL, 955, L6,
+doi: 10.3847/2041-8213/acf216
+Yao, Y., Alexander, K. D., Lu, W., et al. 2025, ApJ, 993,
+198, doi: 10.3847/1538-4357/ae08b3
+
+Anomalous dissipation in TDEs 21
+APPENDIX
+First used by Ayal, Livio, & Piran (2000) in the context of TDEs, Hu, Mandel, Nealon, & Price (2026) re-used the
+technique of particle splitting 12 to understand the dissipation associated with the debris as it returns to pericenter,
+arguing that by “shuffling” the particles they could reduce the noise it otherwise introduces. They also stated that the
+distance between each spatial region in which the stream was split (see their Figure 1) enabled “ ≥ 100 sound crossings
+of the gas, allowing particles to fully relax between splitting and merging events and reducing the total noise. ” This
+contradicts the estimates in Section 2 shown in Figure 1, i.e., according to our analytical model it should be out of
+causal contact and any perturbations to the stream should remain. The predictions of our analytical model were
+upheld by simulations in which we included a perturbation to the stream (Figures 9 & 10).
+To investigate whether the artifacts from particle splitting are indeed preserved, or whether they are somehow
+suﬀiciently smoothed out by the shuffling procedure employed by Hu, Mandel, Nealon, & Price (2026), we have
+explored the particle distribution in the data taken directly from the simulation presented in Hu, Mandel, Nealon, &
+Price (2026) provided by Hu (2025). Figure 12 shows the raw particle distribution corresponding to the lower right
+panel (16 levels of refinement) in Figure 2 of Hu, Mandel, Nealon, & Price (2026), accompanied by four separate zoom-
+ins on the distribution at various locations in the stream. The first zoom-in (top-left, bounded by green) encompasses
+the first splitting region (demarcated by the red-line, i.e., particles at radii larger than the red line have not been
+split, while those interior to it have), the second (bottom-left, bounded by blue) is midway towards pericentre, the
+third (bottom-right, bounded by purple) is just after pericentre and the fourth (top-right, bounded by orange) encloses
+material that has travelled further away from pericentre. The stream, from the first splitting of particles, takes on
+an incorrigible state 13 and each successive splitting compounds the issue. This plot also makes it clear that—while
+not visible in the corresponding density rendering provided in Figure 2 of Hu, Mandel, Nealon, & Price (2026)—the
+outgoing stream is considerably wider after passing through pericenter.
+Additionally, we show in Figure 13 (left panel) the density of the particles in the simulation presented by Hu,
+Mandel, Nealon, & Price (2026) as a function of their distance from the black hole. The red line marks the location
+of the outermost splitting zone, which is coincident with the red line in the first zoom-in in Figure 12, with 15 more
+zones inside this. The noise in the particle distribution, introduced by the splitting procedure, results in density
+variations that are up to 4 orders of magnitude above that of the unsplit stream (see the particle structures shown
+in the middle and right panels of Figure 13). Finally, it is worth noting that the particle structures developed in the
+simulations presented in Hu, Mandel, Nealon, & Price (2026), and shown here in detail (Figures 12 & 13), do not occur
+in simulations performed with codes that employ a robust SPH algorithm such as the one implemented in phantom
+without particle splitting (cf. Section 2.4.1 of Price 2012).
+12 Specifically, they used the “Adaptive Particle Refinement” algorithm (previously known as particle splitting) reintroduced by Nealon &
+Price (2025).
+13 i.e. beyond correction or reform.
+
+22 Nixon et al.
+x [R g]
+y [R g]
+       
+-1000 -500 0 500
+0
+1000
+2000
+x [Rg]
+y [Rg]
+       
+0 50 100 150
+300
+350
+400
+450
+x [Rg]
+y [Rg]
+       
+-100 -50 0 50
+650
+700
+750
+800
+x [Rg]
+y [Rg]
+       
+-650 -600 -550 -500
+850
+900
+950
+1000
+x [Rg]
+y [Rg]
+       
+-850 -800 -750 -700
+2000
+2050
+2100
+2150
+(1)
+(2)
+(4)
+(3)
+(1)
+(2) (3)
+(4)Hu et al. (2026)
+Figure 12. Particle distribution plots of the debris stream from the simulation presented in Hu, Mandel, Nealon, & Price
+(2026). The left panel shows the main structure of the stream; there is a noticeable fanning of the stream exiting pericentre.
+There are, however, additional anomalous features present that are highlighted by the four coloured boxes, which correspond
+to the zoom-in panels on the right. The zoom-ins have coloured borders that match the coloured squares in the left hand panel
+(also marked by the numbers). Panel (1) contains a red line that marks the location of the first splitting point – particles at
+radii larger than this line do not experience splitting – in the simulation presented by Hu, Mandel, Nealon, & Price (2026), and
+a transition from approximately smooth flow above to clumpy flow below this line can easily be seen. Panels (2)-(4) contains
+additional features that have no physical origin.
+r [Rg]
+log density [g/cm3]
+       
+0 1000 2000 3000 4000
+-15
+-10
+-5
+Hu et al. (2026)
+x [Rg]
+y [Rg]
+       
+-660 -640 -620
+1200
+1250
+x [Rg]
+y [Rg]
+       
+-750 -700
+1650
+1700
+1750
+1800
+Figure 13. Left panel: The density of particles plotted against radius in the simulation presented in Hu et al. (2026). The red
+line marks the location of the first particle-splitting region (with the stream moving from right to left on the plot) and coincides
+with an instantaneous and large jump in the densities of the particles that is typical of a noisy, artificially-fragmented stream.
+Middle and right panels: Zoom-ins on the particle structure in the stream. The lines (middle panel) and knots (right panel) of
+particles are the patently unphysical features responsible for the substantial density increases seen in the left panel.

@@ -1,0 +1,1354 @@
+Title: Three-dimensional Conditional Diffusion Models for Cosmological 21 cm Lightcone Emulation
+Authors: Bin Xia, John H. Wise
+Published: 2026-05-27
+Categories: astro-ph.IM, astro-ph.CO, cs.LG
+
+Draft version May 29, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX7.0.1
+Three-dimensional Conditional Diffusion Models for Cosmological 21 cm Lightcone Emulation
+Bin Xia (夏斌)
+ 1 and John H. Wise
+ 1
+1Center for Relativistic Astrophysics, School of Physics, Georgia Institute of Technology, Atlanta, GA 30332, USA
+ABSTRACT
+We investigate conditional diffusion modeling for three-dimensional 21 cm lightcone emulation, fo-
+cusing on cubes with a sky-plane size of 64×64 and a line-of-sight depth up to 1024 cells. Relative
+to earlier 2D studies, the 3D setting is substantially harder because memory limits enforce very small
+micro-batches while the underlying voxel distribution is highly skewed and long tailed. We perform
+controlled comparisons across preprocessing choices, dynamic-range compression settings, architecture
+depth, and training duration using 25,600 training lightcones and validation ensembles at fixed pa-
+rameter points. For validation, each reference parameter point contains 80021cmFASTrealizations
+with independent initial conditions, and we use 800 samples per model and per reference set for the
+reported ensemble comparisons. We evaluate generated lightcones with complementary diagnostics in
+both image and summary-statistic spaces: brightness-temperature slices, the global signal, the power
+spectrum, and reduced scattering coefficients. Across the tested configurations, preprocessing is the
+dominant factor governing stable training and the resulting physical fidelity. Among the configurations
+explored here, Yeo–Johnson preprocessing combined with moderate amplitude compression gives the
+most consistently favorable trade-off, with the strongest quantitative support coming from rankings
+based on the standard-deviation-normalized mean absolute error (MAE std) of the global signal and
+qualitatively compatible behavior in the complementary diagnostics. At the same time, visually plau-
+sible 3D samples still retain measurable biases in two-point and higher-order statistics. We therefore
+view the present work as a simulation-level baseline for three-dimensional 21 cm emulation and for
+future studies that incorporate more realistic observational effects.
+Keywords:cosmology: theory — dark ages, reionization, first stars — methods: numerical — methods:
+statistical — radio lines: general
+1.INTRODUCTION
+The redshifted 21 cm signal from the hyperfine tran-
+sition of neutral hydrogen is a leading probe of Cosmic
+Dawn and the Epoch of Reionization (EoR; R. Barkana
+& A. Loeb 2001; M. F. Morales & J. S. B. Wyithe 2010;
+J. R. Pritchard & A. Loeb 2012). In the redshift range
+6≲z≲30, the signal traces the thermal and ionization
+state of the intergalactic medium and therefore encodes
+the impact of the first stars, galaxies, and X-ray sources.
+Its mean evolution and spatial fluctuations are sensitive
+to both source physics and large-scale structure, making
+21 cm tomography a high-information observable.
+A broad observational program is aimed at this
+regime, including the Low Frequency Array (LOFAR),
+the Murchison Widefield Array (MWA), the Hydrogen
+Email: xiabin@gatech.edu
+Epoch of Reionization Array (HERA), and the future
+Square Kilometre Array (SKA) (M. P. van Haarlem
+et al. 2013; S. J. Tingay et al. 2013; L. Koopmans et al.
+2015; D. R. DeBoer et al. 2017). Recent HERA up-
+per limits and astrophysical constraints illustrate the
+broader shift from forecasting toward data-driven infer-
+ence (Z. Abdurashidova et al. 2022a,b). Interpreting fu-
+ture imaging data will therefore require forward models
+that are both fast and physically reliable across broad
+astrophysical parameter spaces.
+Semi-numerical simulations such as21cmFASTare
+widely used to generate target distributions for such
+analyses (A. Mesinger et al. 2011; B. Greig & A.
+Mesinger 2018). However, large simulation campaigns
+remain expensive when repeated realizations, parame-
+ter sweeps, or downstream simulation-based inference
+are required. This has motivated growing interest in
+machine-learning emulators for 21 cm cosmology.
+arXiv:2605.29016v1  [astro-ph.IM]  27 May 2026
+
+2
+Machine learning has already been applied to parame-
+ter inference from tomographic data, lightcone compres-
+sion, foreground-affected reconstruction, and fast sam-
+ple generation (D. Prelogovi´ c et al. 2021; S. Gagnon-
+Hartman et al. 2021; P. Villanueva-Domingo & F.
+Villaescusa-Navarro 2021; X. Zhao et al. 2022). Emu-
+lators based on generative adversarial networks (GANs)
+have also been explored for 21 cm data products (I. J.
+Goodfellow et al. 2014; F. List & G. F. Lewis 2020; S.
+Andrianomena et al. 2022; K. Diao & Y. Mao 2023),
+but these models remain sensitive to training instabil-
+ity, partial mode collapse, and preprocessing choices.
+More recently, two related developments have sharp-
+ened the context for the present work. First, studies
+of 21 cm summary statistics have shown that differ-
+ent statistics capture complementary information and
+that wavelet-scattering-based summaries can outper-
+form power-spectrum-only approaches in some settings
+(S. Cheng et al. 2020; X. Zhao et al. 2024; D. Prelogovi´ c
+& A. Mesinger 2024). Second, generative modeling in
+cosmology has begun moving from 2D images toward
+higher-dimensional fields, including 3D conditional dif-
+fusion and alternative 21 cm lightcone emulation strate-
+gies (A. Rouhiainen et al. 2024; K. Diao & Y. Mao 2025;
+I. Hothi et al. 2026).
+Diffusion models provide a competitive alternative for
+high-dimensional generative modeling (J. Ho et al. 2020;
+P. Dhariwal & A. Nichol 2021). In particular, X. Zhao
+et al. (2023) showed that conditional diffusion models
+can generate 21 cm images with promising fidelity in two
+dimensions, while also emphasizing the importance of
+distribution-level validation using scattering-based sum-
+mary statistics and Fisher forecasts. That work moti-
+vates a natural next question: can conditional diffusion
+models remain useful when the target changes from 2D
+slices to full 3D lightcones?
+This dimensional change is not merely cosmetic.
+Adding an extra dimension to the lightcones increases
+memory cost, forces small micro-batches, amplifies op-
+timization noise, and makes transform-space distor-
+tions more consequential after inversion back to physical
+units. It also raises the standard for evaluation. A model
+may generate visually plausible slices while still retain-
+ing measurable biases in the global signal, the power
+spectrum, or higher-order morphology.
+In this paper, we address three main questions. First,
+can conditional diffusion remain stable and useful with
+the substantially harder 3D lightcone data? Second,
+which preprocessing and dynamic range control choices
+are most important for stable training? Third, what lev-
+els of physical fidelity are recovered across a hierarchy
+of diagnostics probing mean evolution, two-point struc-
+ture, and higher-order non-Gaussian morphology? We
+will show that the answer is not captured by image in-
+spection alone. Across the tested configurations, the
+most favorable behavior arises only after explicit con-
+trol of transformed-space skewness and dynamic range,
+and the achieved fidelity follows a clear hierarchy: the
+agreement is strongest in the global signal, weaker in the
+power spectrum, and weakest in higher-order scattering
+statistics.
+The remainder of this paper is organized as follows.
+Section 2 summarizes the physical and methodological
+background, emphasizing the morphology of the 21 cm
+signal and why three-dimensional conditional diffusion
+is more challenging than the two-dimensional setting.
+Section 3 describes the simulation data, conditioning pa-
+rameters, validation design, diffusion architecture, pre-
+processing pipeline, and evaluation protocol. Section 4
+presents the hyperparameter sweep, identifies the pre-
+ferred preprocessing and dynamic range control choices,
+and examines the representative 3D model across image-
+space and summary-statistic diagnostics. Section 5 dis-
+cusses what the experiments demonstrate, what limi-
+tations remain, and what is required before such emu-
+lators can be used in survey-facing inference pipelines.
+Section 6 summarizes the main conclusions and outlines
+the role of this work as a simulation-level baseline for
+future 3D 21 cm emulator studies.
+2.PHYSICAL AND METHODOLOGICAL
+BACKGROUND
+2.1.21 cm Morphology and Non-Gaussian Structure
+The redshifted 21 cm signal provides a tomographic
+view of the thermal and ionization history of the inter-
+galactic medium prior to cosmic reionization. Its mor-
+phology is shaped by several coupled physical processes,
+including density evolution, radiative coupling, gas heat-
+ing, and reionization. After thermal decoupling from the
+cosmic microwave background (CMB), the gas cools adi-
+abatically and can produce a 21 cm absorption signal.
+Once the first luminous sources appear, Lyαcoupling
+drives the spin temperature toward the gas temperature,
+strengthening the absorption feature, while subsequent
+X-ray heating can move the signal into emission. During
+reionization, ionized bubbles expand and suppress the 21
+cm brightness temperature over progressively larger re-
+gions until most hydrogen becomes ionized (R. Barkana
+& A. Loeb 2001; J. R. Pritchard & A. Loeb 2012).
+These processes imprint structure on multiple phys-
+ical scales and generate strongly non-Gaussian spatial
+patterns. In some regions of parameter space, the 21
+cm field remains close to a Gaussian-like density field,
+whereas in others it develops prominent bubble morphol-
+
+3
+ogy, sharp ionization boundaries, and strongly nonlin-
+ear contrasts. This combination of large-scale evolution
+and non-Gaussian structure is precisely what makes 21
+cm tomography scientifically powerful, but it also makes
+emulation demanding: visually plausible samples must
+reproduce not only mean trends but also morphology-
+sensitive summaries (X. Zhao et al. 2023).
+2.2.Why 3D Conditional Diffusion Is Harder Than 2D
+Prior 2D diffusion studies considered conditional gen-
+eration of 64×64 21 cm images and showed that
+diffusion-based generation is viable for 21 cm data
+(X. Zhao et al. 2023). In the 3D lightcone setting
+studied here, however, transformed-space behavior and
+dynamic-range control become much more consequential
+because memory limits force very small micro-batches
+and amplify optimization noise. The present problem is
+harder for three coupled reasons.
+First, the computational burden grows sharply. Full-
+resolution 3D lightcone training must contend with
+strong GPU-memory limitations, small micro-batches,
+and large training I/O. Second, those computational
+limits interact with the statistics of the data: heavy-
+tailed voxel distributions, strong skewness, and inverse-
+transform distortions become harder to control when
+optimization noise is amplified by small effective batch
+sizes. Third, evaluation becomes more demanding. A
+model can reproduce the broad visual progression of
+slices while still failing to match lower-order or higher-
+order summary statistics. These coupled effects moti-
+vate the normalization-centered and diagnostic-centered
+study developed below.
+3.METHODS
+3.1.Data, Conditioning, and Validation Design
+Our target field is the differential 21 cm brightness
+temperature relative to the CMB,
+T21(x, z) = ˜T21(z)x HI(x) [1 +δ(x)]
+
+1− Tγ
+TS
+
+,(1)
+where ˜T21(z) = 27(Ωbh2/0.023)
+p
+(0.15/Ωmh2)(1 +z)/10
+is the redshift-dependent brightness-temperature nor-
+malization in units of mK.x HI is the neutral hydrogen
+fraction,δis the matter overdensity,T γ is the CMB
+temperature, andT S is the hydrogen spin temperature
+(S. R. Furlanetto et al. 2006). In the reionization-
+focused regime considered here, we adopt the standard
+high spin temperature approximationT S ≫T γ, so
+the signal primarily traces the evolving ionization and
+density structure.
+Our training dataset has a shape of
+(25600,64,64,1024) for the 25600 3D lightcones and
+(25600,2) for the conditioning parameters. The cor-
+responding lightcones span 2048 cMpc (comoving
+megaparsecs) along the line of sight, with a redshift
+rangez∈[7.51,20.95] and comoving distance range
+[8.973,11.021] cGpc. Each voxel therefore corresponds
+to 2 cMpc along the line of sight, while the transverse
+dimensions each span 128 cMpc. The conditioning vari-
+ables are (log10 Tvir, ζ), whereT vir is the minimum virial
+temperature of halos capable of hosting ionizing sources
+andζis the ionizing efficiency, which controls the num-
+ber of ionizing photons produced per collapsed baryon.
+In our training set, log 10 Tvir ∈[4,6] andζ∈[10,250].
+Following X. Zhao et al. (2023), these two parameters
+are chosen because they capture dominant astrophys-
+ical variation in the 21 cm signal while keeping the
+conditional problem tractable.
+The training parameter points are drawn with Latin
+hypercube sampling across the target parameter space,
+with one simulated lightcone for each parameter pair.
+This design is chosen to maximize parameter space
+coverage at fixed simulation cost. The cosmolog-
+ical parameters are fixed to (Ω m,Ω b, ns, σ8, h) =
+(0.310,0.0490,0.967,0.810,0.677) with the variables
+having their standard definitions (P. A. Ade et al. 2016).
+For validation, we instead fix several parameter points
+and generate many realizations at each point. Specifi-
+cally, we generated five reference parameter sets, each
+with lightcone shape (64,64,1024), at (log 10 Tvir, ζ) =
+(4.699,30), (5.477,200), (4.8,131.341), (4.4,131.341),
+and (5.6,19.037). These points were chosen to sam-
+ple physically distinct regimes within the training do-
+main. Lower values ofT vir, associated with lower im-
+pact of feedback, allow lower-mass halos to host ioniz-
+ing sources, increasing the abundance of contributing
+sources, whereas largerζcorresponds to more efficient
+ionizing photon production per collapsed baryon. Thus,
+the lowT vir, highζpoint (4.4,131.341) represents a
+regime with relatively abundant and efficient ionizing
+sources, while the highT vir, lowζpoint (5.6,19.037)
+represents the opposite limit. The points (4.699,30)
+and (5.477,200) correspond approximately to the “Faint
+Galaxy” and “Bright Galaxy” benchmark models of B.
+Greig & A. Mesinger (2017), respectively, and the in-
+termediate point (4.8,131.341) provides an additional
+visually structured validation case within the parame-
+ter space. For each parameter set, we produced 800
+21cmFASTrealizations with independent initial condi-
+tions. This multi-realization validation design is in-
+tended to test not only whether the diffusion model
+reproduces the central tendency of the signal at fixed
+parameters, but also whether it learns the conditional
+diversity of the target distribution.
+
+4
+All reported comparisons below therefore use 800 dif-
+fusion samples and 80021cmFASTsamples for each pa-
+rameter set. To reduce visual crowding in the power-
+spectrum and scattering-coefficient panels, we focus
+most figures on three representative validation points:
+(4.4,131.341), (5.477,200), and (4.699,30). Since all val-
+idation points lie within the training range, the present
+study is an interpolation test rather than an extrapola-
+tion test.
+Our code supports 2D and 3D input tensors through
+the same interface:
+x∈R H×Z (2D) orx∈R H×H×Z (3D).(2)
+In this work,H= 64 andZvaries by run design, with
+the most demanding configurations reachingZ= 1024.
+3.2.Conditional Diffusion Architecture
+We use a context-conditioned U-Net (J. Ho et al. 2020;
+P. Dhariwal & A. Nichol 2021) in which timestep embed-
+dings and condition embeddings are combined in latent
+space. For the 64×64×1024 3D lightcone datasets, the
+network uses four resolution levels with an anisotropic
+downsampling and upsampling stride of (2,2,4), pro-
+ducing feature resolutions of (64,64,1024), (32,32,256),
+(16,16,64), and (8,8,16). The fiducial comparison ar-
+chitecture uses 128 base channels and channel multipli-
+ers (1,1,2,4). We apply one residual block per reso-
+lution in the encoder and two residual blocks per res-
+olution in the decoder; additional tests with deeper
+residual-block configurations are included in the hyper-
+parameter sweep.
+The model is dimension agnostic through shared
+2D/3D code paths built fromConv{2,3}din PyTorch,
+residual blocks, downsampling and upsampling opera-
+tors, and attention blocks. Attention is applied with
+four heads at the two lowest spatial resolutions, corre-
+sponding to feature maps of (16,16,64) and (8,8,16)
+in the 3D case. The timestep embedding dimension is
+set to 512, corresponding to four times the base chan-
+nel size. The two astrophysical conditioning parameters
+are mapped through a linear token embedding of the
+same dimension, and the condition embedding is added
+directly to the timestep embedding before it is injected
+into every residual block.
+For all reported experiments, the sampling follows
+the full denoising diffusion probabilistic model (DDPM)
+trajectory with 1000 diffusion timesteps and a stan-
+dard mean-squared-error (MSE) noise-prediction loss (J.
+Ho et al. 2020). We use the AdamW optimizer with
+an initial learning rate of 10 −5 and a cosine-annealing
+learning-rate decay. For the fiducial 3D runs, each GPU
+processes 800 lightcones, corresponding to the full train-
+ing set of 25,600 lightcones distributed across 32 GPUs.
+We use a micro-batch size of 2, 120 epochs, and a gradi-
+ent accumulation of 16, corresponding to a cosine sched-
+ule withT max = 3000 optimizer steps. We also tested an
+exponential moving average (EMA) with a decay rate
+β= 0.995 but found no improvement in the reported
+comparisons; all results shown in this paper therefore
+exclude EMA.
+3.3.Normalization and Dynamic-Range Control
+A central empirical finding of this study is that pre-
+processing dominates training stability at 3D scale. The
+full preprocessing and postprocessing pipeline is
+xraw →primary transform→optional squish→
+diffusion model→inverse squish→inverse transform,
+wherex raw denotes the physical 21 cm brightness-
+temperature voxel value, and the optional squish step
+refers to the additional dynamic-range compression de-
+fined in Eq. (8). We consider four primary normalization
+transforms:
+1.Yeo–Johnson transform:
+x′ = YJ(x;λ)
+=
+
+
+
+(x+ 1) λ −1
+λ , λ̸= 0, x≥0,
+log(x+ 1), λ= 0, x≥0,
+−(1−x) 2−λ −1
+2−λ , λ̸= 2, x <0,
+−log(1−x), λ= 2, x <0,
+(3)
+followed by standardization
+˜x= x′ −µ YJ
+σYJ
+,(4)
+whereλis the fitted Yeo–Johnson parameter and
+(µYJ, σYJ) are the mean and standard deviation of
+the transformed training distribution.
+2.Min–max scaling:
+˜x= 2 x−x min
+xmax −x min
+−1,(5)
+which maps the data to [−1,1] using fixed dataset-
+level bounds.
+3.Z-score normalization:
+˜x= x−µ
+σ ,(6)
+with fixed dataset meanµand standard deviation
+σ.
+
+5
+4.Arcsinh transform:
+˜x= arcsinh(x).(7)
+The physical voxel distribution motivates these
+choices. Most voxels cluster near a brightness temper-
+ature of 0 mK; however, there is an additional con-
+centration in the emission phase in positive tempera-
+tures, and the absorption tail extends more broadly to-
+ward large negative values. This strong skewness makes
+transformed-space behavior critical: a transform can
+appear reasonable in transformed space while still pro-
+ducing clear distortions after inversion back to physical
+units.
+After the primary normalization transform, we op-
+tionally apply an additional dynamic-range compression
+step (“squish”) before diffusion training:
+xsq =
+
+
+
+A˜x, k= 0,
+Aarcsinh(˜x/k), k̸= 0.
+(8)
+In practice, the main 3D comparisons in this paper use
+the linear casek= 0, so the squish step reduces to
+a simple amplitude scalingx sq =A˜x. We tested sev-
+eral amplitude settings and found thatA= 0.1 provides
+the most favorable trade-off among the configurations
+considered here, outperforming both weaker compres-
+sion (A= 0.5,A= 1) and overly aggressive compres-
+sion (A= 0.01). Tests with nonlinear squish, such as
+(A, k) = (0.1,1), gave behavior similar to the linear
+(0.1,0) case. We therefore interpret the main role of the
+squish stage as controlled dynamic-range compression
+rather than as a qualitatively new nonlinear transform.
+3.4.Evaluation Protocol
+We evaluate generated samples against21cmFASTtar-
+gets using a hierarchy of complementary diagnostics:
+1. brightness-temperatureT b image slices, for direct
+qualitative inspection;
+2. the global signal⟨T b⟩versus line-of-sight position
+or redshift, to test mean evolutionary behavior;
+3. the power spectrum, to test two-point spatial
+structure;
+4. reduced scattering coefficients, to test higher-order
+non-Gaussian morphology (M. Andreux et al.
+2020; S. Cheng et al. 2020; B. Greig et al. 2023).
+The global signal is the transversely averaged 21 cm
+brightness temperature as a function of line-of-sight po-
+sition or redshift. In practice, we first average each
+lightcone over the two sky-plane dimensions and then
+aggregate the resulting curves across 800 realizations
+using the median. The power spectrum is computed
+from a square 64×64 two-dimensional lightcone patch
+spanning one transverse direction and the line of sight,
+whose starting line-of-sight index corresponds toz=
+11.93. This redshift was chosen because the global sig-
+nal, power spectrum, and scattering coefficients are well
+separated between the representative (log 10 Tvir, ζ) con-
+figurations at this stage, making qualitative differences
+easier to visualize and compare. The resulting statistics
+are likewise aggregated across realizations using the me-
+dian. We use the same 64×64 transverse–line-of-sight
+2D lightcone patches to compute the reduced second-
+order scattering coefficients. The second-order scatter-
+ing coefficients are constructed from cascaded wavelet
+convolutions followed by modulus operations and spatial
+averaging. For an input 2D imageI, the second-order
+coefficients can be written as
+S2(j1, ℓ1, j2, ℓ2) =⟨||I ⋆ ψ j1,ℓ1 |⋆ ψ j2,ℓ2 |⟩,
+whereψ j,ℓ denotes a wavelet filter at scalejand orien-
+tationℓ,⋆denotes convolution,| · |denotes the modulus
+operation, and⟨·⟩denotes spatial averaging. These co-
+efficients probe correlations between image structures
+across different spatial scales and orientations, and
+therefore provide a compact description of multiscale
+non-Gaussian morphology. Following X. Zhao et al.
+(2023), we retain only scale pairs withj 2 > j 1, remov-
+ing redundant scale combinations while preserving the
+dominant structural information. In practice, we aver-
+age over the absolute orientationℓ 1 and retain the rel-
+ative orientation class (ℓ 2 −ℓ 1) modL, which reduces
+the number of coefficients while preserving orientation-
+dependent morphological information. We additionally
+use logarithmic scattering coefficients for dynamic-range
+compression, following conventions commonly adopted
+in prior 2D analyses (X. Zhao et al. 2023).
+For the summary-statistic panels in Figures 2, 4, and
+5, the shaded bands correspond to the 1σquantile range
+estimated from the 800 realizations at fixed parameters.
+These bands are intended to visualize sample-to-sample
+diversity at fixed conditioning values rather than formal
+parameter-estimation uncertainties.
+All major diagnostic functions share the same residual
+definitions:
+ϵrel = y1 −y 0
+|y0| ,(9)
+ϵstd = y1 −y 0
+σ0
+,(10)
+ϵσ = σ1
+σ0
+−1,(11)
+
+6
+T able 1.Index-to-hyperparameter mapping used in the hyperparameter-comparison figures. The fiducial configuration is
+highlighted in bold and serves as the comparison anchor in the sweep. The representative model shown in Figures 3–5 is the
+corresponding 240-epoch extension (index 12). TheLabelcolumn gives the shorthand labels used in Figures 1 and 2. The
+final column reports MAE std computed from the global-signal residual channels, which we use as the primary scalar metric for
+compact comparison across hyperparameter configurations.
+Index Dim Transform Amplitude ResBlocks Epochs Label MAE std
+2D transform controls
+1 2D arcsinh 1 1 120 A1 D2 TAS 7.67
+2 2D min–max 1 1 120 A1 D2 TMM 0.284
+3 2D z-score 1 1 120 A1 D2 TZS 0.338
+4 2D Yeo–Johnson 1 1 120 A1 D2 0.274
+3D lightcone runs
+5 3D min–max 1 1 120 A1 TMM 1.93
+6 3D z-score 1 1 120 A1 TZS 6.35
+7 3D Yeo–Johnson 1 1 120 A1 4.94
+8 3D Yeo–Johnson 0.5 1 120 A0.5 2.80
+9 3D Yeo–Johnson 0.01 1 120 A0.01 1.36
+10 3D Yeo–Johnson 0.1 3 120 RB3 1.20
+11 3D Yeo–Johnson 0.1 2 120 RB2 0.425
+12 3D Yeo–Johnson 0.1 1 240 Ep240 0.272
+13 3D Y eo–Johnson 0.1 1 120 FIDUCIAL 0.389
+14 3D Yeo–Johnson 0.1 1 60 Ep60 1.29
+15 3D Yeo–Johnson 0.1 1 30 Ep30 8.63
+where subscripts 0 and 1 denote the reference21cmFAST
+ensemble and the generated diffusion-model ensemble,
+respectively. Hereydenotes the ensemble median of the
+diagnostic quantity under consideration andσdenotes
+the corresponding ensemble standard deviation. We ap-
+ply masking thresholds on|y 0|orσ 0 to avoid artificial
+divergence when the denominator becomes too small.
+These three channels probe distinct failure modes:ϵ rel
+measures relative bias with respect to the reference sig-
+nal,ϵ std measures mismatch relative to the sample vari-
+ance of the reference ensemble, andϵ σ measures discrep-
+ancies in dispersion. The reported scalar metrics are the
+mean absolute errors (MAEs),
+MAErel =⟨|ϵ rel|⟩,(12)
+MAEstd =⟨|ϵ std|⟩,(13)
+MAEσ =⟨|ϵ σ|⟩.(14)
+Among these scalar summaries, we use MAEstd as the
+primary compact ranking metric in the hyperparame-
+ter sweep. The reason is pragmatic as well as physical:
+MAErel can become numerically unstable when the ref-
+erence signal is close to zero, while MAE σ is designed
+specifically to measure recovery of diversity rather than
+central accuracy. By normalizing the residual to the
+sample scatter of the reference ensemble, MAE std pro-
+vides the most stable single-number measure of condi-
+tional bias across the diagnostics considered here. Un-
+less explicitly noted otherwise, our ranking descriptions
+in the hyperparameter sweep refer to MAEstd computed
+from the global-signal residual channels.
+4.RESULTS
+4.1.Model Performance Dependence on Preprocessing
+We begin with the different preprocessing methods
+listed in Section 3.3 and the hyperparameter sweep be-
+cause it provides the clearest quantitative view of which
+design choices have the largest impact on accuracy. Ta-
+ble 1 lists the indexed runs used in the comparison fig-
+ures. The fiducial configuration, highlighted in bold,
+serves as the comparison anchor for the 3D sweep. Fig-
+ure 1 summarizes the preprocessing and hyperparameter
+sweep across the 2D and 3D runs. Figure 2 illustrates
+how these differences appear directly in the global-signal
+evolution. The representative model shown later in Fig-
+ures 3–5 is the corresponding 240-epoch extension of
+that fiducial setup.
+Table 1 and Figures 1 and 2 show that the preprocess-
+ing and dynamic-range control are the dominant drivers
+of performance in a 3D setting. The 2D runs serve
+mainly as control runs for the transforms, while the main
+scientific comparison is within the 3D model block. In
+
+7
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+job index
+10 1
+100
+101
+MAE
+2D Transform
+3D Transform
+3D + Amplitude Scale
+3D + ResBlocks
+3D + EpochMAErel MAEstd MAE
+ best in group
+A1 D2 TAS
+A1 D2 TMM
+A1 D2 TZS
+A1 D2
+A1 TMM
+A1 TZS
+A1
+A0.5
+A0.01
+RB3
+RB2
+Ep240
+RB1 A0.1 D3 Ep120 TYJ
+Ep60
+Ep30
+Figure 1.Summary of scalar MAE metrics across the hyperparameter sweep. Markers show MAE rel, MAE std, and MAE σ
+for each indexed run listed in Table 1 where their labels are given; open stars mark the best run within each comparison group
+using MAE std as the primary selection metric. The colored guide bands separate the 2D-transform tests, 3D-transform tests,
+amplitude-scaling tests, residual-block tests, and epoch-length tests.
+7.6 9.4 11.9 15.5 20.7
+redshift
+140
+120
+100
+80
+60
+40
+20
+0
+20
+Tb  [mK]
+21cmFAST median
+A1 TMM
+A1 TZS
+A1
+A0.5
+A0.01
+RB3
+RB2
+RB1 A0.1 D3 Ep120 TYJ
+9.0 9.5 10.0 10.5 11.0
+distance [Gpc]
+101
+0
+101
+Tb  [mK]
+Figure 2.Comparison of selected 3D runs against
+21cmFAST(dotted line) using the global signal and its resid-
+ual, ∆⟨T b⟩. The upper panel shows the median⟨T b⟩evolu-
+tion for representative runs spanning different preprocessing
+choices, amplitude scalings, and residual-block depths, and
+the lower panel shows the corresponding deviation from the
+21cmFASTmedian.
+the 2D transform tests contained in the blue shaded re-
+gion in Figure 1, the Yeo–Johnson and min–max trans-
+forms give similarly favorable performance and emerge
+as the strongest preprocessing choices. Comparing the
+2D and 3D transform groups in the same figure shows
+that the transition from 2D to 3D substantially in-
+creases the difficulty of training, with the MAE values
+rising by roughly an order of magnitude. Within the
+3D transform-only subset shown in the orange shaded
+region of Figure 1, the plain z-score and plain Yeo–
+Johnson runs perform markedly worse than the min–
+max transform in the global-signal MAE std ranking.
+This ordering is then reversed once a moderate ampli-
+tude compression is added to the Yeo–Johnson trans-
+form, consistent with the interpretation that the plain
+z-score and plain Yeo–Johnson approaches do not com-
+press the transformed dynamic range strongly enough
+for the much broader 3D voxel distribution, relative to
+the 2D cases. The hyperparameter sweep in amplitude
+A, which are contained in the green shaded region, shows
+the clearest single trend in the 3D runs: adding an extra
+compression stage substantially improves performance,
+and the improvement is not monotonic with compression
+strength. We find that an intermediate value,A= 0.1,
+performs better thanA= 1, 0.5, or 0.01, clearly sur-
+passing the plain min–max baseline.
+
+8
+8.0 10.0 12.0 14.0 16.0 18.0 20.0
+redshift
+(log10 Tvir, ) = (4.4, 131)
+21cmFAST
+diffusion
+(log10 Tvir, ) = (5.5, 200)
+21cmFAST
+diffusion
+(log10 Tvir, ) = (4.7, 30)
+21cmFAST
+diffusion
+9.0 9.5 10.0 10.5 11.0
+distance [Gpc]
+140
+120
+100
+80
+60
+40
+20
+0
+20
+Brightness T emperature (mK)
+Figure 3.Brightness-temperature slice comparison for the representative 3D run (Yeo–Johnson preprocessing,A= 0.1,
+one residual block per level in the encoder, 240 epochs). For each conditioning point, the upper two strips show independent
+21cmFASTrealizations and the lower two strips show diffusion-generated realizations.
+Figure 2 depicts how these scalar differences appear
+in the global-signal⟨T b⟩evolution itself: preprocessing
+and dynamic-range control primarily determine whether
+the absorption trough is placed at the correct depth and
+redshift, whereas architectural changes such as residual-
+block depth modulate the remaining mismatch more
+subtly. In particular, the better-performing compressed
+Yeo–Johnson runs place the absorption trough closer to
+the21cmFASTreference signal in both depth and redshift
+and remain closest to the reference curve over most of
+the lightcone, while several alternative settings produce
+systematic offsets that persist across extended redshift
+intervals.
+The remaining trends are secondary. Figure 1 shows
+that increasing residual-block depth is not monotoni-
+cally beneficial: the run with one residual-block (RB1)
+outperforms the model with two (RB2) and does
+markedly better than the model with three (RB3),
+despite RB3 requiring far greater computational cost
+(1061-GPU hours for RB3, 536 GPU-hours for RB2, and
+347-GPU hours for RB1). This result indicates that sim-
+ply stacking more parameters does not guarantee better
+performance for this problem. One plausible interpreta-
+tion is that, in the small-micro-batch regime enforced by
+3D memory limits, the potential representational bene-
+fit of additional depth is outweighed by noisier optimiza-
+tion dynamics, so deeper models are not rewarded unless
+training is already sufficiently stable.
+The points in the red shaded region of Figure 1 show a
+consistent improvement from 30 to 240 epochs, with the
+240-epoch run giving the best result among the tested
+values, although longer training runs were not explored.
+Owing to computing time and memory constraints, the
+runs on the left side of the sweep were all trained for
+120 epochs. The representative example used in Fig-
+ures 3–5 corresponds to the 240-epoch configuration.
+
+9
+7.6 8.4 9.4 10.6 11.9 13.6 15.5 17.8 20.7
+redshift
+140
+120
+100
+80
+60
+40
+20
+0
+20
+Tb  [mK]
+ 21cmFAST
+diffusion
+(log10 Tvir, ) = (4.4, 131)
+(log10 Tvir, ) = (5.5, 200)
+(log10 Tvir, ) = (4.7, 30)
+1
+0
+1
+rel
+ | rel| = 0.05
+1
+0
+1
+std
+ | std| = 0.26
+9.0 9.5 10.0 10.5 11.0
+distance [Gpc]
+1
+0
+1
+ | | = 0.23
+103
+104
+105
+2(k) [mK2]
+power spectrum of Tb
+1
+0
+1
+rel
+ | rel| = 0.29
+1
+0
+1
+std
+ | std| = 0.72
+10 1
+k [Mpc 1]
+1
+0
+1
+ | | = 0.19
+Figure 4.Global-signal (left) and power-spectrum (right) diagnostics for the representative 3D run shown in Figure 3. In
+both panels, the dashed lines with shaded bands denote the21cmFASTmedian and 1σquantile ranges, while the solid lines
+with error bars denote the diffusion-model median and 1σquantile ranges.Left:median global signal⟨T b⟩as a function of
+distance/redshift, together with the residual channelsϵ rel,ϵ std, andϵ σ.Right:power-spectrum comparison for the selected
+transverse–line-of-sight lightcone patches.
+Taken together, our hyperparameter sweep supports a
+narrow but robust conclusion: among the tested con-
+figurations, the Yeo–Johnson preprocessing transform
+combined with a moderate amplitude compression gives
+the most consistently favorable trade-off between perfor-
+mance and compute time and memory usage, with the
+strongest direct support coming from the global-signal
+MAEstd ranking.
+4.2.Accurately Captured Features in the 3D Model
+Having identified a preferred region of hyperparame-
+ter space, we now examine the representative extended-
+training run in more detail. This model uses the same
+configuration as the fiducial comparison anchor but ex-
+tends training from 120 to 240 epochs (Table 1, index
+12).
+The representative run captures the broad large-scale
+morphology and the main global-signal evolution, but
+the finer diagnostics show a clear hierarchy of difficulty.
+Figure 3 provides a qualitative illustration of sample di-
+versity at fixed parameters: for each conditioning point,
+the upper two strips show two independent21cmFAST
+reference realizations and the lower two strips show two
+corresponding diffusion-generated realizations. The hor-
+izontal axis gives comoving distance and the top axis
+indicates the associated redshift range. The model re-
+produces the large-scale progression of the brightness-
+temperature structure along the line of sight, as well
+as the approximate location and width of the domi-
+nant transition region. At the same time, the most
+visible residuals are local. The generated slices appear
+smoother, particularly in ionized bubble-rich regions,
+they do not always match the sharpest boundaries or
+fine-scale structure in the reference maps, and they often
+contain small nonzero pixels within visually dark regions
+that are cleaner in the21cmFASTslices. Morphological
+agreement is therefore stronger on large scales than at
+the smallest resolved scales, and the sharp separation
+between lowT b interiors and the surrounding medium is
+not fully recovered.
+Figure 4 shows that this agreement is strongest in
+the global signal. In both panels, the dashed lines with
+shaded bands denote the21cmFASTmedian and 1σquan-
+tile ranges, while the solid lines with error bars denote
+the diffusion-model median and 1σquantile ranges. In
+the left panel, the model follows the broad timing and
+depth of the absorption troughs for the three represen-
+tative parameter choices, with the closest agreement oc-
+curring in the large-scale trend. The remaining discrep-
+ancies are concentrated near the steepest parts of the
+evolution, where small shifts in transition location pro-
+duce visible residual structure. Some residual-channel
+curves are partially truncated because we mask bins
+with denominators below 1 mK, thereby avoiding ar-
+tificial divergence of theϵmetrics near zero crossings.
+In the right panel, the generated samples recover the
+overall ordering and amplitude of ∆ 2(k) across the dif-
+ferent parameter settings, but the residual panels show
+that scale-dependent differences remain, especially to-
+ward the highestkmodes where the smallest resolved
+structures are hardest to reproduce accurately. This or-
+dering across diagnostics is physically consistent with
+
+10
+10 1
+S2
+reduced scattering coefficients
+1
+0
+1
+rel
+ | rel| = 0.11
+1
+0
+1
+std
+ | std| = 0.51
+[0 1]
+[0 2]
+[0 3]
+[0 4]
+[1 2]
+[1 3]
+[1 4]
+[2 3]
+[2 4]
+[3 4]
+[0 1]
+[0 2]
+[0 3]
+[0 4]
+[1 2]
+[1 3]
+[1 4]
+[2 3]
+[2 4]
+[3 4]
+[0 1]
+[0 2]
+[0 3]
+[0 4]
+[1 2]
+[1 3]
+[1 4]
+[2 3]
+[2 4]
+[3 4]
+[0 1]
+[0 2]
+[0 3]
+[0 4]
+[1 2]
+[1 3]
+[1 4]
+[2 3]
+[2 4]
+[3 4]
+(j1, j2)
+1
+0
+1
+ | | = 0.25
+(l2 l1)%L=0
+ (l2 l1)%L=1
+ (l2 l1)%L=2
+ (l2 l1)%L=3
+Figure 5.Reduced scattering-coefficient comparison for the representative 3D run shown in Figures 3 and 4. The top panel
+compares the second-order coefficientsS 2 across multiscale index pairs (j 1, j2) and relative orientation classes, while the lower
+panels show the corresponding residual channels.
+the image-space residuals: once sharp boundaries are
+smoothed and lowT b interiors are broadened, the largest
+impact is expected at the smallest resolved scales, even
+when the large-scale mean evolution is already well cap-
+tured.
+Figure 5 then shows that higher-order morphology re-
+mains the most difficult target. The top panel compares
+the second-order scattering coefficientsS 2 across multi-
+scale index pairs (j 1, j2) and relative orientation classes
+(ℓ2 −ℓ 1) modL, while the lower panels report the same
+three residual channels used elsewhere in the paper. The
+diffusion outputs track the broad level ordering and os-
+cillatory pattern of the reference coefficients, indicating
+that the model captures a substantial fraction of the
+non-Gaussian morphological information present in the
+lightcone patches. At the same time, the residual struc-
+ture shows that higher-order statistics remain more dif-
+ficult to match than the global signal, so even visually
+plausible samples can retain measurable errors in mul-
+tiscale morphology. The main positive result of the rep-
+resentative run is therefore not perfect agreement, but
+a structured and interpretable level of success across di-
+agnostics.
+4.3.Inaccuracies in the Preferred Model
+To isolate the remaining failure modes more directly,
+Figure 6 compares voxel value probability density func-
+tions in both transformed space and raw space, which
+shows that an important part of the difficulty already
+appears in transformed voxel space. The two pan-
+els show voxel value probability density functions in
+transformed space (left) and raw brightness tempera-
+tureT b space (right) for21cmFASTtargets and diffusion-
+generated samples, respectively. The main challenge is
+the strong concentration of voxels near 0 mK in the phys-
+ical lightcone distribution: the reference data contain
+a sharply peaked, nearly delta-function-like near-zero
+component, whereas the diffusion model reproduces this
+feature only as a peak with finite width. Although some
+preprocessing choices place the dominant near-zero peak
+at roughly the correct location, the diffusion model does
+not fully recover its height, width, or surrounding distri-
+bution. In transformed voxel space, min–max performs
+better than plain z-score and plain Yeo–Johnson because
+it compresses the data into a narrower range, making
+the target distribution easier for the diffusion model to
+reproduce. This observation helps explain why a sec-
+ondary squish step can improve 3D training: it further
+
+11
+3
+ 2
+ 1
+ 0 1 2 3 4
+transformed voxel value
+10 1
+100
+101
+PDF
+Transformed voxel space
+min-max
+z-score
+Yeo-Johnson
+Yeo-Johnson (A=0.1)
+21cmFAST
+diffusion
+102
+ 101
+ 0 101
+raw voxel value
+10 2
+10 1
+Raw voxel space
+Figure 6.Comparison of preprocessing choices using lightcone voxel value distributions. The two panels show voxel value
+probability density functions in transformed space (left) and raw brightness-temperature space (right) for21cmFASTtargets and
+diffusion-generated samples.
+narrows the transformed dynamic range that the diffu-
+sion model must learn.
+The same figure also clarifies why transformed-space
+improvement is not the whole story. A Yeo–Johnson
+transform followed by an additional amplitude compres-
+sion withA= 0.1 yields the best overall agreement in
+both transformed and raw space, substantially improv-
+ing upon the case without the additional compression.
+After mapping the samples back to physical brightness-
+temperature space, however, the near-zero component
+remains visibly broader than in the21cmFASTtargets,
+indicating that the model still does not perfectly match
+this part of the distribution. In the21cmFASTreference,
+the near-zero voxel population is sharply concentrated
+and nearly delta function-like, whereas the diffusion
+model broadens it into a finite-width distribution. Af-
+ter inversion back to raw brightness-temperature space,
+voxel values that should remain tightly clustered near
+0 mK are instead spread over a continuous range, in-
+cluding small positive and negative values. In image
+space, this broadening manifests as visually dark regions
+that are less cleanly separated from their surroundings,
+with small nonzero pixels appearing inside regions that
+are closer to zero in the reference maps. This interpre-
+tation is consistent with the local residuals seen in Fig-
+ure 3, and it also provides a plausible link to the residual
+power-spectrum mismatch at highk: once lowT b inte-
+riors and sharp boundaries are smeared into a broader
+continuum, the resulting fields naturally lose some of
+the smallest-scale contrast even if the large-scale trend
+is preserved.
+Together with Figure 2, the voxel-PDF compar-
+ison also shows why a voxel-level agreement alone
+is not sufficient to identify a preferred preprocess-
+ing strategy. Min–max is relatively competitive in
+the voxel-PDF comparison, but its global-signal be-
+havior remains systematically biased, with the median
+brightness-temperature curve consistently shifted below
+the21cmFASTreference over much of the lightcone evo-
+lution. This behavior is consistent with the strong skew-
+ness of the voxel distribution: although min–max scal-
+ing preserves the overall range, it does not sufficiently
+regularize the highly asymmetric near-zero population,
+leading the diffusion model to underestimate the bright-
+ness temperature after inversion back to physical units.
+In contrast, the better compressed Yeo–Johnson runs
+yield a more favorable compromise across voxel level and
+global signal diagnostics: the reconstructed median fluc-
+tuates around the21cmFASTreference while remaining
+largely within the reference 1σband throughout most
+of the lightcone evolution. Overall, Figure 6 shows
+that preprocessing plays a major role in voxel-level fi-
+delity: additional dynamic-range compression improves
+the agreement, but does not fully eliminate the difficulty
+of reproducing the sharply concentrated near-zero voxel
+population. The preferred configuration should there-
+fore be understood not as universally optimal across ev-
+ery metric, but as the most consistent trade-off among
+the tested configurations.
+
+12
+5.DISCUSSION
+5.1.Challenges in 3D Lightcone Emulation
+The move from 2D image generation to 3D lightcone
+emulation is not simply a dimensional upgrade. The
+dominant failure modes in our experiments arise from
+coupled computational and statistical effects: mem-
+ory constraints force small micro-batches, small batches
+amplify optimization noise, and unstable normalization
+magnifies the resulting errors. In this regime, prepro-
+cessing is not a minor implementation detail but a prin-
+cipal modeling choice.
+Our results also show that evaluation must be phys-
+ically layered. The global signal, power spectrum, and
+scattering coefficients probe distinct aspects of fidelity:
+mean evolution, two-point structure, and higher-order
+non-Gaussian morphology. This hierarchy matters for
+21 cm lightcones because their information content is
+not fully described by Gaussian statistics. A model may
+therefore appear satisfactory under visual inspection or
+even under low-order summaries while still retaining
+meaningful biases in morphology-sensitive diagnostics.
+That is precisely why the scattering transform is useful
+here: it helps expose discrepancies that would be missed
+by image inspection or by the global signal alone, con-
+sistent with the broader conclusions of X. Zhao et al.
+(2023). More broadly, our results argue that future 21
+cm generative-emulator studies should not rely on vi-
+sual inspection alone, and should include morphology-
+sensitive validation in addition to lower-order summaries
+whenever the scientific goal depends on preserving non-
+Gaussian structure.
+The validation design also allows a more specific state-
+ment about diversity. Because the reference sets con-
+tain many independent realizations at fixed parameter
+points, they test whether the model learns a distribu-
+tion rather than only a deterministic mean mapping.
+The dispersion metric MAE σ suggests that the better-
+performing 3D models recover the conditional spread
+of the signal reasonably well, even when some residual
+biases remain in lower-order or higher-order summary
+statistics. This is encouraging for inference-oriented ap-
+plications, where realistic sample diversity is essential.
+5.2.Limitations and Future Work
+This paper focuses on emulator fidelity under
+simulation-level conditions rather than a complete
+survey-facing inference pipeline. Several ingredients re-
+main necessary for that next step: instrument response
+and foreground contamination, uncertainty calibration
+beyond percentile envelopes, larger controlled studies
+of realization-to-realization variance, and direct down-
+stream validation in simulation-based inference (SBI)
+or Markov chain Monte Carlo (MCMC) workflows. One
+specific open question is whether the small-scale smooth-
+ing identified in Sections 4.2 and 4.3 would lead to
+measurable parameter-level bias in downstream infer-
+ence. Quantifying that effect will require explicit SBI
+or MCMC tests and is beyond the scope of this paper.
+The present work should therefore be viewed as a base-
+line study of generative fidelity rather than as a complete
+end-to-end inference demonstration.
+The present validation is also interpolative: all refer-
+ence parameter points lie within the training range. In
+addition, the training data use one lightcone per train-
+ing parameter pair, whereas the validation ensembles
+use many realizations at fixed parameter points. This
+design is efficient for parameter-space coverage, but fu-
+ture work could explore denser multi-realization train-
+ing sets, wider astrophysical conditioning spaces, and
+more explicit tests of generalization under distribution
+shift. Finally, although the present analysis uses 800-
+sample ensembles for both the generated and reference
+sets, more extensive sampling studies could still be valu-
+able for tightening uncertainty estimates.
+More broadly, the main astrophysical value of this
+work lies in methodology and benchmarking. Before
+a 3D generative emulator can be trusted for survey-
+facing 21 cm inference, it must be validated in a way
+that is sensitive not only to image appearance but also
+to the physically meaningful statistics of the signal.
+The present study identifies preprocessing and diagnos-
+tic choices that materially affect that trustworthiness
+and therefore helps define a more robust baseline for
+future emulator development.
+6.CONCLUSION
+We have presented a study of conditional diffusion
+modeling for 3D 21 cm lightcone emulation. The main
+conclusion is methodological: in this high-dimensional
+regime, stable and physically meaningful generation de-
+pends primarily on preprocessing and dynamic-range
+control, with architecture depth and training duration
+becoming secondary once optimization has been stabi-
+lized. Our diagnostics further show that visual plausi-
+bility is not enough; physically motivated summaries are
+needed to assess emulator quality.
+Among the tested configurations, Yeo–Johnson pre-
+processing with moderate amplitude compression pro-
+vides the most consistently favorable trade-off, with the
+clearest quantitative support coming from the global-
+signal MAE std ranking and with qualitatively compati-
+ble behavior in the complementary diagnostics. At the
+same time, the hierarchy of diagnostics shows that suc-
+cess is easier to achieve in the global signal than in
+
+13
+the power spectrum or scattering coefficients, so visu-
+ally convincing outputs can still retain measurable phys-
+ical biases. In particular, the broadened near-zero voxel
+component, the corresponding smoothing of lowT b re-
+gions in image space, and the residual mismatch at the
+smallest resolved scales all point to the same limita-
+tion: recovering the full small-scale and morphology-
+sensitive structure of the 3D lightcone distribution re-
+mains harder than matching its large-scale evolution.
+The present work therefore provides a reproducible
+simulation-level baseline for judging 3D 21 cm lightcone
+emulators in terms of mean evolution, two-point struc-
+ture, and higher-order morphology. More broadly, it
+argues that future 21 cm emulator studies should move
+beyond visual inspection and global signals alone and
+include morphology-sensitive validation when assessing
+physical fidelity, especially if the intended application is
+inference rather than image generation.
+ACKNOWLEDGMENTS
+We acknowledge funding support from a Georgia
+Tech Research Institute IRAD award, NSF grants
+AST-2108020 and AST-2510197, and NASA grant
+80NSSC21K1053. This research used resources of the
+National Energy Research Scientific Computing Center
+(NERSC), a U.S. Department of Energy Office of Sci-
+ence User Facility, through the GenAI@NERSC award.
+DATA AVAILABILITY
+The training and validation data underlying this ar-
+ticle are available from the corresponding author upon
+request. The code used for the analysis and model de-
+velopment is publicly available at https://github.com/
+Xsmos/ml21cm.
+Software:21cmFAST(A. Mesinger et al. 2011; B.
+Greig & A. Mesinger 2018), PyTorch (A. Paszke et al.
+2019), NumPy (C. R. Harris et al. 2020), Matplotlib
+(J. D. Hunter 2007)
+APPENDIX
+A.IMPLEMENTATION DETAILS FOR
+REPRODUCIBILITY
+A.1.Architecture and Diffusion Settings
+The main architectural configuration is summarized
+in Section 3.2. Here we record only the implementation
+details most relevant for reproducibility.
+InContextUnet, 2D and 3D are unified through
+dimension-dependent convolution and resampling oper-
+ators. The residual block uses the GroupNorm-based
+normalization (32 groups), SiLU-style nonlinearity, a
+3×3 convolution, timestep-conditioned embedding in-
+jection, dropout, and a final zero-initialized convolution,
+together with a residual skip connection. Depending on
+the configuration, the skip path is identity, 1×1, or 3×3.
+When upsampling or downsampling is requested inside
+the residual block, the feature path and skip path are
+resampled in parallel before the final convolution.
+The attention block normalizes the feature tensor,
+projects it to query, key, and value tensors with a
+1×1 convolution in flattened spatial coordinates, ap-
+plies scaled dot-product attention, and returns the result
+through a residual connection.
+Intraining/diffusion.pyprovided in our GitHub
+repository, the DDPM training uses the following set-
+tings:
+1.betas=(1e-4, 0.02)with a linear schedule,
+2.num timesteps=1000,
+3. MSE loss on predicted noise,
+4. AdamW optimizer with an initial learning rate of
+10−5,
+5. cosine annealing learning-rate schedule, and
+6. gradient clipping (max norm=1.0).
+We also tested an exponential moving average (EMA)
+with a decay rateβ= 0.995 but found no improvement
+in the final comparisons, therefore the reported results
+do not use EMA.
+A.2.Data Pipeline and Normalization
+For each sample, the loader returns an image tensor
+and a normalized condition vector:
+(x,c),c∈[0,1] 2,(A1)
+whereccorresponds to (log 10 Tvir, ζ) after min–max
+rescaling. Letxdenote a raw voxel value of the 21 cm
+brightness-temperature field. Image-space preprocess-
+ing is selected viascale pathand uses the four normal-
+ization choices listed in Section 3.3. After the primary
+normalization step, the training code can additionally
+apply the squish transform
+xsq =
+
+
+
+A˜x(k= 0)
+Aarcsinh(˜x/k) (k̸= 0)
+(A2)
+
+14
+with an inverse mapping applied after sampling to re-
+cover the physical brightness-temperature space. In the
+main 3D comparisons, the fiducial setting uses the linear
+case (A, k) = (0.1,0).
+A.3.Stability and Memory Controls for 3D
+The dimensional expansion from 2D to 3D required
+several explicit controls for training stability and mem-
+ory efficiency, including distributed data parallel execu-
+tion, automatic mixed precision, gradient accumulation,
+optional checkpointed U-Net blocks, and anisotropic
+downsampling choices tailored to the line-of-sight direc-
+tion. The reported 3D runs were trained on 32 NVIDIA
+A100 GPUs with 80 GB of device memory, and even
+at that memory scale the full-resolution 64×64×1024
+setup remained constrained to very small micro-batches.
+In the fiducial 3D setup, each GPU processes 800 light-
+cones, corresponding to the full training set of 25,600
+lightcones distributed across 32 GPUs. We use a micro-
+batch size of 2, gradient accumulation of 16, and an ad-
+ditional amplitude-compression step squish(0.1,0), with
+training carried out for 120 epochs. These settings cor-
+respond to a cosine learning-rate schedule withT max =
+3000 optimizer steps. The anisotropic stride design is
+particularly important in 3D because it reduces memory
+usage while remaining better matched to the elongated
+lightcone geometry along the line of sight.
+REFERENCES
+Abdurashidova, Z., Aguirre, J. E., Alexander, P., et al.
+2022a, ApJ, 925, 221, doi: 10.3847/1538-4357/ac1c78
+Abdurashidova, Z., Aguirre, J. E., Alexander, P., et al.
+2022b, ApJ, 924, 51, doi: 10.3847/1538-4357/ac2ffc
+Ade, P. A., Aghanim, N., Arnaud, M., et al. 2016,
+Astronomy & Astrophysics, 594, A13
+Andreux, M., Angles, T., Exarchakis, G., et al. 2020,
+Journal of Machine Learning Research, 21, 1
+Andrianomena, S., Villaescusa-Navarro, F., & Hassan, S.
+2022, arXiv e-prints, arXiv:2211.05000,
+doi: 10.48550/arXiv.2211.05000
+Barkana, R., & Loeb, A. 2001, PhR, 349, 125,
+doi: 10.1016/S0370-1573(01)00019-9
+Cheng, S., Ting, Y.-S., Ménard, B., & Bruna, J. 2020,
+Monthly Notices of the Royal Astronomical Society, 499,
+5902, doi: 10.1093/mnras/staa3165
+DeBoer, D. R., Parsons, A. R., Aguirre, J. E., et al. 2017,
+PASP, 129, 045001,
+doi: 10.1088/1538-3873/129/974/045001
+Dhariwal, P., & Nichol, A. 2021, Advances in neural
+information processing systems, 34, 8780
+Diao, K., & Mao, Y. 2023, arXiv e-prints,
+arXiv:2307.04976, doi: 10.48550/arXiv.2307.04976
+Diao, K., & Mao, Y. 2025, ApJ, 992, 173,
+doi: 10.3847/1538-4357/ae0325
+Furlanetto, S. R., Oh, S. P., & Briggs, F. H. 2006, Physics
+reports, 433, 181
+Gagnon-Hartman, S., Cui, Y., Liu, A., & Ravanbakhsh, S.
+2021, Monthly Notices of the Royal Astronomical
+Society, 504, 4716, doi: 10.1093/mnras/stab1158
+Goodfellow, I. J., Pouget-Abadie, J., Mirza, M., et al. 2014,
+arXiv e-prints, arXiv:1406.2661,
+doi: 10.48550/arXiv.1406.2661
+Greig, B., & Mesinger, A. 2017, Proceedings of the
+International Astronomical Union, 12, 1821,
+doi: 10.1017/S1743921317011103
+Greig, B., & Mesinger, A. 2018, MNRAS, 477, 3217,
+doi: 10.1093/mnras/sty796
+Greig, B., Ting, Y.-S., & Kaurov, A. A. 2023, MNRAS,
+519, 5288, doi: 10.1093/mnras/stac3822
+Harris, C. R., Millman, K. J., van der Walt, S. J., et al.
+2020, Nature, 585, 357, doi: 10.1038/s41586-020-2649-2
+Ho, J., Jain, A., & Abbeel, P. 2020, Advances in neural
+information processing systems, 33, 6840
+Hothi, I., Allys, E., Semelin, B., & Meriot, R. 2026, A&A,
+706, A15, doi: 10.1051/0004-6361/202555896
+Hunter, J. D. 2007, Computing in Science & Engineering, 9,
+90, doi: 10.1109/MCSE.2007.55
+Koopmans, L., Pritchard, J., Mellema, G., et al. 2015, SKA
+Organisation, Manchester, 1
+List, F., & Lewis, G. F. 2020, Monthly Notices of the Royal
+Astronomical Society, 493, 5913,
+doi: 10.1093/mnras/staa523
+Mesinger, A., Furlanetto, S., & Cen, R. 2011, MNRAS, 411,
+955, doi: 10.1111/j.1365-2966.2010.17731.x
+Morales, M. F., & Wyithe, J. S. B. 2010, ARA&A, 48, 127,
+doi: 10.1146/annurev-astro-081309-130936
+Paszke, A., Gross, S., Massa, F., et al. 2019, in Advances in
+Neural Information Processing Systems 32
+Prelogovi´ c, D., & Mesinger, A. 2024, A&A, 688, A199,
+doi: 10.1051/0004-6361/202449309
+Prelogovi´ c, D., Mesinger, A., Murray, S., Fiameni, G., &
+Gillet, N. 2021, Monthly Notices of the Royal
+Astronomical Society, 509, 3852,
+doi: 10.1093/mnras/stab3215
+Pritchard, J. R., & Loeb, A. 2012, Reports on Progress in
+Physics, 75, 086901
+
+15
+Rouhiainen, A., M¨ unchmeyer, M., Shiu, G., Gira, M., &
+Lee, K. 2024, PhRvD, 109, 123536,
+doi: 10.1103/PhysRevD.109.123536
+Tingay, S. J., Goeke, R., Bowman, J. D., et al. 2013,
+PASA, 30, e007, doi: 10.1017/pasa.2012.007
+van Haarlem, M. P., Wise, M. W., Gunst, A. W., et al.
+2013, A&A, 556, A2, doi: 10.1051/0004-6361/201220873
+Villanueva-Domingo, P., & Villaescusa-Navarro, F. 2021,
+ApJ, 907, 44, doi: 10.3847/1538-4357/abd245
+Zhao, X., Mao, Y., Cheng, C., & Wandelt, B. D. 2022, The
+Astrophysical Journal, 926, 151,
+doi: 10.3847/1538-4357/ac457d
+Zhao, X., Mao, Y., Zuo, S., & Wandelt, B. D. 2024, ApJ,
+973, 41, doi: 10.3847/1538-4357/ad5ff0
+Zhao, X., Ting, Y.-S., Diao, K., & Mao, Y. 2023, Monthly
+Notices of the Royal Astronomical Society, 526, 1699

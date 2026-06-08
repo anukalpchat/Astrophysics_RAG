@@ -1,0 +1,1593 @@
+Title: A multi-eigenbasis approach to covariance matrix denoising for cosmological inference
+Authors: Wynne Turner
+Published: 2026-06-02
+Categories: astro-ph.CO, astro-ph.IM
+
+Version June 4, 2026
+Preprint typeset using LATEX style openjournal v. 09/06/15
+A MULTI-EIGENBASIS APPROACH TO COVARIANCE MATRIX DENOISING FOR COSMOLOGICAL
+INFERENCE
+Wynne Turner
+Department of Astronomy, The Ohio State University, 4055 McPherson Laboratory, 140 W 18th Avenue, Columbus, OH 43210, USA
+and
+Center for Cosmology and AstroParticle Physics, The Ohio State University, 191 West Woodruff Avenue, Columbus, OH 43210, USA
+Version June 4, 2026
+Abstract
+Accurate covariance matrix estimation is crucial to cosmological analyses, enabling unbiased pa-
+rameter inference with well-calibrated uncertainties. Obtaining a reliable estimate generally requires
+far more independent samples than the dimension of the data vector, which is not always feasible.
+This challenge is especially relevant for the 3D Lyαforest analysis, which measures the Lyαauto-
+correlation and its cross-correlation with quasars in bins of comoving separation to jointly constrain
+cosmological parameters. The consequence is a very large data vector, and the data-driven covariance
+measured from sub-samples is non-invertible. The current approach applies a smoothing procedure
+to the off-diagonals of the correlation matrix to establish invertibility, but this does not fully cap-
+ture the true correlation structure. In this work, I present a novel multi-eigenbasis denoising method
+for the data-driven covariance matrix, developed in the context of the 3D Lyαforest analysis and
+conditioned on DESI DR1 mock simulations. The measured noisy covariance is first projected onto
+the eigenbasis of a mock-based reference, yielding an initial denoised estimate. A weighted residual
+correction is then constructed by projecting the noisy residual onto a second eigenbasis derived from
+a mock-trained classifier, capturing correlation structure not recovered in the initial reconstruction.
+I validate the method on mock covariances withheld from classifier training and find significant im-
+provements over the current smoothing-based approach in matrix-level reconstruction metrics and in
+the recovery of cosmological parameter posteriors when compared to those obtained from the true
+covariance measured from many mock realizations.
+Subject headings:Covariance, large-scale structure, Lyman-alpha forest
+1.INTRODUCTION
+The covariance matrix quantifies the statistical uncer-
+tainties of the data points in an analysis and their correla-
+tions. It is therefore of critical importance to large-scale
+structure surveys, which often aim to constrain cosmo-
+logical parameters to sub-percent precision. As surveys
+seek to improve their constraining power by extending
+model fits into the nonlinear regime and measuring addi-
+tional summary statistics such as cross-correlations with
+new tracers, the growing dimensionality of the data vec-
+tor makes accurate covariance estimation an increasingly
+pressing challenge. When an analytic solution is not fea-
+sible, the sample covariance can be estimated through
+several approaches.
+A common method is to divide the dataset into sub-
+samples and apply resampling techniques such as boot-
+strap or jackknife estimation. A central concern with
+this approach is that the assumption of sub-sample inde-
+pendence may be violated due to large-scale correlations
+present in the data. Additionally, it can be difficult or
+even impossible to obtain a sufficiently large number of
+sub-samples relative to the size of the data vector. Other
+approaches rely on simulated datasets, alleviating this
+concern provided a sufficiently large number of mock re-
+turner.1839@osu.edu
+alizations is available. However, a covariance matrix esti-
+mated purely from mocks requires that those mocks cap-
+ture all features present in the true data covariance and
+do not introduce a systematic bias. Further, the limited
+number of samplesNused to estimate the covariance
+relative to the data vector dimensionnintroduces noise
+that biases the inverse covariance (Hartlap et al. 2007)
+and increases inferred uncertainties (Dodelson & Schnei-
+der 2013; Taylor et al. 2013). Several works have further
+studied the propagation of this noise into cosmological
+parameter estimation (e.g., Percival et al. 2014; Taylor &
+Joachimi 2014; Sellentin & Heavens 2016; Percival et al.
+2022). However, these corrections are approximations
+that diminish in accuracy asNapproachesn. When
+N < n, the Wishart-distributed sample covariance ma-
+trix becomes singular and therefore cannot be inverted
+for use in cosmological inference.
+Several methods have been proposed in the literature
+to mitigate these concerns by “denoising” the noisy sam-
+ple covariance matrix. The linear shrinkage estimator
+(Pope & Szapudi 2008) tunes the sample covariance to-
+ward a target matrix. Nonlinear shrinkage estimators
+(e.g., Ledoit & Wolf 2012; Lam 2016; Joachimi 2017)
+adopt a more sophisticated approach, applying individ-
+ual, data-driven transformations to the eigenvalues of the
+sample covariance while retaining the sample eigenvec-
+arXiv:2606.04089v1  [astro-ph.CO]  2 Jun 2026
+
+2
+tors. See Looijmans et al. (2025) for a recent review of
+shrinkage estimators in a cosmological context. Similarly,
+Farina et al. (2026) recently proposed the application of
+rotational invariant estimators to denoise the large-scale
+structure covariance matrix. While these methods are
+very promising, in the case of a singular sample covari-
+ance matrix, (N−n) eigenvalues are identically zero and
+their associated eigenvectors are entirely uninformative.
+There have also been recent developments in using neural
+networks to denoise the sample covariance matrix (e.g.,
+de Santi & Abramo 2022), though training such models
+may be computationally prohibitive for very largen.
+Obtaining a reliable estimate of the Lyαforest covari-
+ance matrix is especially challenging. The Lyαforest
+traces the distribution of neutral hydrogen in the inter-
+galactic medium through absorption lines in quasar spec-
+tra. The 3D Lyαanalysis measures the auto-correlation
+of this absorption and its cross-correlation with quasar
+positions in bins of comoving separation along (r ∥) and
+across (r ⊥) the line of sight (e.g., Slosar et al. 2011;
+Busca et al. 2013; Kirkby et al. 2013; Slosar et al.
+2013; Font-Ribera et al. 2013, 2014; Delubac et al. 2015;
+Bautista et al. 2017; du Mas des Bourboux et al. 2017;
+de Sainte Agathe et al. 2019; Blomqvist et al. 2019;
+du Mas des Bourboux et al. 2020; Adame et al. 2025;
+DESI Collaboration et al. 2025a). These correlations
+were first measured with the Baryon Oscillation Spec-
+troscopic Survey (BOSS; Dawson et al. 2013), with co-
+variance estimation techniques ranging from an analytic
+Wick expansion (see e.g., Slosar et al. 2011; Font-Ribera
+et al. 2014; Delubac et al. 2015) to data-driven ap-
+proaches using sub-samples of comparable statistical size
+(e.g., Busca et al. 2013; Slosar et al. 2013; Delubac et al.
+2015; Bautista et al. 2017; du Mas des Bourboux et al.
+2017). Delubac et al. (2015) was the first to compute the
+covariance over the full (r ∥, r⊥) coordinate grid, making
+the matrix non-invertible withN < n. They therefore
+introduced a smoothing procedure that averages all off-
+diagonal elements of the correlation matrix sharing the
+same separations along and across the line of sight, effec-
+tively reducing it to a function of (∆r ∥,∆r ⊥) only. This
+smoothing approach has been employed in all subsequent
+Lyα3D analyses.
+Later, correlation function measurements with the
+extended-BOSS (eBOSS; Dawson et al. 2016) used sub-
+samples defined byHEALPixpixels (G´ orski et al. 2005)
+to estimate the covariance and apply the smoothing pro-
+cedure. More recently, these measurements have been
+performed with the Dark Energy Spectroscopic Instru-
+ment (DESI; DESI Collaboration et al. 2016, 2022), in-
+cluding baryon acoustic oscillation (BAO) measurements
+from Data Release 1 (DR1; Adame et al. 2025) and DR2
+(DESI Collaboration et al. 2025a), as well as a full-shape
+measurement from DR1 (Cuceu et al. 2025a). These
+analyses all use the sameHEALPix-based sub-sampling
+and smoothing of the correlation matrix described above,
+but were the first to account for the cross-covariance be-
+tween the Lyαauto- and cross-correlations, finding that
+assuming independence leads to a∼10% underestima-
+tion of the BAO uncertainties (Adame et al. 2025). While
+the long-standing smoothing procedure has been vali-
+dated, most recently in the context of BAO (Cuceu et al.
+2025b) and the Alcock-Paczy´ nski (AP) parameter from
+the full-shape correlation function (Cuceu et al. 2025a),
+the process of averaging off-diagonal elements smooths
+out large-scale correlation structure present in the mea-
+sured covariance. One potential alternative to bypass
+this limitation is to compress the data vector to obtain
+a well-conditioned sample covariance, as explored in the
+context of the Lyαforest by Gerardi et al. (2024), though
+such methods typically still require a mock-based covari-
+ance to determine the optimal compression framework.
+Compressing the data vector by performing the analy-
+sis in multipoles may offer another promising direction,
+though recent results suggest this compression leads to a
+degradation in constraining power on the BAO parame-
+ters (Kara¸ caylı et al. 2026).
+This work introduces a new framework for denoising
+the data-driven sample covariance matrix. Given a well-
+conditioned mock-based reference correlation matrix, I
+project the noisy correlation matrix onto the eigenbasis
+defined by the reference matrix. The resulting diagonal
+elements, or pseudo-eigenvalues, are used to construct
+an initial denoised estimate. A residual correction then
+adds small corrections to this reconstruction to account
+for the fact that the reference correlation matrix cannot
+be fully representative of the truth. I construct a sec-
+ond eigenbasis from multiple residual matrices computed
+from different mock suites and train a weighted distance
+classifier to classify the noisy correlation matrix. The
+resulting weights are used to down-weight mock suites
+with less similarity to the data and project the noisy
+residual onto the appropriately weighted residual eigen-
+basis. This residual reconstruction is added to the initial
+denoised matrix to produce a final denoised correlation
+matrix. I then use the measured variance of the input co-
+variance to rescale the denoised correlation matrix back
+to its covariance, preserving the statistical interpretation
+of the data.
+This paper is organized as follows: in Section 2 I de-
+scribe the mock datasets used to derive eigenbases and
+test the denoising model. I present the multi-eigenbasis
+denoising methodology in Section 3. In Section 4 I
+demonstrate the performance of the model using matrix-
+level reconstruction metrics and by sampling the poste-
+riors of cosmological parameters. Finally, I summarize
+the methodology and discuss caveats and future work in
+Section 5.
+2.SYNTHETIC DATA
+In this section I describe the synthetic (mock) data
+used to develop the denoising methodology. Section 2.1
+describes the mocks themselves, focusing on the two
+suites of DESI DR1 mocks used in this work. In Sec-
+tion 2.2 I describe the standard correlation function and
+covariance matrix estimation procedures employed in the
+DESI Lyαforest analysis.
+2.1.DESI DR1 Mocks
+In this work, I use a total of 300 synthetic realizations
+of the first year of the DESI Lyαforest survey. Below
+I describe two different suites of mocks available for the
+DR1 Lyαforest dataset: LyαCoLoRe and Saclay mocks.
+Both mock suites are built from large-scale Gaussian ran-
+dom density fields and use a log-normal transformation
+to model the Lyαforest opacity, but differ in their treat-
+ment of redshift-space distortions and the coupling be-
+
+3
+tween the quasar and Lyαforest density fields, as de-
+scribed in Sections 2.1.1 and 2.1.2. Cuceu et al. (2025b)
+found that the Saclay mocks provide a better fit to the
+data cross-correlation, while the LyαCoLoRe mocks pro-
+vide a better fit to the data auto-correlation.
+The products of theLyaCoLoRe 1 andSaclaysoftware
+packages are raw flux transmission files. Realistic quasar
+spectra are then generated byquickquasars 2, which
+multiplies the flux transmission fields by an unabsorbed
+continuum template (Herrera-Alcantar et al. 2025). This
+continuum template is produced bysimqso 3 (McGreer
+et al. 2021), a tool for simulating quasar spectra and pho-
+tometry. The continuum is modeled as a broken power-
+law and is tuned to better match the mean quasar contin-
+uum measured in eBOSS DR16 (du Mas des Bourboux
+et al. 2020) using principal component analysis. Each
+mock is designed to be representative of the DESI DR1
+Lyαforest dataset, with instrument noise, footprint, and
+quasar redshift and magnitude distributions tuned to the
+observed sample. The mocks I use in this work also con-
+tain contaminants including quasar redshift errors and
+absorption due to metals, broad absorption line (BAL)
+systems, and high column density systems (HCDs) in
+order to better match the properties of the real data.
+Herrera-Alcantar et al. (2025) provides a detailed de-
+scription of how these contaminants are incorporated. To
+match the approach used in the baseline DESI Lyαanal-
+ysis (see e.g., Adame et al. 2025; DESI Collaboration
+et al. 2025a; Cuceu et al. 2025a), I use a fitted contin-
+uum in each forest to measure the flux transmission field
+rather than the true unabsorbed continuum. Of the 300
+total mock realizations, 100 LyαCoLoRe and 50 Saclay
+mocks correspond to those used in Cuceu et al. (2025b).
+The remaining 150 were generated from the same large-
+scale density fields but with inverted random seeds for
+quasar down-sampling, resulting in only a small fraction
+of quasars in common with their paired counterparts.
+2.1.1.LyαCoLoRe Mocks
+The majority of the mocks are drawn from the
+LyαCoLoRe suite, comprising 200 realizations. These
+mocks are generated in two main stages, which are de-
+scribed in detail in Farr et al. (2020). First, theCoLoRe 4
+(Ram´ ırez-P´ erez et al. 2022) code generates a large-scale
+Gaussian random density field given an input matter
+power spectrum and places quasars in over-dense regions
+following a prescribed number density and bias. Line-
+of-sight density and velocity skewers are extracted along
+each quasar sightline. Second, theLyaCoLoRecode post-
+processes these skewers to produce realistic Lyαforest
+spectra: small-scale power is added to match the ob-
+served one-dimensional forest power spectrum, a log-
+normal transformation converts the Gaussian field to a
+physical density field, and the fluctuating Gunn-Peterson
+approximation (FGPA) is used to compute the Lyαop-
+tical depthτ. Redshift-space distortions are applied by
+shifting the optical depth field according to the line-of-
+sight peculiar velocities computed from the gradient of
+1 https://github.com/igmhub/LyaCoLoRe
+2 https://github.com/desihub/desisim/blob/main/py/desisim/
+scripts/quickquasars.py
+3 https://github.com/imcgreer/simqso
+4 https://github.com/damonge/CoLoRe
+the Newtonian gravitational potential, and finally the
+transmitted flux fraction is computed asF=e −τ. The
+final transmission files are used as input toquickquasars
+to generate realistic quasar spectra, as described above.
+2.1.2.Saclay Mocks
+The remaining 100 mock realizations are drawn from
+the Saclay suite, detailed in Etourneau et al. (2024).
+Like the LyαCoLoRe mocks, these begin from Gaussian
+random fields and apply a log-normal transformation to-
+gether with the FGPA to produce Lyαforest transmis-
+sion skewers. However, the Saclay mocks differ from
+LyαCoLoRe in two key aspects. Rather than using a
+single matter density field for both the Lyαforest and
+quasar positions, the Saclay pipeline generates two inde-
+pendent fields with different input power spectra, each
+calibrated so that the resulting log-normal fields have
+the correct linear power spectrum for their respective
+tracer. Additionally, redshift-space distortions are ap-
+plied via the velocity gradient along each line of sight
+using a modified form of the FGPA, rather than by shift-
+ing the optical depth field based on the Newtonian grav-
+itational potential. Similar to the LyαCoLoRe case de-
+scribed above, these raw transmission files are then used
+as input toquickquasars.
+2.2.Correlation Function and Covariance Estimation
+In the Lyαforest 3D analysis, the auto-correlation of
+the forest flux transmission field and its cross-correlation
+with quasars are measured in bins of comoving separation
+along and across the line-of-sight (e.g., du Mas des Bour-
+boux et al. 2020; Adame et al. 2025; DESI Collaboration
+et al. 2025a; Cuceu et al. 2025a). The auto-correlation
+is symmetric along the line-of-sight and therefore mea-
+sured from separations of 0< r ∥,⊥ <200h −1 Mpc in
+each direction. The cross-correlation is not symmetric
+along the line-of-sight since the Lyαforest pixel may
+lie either in front of or behind its neighboring quasar.
+The cross-correlation is therefore measured over−200<
+r∥ <200h −1 Mpc along the line of sight and 0< r ⊥ <
+200h −1 Mpc in the transverse direction. With a typical
+bin size of ∆r= 4h −1 Mpc, there are 50×50 = 2500 bins
+in the auto-correlation and 50×100 = 5000 bins in the
+cross-correlation. In the baseline DESI analysis (Adame
+et al. 2025; DESI Collaboration et al. 2025a; Cuceu et al.
+2025a), separate auto- and cross-correlation functions are
+measured using the Lyαabsorption in the Lyα(orA) re-
+gion (1040−1205 ˚A in the rest frame) as well as Lyαab-
+sorption in the Lyβ(orB) region (920−1020 ˚A in the rest
+frame), yielding four correlation function measurements
+in total. In this work I only use theAregion, both for
+simplicity and to limit the size of the data vector given
+the limited number of available DR1 mock realizations.
+For all cosmological inference, I fit the correlation func-
+tions over isotropic scale ranges of 30< r <180h −1 Mpc
+for the auto-correlation and 40< r <180h −1 Mpc for
+the cross-correlation.
+Thepiccapackage is the DESI Lyαforest analysis
+pipeline software, which fits a continuum to each forest,
+computes the flux transmission field, measures correla-
+tion functions and power spectra, and computes covari-
+ance matrices (du Mas des Bourboux et al. 2020). The
+covariance matrix is estimated via sub-sampling of corre-
+
+4
+lation function measurementsξacross∼1000HEALPix
+pixels (G´ orski et al. 2005) withNSIDE = 16. For two
+binsMandNof the correlation function, the covariance
+matrix is
+CM N = 1
+WM WN
+X
+ss
+W ss
+M W ss
+N [ξss
+M ξss
+N −ξ M ξN],(1)
+wheressdenotes a sub-sample,W ss
+M andξ ss
+M are its
+summed weight and correlation function, respectively,
+andW M =P
+ss W ss
+M (du Mas des Bourboux et al. 2020).
+Small correlations between sub-samples are ignored in
+this expression. OneNSIDE = 16 HEALPixpixel sub-
+tends an area of∼(250h −1Mpc)2 at the effective red-
+shift ofz eff = 2.33, so the assumption of sub-sample in-
+dependence for correlations measured up to separations
+ofr <200h −1 Mpc is justified, especially considering
+that the current continuum fitting approach suppresses
+power on large scales (see e.g., Busca et al. 2025; Turner
+et al. 2026). In addition to computing the covariance ma-
+trix for the auto- and cross-correlation functions,picca
+also computes the cross-covariance between these statis-
+tics. When using only theAregion as in this work,
+this yields a 7500×7500 covariance matrix, for which
+a reliable noiseless estimate can be obtained by stacking
+many mocks. For the LyαCoLoRe suite I stack all 200
+mocks (∼200,000 sub-samples), and for the Saclay suite
+I stack all 100 mocks (∼100,000 sub-samples). Even in
+the Saclay case, the ratio of the number of samplesN
+to the size of the unmasked data vectornisN/n >10
+(rising toN/n >20 when the data vector is masked to
+the standard fitting range), which should be sufficient for
+determining the true covariance. The leftmost panel of
+Figure 1 shows the true correlation matrix for the Saclay
+mock suite.
+The standard estimators of the correlation function
+and its associated covariance used in the DESI Lyαfor-
+est analysis are sub-optimal. This is because all pixels in
+the forest are assumed to be independent, each receiving
+independent pixel weights during correlation function es-
+timation. In contrast, an optimal estimator would take
+into account the full covariance of all pixels in the sur-
+vey, including the covariance between pixels in the same
+forest and between different forests (e.g., Slosar et al.
+2013; Ram´ ırez-P´ erez et al. 2024). Such an optimal esti-
+mator would be computationally prohibitive for a survey
+of this scale. Instead, Ram´ ırez-P´ erez et al. (2024) intro-
+duced an improved weighting scheme calibrated on mock
+datasets that up-weights the large-scale structure contri-
+bution to each pixel’s variance and improves the preci-
+sion of the correlation function measurement. The sub-
+sampling procedure to estimate the covariance matrix is
+sub-optimal as well, as an optimal estimator would com-
+pute the mock-to-mock covariance without reliance on
+sub-samples, requiring either an infeasibly large number
+of mocks or compression of the data vector (e.g., Philcox
+et al. 2021; Gerardi et al. 2024; Kara¸ caylı et al. 2026).
+The current estimators have been validated in the con-
+text of the standard Lyαforest analysis (e.g., Cuceu et al.
+2025b; Casas et al. 2025). The development of a more
+optimal estimator of the correlation function and its co-
+variance are important future directions, but are beyond
+the scope of this work. The goal of this work is instead
+to develop an empirically-motivated methodology to de-
+noise the data-driven covariance matrix, conditioned on
+mocks.
+While the Lyαcovariance can be well-measured from
+a stack of several mocks, estimating it from data alone
+is considerably more difficult. In practice, the covariance
+matrix of the data can only be measured through sub-
+sampling, resulting in a very noisy estimate. The first
+figure in the upper panel of Figure 1 illustrates this by
+showing the correlation matrix estimated from a single
+Saclay mock. In this noisy regime,N << n, rendering
+the sample covariance non-invertible. The standard rem-
+edy is to apply a smoothing algorithm to the off-diagonal
+elements of the correlation matrixR, defined by
+RM N ≡ CM N√CM MCN N
+,(2)
+whereC M M (CN N) are the variances in binsM(N).
+During smoothing, all off-diagonal elements of the corre-
+lation matrix with equal separations in|r ∥(M)−r ∥(N)|
+and|r ⊥(M)−r ⊥(N)|are replaced with their mean (see
+e.g., Delubac et al. 2015; Bautista et al. 2017; du Mas des
+Bourboux et al. 2020; Cuceu et al. 2025b; Adame et al.
+2025; DESI Collaboration et al. 2025a). This procedure
+has been validated for BAO and AP parameter recovery
+in the standard Lyαforest analysis (Cuceu et al. 2023;
+Cuceu et al. 2025b,a), though recent work suggests that
+it may result in slightly underestimated uncertainties on
+the AP scale parameter (Turner et al. 2026). Beyond
+this, the smoothing procedure imposes a strong struc-
+tural assumption on the covariance, which causes it to
+erase genuine large-scale correlation structure. The sec-
+ond panel of the top row in Figure 1 shows the smoothed
+version of the noisy matrix to its left. Compared to
+the truth, the smoothed matrix clearly suppresses cer-
+tain features (e.g., due to cosmic variance). This moti-
+vates the development of a more principled approach to
+denoise the non-invertible sample covariance matrix.
+3.METHODOLOGY
+In this section I present the denoising methodology.
+The methodology is reliant on access to multiple mock
+suites from which noiseless (“true”) covariance matrices
+can be measured by stacking many sub-samples across
+realizations. In brief, the steps are as follows:
+1. Derive a reference correlation matrix from mocks
+and compute its eigenvectors.
+2. For any given noisy input covariance matrix,
+project its normalized correlation matrix onto the
+reference eigenbasis.
+3. Use the pseudo-eigenvalues (diagonal elements of
+the projected matrix) to reconstruct an initial de-
+noised estimate in its original basis (Sec. 3.1).
+4. Classify the noisy correlation matrix by its pseudo-
+eigenvalues to determine a weighted residual refer-
+ence eigenbasis (Sec. 3.2).
+5. Project the noisy residual onto this new eigenbasis,
+and repeat step 3 above to obtain a denoised resid-
+ual correction. Add this to the initial estimate to
+produce the final denoised correlation matrix, then
+
+5
+0 2500 5000 7500
+0
+2500
+5000
+7500
+Stacked (truth)
+0
+2500
+5000
+7500 Correlation
+Noisy
+ Smoothed (current approach)
+ Denoised (initial)
+ Denoised (final)
+0 2500 5000 7500
+0
+2500
+5000
+7500 Residual
+Truth Noisy
+0 2500 5000 7500
+Truth Smoothed
+0 2500 5000 7500
+Truth Denoised (initial)
+0 2500 5000 7500
+Truth Denoised (final)
+-0.010
+-0.005
+0.000
+0.005
+0.010
+Fig. 1.—Several correlation and residual matrices for visualization purposes. The correlation matrix on the left is computed from a
+stack of∼100,000 correlation function measurements from Saclay mocks and is taken as the “truth” for this suite.Top row, left to
+right:the correlation matrix measured from∼1000 sub-samples of a single mock (representative of a survey measurement); the smoothed
+version produced by the current DESI Lyαforest analysis procedure; the initial denoised estimate from this work; and the final denoised
+estimate from this work.Bottom row:residuals of each matrix with respect to the truth. Notably, the current smoothing approach does
+not capture all the structure in the correlation matrix, while the final denoised approach presented in this work reconstructs these features
+more effectively. In all panels, axes correspond to bins in (r ∥, r⊥) separation.
+rescale the variance to match that of the input co-
+variance.
+I elaborate on each step in the following subsections.
+3.1.Initial Reconstruction
+The first stage of the denoising algorithm begins by
+constructing a reference correlation matrix from mocks.
+I use 100 Saclay and 200 LyαCoLoRe mocks, each con-
+taining∼1000HEALPixpixel sub-samples, as these rep-
+resent the full set of available DESI DR1 Lyαmocks.
+For each mock suite, I compute the noiseless (true) co-
+variance matrix from the stack ofNmocks ×NHEALPix cor-
+relation functions and rescale it to the single-mock level
+by multiplying by a factor ofN mocks. I then take the
+unweighted mean of these two true correlation matrices
+as the reference matrix.
+Decomposing the reference correlation matrix gives
+Rref =VΛV T ,(3)
+whereVis an orthogonal matrix of eigenvectors and Λ
+is a diagonal matrix containing the eigenvalues ofR ref.
+The noisy correlation matrix can then be projected onto
+the basis spanned byV,
+˜R=V T RnoisyV.(4)
+The projected matrix ˜Ris approximately diagonal: the
+pseudo-eigenvalues ˜λk along its diagonal represent the
+contribution of each reference eigenvector to the noisy
+matrix, while the off-diagonal elements consist primar-
+ily of noise. I verify this assumption by projecting the
+true correlation matrices from each mock suite,R s,truth,
+and confirming that the result is well approximated by a
+diagonal matrix (see Appendix A).
+I reconstruct an initial denoised estimate in the original
+basis, ˆRinitial, by retaining only the pseudo-eigenvalues
+when rotating back from the reference basis:
+ˆRinitial =Vdiag( ˜λ1, . . . ,˜λn)V T .(5)
+3.2.Residual Correction
+3.2.1.Covariance Classification
+The off-diagonal elements of the projected matrix in
+Equation 4 consist of a combination of noise and a
+smaller signal component arising from the fact that the
+eigenbasis of the reference correlation matrix (Eq. 3) does
+not fully capture the signal in a different noisy correla-
+tion matrix. This can be understood by noting that the
+residual between the true correlation matrix of any mock
+suitesand its initial reconstruction,
+∆s =R s
+truth − ˆRinitial,s
+truth ,(6)
+retains a small amount of structure not captured by the
+initial reconstruction. To correct for this, I perform a
+second projection and reconstruction using an eigenba-
+sis derived from a weighted mean of noiseless residuals
+across mock suites, where the weights are determined by
+classifying the noisy input matrix.
+Out of 300 noisy correlation matrices available, I set
+aside 20% from each mock suite (20 for Saclay, 40 for
+LyαCoLoRe) for testing purposes and use the remaining
+80% to fit a classifier model. The classifier operates on
+the pseudo-eigenvalues of the noisy input matrix, com-
+puting its distance to each mock suite,d s, as
+ds =
+vuut
+nX
+k=1
+wk
+ ˜λk −µ s,k
+σs,k
+!2
+,(7)
+where ˜λk is the vector of pseudo-eigenvalues withk
+modes, andµ s,k andσ s,k are the mean and standard de-
+viation of pseudo-eigenvalues in the training set for suite
+sat modek, respectively. The distance to each suite also
+depends on feature weightsw k, a vector over eigenmode
+indexkcomputed from the training set as
+wk = rk |¯˜λk|
+Pn
+k′=1 rk′ |¯˜λk′|
+,(8)
+
+6
+where
+rk =
+σ2
+between,k
+σ2
+within,k
+(9)
+is the between-to-within suite variance ratio for mode
+k. The weight of each modekis therefore determined
+by both the mean magnitude of its pseudo-eigenvalue
+among the training set,| ¯˜λk|, and the between-suite to
+within-suite variance ratio for that mode,r k. This means
+that modes where mock suites can be more easily dis-
+tinguished are assigned more weight during classifica-
+tion. Figure 2 shows the pseudo-eigenvalue distributions
+for each suite in the training set along with the feature
+weights. Also shown are the pseudo-eigenvalues of the
+DESI DR1 Lyαcovariance matrix. The data pseudo-
+eigenvalues fall into the distributions spanned by the
+mocks across most modes, demonstrating the applica-
+bility of the reference eigenbasis to real data.
+Converting the distancesd s (Eq. 7) to per-suite weights
+via inverse distance-squared weighting gives
+ps = d−2
+s
+NsX
+s′=1
+d−2
+s′
+,(10)
+whereN s = 2 is the number of mock suites. Whenp s is
+converted to a hard classification, the classification model
+achieves 100% accuracy on both the training and testing
+sets. The weighted mean reference residual matrix is
+then
+¯∆ =
+NsX
+s=1
+ps∆s,(11)
+where ∆ s is the true residual matrix for mock suites
+(Eq. 6) and PNs
+s=1 ps = 1.
+3.2.2.Weighted Residual Reconstruction
+To implement the residual correction, I first eigen-
+decompose the reference residual matrix computed in
+Eq. 11,
+¯∆ =UΣU T ,(12)
+whereUis an orthogonal matrix containing the eigenvec-
+tors of ¯∆ and Σ is a diagonal matrix of its eigenvalues. I
+compute the noisy residual and project it onto the eigen-
+basis spanned byU,
+∆noisy =R noisy − ˆRinitial, ˜∆ =U T ∆noisy U.(13)
+Following the same logic as in Section 3.1, I assume the
+pseudo-eigenvalues ˜σk of the projected residual capture
+the missing signal, and reconstruct a denoised residual
+estimate as
+ˆ∆ =Udiag(˜σ1, . . . ,˜σn)U T .(14)
+Adding this to the initial reconstruction (Eq. 5) gives the
+final denoised correlation matrix,
+ˆRfinal = ˆRinitial + ˆ∆.(15)
+Finally, I convert the denoised correlation matrix back
+to a covariance matrix, scaling by the input variance.
+This is an important step as the variance estimated from
+mock realizations is known to underestimate the variance
+computed from the data (e.g., Kara¸ caylı et al. 2026).
+4.RESULTS
+In this section I present the main results. In Section 4.1
+I evaluate the model’s performance using several matrix-
+level reconstruction metrics that quantify the quality of
+the denoised covariance relative to the noiseless covari-
+ance estimated from a stack of mocks, which is taken as
+the truth. In Section 4.2 I compare the effects of the de-
+noised covariance, the true covariance, and the current
+smoothing approach on cosmological parameter estima-
+tion.
+4.1.Covariance Reconstruction Metrics
+I assess the reconstruction quality of the covariance
+matrix using three metrics. The first is the Frobenius
+norm of the correlation matrix relative to its truth,
+∥Rtruth − ˆR∥F =
+sX
+i,j
+
+Rij,truth − ˆRij
+2
+,(16)
+whereR truth is the true noiseless correlation matrix for
+the mock suite in question and ˆRis an estimate of the
+correlation matrix. Similarly, I also compute the mean
+squared error (MSE) between the correlation matrix and
+its truth as
+MSE(Rtruth, ˆR) = 1
+n2
+X
+i,j
+
+Rij,truth − ˆRij
+2
+,(17)
+wheren= 7500 is the dimension of the matrix.
+Figure 3 shows the progression of the Frobenius norm
+and MSE on the testing set of 60 mock correlation ma-
+trices at each stage of the pipeline: the original noisy
+matrix, the initial denoised estimate, and the final de-
+noised matrix. The smoothed correlation matrix is also
+included for comparison. There is a clear improvement in
+the metrics. The greatest gain comes from the initial re-
+construction stage, and the final denoised correlation ma-
+trices achieve a median Frobenius norm (MSE) roughly
+a factor of∼30 (∼1000) smaller than the original noisy
+matrices.
+Lastly, I evaluate the Kullback-Leibler (KL; Kull-
+back & Leibler 1951) divergenceD KL between two zero-
+mean multivariate Gaussian distributions with covari-
+ancesC truth and ˆC, normalized by the matrix dimension,
+DKL(Ctruth∥ ˆC)
+n = 1
+2
+"
+1
+ntr
+
+ˆC −1Ctruth
+
+−1
+− 1
+n ln det
+
+ˆC −1Ctruth
+#
+,
+(18)
+This quantity measures the loss of information when the
+true covarianceC truth is approximated by ˆC: it is zero
+when ˆC=C truth and increases monotonically as ˆCde-
+parts from the truth. Dividing bynmakes the metric
+comparable across different matrix dimensions. Because
+the initial noisy covariance is non-invertible, its KL di-
+vergence cannot be evaluated and I instead focus on the
+initial and final denoised covariances.
+Figure 4 shows theD KL/ndistributions on the mock
+testing set for the initial and final denoised covariance
+relative to their truth. Two denoised covariances (∼3%
+of the testing set) are not positive definite and excluded
+
+7
+100
+101
+k
+Ly CoLoRe mocks
+Saclay mocks
+DESI DR1
+100 101 102 103
+k
+10 8
+10 6
+10 4
+10 2
+wk
+Fig. 2.—Pseudo-eigenvalue spectra and classifier feature weights.Top:pseudo-eigenvalues ˜λk as a function of eigenmode indexk. Solid
+lines show the median and shaded regions show the 16th–84th and 2.5th–97.5th percentile intervals across the classifier training set for
+the LyαCoLoRe (blue) and Saclay (orange) mocks. The pseudo-eigenvalues of the DESI DR1 Lyαforest covariance (gray dashed line) are
+consistent with the mock distributions, validating the applicability of the reference eigenbasis to real data.Bottom:feature weightsw k
+(Eq. 8) used in the classifier model. Weights are largest at lowk, where the pseudo-eigenvalues are largest in magnitude and the between-
+to-within suite variance ratior k (Eq. 9) is most significant, and remain non-negligible at intermediate and largekwherer k continues to
+provide discriminating power. Classification of the DESI DR1 covariance provides mock suite weights (Eq. 10) of (p Saclay, pLyαCoLoRe)≈
+(0.32,0.68).
+from the sample. The medianD KL/ndecreases by a
+factor of∼4.2 from the initial to the final denoised co-
+variance, consistent with the improvements seen in the
+Frobenius norm and MSE.
+4.2.Cosmological Parameters
+I perform cosmological inference with the denoised
+covariances and compare the results against those ob-
+tained with the true covariance and current smoothing
+approach. This is done in the context of a full-shape
+analysis (e.g., Cuceu et al. 2021; Cuceu et al. 2025a),
+which extracts cosmological information from the full
+shape of the Lyαforest two-point correlation functions
+rather than from the BAO peak position alone. For
+the Lyαforest, a full-shape approach more than doubles
+the constraining power on Alcock-Paczy´ nski relative to
+a BAO-only analysis (Cuceu et al. 2025a).
+Modeling choices for the DESI DR1 mock and data
+correlations follow those of Cuceu et al. (2025a), with
+two main differences as mentioned in Section 2.2: I re-
+strict the analysis to theAregion only (typically span-
+ning 1040−1205 ˚A in the quasar rest frame) 5, and
+fit the auto-correlation over an isotropic scale range of
+30< r <180h −1 Mpc. For a detailed description of all
+other modeling choices and the fitting procedures, see
+Cuceu et al. (2025a).
+In the full-shape analysis, cosmological information
+comes from the BAO scale, the Alcock-Paczy´ nski (AP;
+Alcock & Paczynski 1979) effect, and redshift space
+5 While 1040−1205 ˚A is the typical rest-frame wavelength range
+used for theAregion, the fits in this work use the range 1040−
+1200 ˚A due to mock analysis availability.
+distortions (RSD). Following Cuceu et al. (2025a), the
+isotropic BAO parameter is defined as
+αp(zeff) =
+s
+DM(zeff)DH(zeff)/r2
+d
+[DM(zeff)DH(zeff)/r2
+d]fid
+(19)
+where thepsubscript denotes the BAO peak,D M(z) is
+the transverse comoving distance,D H(z) =c/H(z) with
+the speed of lightcand Hubble parameterH(z),r d is
+the acoustic scale, andz eff = 2.33 is the effective red-
+shift of the DESI DR1 Lyαdataset. The fid subscript
+denotes quantities computed assuming the fiducial cos-
+mology, which is given by Planck Collaboration et al.
+(2016) when performing the analysis on DR1 mocks and
+Planck Collaboration et al. (2020) when performing it on
+the data. One can also measure the isotropic scale of the
+broadband,α s, where thessubscript denotes the smooth
+component. However, this component is more difficult to
+model cleanly and is typically marginalized over (Cuceu
+et al. 2021); whether it traces cosmology or reflects a
+combination of cosmology and systematic effects such as
+continuum fitting distortions remains an open question
+(see e.g., Busca et al. 2025; Turner et al. 2026).
+The AP scale parameter from the full shape, including
+contributions from both the BAO scale and the broad-
+band, is parameterized as
+ϕf(zeff) = DM(zeff)H(zeff)
+[DM(zeff)H(zeff)]fid
+.(20)
+The full-shape analysis is also sensitive tof σ 8, the prod-
+uct of the cosmic growth rate and the amplitude of mat-
+ter fluctuations in spheres of 8h −1 Mpc. This informa-
+tion comes from the RSD signal recoverable from the
+
+8
+0.5 1.0 1.5 2.0
+×10 5
+10 15 20 25 30 35
+Denoised (final)
+Denoised (initial)
+Smoothed (current approach)
+Noisy
+1.85 1.90 1.95
+×10 3
+325 330
+Frobenius norm
+MSE
+Fig. 3.—The Frobenius norm (Equation 16,lower axis) and MSE (Equation 17,upper axis) evaluated on the mock testing set at each
+pipeline stage relative to the truth: the measured noisy correlation matrix (gray), the initial denoised estimate (purple), and the final
+denoised estimate (blue). The smoothed matrix from the current approach (orange) is also shown for comparison. Points show the median
+and error bars span the 16th–84th percentile. The Frobenius norm (MSE) drops by a factor of∼15 (∼230) from the noisy matrix to the
+initial denoised estimate, and by an additional factor of∼2 (∼4) from the initial to the final denoised result. The final denoised estimates
+show larger dispersion than the initial ones, reflecting the added variability from the residual correction stage.
+0.0000 0.0025 0.0050 0.0075 0.0100 0.0125 0.0150 0.0175
+DKL/n
+0
+5
+10
+15
+20
+25
+30
+35
+40
+45Count
+0.016
+0.0038
+Denoised (initial)
+Denoised (final)
+Fig. 4.—Distributions of the normalized KL divergenceD KL/n
+(Eq. 18) for the initial (purple unfilled) and final (blue filled) de-
+noised covariance matrices in the mock testing set relative to their
+truth. Vertical dashed lines indicate their respective medians. The
+medianD KL/ndrops by a factor of∼4.2 when progressing from
+the initial to final denoised covariances.
+joint auto- and cross-correlation analysis, which is de-
+scribed in detail in Cuceu et al. (2025a).
+I perform cosmological inference usingVega 6 with the
+full shape of the Lyαauto- and cross-correlation func-
+tions. In brief, a template correlation function built
+from the fiducial cosmology is fit to the measured corre-
+lations using the full covariance matrix including cross-
+covariance. For all mocks in the testing set, the max-
+imum likelihood solution is found usingiminuitand
+assuming Gaussian posteriors. I perform these fits us-
+ing the true covariance matrix, the smoothed covariance
+used in the current approach, the final denoised covari-
+ance, and a diagonal covariance for a simple comparison.
+Additionally, for one mock in the testing set and for the
+6 https://github.com/andreicuceu/vega
+DESI DR1 Lyαdataset, I sample the full posteriors us-
+ing thePolyChordnested sampler. For comprehensive
+details on the fitting process including nuisance parame-
+ters that are marginalized over, see Cuceu et al. (2025a).
+Figure 5 shows the parameter bias distributions com-
+puted from fit results on the mock testing set, normal-
+ized by the uncertainty inferred with the true covariance.
+I find that using a diagonal covariance results in sub-
+stantial scatter around zero for all parameters, as ex-
+pected from the loss of information when off-diagonal
+correlations are ignored. Both the current smoothing
+approach and the denoised covariance yield distributions
+centered near zero, indicating no significant systematic
+bias in parameter recovery for either method. The de-
+noised covariance consistently produces narrower distri-
+butions than the smoothing approach, indicating more
+consistent parameter recovery across mocks. A narrower
+distribution here is a favorable result, reflecting smaller
+mock-to-mock scatter in the recovered parameters rela-
+tive toσ truth. Median and 16th-84th percentile ranges
+for each bias distribution are reported in Table 1.
+To assess uncertainty calibration, Figure 6 shows the
+uncertainty ratio distributionsσ method/σtruth across the
+mock testing set for each covariance method. The diago-
+nal covariance yields severely underestimated uncertain-
+ties for all parameters. Both the smoothing-based and
+denoised covariances produce distributions centered near
+unity, indicating well-calibrated uncertainties on average.
+The denoised covariance yields a significantly narrower
+distribution of ratios more tightly clustered around one,
+indicating more consistent uncertainty estimation across
+mocks relative to the smoothing approach. Median val-
+ues and percentile regions are listed in Table 1.
+In Figure 7 I show the sampled posteriors for one
+Saclay mock in the classifier testing set. I include re-
+sults using the true, smoothing-based, and the final de-
+noised covariance, all of which are shown in normalized
+correlation matrix form in Figure 1. Here the isotropic
+BAO and AP scale parameters are converted into cos-
+
+9
+1.5
+ 1.0
+ 0.5
+ 0.0 0.5 1.0
+0
+5
+10
+15
+20
+25
+p
+Diagonal covariance
+Smoothed (current approach)
+Denoised (this work)
+2
+ 1
+ 0 1 2
+0
+5
+10
+15
+20
+25
+f
+1
+ 0 1
+0.0
+2.5
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+s
+1.0
+ 0.5
+ 0.0 0.5 1.0
+0
+2
+4
+6
+8
+10
+12
+f 8
+( method truth)/ truth
+Count
+Fig. 5.—Normalized parameter bias distributions (µ method −µ truth)/σtruth for a selection of parameters:α p (isotropic BAO scale
+parameter),ϕ f (full-shape AP scale parameter),α s (isotropic broadband scale parameter), andf σ 8. Distributions are computed from
+maximum likelihood fits on the mock testing set, whereσ truth is the uncertainty inferred from the fit using the true covariance andµ
+is the mean. A value of zero (vertical dashed line) indicates no bias relative to the true covariance fit. I show results using the current
+smoothing-based covariance (orange), the final denoised covariance (blue filled), and a diagonal covariance (gray filled) for comparison. The
+denoised covariance produces the narrowest distributions, indicating the most consistent parameter recovery across mocks. No significant
+systematic bias is found for either the smoothed or denoised covariance. Median and percentile regions for each distribution are reported
+in Table 1.
+Denoised (this work) Smoothed (current approach) Diagonal covariance
+Parameter Bias Uncertainty Ratio Bias Uncertainty Ratio Bias Uncertainty Ratio
+αp −0.018+0.092
+−0.081 0.989+0.011
+−0.012 −0.013+0.289
+−0.256 1.016+0.026
+−0.027 0.104+0.630
+−0.748 0.634+0.064
+−0.036
+ϕf 0.002+0.129
+−0.112 0.986+0.014
+−0.010 −0.003+0.303
+−0.390 0.984+0.027
+−0.034 0.049+0.873
+−0.848 0.634+0.068
+−0.043
+αs −0.040+0.145
+−0.109 0.990+0.018
+−0.014 0.041+0.401
+−0.287 0.974+0.040
+−0.039 −0.132+0.649
+−0.772 0.613+0.073
+−0.053
+f σ8 0.030+0.126
+−0.122 0.992+0.015
+−0.014 0.164+0.333
+−0.296 1.009+0.033
+−0.029 0.321+0.513
+−0.573 0.738+0.082
+−0.042
+TABLE 1
+Median and 68% limits of parameter bias (Fig. 5) and uncertainty ratio (Fig. 6) distributions for different covariance
+methods across the mock testing set.
+mological distance quantities via Equations 19 and 20.
+Across all parameters, there is excellent agreement be-
+tween the true covariance and denoised covariance re-
+sults. The smoothed covariance also produces results in
+agreement for this mock.
+Finally, Figure 8 shows the posteriors for the DESI
+DR1 Lyαdataset using the smoothed versus denoised
+covariance. The smoothed result reproduces the DESI
+DR1 full-shape analysis of Cuceu et al. (2025a) up to
+the analysis differences noted earlier in this section, re-
+sulting in larger overall uncertainties. Results for the
+BAO and AP parameters using the denoised covariance
+are in excellent agreement with previous results. There
+is a∼0.5σshift inf σ 8, though this parameter was not
+shown to be unbiased in the validation analysis on mocks
+of Cuceu et al. (2025a).
+5.SUMMARY AND DISCUSSION
+In this work, I developed a multi-eigenbasis approach
+for denoising data-driven covariance matrices condi-
+tioned on mock datasets, using the LyαCoLoRe and
+Saclay mock suites described in Section 2.1. The method
+requires a noiseless mock-based reference covariance ma-
+trix that reasonably captures the data covariance. An
+initial denoised estimate is obtained by projecting the
+noisy covariance onto the eigenbasis of the reference ma-
+trix and reconstructing it using the resulting pseudo-
+eigenvalues. This estimate is then refined through a
+
+10
+0.6 0.7 0.8 0.9 1.0 1.1
+0
+5
+10
+15
+20
+25
+30
+35
+p
+Diagonal covariance
+Smoothed (current approach)
+Denoised (this work)
+0.6 0.7 0.8 0.9 1.0 1.1
+0
+5
+10
+15
+20
+25
+f
+0.5 0.6 0.7 0.8 0.9 1.0
+0
+5
+10
+15
+20
+25
+s
+0.7 0.8 0.9 1.0 1.1 1.2
+0
+5
+10
+15
+20
+25
+f 8
+method/ truth
+Count
+Fig. 6.—Uncertainty ratio distributionsσ method/σtruth for the same parameters and covariance methods as in Fig. 5, computed from
+fits on the mock testing set. A value of unity (vertical dashed line) indicates perfect agreement with the uncertainty inferred from the true
+covariance fit. The diagonal covariance severely underestimates uncertainties for all parameters shown, while both the smoothing-based
+(orange) and denoised (blue filled) covariances yield median ratios near unity. The denoised covariance produces a significantly narrower
+distribution, indicating more consistent uncertainty recovery across mocks. Median and percentile ranges for each distribution are reported
+in Table 1.
+weighted residual correction, where the weights are deter-
+mined by classifying the noisy covariance against at least
+two available mock suites. I demonstrated that the ini-
+tial reconstruction alone already outperforms the current
+smoothing-based approach used in the DESI 3D Lyαfor-
+est analysis. While developed in the context of this anal-
+ysis, the methodology is general and could be applied in
+other contexts, especially where the data vector is very
+large or the sample covariance is non-invertible.
+In the initial reconstruction stage, a noisy correlation
+matrix is projected onto the reference eigenbasis; the
+resulting pseudo-eigenvalues encode most of the signal
+while noise is redistributed into the off-diagonal elements
+of the projected matrix. These pseudo-eigenvalues serve
+two purposes: they are used both to construct an ini-
+tial denoised estimate and to classify the noisy covari-
+ance against the available mock suites. The classifier is a
+weighted distance model trained on 80% of the available
+mocks, with the remaining 20% reserved for testing pur-
+poses. It assigns per-suite weights by converting inverse-
+squared distances in pseudo-eigenvalue space, which are
+then used to form a weighted mean reference residual
+matrix. The noisy residual is projected onto the eigen-
+basis of this weighted reference residual, and the pseudo-
+eigenvalues of the projection are used to reconstruct a
+denoised residual estimate. Adding this residual correc-
+tion to the initial reconstruction yields the final denoised
+correlation matrix, which is then rescaled by the mea-
+sured variance to produce a denoised covariance matrix.
+I evaluated the performance of the denoising method
+using matrix-level reconstruction metrics and Lyαfull-
+shape cosmological fits on the mock testing set withheld
+from the classifier training. I compared results obtained
+with the denoised covariance against those from the true
+covariance and the current smoothing approach. The
+method achieves significant improvements in all matrix-
+level metrics relative to the current approach. Cosmolog-
+ical parameter values and uncertainties recovered using
+the denoised covariance are consistent with those from
+the true covariance, and show substantially more con-
+sistent mock-to-mock recovery than the smoothing ap-
+proach. I also applied the denoised covariance to the
+DESI DR1 Lyαdataset and found consistent cosmologi-
+cal results compared to the current smoothed covariance.
+The only notable discrepancy is a∼0.5σshift inf σ 8;
+however, this parameter has not been demonstrated to
+be unbiased in the Lyαfull-shape analysis (Cuceu et al.
+2025a) and the shift should therefore be interpreted with
+caution. Finally, I demonstrate that the performance of
+the denoising approach is not sensitive to the choice of
+initial reference matrix by repeating the analysis with a
+LyαCoLoRe-only reference matrix in Appendix A.
+The central assumption underlying this work is that
+the important features of the data covariance matrix are
+
+11
+330 340 350 360 370
+DMDH/r2
+d
+0.2
+0.3
+0.4
+f 8
+4.3
+4.4
+4.5
+4.6
+4.7
+4.8
+DM/DH
+4.3 4.4 4.5 4.6 4.7 4.8
+DM/DH
+0.2 0.3 0.4
+f 8
+Saclay mock: Stacked (truth)
+Saclay mock: Smoothed (current approach)
+Saclay mock: Denoised (this work)
+Fig. 7.—Posteriors for a full-shape analysis on a Saclay mock in the testing set sampled withPolyChord. I compare results using the
+true covariance measured from a stack of 100 Saclay mocks with∼1000 sub-samples per mock (black contours), the smoothed covariance
+used in the current approach (orange dashed contours), and the final denoised covariance from this work (blue filled contours). Cross-hairs
+indicate the fiducial values used to generate the mock, and all covariance methods recover the fiducial cosmology to within 2σ. The denoised
+result shows excellent agreement with that of the true covariance.
+represented in the mock covariances. I showed that the
+pseudo-eigenvalues of the data covariance are consistent
+with the distributions from mocks (Fig. 2), which ad-
+dresses this assumption, but a more comprehensive com-
+parison of mock and data covariances may be warranted
+in future work. This work is also limited by access to
+only two mock suites, namely the LyαCoLoRe and Saclay
+mocks. The inclusion of additional and more realistic
+mock suites in future work should help improve the per-
+formance of the denoising method and its applicability
+to real data, as it will provide greater flexibility to the
+classification model and potentially capture correlation
+features not represented by the two suites used in this
+work.
+An important caveat is that while 20% of the mock co-
+variances are withheld from the classifier model training
+set and reserved for testing purposes, the underlying true
+covariance of these test-set mocks are still represented in
+the reference correlation and residual matrices. A more
+stringent test would withhold an entire mock suite from
+all reference matrices and the classifier, benchmarking
+denoiser performance on a suite that played no role in
+its development. Such a test would be especially infor-
+mative if the differences between the withheld suite and
+the training suites are believed to be comparable to or
+larger than those between the training suites and the
+data. However, the denoising model requires at least
+two mock suites in order for the classification to add
+meaningful information, and only two mock suites are
+available for the DESI DR1 Lyαdataset, making this in-
+feasible for the present work. Future work will re-train
+and test the model on DESI DR2 or DR3 mocks where
+additional suites will be available and this type of test
+becomes possible.
+I also note that I did not apply the Hartlap correction
+(Hartlap et al. 2007) to account for the bias in the in-
+verse covariance when the covariance is estimated from a
+limited number of samples relative to the size of the data
+vector (see also e.g., Percival et al. 2014, 2022), nor do I
+account for the additional parameter uncertainty arising
+
+12
+320 340 360
+DMDH/r2
+d
+0.2
+0.3
+0.4
+0.5
+0.6
+f 8
+4.4
+4.6
+4.8
+DM/DH
+4.4 4.6 4.8
+DM/DH
+0.2 0.3 0.4 0.5 0.6
+f 8
+DESI DR1: Smoothed (current approach)
+DESI DR1: Denoised (this work)
+Fig. 8.—Posteriors for the DESI DR1 Lyαfull-shape analysis sampled withPolyChordusing the standard smoothed covariance (orange
+dashed contours) and the final denoised covariance from this work (blue filled contours). The two results are in excellent agreement for
+quantities derived from the BAO and AP scale parameters. A∼0.5σshift inf σ 8 is present, but this parameter was not demonstrated to
+be unbiased in Cuceu et al. (2025a).
+from treating the sample covariance as fixed (Dodelson
+& Schneider 2013), which requires a non-Gaussian like-
+lihood (Sellentin & Heavens 2016) that can be approx-
+imated assuming a Gaussian likelihood with additional
+correction factors (e.g., Dodelson & Schneider 2013; Per-
+cival et al. 2014, 2022). I tested that the impact of these
+corrections is small or negligible in this setting, and stress
+that the key results of this work lie in the comparison
+between the true and denoised covariances, for which
+the absolute correction is likely irrelevant as it applies
+to both cases. Moreover, deriving the appropriate cor-
+rections for the denoised covariance is non-trivial. These
+correction factors often depend on the number of samples
+and the data vector dimension, but the effective number
+of samples for the denoised covariance is a nonlinear func-
+tion of both the mock-based reference covariance – which
+itself is dependent on a different number of samples per
+mock suite – and the noisy covariance measured from
+the data. While the correction factors associated with
+the mock-based reference are technically non-negligible
+here, this concern could be mitigated in future work by
+building the reference from a larger stack of mocks (e.g.,
+500 per suite rather than 100−200).
+There are several directions for future work. The
+most immediate extension is to apply this method to
+DESI DR2 or DR3 covariances, requiring only a re-
+computation of reference matrices and re-training of the
+classifier with the updated mock suites. Access to addi-
+tional mock suites will improve the denoising model by
+increasing flexibility in the classification step. A larger
+number of mocks per suite will also enable the extension
+of this work to include theBregion (920−1020 ˚A in the
+rest frame). The baseline DESI Lyαanalysis uses both
+theAandBregion to measure correlation functions and
+constrain cosmological parameters, as discussed in Sec-
+tion 2.2, doubling the data vector dimension from 7500
+to 15000. With a sufficiently large stack of mocks, robust
+noiseless covariance estimates for this larger data vector
+will be achievable, allowing the denoising methodology
+to be extended accordingly.
+The mocks used in this work were generated assuming
+
+13
+ΛCDM fiducial cosmologies (Planck Collaboration et al.
+2016, 2020). In light of recent DESI results that hint
+that dark energy may evolve with redshift (DESI Col-
+laboration et al. 2024, 2025b), it will be valuable to test
+the robustness of this methodology to non-ΛCDM cos-
+mologies. This will be influenced by the sensitivity of
+the sample covariance matrix to the choice of fiducial
+cosmology, which remains an open question.
+Another exciting future direction is to extend this work
+to analyses that use the true (or unabsorbed) continuum
+of quasars to measure the flux transmission field rather
+than the current continuum fitting approach mentioned
+in Section 2.1. The baseline DESI Lyαforest analy-
+sis fits a continuum to each forest prior to measuring
+the flux transmission field, a procedure that suppresses
+power on large scales by absorbing large-scale density in-
+formation into the continuum fitting parameters (see e.g.,
+Busca et al. 2025; Turner et al. 2026). Several recent ef-
+forts have developed methods to estimate the unabsorbed
+continuum strictly from spectral information outside the
+forest region (e.g., Suzuki et al. 2005; Pˆ aris et al. 2011;
+Liu & Bordoloi 2021; Turner et al. 2024; Pistis et al.
+2025), which could enable a∼10−15% improvement in
+constraining power on the Alcock-Paczy´ nski parameter
+(Turner et al. 2026) and remove the need for the distor-
+tion matrix that complicates the analysis (Busca et al.
+2025). While the current covariance smoothing proce-
+dure has been validated in the context of the standard
+continuum fitting approach (e.g., Cuceu et al. 2025b), it
+has not been validated in a true-continuum analysis. Ex-
+tending the denoising approach developed here to such
+an analysis is therefore an important future step, en-
+abling future cosmological constraints using estimates of
+the unabsorbed continuum.
+ACKNOWLEDGMENTS
+I thank Andreu Font-Ribera and Paul Martini for use-
+ful comments on this manuscript. I also thank Paul Mar-
+tini, Molly Wolfson, Naim Kara¸ caylı, and David Wein-
+berg for helpful discussions. WT acknowledges support
+from the United States Department of Energy, Office
+of High Energy Physics under Award Number DE-SC-
+0011726.
+REFERENCES
+Adame, A. G., Aguilar, J., Ahlen, S., et al. 2025, J. Cosmology
+Astropart. Phys., 2025, 124,
+doi: 10.1088/1475-7516/2025/01/124
+Alcock, C., & Paczynski, B. 1979, Nature, 281, 358,
+doi: 10.1038/281358a0
+Bautista, J. E., Busca, N. G., Guy, J., et al. 2017, A&A, 603,
+A12, doi: 10.1051/0004-6361/201730533
+Blomqvist, M., du Mas des Bourboux, H., Busca, N. G., et al.
+2019, A&A, 629, A86, doi: 10.1051/0004-6361/201935641
+Busca, N., Rich, J., Bautista, J., et al. 2025, arXiv e-prints,
+arXiv:2506.15262. https://arxiv.org/abs/2506.15262
+Busca, N. G., Delubac, T., Rich, J., et al. 2013, A&A, 552, A96,
+doi: 10.1051/0004-6361/201220724
+Casas, L., Herrera-Alcantar, H. K., Chaves-Montero, J., et al.
+2025, arXiv e-prints, arXiv:2503.14741,
+doi: 10.48550/arXiv.2503.14741
+Cuceu, A., Font-Ribera, A., Joachimi, B., & Nadathur, S. 2021,
+MNRAS, 506, 5439, doi: 10.1093/mnras/stab1999
+Cuceu, A., Font-Ribera, A., Martini, P., et al. 2023, MNRAS,
+523, 3773, doi: 10.1093/mnras/stad1546
+Cuceu, A., Herrera-Alcantar, H. K., Gordon, C., et al. 2025a,
+arXiv e-prints, arXiv:2509.15308,
+doi: 10.48550/arXiv.2509.15308
+—. 2025b, J. Cosmology Astropart. Phys., 2025, 148,
+doi: 10.1088/1475-7516/2025/01/148
+Dawson, K. S., Schlegel, D. J., Ahn, C. P., et al. 2013, AJ, 145,
+10, doi: 10.1088/0004-6256/145/1/10
+Dawson, K. S., Kneib, J.-P., Percival, W. J., et al. 2016, AJ, 151,
+44, doi: 10.3847/0004-6256/151/2/44
+de Sainte Agathe, V., Balland, C., du Mas des Bourboux, H.,
+et al. 2019, A&A, 629, A85, doi: 10.1051/0004-6361/201935638
+de Santi, N. S. M., & Abramo, L. R. 2022, J. Cosmology
+Astropart. Phys., 2022, 013,
+doi: 10.1088/1475-7516/2022/09/013
+Delubac, T., Bautista, J. E., Busca, N. G., et al. 2015, A&A, 574,
+A59, doi: 10.1051/0004-6361/201423969
+DESI Collaboration, Adame, A. G., Aguilar, J., et al. 2016, The
+DESI Experiment Part I: Science,Targeting, and Survey
+Design, doi: 10.48550/arXiv.1611.00036
+—. 2022, AJ, 164, 207, doi: 10.3847/1538-3881/ac882b
+—. 2024, arXiv e-prints, arXiv:2404.03002,
+doi: 10.48550/arXiv.2404.03002
+DESI Collaboration, Abdul-Karim, M., Aguilar, J., et al. 2025a,
+arXiv e-prints, arXiv:2503.14739,
+doi: 10.48550/arXiv.2503.14739
+—. 2025b, arXiv e-prints, arXiv:2503.14738,
+doi: 10.48550/arXiv.2503.14738
+Dodelson, S., & Schneider, M. D. 2013, Phys. Rev. D, 88, 063537,
+doi: 10.1103/PhysRevD.88.063537
+du Mas des Bourboux, H., Le Goff, J.-M., Blomqvist, M., et al.
+2017, A&A, 608, A130, doi: 10.1051/0004-6361/201731731
+du Mas des Bourboux, H., Rich, J., Font-Ribera, A., et al. 2020,
+ApJ, 901, 153, doi: 10.3847/1538-4357/abb085
+Etourneau, T., Goff, J.-M. L., Rich, J., et al. 2024, J. Cosmology
+Astropart. Phys., 2024, 077,
+doi: 10.1088/1475-7516/2024/05/077
+Farina, A., Guidi, M., Veropalumbo, A., & Guida, C. 2026, arXiv
+e-prints, arXiv:2604.13851, doi: 10.48550/arXiv.2604.13851
+Farr, J., Font-Ribera, A., Bourboux, H. d. M. d., et al. 2020, J.
+Cosmology Astropart. Phys., 2020, 068,
+doi: 10.1088/1475-7516/2020/03/068
+Font-Ribera, A., Arnau, E., Miralda-Escud´ e, J., et al. 2013, J.
+Cosmology Astropart. Phys., 2013, 018,
+doi: 10.1088/1475-7516/2013/05/018
+Font-Ribera, A., Kirkby, D., Busca, N., et al. 2014, J. Cosmology
+Astropart. Phys., 2014, 027,
+doi: 10.1088/1475-7516/2014/05/027
+Gerardi, F., Cuceu, A., Joachimi, B., Nadathur, S., &
+Font-Ribera, A. 2024, MNRAS, 528, 2667,
+doi: 10.1093/mnras/stae092
+G´ orski, K. M., Hivon, E., Banday, A. J., et al. 2005, ApJ, 622,
+759, doi: 10.1086/427976
+Hartlap, J., Simon, P., & Schneider, P. 2007, A&A, 464, 399,
+doi: 10.1051/0004-6361:20066170
+Herrera-Alcantar, H. K., Mu˜ noz-Guti´ errez, A., Tan, T., et al.
+2025, J. Cosmology Astropart. Phys., 2025, 141,
+doi: 10.1088/1475-7516/2025/01/141
+Joachimi, B. 2017, MNRAS, 466, L83,
+doi: 10.1093/mnrasl/slw240
+Kara¸ caylı, N. G., Cuceu, A., Aguilar, J., et al. 2026, arXiv
+e-prints, arXiv:2603.04281, doi: 10.48550/arXiv.2603.04281
+Kirkby, D., Margala, D., Slosar, A., et al. 2013, J. Cosmology
+Astropart. Phys., 2013, 024,
+doi: 10.1088/1475-7516/2013/03/024
+Kullback, S., & Leibler, R. A. 1951, Ann. Math. Stat., 22, 79
+Lam, C. 2016, Ann. Stat., 44, 928, doi: 10.1214/15-AOS1393
+Ledoit, O., & Wolf, M. 2012, Ann. Stat., 40, 1024,
+doi: 10.1214/12-aos989
+Liu, B., & Bordoloi, R. 2021, MNRAS, 502, 3510,
+doi: 10.1093/mnras/stab177
+Looijmans, M. J., Wang, M. S., & Beutler, F. 2025, MNRAS, 537,
+21, doi: 10.1093/mnras/stae2786
+
+14
+McGreer, I., Moustakas, J., & Schindler, J. 2021, simqso:
+Simulated quasar spectra generator, Astrophysics Source Code
+Library, record ascl:2106.008. http://ascl.net/2106.008
+Percival, W. J., Friedrich, O., Sellentin, E., & Heavens, A. 2022,
+MNRAS, 510, 3207, doi: 10.1093/mnras/stab3540
+Percival, W. J., Ross, A. J., S´ anchez, A. G., et al. 2014, MNRAS,
+439, 2531, doi: 10.1093/mnras/stu112
+Philcox, O. H. E., Ivanov, M. M., Zaldarriaga, M., Simonovi´ c, M.,
+& Schmittfull, M. 2021, Phys. Rev. D, 103, 043508,
+doi: 10.1103/PhysRevD.103.043508
+Pistis, F., Fumagalli, M., Fossati, M., et al. 2025, A&A, 698,
+A292, doi: 10.1051/0004-6361/202453377
+Planck Collaboration, Ade, P. A. R., Aghanim, N., et al. 2016,
+A&A, 594, A13, doi: 10.1051/0004-6361/201525830
+Planck Collaboration, Aghanim, N., Akrami, Y., et al. 2020,
+A&A, 641, A6, doi: 10.1051/0004-6361/201833910
+Pope, A. C., & Szapudi, I. 2008, MNRAS, 389, 766,
+doi: 10.1111/j.1365-2966.2008.13561.x
+Pˆ aris, I., Petitjean, P., Rollinde, E., et al. 2011, A&A, 530, A50,
+doi: 10.1051/0004-6361/201016233
+Ram´ ırez-P´ erez, C., Sanchez, J., Alonso, D., & Font-Ribera, A.
+2022, J. Cosmology Astropart. Phys., 2022, 002,
+doi: 10.1088/1475-7516/2022/05/002
+Ram´ ırez-P´ erez, C., P´ erez-R` afols, I., Font-Ribera, A., et al. 2024,
+MNRAS, 528, 6666, doi: 10.1093/mnras/stad3781
+Sellentin, E., & Heavens, A. F. 2016, MNRAS, 456, L132,
+doi: 10.1093/mnrasl/slv190
+Slosar, A., Font-Ribera, A., Pieri, M. M., et al. 2011, J.
+Cosmology Astropart. Phys., 2011, 001,
+doi: 10.1088/1475-7516/2011/09/001
+Slosar, A., Irˇ siˇ c, V., Kirkby, D., et al. 2013, J. Cosmology
+Astropart. Phys., 2013, 026,
+doi: 10.1088/1475-7516/2013/04/026
+Suzuki, N., Tytler, D., Kirkman, D., O’Meara, J. M., & Lubin, D.
+2005, ApJ, 618, 592, doi: 10.1086/426062
+Taylor, A., & Joachimi, B. 2014, MNRAS, 442, 2728,
+doi: 10.1093/mnras/stu996
+Taylor, A., Joachimi, B., & Kitching, T. 2013, MNRAS, 432,
+1928, doi: 10.1093/mnras/stt270
+Turner, W., Martini, P., Kara¸ caylı, N. G., et al. 2024, ApJ, 976,
+143, doi: 10.3847/1538-4357/ad8239
+Turner, W., Cuceu, A., Martini, P., et al. 2026, J. Cosmology
+Astropart. Phys., 2026, 010,
+doi: 10.1088/1475-7516/2026/05/010
+APPENDIX
+SENSITIVITY TO CHOICE OF REFERENCE MATRIX
+As discussed in Section 3, I derive the initial eigenbasis
+from a reference correlation matrix based on a combina-
+tion of Saclay and LyαCoLoRe mocks. I assume that
+the true correlation matrix of each mock suite is approx-
+imately diagonalized in this reference eigenbasis. Fig-
+ure 9 validates this assumption by showing the true cor-
+relation matrices of each suite projected onto the default
+reference eigenbasis. Both projected matrices are very
+nearly diagonal, with only a small residual signal present
+in the off-diagonal elements. This can be quantified by
+computing the ratio of power present in the diagonal to
+the total power,
+P=
+P
+k(V T RV) 2
+kkP
+i,j(V T RV) 2
+ij
+=
+P
+k
+˜λ2
+k
+∥V T RV∥ 2
+F
+,(A1)
+wherekindexes the diagonal elements of the projected
+matrix, ˜λk are the pseudo-eigenvalues,Vis the refer-
+ence eigenbasis,Ris the input correlation matrix, and
+∥V T RV∥ 2
+F is the Frobenius norm of the projected cor-
+relation matrix. Both the Saclay and LyαCoLoRe true
+correlation matrices achieveP ≈0.96 in this basis, con-
+firming that the projection is nearly diagonal with only
+∼4% of total power in the off-diagonals.
+To test the sensitivity of the results to this choice of
+reference matrix, I repeat the full analysis using only
+the LyαCoLoRe mocks to define the reference correla-
+tion matrix. In this case the reference matrix is simply
+the correlation matrix from the stack of 200 LyαCoLoRe
+mocks with∼1000 sub-samples each.
+Figure 10 compares theD KL/ndistributions (Eq. 18)
+after the final correction stage for the default mixed
+eigenbasis and the LyαCoLoRe-only eigenbasis. The two
+distributions are consistent, with the medianD KL/nin-
+creasing by only∼0.0001 when using the LyαCoLoRe-
+only basis. This consistency is expected: noisy
+LyαCoLoRe covariances are well reconstructed by the
+initial stage alone, since their structure is fully captured
+by that eigenbasis, while noisy Saclay covariances rely
+more heavily on the residual correction to account for
+structure not represented in the initial LyαCoLoRe-only
+basis. The fact that the results remain consistent in ei-
+ther case demonstrates the complementary roles of the
+two pipeline stages.
+Finally, Figure 11 compares the cosmological parame-
+ter constraints obtained with the two choices of reference
+matrix on a Saclay mock from the classifier testing set,
+repeating the inference shown in Figure 7 but by find-
+ing the maximum likelihood solution instead of sampling
+the full posteriors. The results are in excellent agree-
+ment, confirming that the choice of initial reference ma-
+trix does not meaningfully affect the performance of the
+denoising methodology.
+This paper was built using the Open Journal of As-
+trophysics LATEX template. The OJA is a journal which
+provides fast and easy peer review for new papers in the
+astro-phsection of the arXiv, making the reviewing pro-
+cess simpler for authors and referees alike. Learn more
+at http://astro.theoj.org.
+
+15
+0 2500 5000 7500
+0
+2500
+5000
+7500
+Saclay
+0 2500 5000 7500
+Ly CoLoRe
+-0.010
+-0.005
+0.000
+0.005
+0.010
+Fig. 9.—True correlation matrices for each mock suite projected onto the default reference eigenbasis (Eq. 4).Left:the projection of the
+Saclay correlation matrix computed from 100 mocks and∼1000 sub-samples each.Right:the projection of the LyαCoLoRe correlation
+matrix computed from 200 mocks and∼1000 sub-samples each. In both cases the diagonal-to-total power ratio (Eq. A1)P ≈0.96,
+demonstrating that each matrix is nearly diagonalized in the reference eigenbasis.
+0.000 0.002 0.004 0.006 0.008 0.010 0.012
+DKL/n
+0
+5
+10
+15
+20
+25
+30
+35
+40
+45Count
+0.0038 0.0039
+Mixed basis
+Ly CoLoRe basis
+Fig. 10.—Distributions of the normalized KL divergenceD KL/n
+(Eq. 18) for the final denoised covariances on the mock testing
+set, using the default mixed initial eigenbasis (blue filled) and the
+LyαCoLoRe-only eigenbasis (black unfilled). The two distributions
+are in close agreement, demonstrating that the results are robust
+to the choice of initial reference matrix.
+
+16
+330 340 350 360 370 380
+DMDH/r2
+d
+0.2
+0.3
+0.4
+f 8
+4.3
+4.4
+4.5
+4.6
+4.7
+4.8
+DM/DH
+4.4 4.6 4.8
+DM/DH
+0.2 0.3 0.4
+f 8
+Mixed basis
+Ly CoLoRe basis
+Fig. 11.—Gaussian posteriors of cosmological parameters from a full-shape fit on a Saclay mock in the classifier testing set. The results
+compare the default mixed initial eigenbasis (gray contours; also shown in Fig. 7) and the LyαCoLoRe-only initial eigenbasis (red contours).
+The two results are in excellent agreement, demonstrating the robustness of the denoising method to different choices of reference matrix.

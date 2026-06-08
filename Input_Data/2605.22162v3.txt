@@ -1,0 +1,2568 @@
+Title: Spectra as Language: Large Language Models for Scalable Stellar Parameter and Abundance Inference
+Authors: Hai-Ling Lu, Yu-Yang Li, Yin-Bi Li, Cun-Shi Wang, A-Li Luo, Jun-Chao Liang, Shuo Li
+Published: 2026-05-21
+Categories: astro-ph.IM, astro-ph.SR, cs.LG
+
+Draft version May 27, 2026
+Typeset using LATEX twocolumn style in AASTeX631
+Spectra as Language: Large Language Models for Scalable Stellar Parameter and Abundance
+Inference
+Hai-Ling Lu †
+ ,1, 2 Yu-Yang Li †
+ ,1, 3 Yin-Bi Li ∗
+ ,1, 2 Cun-Shi W ang∗
+ ,1, 3 A-Li Luo ∗
+ ,1, 3, 4 Jun-Chao Liang
+ ,1, 2
+and Shuo Li
+ 1, 2
+1National Astronomical Observatories, Chinese Academy of Sciences, Beijing 100101, China
+2University of Chinese Academy of Sciences, Beijing 100049, China
+3School of Astronomy and Space Science, University of Chinese Academy of Sciences, Beijing 100049, China
+4University of Chinese Academy of Sciences, Nanjing 211135, China
+ABSTRACT
+Stellar spectra encode key information on the physical properties and chemical compositions of stars.
+Accurate determination of stellar parameters constitutes a fundamental cornerstone of astrophysical
+research and is crucial for addressing major scientiﬁc questions such as galaxy evolution and stellar
+evolution. With the rapid advancement of large-scale stellar spectroscopic surveys, an unprecedented
+volume of spectral data has been accumulated. Traditional approaches based on handcrafted fea-
+ture extraction or physical model ﬁtting face challenges when dealing with high-dimensional, massive
+spectral datasets, including limited generalization capability, low computational eﬃciency, and diﬃ-
+culty in achieving the simultaneous and precise estimation of multiple parameters. In recent years,
+large language models have demonstrated strong generalization and feature-learning capabilities in
+sequence-related tasks such as natural language processing, DNA/RNA sequence analysis, and protein
+and chemical formula parsing. Given that stellar spectra are intrinsically continuous sequential sig-
+nals, the transferability of large language models to stellar spectroscopy has become a valuable research
+direction. In this work, we propose a two-stage trained large language model framework for stellar
+parameter determination. The framework enables robust and accurate inference of fundamental stel-
+lar atmospheric parameters, including eﬀective temperature, surface gravity, and overall metallicity,
+and, building upon this foundation, achieves accurate joint estimation of the abundances of nearly
+twenty chemical elements. Furthermore, scaling-law analyses based on spectroscopic data augmen-
+tation demonstrate a stable and systematic improvement in model performance with increasing data
+scale, providing a scalable and eﬃcient technical framework for precise parameter determination in
+forthcoming large-scale stellar spectroscopic surveys.
+Keywords: starsparameter estimationLLM
+1. INTRODUCTION
+Stellar spectra are often regarded as cosmic codes for
+decoding the physical nature of stars, encoding key in-
+formation such as the eﬀective temperature ( Teﬀ ), sur-
+face gravity ( log g), metallicity ([Fe/H]), and the abun-
+dances of various chemical elements. They constitute a
+fundamental tool for revealing the laws of stellar for-
+mation and evolution, tracing the history of galactic
+1 † These authors contributed equally to this work.
+Corresponding author: Yin-Bi Li & Cun-Shi Wang & A-Li Luo
+* ybli@bao.ac.cn, wangcunshi@nao.cas.cn, lal@nao.cas.cn
+chemical enrichment, and probing the origin of cos-
+mic structures. With astronomy entering the era of
+large-scale surveys, major projects such as LAMOST
+and APOGEE have accumulated massive volumes of
+stellar spectraLAMOST alone has released more than
+ten million low-resolution spectra ( Cui et al. 2012),
+while APOGEE has provided several hundred thousand
+high-precision infrared spectra ( Abdurro’uf et al. 2022;
+Shetrone et al. 2025). The rapid growth of spectro-
+scopic data oﬀers unprecedented opportunities for com-
+prehensively reconstructing the evolutionary picture of
+the Milky Way and the Universe, while simultaneously
+arXiv:2605.22162v3  [astro-ph.IM]  26 May 2026
+
+2 Lu et al.
+posing signiﬁcant challenges to eﬃcient and accurate
+stellar parameter determination.
+Current mainstream approaches to stellar parameter
+estimation can be broadly categorized into two classes.
+The ﬁrst class consists of physics-based ﬁtting mod-
+els, such as The Payne and ASPCAP ( Lee et al. 2008;
+Smolinski et al. 2011; Ness et al. 2015; García Pérez et al.
+2016; Xiang et al. 2017; Ting et al. 2019; Xiang et al.
+2019; Steinmetz et al. 2020). These methods rely on de-
+tailed assumptions of stellar atmosphere physics and in-
+fer parameters by ﬁtting diﬀerences between theoretical
+and observed spectra. However, they have notable limi-
+tations: on the one hand, complex physical assumptions
+are diﬃcult to adapt to all stellar types (e.g., chemically
+peculiar stars or stars at late evolutionary stages); on the
+other hand, the ﬁtting procedures are computationally
+expensive, making them ineﬃcient for large-scale survey
+data. The second class includes data-driven deep learn-
+ing approaches, such as convolutional neural networks
+(CNNs) and recurrent neural networks (RNNs) ( Bialek
+et al. 2020; Zheng et al. 2020; O’Briain et al. 2021; Li
+et al. 2022, 2025; Gilda 2025). These methods automat-
+ically extract spectral features and improve prediction
+eﬃciency. Nevertheless, existing deep learning models
+generally suﬀer from a lack of task generality: diﬀerent
+parameters (e.g., basic atmospheric parameters versus
+heavy-element abundances) or diﬀerent spectral regimes
+(e.g., low- versus high-resolution spectra) often require
+dedicated network architectures and extensive retrain-
+ing, resulting in poor transferability and limited gener-
+alization. Moreover, the black-box nature of these mod-
+els reduces interpretability, constraining their broader
+adoption in frontier astrophysical research.
+In recent years, large language models have demon-
+strated remarkable generalization and feature-learning
+capabilities across various sequence-related tasks, in-
+cluding natural language processing, DNA/RNA se-
+quence analysis, and protein and chemical formula pars-
+ing ( Xie et al. 2023; Zhang et al. 2024a). Their
+core strength lies in learning universal representations
+from massive and heterogeneous sequence data with-
+out redesigning model architectures for speciﬁc tasks.
+Against this backdrop, large language models (LLMs)
+have achieved breakthroughs in natural language pro-
+cessing and multimodal tasks, with their application
+scope gradually extending beyond text and vision to
+more general numerical sequence modeling problems.
+For numerical sequence tasks, Zhang et al. (2024b) sys-
+tematically reviews recent eﬀorts to bridge the modality
+gap between text-trained LLMs and continuous time-
+series data, summarizing representative strategies such
+as prompting-based textualization, numerical quantiza-
+tion, representation alignment, vision-based bridging,
+and tool integration for time-series analysis.
+From a complementary engineering and application-
+oriented perspective, Jiang et al. (2024) further reviews
+the general workﬂow and key challenges of LLM-based
+time-series analysis. Compared with training generic
+time-series models from scratch, leveraging the represen-
+tational power of pretrained LLMs through suitable tok-
+enization, prompt design, and ﬁne-tuning strategies can
+oﬀer greater ﬂexibility for large-scale, diverse, and non-
+stationary time-series tasks. This review also highlights
+the prevalence of distribution shift and concept drift
+in time-series problems, which impose additional chal-
+lenges on continual adaptation and cross-dataset gen-
+eralization, underscoring the importance of construct-
+ing uniﬁed and transferable sequence modeling frame-
+works. Together, these two surveys indicate that LLMs
+are evolving from text models into general-purpose mod-
+eling paradigms for broad classes of sequential data.
+Notably, stellar spectra are also continuous numeri-
+cal sequences ordered along the wavelength axis, where
+spectral lines and continua across diﬀerent bands en-
+code long-range physical and chemical correlations. As
+such, they naturally ﬁt within the aforementioned nu-
+merical sequence–LLM methodological framework. In
+astronomy, LLM- and transformer-based studies have
+already achieved initial success in astronomical sequence
+tasks ( Li et al. 2024; Wang et al. 2024; Shao et al. 2025;
+Zhao et al. 2025; Parker et al. 2025; Stoppa et al. 2025).
+For example, Ramachandra et al. (2025) demonstrated
+that parameter-eﬃcient ﬁne-tuning (LoRA) can directly
+adapt pretrained LLMs to spectroscopic data, enabling
+quantitative prediction of galaxy spectral redshifts while
+achieving competitive spectroscopic performance. In ad-
+dition, Fortino et al. (2026) showed that ABC-SN out-
+performs the CNN-based DASH model for nearly all su-
+pernova subtypes, indicating that attention mechanisms
+can eﬀectively capture discriminative spectral features
+and further supporting the treatment of spectra as struc-
+tured sequences suitable for attention-based modeling.
+More recently, Zhao et al. (2026) proposed SpecCLIP,
+a uniﬁed foundation-model framework that pretrains on
+LAMOST and Gaia XP spectra and uses contrastive
+alignment along with spectrum-aware decoders to en-
+able cross-spectrum translation and simultaneous infer-
+ence of multiple stellar parameters and elemental abun-
+dances. This work represents a concrete implementation
+of a uniﬁed modeling approach for quantitative stellar
+spectroscopy.
+Guided by the central idea of spectra as language, this
+work introduces the general sequence-learning capabili-
+ties of LLMs into stellar spectroscopic analysis to con-
+
+A review of AGB star 3
+struct a uniﬁed modeling framework tailored for large-
+scale survey data. The continuous ﬂux distributions of
+stellar spectra encode physical and chemical information
+through line structures and continuum shapes, which are
+analogous, at the sequence modeling level, to how dis-
+crete symbols in natural language convey semantics via
+contextual relationships. Speciﬁcally, we adopt a two-
+stage ﬁne-tuning strategy. In the ﬁrst stage, the model
+is trained on LAMOST low-resolution spectra with at-
+mospheric parameter labels derived from the LAMOST
+pipeline, in order to build foundational capabilities and
+achieve accurate inference of core stellar atmospheric
+parameters. In the second stage, the model is trained
+on LAMOST low-resolution spectra that are co-origin
+with APOGEE observations, using chemical abundance
+labels transferred from APOGEE high-resolution spec-
+troscopy, thereby extending the model capacity and en-
+abling the simultaneous inversion of multiple elemental
+abundances.
+To systematically present this study, the remainder
+of the paper is organized as follows. The Data section
+describes the sources of labeled data, including stellar
+samples from LAMOST DR11 and APOGEE DR16,
+along with detailed data selection and preprocessing pro-
+cedures. The Methodology section then covers three
+core componentssample construction, model structure
+design, and training methodsproviding a comprehen-
+sive description of the two-stage ﬁne-tuning framework.
+Subsequently, the Results section presents model per-
+formance evaluations in a stage-wise manner. Finally,
+the Discussion section focuses on an in-depth analysis
+of model performance and the methodological implica-
+tions of this work.
+2. DATA
+2.1. Stellar Samples with Labels from LAMOST DR11
+The Large Sky Area Multi-Object Fiber Spectroscopic
+Telescope (LAMOST), also known as the Guo Shoujing
+Telescope, is a large optical observational facility inde-
+pendently designed and constructed by China, and is
+operated and maintained by the National Astronomi-
+cal Observatories of the Chinese Academy of Sciences.
+LAMOST is a reﬂecting Schmidt telescope equipped
+with 4,000 ﬁbers on its focal plane, enabling the simul-
+taneous observation of 4,000 targets within a ﬁeld of
+view of 20 square degrees, thereby signiﬁcantly increas-
+ing the eﬃciency of spectroscopic data acquisition ( Cui
+et al. 2012; Luo et al. 2015).
+As of June 2023, LAMOST has released its 11th
+data release (DR11). DR11 v1.1 contains a total of
+11,944,049 low-resolution spectra, including 11,586,067
+stellar spectra. Among these stellar spectra with avail-
+able atmospheric parameter labels, there are 432,474
+A-type stars, 2,252,262 F-type stars, 3,712,147 G-type
+stars, 1,403,434 K-type stars, and 899,204 M-type stars.
+The spectra cover a wavelength range from 3,700 Å
+to 9,000 Å with a resolving power of approximately
+R ∼ 1, 800.
+To construct datasets of diﬀerent scales, we perform
+balanced subsampling across stellar spectral types, with
+an equal number of samples drawn from each class. For
+example, for the dataset of 105 samples, approximately
+2 × 104 stars were selected for each of the A, F, G, K,
+and M spectral types. For the dataset of 1. 5 × 106 sam-
+ples, approximately 3 × 105 stars were selected for each
+spectral type.
+2.2. Stellar Samples with Labels from APOGEE DR16
+The Apache Point Observatory Galactic Evolution
+Experiment (APOGEE) is one of the major sub-projects
+of the Sloan Digital Sky Survey phases III (SDSS-III)
+and IV (SDSS-IV). APOGEE is a large-scale stellar
+spectroscopic survey conducted in the near-infrared H
+band. It employs two ﬁber-fed cryogenic spectrographs
+mounted on the 2.5 m Sloan Foundation Telescope at
+Apache Point Observatory (APO) in New Mexico, USA,
+and on the 1 m NMSU telescope at Las Campanas
+Observatory (LCO) in Chile. APOGEE is distinctive
+among large surveys in that it provides high-resolution
+spectra ( R ≈ 22, 500) covering the entire Milky Way.
+One of the primary scientiﬁc goals of APOGEE is to
+derive multi-element chemical abundances for a large
+stellar sample. The APOGEE Stellar Parameters and
+Abundances Pipeline (ASPCAP) is a dedicated process-
+ing pipeline developed for APOGEE spectra, which an-
+alyzes stellar spectra to derive atmospheric parameters
+and individual chemical element abundances. With suc-
+cessive data releases (DRs), the algorithms, models, and
+performance of ASPCAP have been continuously im-
+proved and reﬁned.
+In this work, we adopt the multi-element abundance
+parameters provided by the APOGEE DR16 pipeline
+as supervised learning labels. The selected parameters
+include abundance ratios for a variety of elements, such
+as C, N, O, Na, Mg, Al, Si, P, S, K, Ca, Ti, V, Cr, Mn,
+Co, Ni, and Cu, all expressed in the form of [X/Fe].
+Since APOGEE spectra and derived parameters may
+suﬀer from potential quality issues, it is necessary to
+apply the bitmask ﬂags provided by APOGEE to se-
+lect reliable data. The ASPCAPFLAG bitmask is used to
+indicate possible issues in the ASPCAP ﬁtting process.
+In this study, we required ASPCAPFLAG to be set to 0
+and simultaneously enforce all relevant parameter-level
+ﬂag ﬁelds to be 0. In addition, atmospheric parame-
+
+4 Lu et al.
+ter entries with the invalid placeholder value of 9999.99
+were ignored, thereby removing potential quality issues
+and ensuring the reliability of the training and analysis
+datasets. The resulting sample counts for each parame-
+ter are summarized in Table 1.
+3. METHODOLOGY
+3.1. Sample Construction
+In this study, for the DR11 dataset labeled by the
+LAMOST pipeline, we applied the following ﬁltering and
+preprocessing procedures to the raw data:
+1. Signal-to-noise ratio thresholding : We ﬁrst
+set a minimum signal-to-noise ratio (SNR) thresh-
+old of 2 in the r band (SNRr) and the i band
+(SNRi). Since the SNRs in the u, g, and z bands
+are generally low, using these bands as ﬁltering cri-
+teria would lead to substantial sample loss. There-
+fore, SNR control was performed only in the r and
+i bands.
+2. Bad pixel masking : For pixels (wavelength
+points) with the ormask ﬂag equal to 1, the
+corresponding ﬂux values were masked (excluded
+from analysis). According to the LAMOST
+low-resolution data documentation, pixels with
+ormask=1 may suﬀer from one of the following
+issues: bad CCD pixels, abnormal proﬁles during
+spectral extraction, lack of sky information at that
+wavelength, excessively high sky background, ﬁber
+traces deviating from the CCD region, or the ab-
+sence of valid data in that wavelength range.
+3. Spectral normalization : To reduce sensitivity
+to ﬂux calibration uncertainties (and overall con-
+tinuum scaling), we applied the following normal-
+ization scheme (Eq. ( 1)):
+f lux = f lux
+max(f lux) , (1)
+4. Spectral interpolation and resampling : To
+ensure consistent wavelength coverage and uni-
+form wavelength spacing across all spectra,
+we resampled the spectra over the interval
+[3800, 8700] Å using cubic polynomial interpola-
+tion. Each spectrum was resampled with a step
+size of 1 Å, resulting in a spectral vector of dimen-
+sion 4901.
+5. Flux value precision : All spectral ﬂux values
+were rounded to three decimal places. Given the
+limited context length of large language models,
+retaining too many decimal places would reduce
+the number of pixels that can be input. After
+trade-oﬀ considerations, a precision of three deci-
+mal places was adopted.
+The QA-pair format for the two-stage training was
+designed with the following considerations:
+1. The normalized spectral ﬂux values were inserted
+between <flux> and </flux>, ordered by wave-
+length from 3800 Å to 8700 Å with a step of 1 Å.
+Each ﬂux value was retained to three decimal
+places.
+2. To facilitate character-level tokenization of nu-
+merical strings by the large language model, we
+adopted the method proposed by Nate Gruver &
+Wilson (2023), in which spaces are inserted be-
+tween numbers and punctuation marks in the an-
+swer section to enable character-level tokenization.
+3. In the QA pairs constructed for continued train-
+ing on LAMOST spectra cross-matched with
+APOGEE and annotated with APOGEE-derived
+parameter labels, an identical parameter set and
+the same number of parameter ﬁelds were adopted
+in the question and answer sections.
+The QA designs for the two training stages are sum-
+marized as follows:
+• For the QA design of the ﬁrst-stage model:
+{
+"question": "Given the normalized flux data
+sorted by wavelength, from 3800 angstrom to
+8700. Your task is to analyze this spectrum,
+and predict spectral type and physical
+parameters. Organize your answer in the
+order of [’class’, ’Teff’, ’logg’, ’[Fe/H
+]’]. <flux>0.303, 0.307, 0.302, 0.298, 0.3,
+0.296, 0.295, 0.297, ...</flux>",
+"answer": "[ ’M’,’ 3 7 9 4 . 6 6 ’,’ 4 . 6 2 8
+’,’ - 0 . 0 2 9 5 ’ ]"
+}
+• For the QA design of the second-stage continued
+training model:
+{
+"question": "Given the normalized flux data
+sorted by wavelength, from 3800 angstrom to
+8700 angstrom. Your task is to analyze this
+spectrum, and predict physical parameters:
+C_FE CI_FE N_FE O_FE NA_FE MG_FE. <flux
+>0.303, 0.307, 0.302, 0.298, 0.3, 0.296,
+...</flux>",
+"answer": "[C_FE:’ 0 . 1 5 1 3 9 9 9 9 ’, CI_FE:’
+0 . 1 3 8 5 1 9 9 9 ’, N_FE:’ - 0 . 0 2 6 2
+5 4 0 2 3 ’, O_FE:’ 0 . 2 2 6 4 5 4 9 9 ’,
+NA_FE:’ - 0 . 0 1 3 0 6 3 9 8 1 ’, MG_FE:’ 0
+. 2 7 5 5 5 1 7 ’]"
+}
+
+A review of AGB star 5
+T able 1. Number of spectra with valid elemental abundance labels for each stellar spectral class
+Class C_FE CI_FE N_FE O_FE MG_FE AL_FE SI_FE
+S_FE MN_FE NI_FE CA_FE NA_FE P_FE K_FE
+TI_FE TIII_FE CR_FE CO_FE CU_FE V_FE CE_FE
+A 441 441 330 92 569 554 567
+535 538 563 474 131 95 178
+132 148 171 145 177 45 65
+F 23698 23823 20744 1362 24021 23977 24027
+23837 23883 24004 23729 4736 3374 21313
+12061 11014 16161 14877 16125 1297 1256
+G 111535 111446 108299 65077 111831 111720 111841
+111073 110958 111790 111701 74542 73388 111424
+105506 92075 110991 98557 110372 53733 61161
+K 42201 41759 41145 37818 42221 42193 42225
+37039 40391 42221 42214 15124 15138 40977
+37456 13079 42183 40887 40375 17804 12250
+M 17305 17155 12815 17286 17304 17236 17306
+3918 5305 17297 17299 1778 3897 1141
+822 134 9073 17021 13523 3886 119
+3.2. Model Structure
+The model employed in this study is LLaMA-3.1-8B
+Instruct, which is one of the LLaMA-3 series models re-
+leased by Meta AI in 2024. This model contains approx-
+imately 8 billion parameters and adopts a decoder-only
+Transformer architecture, following the self-attention
+mechanism proposed by Vaswani et al. (2017). It was
+pre-trained on multilingual corpora with trillions of to-
+kens, enabling the model to acquire general-purpose se-
+quence modeling capabilities. These capabilities include
+identifying both local and global dependencies (e.g.,
+subject–verb agreement and long-range coreference in
+syntactic structures), parsing hierarchical compositional
+structures (e.g., nested clauses and tree-like semantic
+representations), and learning context-dependent dy-
+namic representations. Fundamentally, the model ab-
+stracts generalizable sequence patterns from massive
+data, rather than being bound to surface forms of any
+speciﬁc language.
+In our implementation, the input text is constructed
+by serializing the normalized spectral ﬂux values (as
+numerical strings), allowing the model to treat stellar
+spectra as quasi-linguistic sequences. Through stage-
+wise training, the model is able to model long-range
+dependencies between absorption and emission features
+across the wavelength range of 3800–8700 Å, thereby ex-
+tracting structured latent representations from the spec-
+tranamely, the stellar physical states jointly encoded
+by spectral line distributions, strengths, and proﬁles.
+These learned spectral patterns are ultimately mapped
+to key atmospheric parameters, including the eﬀective
+temperature ( Teﬀ ), surface gravity ( log g), and metallic-
+ity ([Fe/H]).
+3.3. Training Methods
+We ﬁrst pre-trained the model using 1.5 million LAM-
+OST spectra, with the primary objective of trans-
+ferring the models sequence modeling capability to
+spectroscopic data. Subsequently, we ﬁne-tuned the
+model on approximately 105 LAMOST spectra anno-
+tated with APOGEE-derived elemental abundance la-
+bels, to enhance its performance on downstream multi-
+physical-parameter prediction tasks. During training,
+we employed QLoRA (Quantized Low-Rank Adapta-
+tion) to optimize resource utilization, signiﬁcantly re-
+ducing GPU memory consumption while maintaining
+high computational precision. The rank was set to 64,
+the scaling factor to 128, and a dropout rate of 10% was
+introduced to mitigate overﬁtting.
+To further improve training eﬃciency, gradient accu-
+mulation and gradient checkpointing techniques were
+enabled, allowing for larger eﬀective batch sizes and
+longer context lengths. Mixed-precision training was im-
+plemented using bf16, in conjunction with DeepSpeeds
+ZeRO Stage 3 optimization strategy to ensure eﬃcient
+
+6 Lu et al.
+memory management and scalable distributed training.
+The AdamW optimizer was used with an initial learn-
+ing rate of 0.0001 and a weight decay coeﬃcient of 0.1,
+while a cosine annealing scheduler was applied to dy-
+namically adjust the learning rate. The dataset was
+split into training and testing subsets with a ratio of
+8:2.
+4. RESULTS
+This section presents and analyzes the experimental
+results of the model on the test set as well as on external
+comparison datasets. During sample construction, for
+each element, only abundance measurements with a ﬂag
+value of zero were included in the statistics.
+4.1. Test Results of the Single-Stage LLM Model
+To comprehensively evaluate the performance of the
+single-stage model, we ﬁrst report its overall metrics on
+the test set, and then further compare the inference re-
+sults of our model with those of other widely used mod-
+els.
+Overview of Test Set Results — As shown in Table 2, the
+performance metrics of the model on the test split of the
+1.5 million-sample dataset are presented. The results
+indicate that the model achieves low bias and dispersion
+in predicting the three atmospheric parameters across
+diﬀerent stellar types.
+T able 2. Prediction residual statistics of the ﬁrst-stage
+model on the 1. 5 × 106-sample test set
+Subclass Teﬀ (µ ± σ ) log g (µ ± σ ) [Fe/H] ( µ ± σ )
+A 17 ± 71 0 . 01 ± 0. 06 −0. 02 ± 0. 05
+F 0 ± 30 0 . 01 ± 0. 05 −0. 02 ± 0. 02
+G −5 ± 35 −0. 02 ± 0. 07 −0. 02 ± 0. 03
+K −1 ± 32 −0. 01 ± 0. 06 −0. 02 ± 0. 04
+M −1 ± 39 0 . 00 ± 0. 07 −0. 01 ± 0. 11
+All Classes 0 ± 38 0 . 00 ± 0. 06 −0. 02 ± 0. 04
+Comparison with Other Models on the Test Set — In ad-
+dition, we compare the proposed method with several
+traditional machine learning approaches, including the
+Light Gradient Boosting Machine (LightGBM), convo-
+lutional neural networks (CNNs), and recurrent neural
+networks (RNNs). The dataset used here consists of
+100,000 spectra, covering ﬁve stellar spectral types (A,
+F, G, K, and M), with approximately 20,000 samples for
+each type. The full dataset was split with an 8:2 ratio,
+where 80% was used for training and 20% for testing.
+The comparative results of the diﬀerent models on the
+test set are presented in Table 3. The parameter settings
+and key training details for each model are summarized
+as follows:
+LightGBM: LightGBM ( Meng et al. 2016; Ke et al.
+2017) is a model based on Gradient Boosting Decision
+Trees (GBDTs). Compared with other GBDT-based
+models (e.g., XGBoost; Chen & Guestrin 2016), Light-
+GBM adopts a leaf-wise growth strategy rather than a
+level-wise one, signiﬁcantly reducing training time while
+maintaining strong predictive performance. Combined
+with eﬃcient parallel computing, LightGBM generally
+achieves faster training speeds than most GBDT-based
+models. In the astronomical domain, Liang et al. (2022)
+applied LightGBM to stellar parameter inversion using
+simulated photometric data from the China Space Sta-
+tion Telescope (CSST). Since LightGBM cannot simul-
+taneously output classiﬁcation and regression results, we
+trained separate models for classiﬁcation and parameter
+regression in this study. The input consists of spectra,
+while the outputs are stellar spectral types for classiﬁ-
+cation and Teﬀ , log g, and [Fe/H] for regression.
+CNN: For the CNN-based model, we adopted
+ResNet-50 ( He et al. 2016) to evaluate its performance
+on our stellar catalog. By introducing residual con-
+nections, ResNet allows information and gradients to
+propagate directly from higher layers to lower layers,
+alleviating the degradation problem commonly encoun-
+tered in deep CNN training and enabling deeper archi-
+tectures to improve performance. For the spectral in-
+puts in this study, the input layer of ResNet-50 was
+adapted to match the structure of the spectral data,
+and the output layer consisted of one classiﬁcation head
+and three regression heads. The training loss was de-
+ﬁned as the sum of the classiﬁcation loss and 50 times
+the regression loss, reﬂecting our emphasis on the ac-
+curacy of stellar physical parameters over spectral type
+classiﬁcation. The classiﬁcation loss was computed us-
+ing cross-entropy, while the regression loss was based
+on mean squared error (MSE). The initial learning rate
+was set to 0.001, the total number of training epochs
+to 80, and the mini-batch size to 32. If the validation
+loss did not decrease for three consecutive epochs, the
+learning rate was reduced by a factor of 0.1; if no im-
+provement was observed for seven consecutive epochs,
+early stopping was applied. For additional comparison,
+a simpler CNN architecture with fewer parameters was
+also included (denoted as Small CNN).
+RNN: For the RNN-based model, we selected the
+Gated Recurrent Unit (GRU; Chung et al. 2014) as
+a representative architecture to evaluate the perfor-
+mance of recurrent neural networks on this stellar cata-
+log task. Compared with Long Short-Term Memory net-
+
+A review of AGB star 7
+works (LSTM; Hochreiter & Schmidhuber 1997), GRUs
+employ a single gating mechanism to control both in-
+formation update and forgetting, achieving faster train-
+ing while retaining strong modeling capacity ( Group
+2017). In astronomy, Chaini & Kumar (2020) applied
+GRU models to classify light curves from the PLAsTiCC
+dataset1. In this study, the input and output layers of
+the GRU model were adapted to the spectral data struc-
+ture. The model consisted of three stacked GRU mod-
+ules, and the loss function was identical to that used
+for ResNet-50. Training was stopped early at epoch 58,
+with a maximum of 80 epochs speciﬁed.
+As shown in Table 3, the diﬀerent models exhibit clear
+diﬀerences in their predictive performance for stellar pa-
+rameters, such as the eﬀective temperature ( Teﬀ ), sur-
+face gravity ( log g), and metallicity ([Fe/H]). Overall,
+our LLM model achieves the smallest prediction er-
+rors across all spectral types (A, F, G, K, and M), out-
+performing the other models in the prediction of Teﬀ ,
+log g, and [Fe/H].
+Speciﬁcally, the LightGBM model shows relatively
+stable performance, particularly for [Fe/H], where the
+errors are comparatively small. However, its errors in
+predicting eﬀective temperature and surface gravity are
+larger; for example, for A-type stars, the performance in
+Teﬀ is −13 ± 433 K.
+In contrast, ResNet-50 exhibits relatively strong
+overall performance, especially for log g and [Fe/H], with
+smaller errors. In particular, for F-, G-, and K-type
+stars, most of the dispersions σ are below 0.2 dex. How-
+ever, the Small CNN model shows larger errors in pre-
+dicting [Fe/H] and log g, with most σ values exceeding
+0.2 dex, and also larger errors in Teﬀ , indicating overall
+lower predictive accuracy compared with ResNet-50.
+The GRU model exhibits performance comparable
+to that of the Small CNN, with relatively large errors
+in Teﬀ and also larger errors in log g and [Fe/H], where
+most σ values exceed 0.2 dex.
+Overall, the LLM yields consistently lower dispersion
+across spectral types, indicating improved stability for
+stellar-label inference on low-resolution spectra.
+To further evaluate the performance of CNN archi-
+tectures on larger-scale datasets, we constructed an ex-
+panded dataset based on the LAMOST 11th data release
+(DR11), with a total of 105 stellar spectra. The model
+adopts the ResNet-50 architecture. A cosine annealing
+learning rate schedule was employed, with the learning
+1 https://plasticc.org/
+T able 3. Comparison of prediction residuals be-
+tween traditional machine-learning models and our
+LLM on the 105-sample test dataset
+Class Teﬀ (K) log g (dex) [Fe/H] (dex)
+LightGBM
+A −13 ± 433 −0. 01 ± 0. 19 0 . 01 ± 0. 27
+F −21 ± 185 0 . 02 ± 0. 21 −0. 01 ± 0. 19
+G 6 ± 170 0 . 01 ± 0. 34 0 . 01 ± 0. 18
+K −12 ± 168 −0. 01 ± 0. 27 0 . 01 ± 0. 19
+M 39 ± 176 −0. 01 ± 0. 41 −0. 02 ± 0. 19
+Overall −0 ± 251 0 . 00 ± 0. 30 −0. 00 ± 0. 21
+ResNet-50
+A 86 ± 666 0 . 01 ± 0. 18 0 . 05 ± 0. 22
+F −29 ± 180 0 . 09 ± 0. 18 0 . 06 ± 0. 14
+G −39 ± 132 0 . 14 ± 0. 24 0 . 09 ± 0. 12
+K −53 ± 165 0 . 02 ± 0. 17 0 . 06 ± 0. 13
+M 44 ± 706 −0. 04 ± 0. 38 0 . 01 ± 0. 16
+Overall 2 ± 453 0 . 04 ± 0. 25 0 . 05 ± 0. 16
+Small CNN
+A −94 ± 699 0 . 05 ± 0. 27 0 . 01 ± 0. 34
+F −50 ± 328 −0. 03 ± 0. 29 −0. 01 ± 0. 23
+G −2 ± 288 −0. 03 ± 0. 43 −0. 02 ± 0. 22
+K 12 ± 302 −0. 03 ± 0. 38 −0. 00 ± 0. 22
+M 53 ± 396 −0. 07 ± 0. 64 −0. 01 ± 0. 25
+Overall −17 ± 434 −0. 02 ± 0. 42 −0. 01 ± 0. 26
+GRU
+A 99 ± 849 −0. 01 ± 0. 21 0 . 03 ± 0. 40
+F −7 ± 252 0 . 02 ± 0. 26 −0. 03 ± 0. 33
+G −0 ± 243 0 . 02 ± 0. 46 0 . 04 ± 0. 31
+K −8 ± 233 0 . 04 ± 0. 33 −0. 01 ± 0. 28
+M 6 ± 238 0 . 02 ± 0. 36 −0. 01 ± 0. 19
+Overall 18 ± 440 0 . 02 ± 0. 34 0 . 01 ± 0. 31
+our LLM
+A 51 ± 297 0 . 05 ± 0. 15 −0. 00 ± 0. 18
+F 9 ± 80 0 . 01 ± 0. 14 −0. 03 ± 0. 09
+G 4 ± 84 −0. 00 ± 0. 17 −0. 02 ± 0. 08
+K 8 ± 72 −0. 01 ± 0. 15 −0. 02 ± 0. 09
+M −1 ± 53 0 . 01 ± 0. 22 −0. 00 ± 0. 15
+Overall 14 ± 150 0 . 01 ± 0. 17 −0. 01 ± 0. 12
+Note—This table compares the mean and standard de-
+viation of the diﬀerence between the predictions and
+labels of the stellar parameters ( Teﬀ , logg, and [Fe/H])
+for diﬀerent classes of stars using LightGBM, ResNet-
+50, GRU, Small CNN, and LLM models. Column
+’Class’ stands for the type of stars, and the overall
+stands for the full test set. The values are shown in
+the format of µ ± σ for each stellar parameter.
+
+8 Lu et al.
+rate gradually decaying from 0.001 to 0 over 50 training
+epochs.
+To compare the parameter regression performance of
+CNNs and large language models on large-scale sam-
+ples, we further evaluated the LLM (hereafter referred
+to as our LLM ) on the same 105-sample dataset under
+the same dataset split and evaluation protocol, and con-
+ducted a spectral-typewise statistical comparison of its
+prediction errors with those of ResNet-50. Table 4 re-
+ports the µ ±σ of the diﬀerences between predictions and
+labels for each spectral class (A/F/G/K/M) as well as
+for the overall sample. Here, µ represents the systematic
+bias, while σ denotes the dispersion (precision).
+From the overall results, our LLM exhibits substan-
+tially better stability across all three key stellar pa-
+rameters. For Teﬀ , the dispersion of ResNet-50 was
+σ = 908 K , whereas our LLM reduced it markedly to
+σ = 133 K. For log g, the dispersion decreased from 1.20
+to 0.15, and for [Fe/H], it dropped from 0.54 to 0.11.
+We noted that ResNet-50 showed larger µ and σ val-
+ues for M-type stars, which was likely related to the
+generally lower signal-to-noise ratios of M-type spectra
+compared to other spectral types (as described in the
+sample construction procedure in Section 3.1, where a
+minimum SNR of 2 was adopted). This suggested that,
+when predicting multiple spectral parameters simultane-
+ously, the LLM remained more stable and reliable than
+the deep learning model ResNet-50, particularly for low-
+SNR samples.
+A spectral-typeresolved comparison further shows
+that, for Teﬀ , log g, and [Fe/H], our LLM systemati-
+cally achieves smaller error dispersions for F-, G-, K-,
+and M-type stars. For the M-type subsample, the error
+distributions of ResNet-50 are extremely dispersed ( Teﬀ :
+σ = 1975 K; log g: σ = 2 . 65; [Fe/H]: σ = 1 . 16), whereas
+our LLM maintains reasonable and stable error levels
+within the same class ( Teﬀ : σ = 56 K ; log g: σ = 0 . 23;
+[Fe/H]: σ = 0 . 14). This supports the improved robust-
+ness of LLMs in subsamples with low signal-to-noise ra-
+tios.
+It should be noted that for A-type stars, both mod-
+els exhibit relatively large dispersions in Teﬀ (ResNet-
+50: 327 K; our LLM : 269 K), indicating that early-type
+stellar parameter regression remains a shared challenge
+under the current data and modeling conditions. Never-
+theless, even in this case, our LLM still achieves smaller
+overall systematic biases and dispersions than ResNet-
+50 for A-type stars. Overall, the results presented in
+Table 4 demonstrate that on a large dataset of 500k sam-
+ples, our LLM can markedly reduce the prediction dis-
+persions of Teﬀ , logg, and [Fe/H] compared with ResNet-
+50, while simultaneously achieving smaller systematic
+T able 4. Comparison of prediction residuals be-
+tween ResNet-50 and our LLM on the 5 × 105-
+sample test dataset
+Class Teﬀ (K) log g (dex) [Fe/H] (dex)
+ResNet-50
+A 61 ± 327 0 . 05 ± 0. 14 0 . 01 ± 0. 19
+F −47 ± 137 −0. 08 ± 0. 14 −0. 03 ± 0. 12
+G −48 ± 124 −0. 11 ± 0. 19 −0. 02 ± 0. 16
+K 2 ± 93 −0. 09 ± 0. 15 −0. 02 ± 0. 12
+M 107 ± 1975 −0. 09 ± 2. 65 −0. 08 ± 1. 16
+Overall 15 ± 908 −0. 06 ± 1. 20 −0. 03 ± 0. 54
+our LLM
+A 22 ± 269 0 . 01 ± 0. 12 −0. 03 ± 0. 15
+F 0 ± 68 0 . 00 ± 0. 12 −0. 03 ± 0. 07
+G −5 ± 66 −0. 03 ± 0. 14 −0. 03 ± 0. 06
+K −4 ± 55 −0. 02 ± 0. 11 −0. 03 ± 0. 08
+M −1 ± 56 0 . 01 ± 0. 23 −0. 01 ± 0. 14
+Overall 2 ± 133 0 . 00 ± 0. 15 −0. 03 ± 0. 11
+Note—The values are shown as µ ± σ of the diﬀerences
+between predictions and labels for each stellar param-
+eter.
+biases and more stable error distributions across most
+spectral types.
+4.2. Test Results of the Second-Stage LLM Model
+To comprehensively evaluate the performance of the
+second-stage (continued-trained) model, we ﬁrst present
+its overall performance metrics on the test set, and then
+further compare the model outputs with the parameter
+predictions obtained from ResNet-50.
+Overview of Test Set Results — The test set results are
+summarized in Table 5, which reports the prediction er-
+ror statistics of the second-stage model for multiple ele-
+mental abundance ratios ( [X/ Fe]) across diﬀerent stellar
+spectral types (A/F/G/K/M). Here, the mean µ repre-
+sents the systematic bias, while the dispersion σ quanti-
+ﬁes the scatter (precision) of the prediction errors. The
+sample counts shown in parentheses indicate that the
+distribution of spectral types in the test set is highly im-
+balanced: G-type and K-type stars dominate the sam-
+ple, followed by F-type stars, whereas A-type and M-
+type stars are relatively scarce.
+Overall, the mean biases µ for most elements across
+diﬀerent spectral types are close to zero, indicating that
+the model does not show large systematic oﬀsets on the
+test set.
+From the perspective of dispersion, the prediction er-
+rors for most elements in G-type and K-type stars satisfy
+
+A review of AGB star 9
+σ < 0. 2 dex, suggesting that the model can achieve rel-
+atively stable abundance estimates for these elements in
+well-sampled spectral types. For F-type stars, the dis-
+persions of these elements increase to some extent, but
+the majority still remain below σ < 0. 2 dex.
+In contrast, several element abundances, such as
+NA_FE, P_FE, CO_FE, CE_FE, and TIII_FE, exhibit σ >
+0. 2 dex across multiple spectral types, with this be-
+havior being particularly pronounced for A-type stars.
+This suggests the relatively larger uncertainties associ-
+ated with the abundance predictions of these elements.
+From an overall comparison across spectral types, G-
+type and K-type stars show the best stability in elemen-
+tal abundance predictions, whereas the fraction of ele-
+ments with σ > 0. 2 dex increases markedly for A-type
+and M-type stars. Nevertheless, the predicted means
+for all spectral types remain close to zero, indicating
+that the model errors are dominated by random scatter
+rather than systematic bias.
+Comparison with Other Models on the Test Set — To fur-
+ther evaluate the second-stage LLM model, we compare
+it with the traditional residual neural network base-
+line, ResNet-50, under the same data splits and eval-
+uation metrics. Table 6 reports the root-mean-square
+error (RMSE) for diﬀerent spectral-type subsamples
+(A/F/G/K/M) as well as for the full sample (All).
+The dataset was split into training and testing sets
+with an 8:2 ratio. For ResNet-50, missing parameters
+were handled using masking to avoid their inﬂuence on
+the training process. During training, all parameters
+were normalized using min–max normalization.
+The training loss was deﬁned as the sum of the classi-
+ﬁcation loss and the average mean squared error (MSE)
+over all stellar parameters, with the stellar-parameter
+loss weighted by a factor of 50, reﬂecting our empha-
+sis on accurate prediction of stellar physical parameters
+over spectral-type classiﬁcation. The initial learning
+rate was set to 0.001. When the validation loss failed
+to decrease for three consecutive epochs, the learning
+rate was reduced by a factor of two. Training was con-
+ducted for a total of 100 epochs without early stopping,
+and the model with the lowest validation loss was saved.
+The mini-batch size was set to 256.
+For several elements, the second-stage LLM achieves
+lower RMSEs than ResNet-50, indicating superior pre-
+dictive accuracy. These elements include AL_FE (0.13
+vs. 0.17), S_FE (0.16 vs. 0.18), NI_FE (0.06 vs. 0.08),
+CA_FE (0.09 vs. 0.14), K_FE (0.16 vs. 0.47), TI_FE (0.14
+vs. 0.28), and CR_FE (0.18 vs. 0.21). Among these, the
+improvements for K_FE and TI_FE are particularly pro-
+nounced, with RMSE reductions exceeding 50%, high-
+lighting a substantial improvement of the second-stage
+LLM for certain elements.
+On the other hand, ResNet-50 achieves slightly lower
+RMSEs for a number of elemental abundance param-
+eters, including C_FE (0.08 vs. 0.11), CI_FE (0.11 vs.
+0.14), N_FE (0.12 vs. 0.16), MG_FE (0.08 vs. 0.12), SI_FE
+(0.08 vs. 0.09), NA_FE (0.21 vs. 0.27), P_FE (0.24 vs.
+0.31), O_FE (0.08 vs. 0.13), V_FE (0.14 vs. 0.20), CE_FE
+(0.19 vs. 0.31), and TIII_FE (0.17 vs. 0.26), suggesting
+that CNNs perform better for these abundances.
+For some elements, the overall performance of the two
+models is comparable, such as MN_FE (0.10 vs. 0.10)
+and CU_FE (0.22 vs. 0.22). For CO_FE (0.55 vs. 0.35),
+both models perform poorly, with large dispersions, sug-
+gesting that this element remains challenging under the
+current data/labeling conditions. From the spectral-
+typeresolved results, the dispersions of predictions for
+both models are slightly larger for A- and M-type stars
+than for F/G/K-type stars, likely inﬂuenced by the
+smaller sample sizes.
+5. DISCUSSION
+5.1. Spectra as Language
+When applied to spectroscopic tasks, large language
+models (LLMs) show notable advantages over tradi-
+tional methods. These advantages are evident not only
+on small-scale datasets but become even more promi-
+nent in large-scale scenarios, supporting the joint infer-
+ence of multiple physical parameters across the spec-
+troscopic analysis pipeline, and oﬀering an accurate
+and scalable alternative for astronomical spectral data
+analysis. From the perspective of core performance
+metrics, LLMs exhibit high accuracy and stability in
+predicting key stellar physical parameters, particularly
+for fundamental quantities such as the eﬀective tem-
+perature ( Teﬀ ), surface gravity ( log g), and metallicity
+([Fe/ H])outperforming conventional models. In large-
+scale tests with datasets of the order of 5 × 105 samples,
+the performance gains of LLMs were especially striking:
+the dispersion in Teﬀ predictions was substantially re-
+duced from approximately 908 K for traditional models
+to 133 K, the dispersion in log g decreases from 1.20 to
+0.15, and the dispersion in [Fe/ H] drops from 0.54 to
+0.11. Improvements of this magnitude were observed
+consistently across most spectral types.
+We also found improved robustness in parameter es-
+timation from low S/N spectra when using the LLM.
+For stellar types with complex spectra, low signal-to-
+noise ratios, or highly imbalanced sample distributions
+(e.g., M-type stars), they are still able to maintain rea-
+sonable and stable predictive performance. For M-type
+
+10 Lu et al.
+T able 5. Prediction residual statistics of elemental abundance parameters for the second-stage model across spectral types on
+the test set: mean µ and dispersion σ
+Parameter A (1087) F (5092) G (22780) K (8765) M (1255)
+C_FE 0.02±0.11 0.01 ±0.09 -0.01 ±0.07 -0.01 ±0.05 -0.01 ±0.06
+CI_FE 0.02±0.11 0.01 ±0.10 0.00 ±0.09 0.00 ±0.09 -0.01 ±0.08
+N_FE -0.04±0.24 -0.01 ±0.20 0.00 ±0.11 -0.01 ±0.12 -0.01 ±0.14
+O_FE 0.01±0.09 0.01 ±0.07 0.00 ±0.07 -0.02 ±0.12 -0.02 ±0.13
+MG_FE 0.02 ±0.10 0.01 ±0.08 0.00 ±0.06 -0.01 ±0.08 -0.03 ±0.09
+AL_FE 0.01±0.14 0.01 ±0.11 0.00 ±0.10 -0.01 ±0.11 -0.04 ±0.14
+SI_FE 0.01±0.09 0.01 ±0.07 0.01 ±0.05 0.00 ±0.06 -0.01 ±0.06
+S_FE -0.01±0.14 0.00 ±0.12 0.00 ±0.12 0.00 ±0.12 -0.01 ±0.15
+MN_FE 0.03 ±0.16 0.01 ±0.11 0.00 ±0.08 -0.01 ±0.09 0.01 ±0.09
+NI_FE 0.00±0.23 0.00 ±0.20 0.00 ±0.15 -0.01 ±0.11 -0.01 ±0.07
+CA_FE 0.01±0.15 0.00 ±0.11 0.00 ±0.06 -0.01 ±0.06 -0.02 ±0.08
+NA_FE 0.06±0.61 0.03 ±0.29 0.03 ±0.26 0.00 ±0.18 0.00 ±0.17
+P_FE 0.01±0.49 0.03 ±0.36 0.03 ±0.31 0.00 ±0.22 -0.01 ±0.21
+K_FE 0.03±0.20 0.02 ±0.18 0.00 ±0.12 0.00 ±0.12 -0.02 ±0.13
+TI_FE -0.01±0.21 -0.01 ±0.15 -0.01 ±0.11 -0.02 ±0.08 -0.03 ±0.11
+TIII_FE 0.03 ±0.26 0.02 ±0.23 0.02 ±0.21 0.02 ±0.26 0.02 ±0.26
+CR_FE 0.00±0.29 0.00 ±0.24 0.00 ±0.17 0.00 ±0.11 -0.01 ±0.10
+CO_FE 0.11±0.55 0.07 ±0.43 0.02 ±0.35 -0.01 ±0.38 0.01 ±0.26
+CU_FE -0.02 ±0.34 -0.01 ±0.28 0.00 ±0.21 0.01 ±0.15 -0.02 ±0.15
+V_FE 0.00±0.21 -0.01 ±0.21 -0.01 ±0.18 0.00 ±0.18 0.01 ±0.17
+CE_FE 0.03±0.30 0.01 ±0.28 0.02 ±0.28 0.04 ±0.24 0.03 ±0.23
+NoteThe number in parentheses indicates the number of samples in each class.
+stars, the dispersion in Teﬀ predictions is only 56 K with
+the LLM, whereas the ResNet-50 baseline reach disper-
+sions as high as 1975 K, highlighting a substantial per-
+formance diﬀerence. Similar advantages are observed for
+the dominant spectral types F, G, and K. Taking G-type
+stars as an example, the LLM achieves a Teﬀ dispersion
+of only 66 K and a [Fe/ H] dispersion as low as 0.06 dex,
+signiﬁcantly outperforming the corresponding values of
+124 K and 0.16 dex from traditional models. For K-
+type stars, the LLM also achieves superior control of
+dispersion, with values of 55 K for Teﬀ and 0.08 dex
+for [Fe/ H], both better than those of conventional ap-
+proaches. In the prediction of multiple elemental abun-
+dances, the LLM performs on par with the traditional
+ResNet-50 model for most elements, while showing no-
+tably improved performance for speciﬁc elements (e.g.,
+K_FE and TI_FE).
+We observed a scaling trend in the performance of
+LLMs for spectroscopic tasks, whereby model behav-
+ior varied systematically with model capacity and train-
+ing data volume. By comparing results obtained from
+datasets of 105, 5 × 105, and 1. 5 × 106 samples (as shown
+in Tables 3, 4, and 2), we found that, as the training
+sample size and eﬀective model capacity increased to-
+gether, the mean prediction biases for the three funda-
+mental atmospheric parameters tended to move closer
+to zero, while the prediction dispersions showed sta-
+ble convergence trends. Even at the 105-sample level,
+the model already maintained nearly unbiased estimates
+across diﬀerent spectral types; at the 5×105 and 1. 5×106
+scales, the standard deviations of Teﬀ , log g, and [Fe/ H]
+were further compressed, and more consistent statisti-
+cal properties were achieved across the major spectral
+classes.
+This continuously improving performance with in-
+creasing scale is consistent with the scaling-law behavior
+revealed by large language models in natural language
+processing tasks, whereby growth in model parame-
+ter count and eﬀective training data systematically en-
+hances the representation of complex high-dimensional
+structures. In the context of spectral modelinga task
+characterized by high dimensionality, strong correla-
+tions, and implicit physical constraintsthe scaling be-
+havior of LLMs is particularly critical. Larger model
+
+A review of AGB star 11
+T able 6. Test-set RMSE comparison of elemental abundance predictions between
+ResNet-50 and the second-stage LLM model across spectral types
+Parameter ResNet-50 LLM
+All A F G K M All A F G K M
+C_FE 0.08 0.11 0.08 0.09 0.06 0.06 0.11 0.23 0.12 0.10 0.10 0.12
+CI_FE 0.11 0.11 0.09 0.13 0.08 0.08 0.14 0.15 0.13 0.14 0.14 0.15
+N_FE 0.12 0.15 0.18 0.11 0.08 0.12 0.16 0.37 0.17 0.15 0.16 0.18
+MG_FE 0.08 0.12 0.09 0.08 0.07 0.08 0.12 0.17 0.12 0.12 0.12 0.14
+AL_FE 0.17 0.30 0.19 0.19 0.08 0.12 0.13 0.13 0.13 0.13 0.13 0.14
+SI_FE 0.08 0.11 0.09 0.09 0.05 0.07 0.09 0.13 0.09 0.09 0.09 0.11
+S_FE 0.18 0.12 0.11 0.21 0.13 0.07 0.16 0.18 0.16 0.16 0.16 0.17
+MN_FE 0.10 0.12 0.11 0.11 0.06 0.06 0.10 0.14 0.10 0.10 0.10 0.11
+NI_FE 0.08 0.14 0.09 0.08 0.05 0.08 0.06 0.12 0.06 0.06 0.06 0.07
+CA_FE 0.14 0.16 0.11 0.18 0.04 0.06 0.09 0.08 0.09 0.09 0.09 0.09
+NA_FE 0.21 0.26 0.30 0.21 0.13 0.10 0.27 0.24 0.27 0.27 0.27 0.28
+P_FE 0.24 0.16 0.20 0.28 0.13 0.09 0.31 0.27 0.31 0.31 0.31 0.33
+K_FE 0.47 0.28 0.24 0.59 0.11 0.07 0.16 0.36 0.16 0.15 0.15 0.17
+TI_FE 0.28 0.18 0.16 0.34 0.08 0.05 0.14 0.09 0.14 0.14 0.14 0.14
+TIII_FE 0.17 0.08 0.18 0.19 0.12 0.05 0.26 0.15 0.25 0.26 0.26 0.28
+CR_FE 0.21 0.15 0.22 0.24 0.10 0.08 0.18 0.15 0.18 0.18 0.17 0.18
+CO_FE 0.55 0.09 0.38 0.66 0.30 0.22 0.35 0.12 0.35 0.35 0.35 0.36
+CU_FE 0.22 0.17 0.24 0.25 0.12 0.10 0.22 0.31 0.22 0.21 0.22 0.24
+O_FE 0.08 0.10 0.07 0.08 0.06 0.07 0.13 0.11 0.14 0.13 0.13 0.14
+V_FE 0.14 0.02 0.06 0.16 0.11 0.06 0.20 0.21 0.21 0.20 0.21 0.20
+CE_FE 0.19 0.25 0.19 0.21 0.14 0.04 0.31 0.31 0.30 0.31 0.31 0.26
+Note— RMSE values for stellar parameters. Columns A, F, G, K, and M correspond to spectral
+types.
+capacity may help improve the modeling accuracy of
+global spectral shapes and cross-band contextual rela-
+tionships, and is likely to facilitate a more uniﬁed rep-
+resentation of physical distribution diﬀerences among
+spectral types, thereby contributing to improved pre-
+dictive stability and generalization as the sample size
+increases. These results demonstrate that the paradigm
+of modeling spectra as a form of language inherently
+possesses strong scalability, providing a promising di-
+rection for further improvements in parameter inversion
+accuracy under larger samples, higher spectral resolu-
+tion, and more complex observational conditions.
+The superior performance of LLMs may be attributed
+to their unique mechanisms for global information inte-
+gration and cross-contextual relationship mining. Com-
+pared with the CNN baseline used here (ResNet-50),
+which are often limited to local feature extraction and
+struggle to capture global correlations within spectral
+data, LLMs can deeply exploit the overall spectral struc-
+ture and cross-band contextual information, can cap-
+ture the complex nonlinear relationships between spec-
+tral morphology and stellar physical parameters. This
+mode of information processing is highly compatible
+with the intrinsically high-dimensional and strongly cor-
+related nature of spectroscopic data, enabling LLMs to
+more fully learn the underlying physical laws from large-
+scale samples. As a result, they can mitigate common is-
+sues such as underﬁtting or convergence to local optima
+that often aﬀect traditional models, leading to improved
+accuracy and robustness.
+5.2. Consistency of Inferred Parameters with External
+Survey Results
+In the previous subsection, we systematically demon-
+strated the validity and advantages of treating spectra
+as language and introducing large language models for
+spectroscopic modeling, from both the perspective of the
+performance gains observed in comparative experiments
+and the underlying reasons for these advantages. Val-
+idation on large-sample test sets shows that LLMs not
+only achieve signiﬁcantly higher accuracy and stability
+than traditional models in predicting atmospheric phys-
+ical parameters, but also deliver performance in multi-
+element abundance prediction tasks that is comparable
+to conventional neural network models, with clear ad-
+vantages for certain elements. These results suggest the
+potential of LLMs to capture complex relationships be-
+tween the global spectral structure and stellar physical
+parameters within the APOGEE spectral data frame-
+work.
+Nevertheless, internal evaluations based solely on ho-
+mogeneous datasets are insuﬃcient to fully establish the
+scientiﬁc reliability and generalization capability of the
+
+12 Lu et al.
+model. To further assess the applicability of LLMs in
+realistic astronomical observational scenarios, it is nec-
+essary to cross-validate their inference results against
+external high-resolution spectroscopic surveys. There-
+fore, in the following analysis, we systematically com-
+pare the model predictions with data from external high-
+resolution surveys such as Gaia-ESO and GALAH DR4,
+in order to evaluate the consistency of inference and the
+physical plausibility of the model under cross-dataset
+conditions.
+5.2.1. Comparison between the First-Stage Model and
+External Datasets
+To examine the consistency and generalization capa-
+bility of the model on external high-resolution spec-
+troscopic datasets, we compared the inference results
+of the single-stage LLM model with stellar parameters
+provided by Gaia-ESO and GALAH DR4 , respec-
+tively. We focused on three key parameters Teﬀ , log g,
+and [Fe/H]and evaluated their systematic biases and dis-
+persions across diﬀerent spectral-type subsamples. The
+corresponding statistical results are summarized in Ta-
+ble 7. For the GALAH dataset, the adopted data qual-
+ity cuts 2 were snr_lpx_ccd3 > 30 && flag_sp == 0
+&& flag_X_fe == 0 (Buder et al. 2025). Due to the
+limited number of stars cross-matched with Gaia-ESO,
+no additional quality cuts were applied to that dataset.
+For the Gaia-ESO dataset, Figs. 1, 2, and 3 illustrate
+the comparisons between the model predictions and the
+reference labels. As shown in Table 7, for F-, G-, and
+K-type stars, the mean biases of all three parameters
+were generally smallmostly below 100 Kand the disper-
+sions σ, although somewhat larger, remained close to the
+102 K level. This suggested good consistency between
+the model predictions and the Gaia-ESO scale for these
+well-sampled spectral types. In contrast, A- and M-type
+stars exhibited relatively larger dispersions in Teﬀ , log g,
+and [Fe/H], which were likely inﬂuenced by their limited
+sample sizes and the resulting statistical uncertainties.
+For the GALAH DR4 dataset, Figs. 4, 5, and 6
+present the corresponding external comparisons, with
+statistical metrics also listed in Table 7. Overall, the
+predicted results for F-, G-, K-, and M-type stars showed
+good agreement with GALAH DR4 across all three pa-
+rameters: the point clouds were primarily distributed
+along the diagonal, and the overall dispersions were
+small, demonstrating the models reliable generalization
+performance on this dataset.
+For Teﬀ , A-type stars displayed relatively larger dis-
+persions. In addition to limitations in model capabil-
+2 https://www.galah-survey.org/dr4/using_the_data/
+ity, this behavior was also likely related to the intrin-
+sic uncertainties of early-type stellar labels in GALAH
+DR4 ( Buder et al. 2025). For log g, the dispersions for
+A- and M-type stars were slightly higher than those for
+other spectral types, but remained within an acceptable
+range, while the remaining spectral types maintained
+low σ values. For [Fe/H], only the M-type subsample
+showed relatively larger dispersion, whereas the error
+distributions for other spectral types were more concen-
+trated; this was likely associated with the lower signal-
+to-noise ratios of late-type stellar spectra.
+Taken together, the external comparisons with Gaia-
+ESO and GALAH DR4 show that the single-stage LLM
+model maintains consistent performance across diﬀer-
+ent high-resolution spectroscopic surveys. Except for
+early-type (A-type) or late-type (M-type) stars with lim-
+ited sample sizes, the parameters Teﬀ , log g, and [Fe/H]
+exhibit small systematic biases and dispersions for the
+dominant spectral types (F/G/K), suggesting reliable
+cross-dataset generalization.
+5.2.2. Comparison between the Second-Stage Model and
+External Datasets
+In the previous subsection, we have veriﬁed the ex-
+ternal consistency of the single-stage LLM model. Here,
+we further extend the analysis to the two-stage model by
+systematically comparing its element-by-element abun-
+dance predictions with those from the external spectro-
+scopic surveys Gaia-ESO and GALAH DR4. As shown
+in Table 8, we assess the reliability of the two-stage
+model at the chemical abundance level by examining the
+degree of consistency for multiple elements across diﬀer-
+ent datasets. Figures 7 and 8 present one-to-one cor-
+relation plots for a subset of elements, comparing the
+model-inferred results with stellar parameters derived
+from high-resolution spectra in Gaia-ESO and GALAH
+DR4, respectively.
+Overall, the conclusions drawn from the two external
+datasets are broadly consistent. Most elements exhibit
+a trend in which the scatter clouds approach the 1:1
+dashed line in both comparisons. However, substantial
+diﬀerences are observed among individual elements: one
+group shows small scatter or low dispersion (indicating
+good external transferability), while another group dis-
+plays much larger scatter and more complex distribution
+patterns, reﬂecting weaker external consistency.
+In the Gaia-ESO comparison (Table 8), the model
+demonstrates the most stable external transferability for
+a set of elements, including MG_FE, SI_FE, CA_FE, TI_FE,
+MN_FE, NI_FE, C_FE, and N_FE. In the corresponding
+scatter-density plots (Fig. 7), the point clouds for these
+elements form relatively narrow bands along the 1:1 re-
+lation, with generally small dispersions σ (e.g., NI_FE
+
+A review of AGB star 13
+T able 7. External validation of the ﬁrst-stage model against Gaia-ESO and GALAH DR4 across stellar spectral subclasses
+Gaia-ESO GALAH DR4
+Subclass Teﬀ (µ ± σ ) log g (µ ± σ ) [Fe/H] ( µ ± σ ) Teﬀ (µ ± σ ) log g (µ ± σ ) [Fe/H] ( µ ± σ )
+A 41 ± 380 0 . 02 ± 0. 40 −0. 06 ± 0. 33 −280 ± 186 0 . 01 ± 0. 23 0 . 11 ± 0. 13
+F 17 ± 164 0 . 04 ± 0. 19 −0. 02 ± 0. 13 108 ± 98 0 . 03 ± 0. 13 −0. 01 ± 0. 07
+G 6 ± 123 −0. 06 ± 0. 23 −0. 05 ± 0. 15 28 ± 86 0 . 00 ± 0. 14 −0. 02 ± 0. 07
+K −63 ± 128 0 . 04 ± 0. 17 0 . 00 ± 0. 18 −49 ± 114 0 . 07 ± 0. 13 0 . 03 ± 0. 09
+M −102 ± 147 −0. 13 ± 0. 26 0 . 17 ± 0. 38 −42 ± 86 −0. 06 ± 0. 24 0 . 19 ± 0. 28
+All Classes −5 ± 138 −0. 02 ± 0. 22 −0. 03 ± 0. 16 42 ± 105 0 . 02 ± 0. 14 −0. 01 ± 0. 08
+exhibits the smallest σ, while the other elemental abun-
+dances also maintain low scatter). This indicates a high
+degree of consistency and robustness between the model
+predictions and the external survey parameters for these
+elements. Meanwhile, AL_FE, K_FE, CR_FE, and CU_FE
+show intermediate levels of dispersion: although their
+scatter distributions still broadly follow the 1:1 relation,
+the bandwidth is wider, suggesting that they may be ad-
+equate for studies of global chemical trends but should
+be used with greater caution in ﬁne-structure analyses.
+In contrast, the elements with relatively weaker exter-
+nal consistency in the Gaia-ESO comparison are mainly
+O_FE, NA_FE, V_FE, CO_FE, and CE_FE. Among them,
+O_FE, NA_FE, and V_FE exhibit signiﬁcantly increased
+dispersion (with σ values markedly higher than those of
+the stable element group), accompanied by more diﬀuse
+scatter distributions and more pronounced deviations
+from the 1:1 trend. CO_FE not only shows relatively
+large dispersion, but also presents a clear negative zero-
+point bias (with a negative and relatively large µ), and is
+more prone to non-linear structures. CE_FE displays the
+largest dispersion and the weakest external consistency.
+In the GALAH DR4 comparison (Table 8), the
+above grouping is reaﬃrmed. The elements with the
+best external consistency remain MG_FE, SI_FE, CA_FE,
+TI_FE, MN_FE, NI_FE, C_FE, and N_FE, all of which main-
+tain low σ values under both external reference scales,
+with scatter patterns most closely aligned with the 1:1
+relation, indicating strong external consistency. AL_FE,
+K_FE, CR_FE, and CU_FE continue to form a group char-
+acterized by moderate dispersion but relatively consis-
+tent trends. The elements with weaker external con-
+sistency are again concentrated in O_FE, NA_FE, V_FE,
+CO_FE, and CE_FE: among these, CE_FE still exhibits the
+largest dispersion in GALAH DR4, while CO_FE contin-
+ues to show a pronounced negative µ.
+By combining the results from both external reference
+scales, we classify the external performance of the ele-
+ments into three categories:
+(i) Well-determined and stable : MG_FE, SI_FE, CA_FE,
+TI_FE, MN_FE, NI_FE, C_FE, and N_FE;
+T able 8. External validation of elemental abundance pre-
+dictions for the second-stage model against Gaia-ESO and
+GALAH DR4
+Gaia-ESO Galah DR4
+Elem. N µ σ N µ σ
+O_FE 5925 0.03 0.27 56771 −0.01 0.25
+NA_FE 6620 0.03 0.25 60817 0.01 0.26
+MG_FE 6349 −0.05 0.13 56166 −0.04 0.13
+AL_FE 5464 −0.03 0.16 48280 −0.03 0.16
+SI_FE 5582 −0.04 0.10 49623 −0.06 0.10
+K_FE 6510 0.15 0.19 60117 0.16 0.20
+CA_FE 6684 0.12 0.12 61522 0.13 0.13
+TI_FE 5341 −0.13 0.13 46616 −0.12 0.13
+V_FE 5481 0.09 0.28 47977 0.09 0.27
+CR_FE 6016 0.07 0.15 56561 0.07 0.15
+MN_FE 6007 −0.08 0.11 56558 −0.07 0.12
+CO_FE 5271 −0.27 0.24 46105 −0.24 0.21
+NI_FE 6430 0.03 0.07 59210 0.02 0.08
+CU_FE 5721 0.03 0.18 52287 0.02 0.18
+C_FE 2055 −0.06 0.09 12277 −0.04 0.10
+N_FE 1144 −0.03 0.15 8819 −0.02 0.17
+CE_FE 1139 −0.09 0.32 8367 −0.03 0.34
+(ii) Moderately stable (usable but with slightly reduced
+precision): AL_FE, K_FE, CR_FE, and CU_FE;
+(iii) Relatively weak external consistency : O_FE,
+NA_FE, V_FE, CO_FE, and CE_FE.
+From both physical and data-processing perspectives,
+the latter group of elements can be often more limited
+by factors such as an insuﬃcient number of eﬀective
+diagnostic lines, weak or blended features, and diﬀer-
+ences among surveys in non-LTE/3D treatments, line
+lists, and prior assumptions. As a result, they are more
+likely to exhibit larger scatter or systematic oﬀsets in ex-
+ternal comparisons. Accordingly, for studies of chemical
+evolution trends, population classiﬁcation, or chemical
+tagging, we recommend prioritizing robust tracers such
+as MG_FE, SI_FE, CA_FE, TI_FE, MN_FE, CR_FE, NI_FE,
+C_FE, and N_FE. For O_FE, NA_FE, V_FE, CO_FE, and
+CE_FE, stricter quality cuts are advised, along with ex-
+plicit correction or modeling of systematic eﬀects, or the
+
+14 Lu et al.
+inclusion of larger systematic uncertainties in scientiﬁc
+interpretations.
+5.3. Limitations and Future Work
+Despite its advantages, the LLM still has limitations
+when applied to spectroscopic tasks, and we outline pos-
+sible directions for improvement. Speciﬁcally, for the
+prediction of the three fundamental atmospheric param-
+eters, the remaining shortcomings are mainly manifested
+in two aspects: (i) there is still room for improvement
+in the prediction of Teﬀ and log g for early-type A stars,
+where the generalization capability needs to be further
+strengthened; and (ii) the prediction of Teﬀ for late-
+type M stars also requires additional improvement. In
+terms of underlying causes, these limitations primarily
+are likely related to insuﬃcient precision in capturing
+weak and blended spectral features, as well as inade-
+quate feature learning for a small number of underrep-
+resented spectral types.
+To address the above issues, future work can miti-
+gate these limitations through a series of targeted strate-
+gies. For example, additional samples of speciﬁc spec-
+tral types such as A and M stars can be incorporated
+for dedicated training to enhance the models learning
+of underrepresented classes; the model architecture can
+be optimized to strengthen the extraction mechanisms
+for weak and blended spectral lines; and model ensem-
+ble strategies can be introduced to combine the fea-
+ture extraction strengths of traditional models with the
+global information integration capability of LLMs, to
+leverage complementary strengths. Through these im-
+provements, the application potential of LLMs in spec-
+troscopic tasks could be further improved, facilitating
+broader and more eﬀective applications in astronomical
+spectral data analysis.
+In element-by-element abundance prediction tasks, al-
+though the LLM demonstrates clear advantages for sev-
+eral key elements, its overall performance has not yet
+comprehensively surpassed that of traditional models
+across all elemental dimensions. Compared with fun-
+damental atmospheric parameters, element-wise abun-
+dance regression is more sensitive to the physical ori-
+gins of spectral lines, the precision of local feature rep-
+resentation, and the degeneracy induced by line blend-
+ing. Consequently, the model is required not only to
+understand the global contextual structure of spectra,
+but also to achieve high-precision characterization of in-
+dividual or a small number of spectral features within
+speciﬁc wavelength regions. The performance variation
+of a single modeling paradigm across diﬀerent elements
+therefore may reﬂects an inherent trade-oﬀ between the
+global modeling strengths of LLMs and the ﬁne-grained
+ﬁtting of local spectral lines.
+Building on this complementary nature, future work
+may further explore hybrid modeling strategies tailored
+for element-wise abundance tasks. For instance, con-
+volutional or physics-informed prior modules can be in-
+troduced for elements dominated by strong local spec-
+tral lines, while the contextual modeling capability of
+LLMs can be enhanced for elements that rely on the
+synergy of multiple lines and cross-band information. In
+this way, an overall improvement in element-by-element
+abundance inversion accuracy may be achieved within a
+uniﬁed framework.
+6. CONCLUSION
+In this study, we propose a large language model
+(LLM) framework for stellar spectral parameter inver-
+sion, in which stellar spectra are modeled as language-
+like sequences and a two-stage training strategy is
+adopted. Speciﬁcally, the model ﬁrst learns general
+spectral representations from large-scale low-resolution
+spectra from LAMOST, and is then ﬁne-tuned using
+high-quality labels from APOGEE to enable joint pre-
+diction of multiple physical quantities. Experimental
+results show that the proposed approach can accurately
+and jointly infer three fundamental atmospheric param-
+eters ( Teﬀ , log g, and [Fe/ H]), and can also jointly pre-
+dict the abundances of nearly twenty chemical elements.
+Compared with traditional machine learning methods
+and convolutional neural network baselines, the LLM ex-
+hibits smaller error dispersion and more consistent sta-
+tistical behavior across most spectral types. Notably,
+it maintains improved robustness even in low signal-
+to-noise regimes or subsamples with imbalanced distri-
+butions, highlighting its potential for large-scale survey
+data processing.
+Importantly, based on comparative experiments with
+data scales of 105, 5 × 105, and 1. 5 × 106, we observe
+a scaling trend in model performance. As the training
+sample size and eﬀective model capacity increase, the
+systematic biases ( µ) of the three fundamental parame-
+ter predictions consistently converge toward zero, while
+the dispersions ( σ) are further reduced, yielding more
+uniform error distributions across major spectral types.
+This behavior is consistent with scaling laws observed in
+natural language tasks, indicating that the paradigm of
+modeling spectra as language possesses favorable scal-
+ability. Furthermore, cross-validation against external
+high-resolution surveys such as Gaia-ESO and GALAH
+DR4 shows that the model preserves good physical plau-
+sibility across datasets. For F/G/K-type stars, both
+the systematic biases and dispersions of Teﬀ , log g, and
+
+A review of AGB star 15
+[Fe/ H] remain relatively small, while at the elemen-
+tal abundance level, several key elements exhibit sta-
+ble agreement across diﬀerent external reference scales,
+further lending support to the reliability of the model
+predictions.
+Nevertheless, early-type A stars and late-type M stars
+remain challenging for both atmospheric parameter re-
+gression and element-by-element abundance inference.
+In addition, the external consistency of some elements
+is relatively weaker likely due to factors such as intrin-
+sically weak or blended spectral lines, a limited number
+of eﬀective diagnostic features, and diﬀerences in line
+lists and prior treatments among surveys. Future work
+may further improve performance from the perspectives
+of data, model architecture, and training strategy. Pos-
+sible directions include targeted data augmentation and
+rebalanced training for A/M-type samples, the incorpo-
+ration of physics-informed feature enhancement mecha-
+nisms tailored to weak-line and molecular-band regions,
+and the exploration of hybrid or integrated frameworks
+combining LLMs with CNNs to jointly leverage global
+contextual modeling and ﬁne-grained local spectral fea-
+ture extraction within a uniﬁed system. In summary,
+this work shows the feasibility and potential of large
+language models in quantitative spectroscopy, and pro-
+vides a scalable new technical pathway for eﬃcient and
+precise stellar parameter determination in forthcoming
+larger-scale and higher-resolution spectroscopic surveys.
+7. FUNDING
+This work is supported by the National Natural
+Science Foundation of China (12273078, 12411530071,
+12273075), National Key Research and Development
+ProgramGrant No. 2025YFF0510602and National As-
+tronomical Observatories of the Chinese Academy of Sci-
+ences (No.E4ZR0516).
+REFERENCES
+Abdurro’uf, Accetta, K., Aerts, C., et al. 2022, ApJS, 259,
+35, doi: 10.3847/1538-4365/ac4414
+Bialek, S., Fabbro, S., Venn, K. A., et al. 2020, MNRAS,
+498, 3817, doi: 10.1093/mnras/staa2582
+Buder, S., Kos, J., Wang, X. E., et al. 2025, PASA, 42,
+e051, doi: 10.1017/pasa.2025.26
+Chaini, S., & Kumar, S. S. 2020, Astronomical
+Classiﬁcation of Light Curves with an Ensemble of Gated
+Recurrent Units. https://arxiv.org/abs/2006.12333
+Chen, T., & Guestrin, C. 2016, in Proceedings of the 22nd
+ACM SIGKDD International Conference on Knowledge
+Discovery and Data Mining, KDD 16 (ACM), 785794,
+doi: 10.1145/2939672.2939785
+Chung, J., Gulcehre, C., Cho, K., & Bengio, Y. 2014,
+Empirical Evaluation of Gated Recurrent Neural
+Networks on Sequence Modeling.
+https://arxiv.org/abs/1412.3555
+Cui, X.-Q., Zhao, Y.-H., Chu, Y.-Q., et al. 2012, Research
+in Astronomy and Astrophysics, 12, 1197,
+doi: 10.1088/1674-4527/12/9/003
+Fortino, W. F., Bianco, F. B., Protopapas, P.,
+Muthukrishna, D., & Brockmeier, A. 2026, ApJ, 1000,
+14, doi: 10.3847/1538-4357/ae3b41
+García Pérez, A. E., Allende Prieto, C., Holtzman, J. A.,
+et al. 2016, AJ, 151, 144,
+doi: 10.3847/0004-6256/151/6/144
+Gilda, S. 2025, RAS Techniques and Instruments, 4,
+rzaf048, doi: 10.1093/rasti/rzaf048
+Group, N. L. C. 2017, in Proceedings of ... https:
+//www.microsoft.com/en-us/research/publication/mcr/
+He, K., Zhang, X., Ren, S., & Sun, J. 2016, in 2016 IEEE
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 770–778, doi: 10.1109/CVPR.2016.90
+Hochreiter, S., & Schmidhuber, J. 1997, Neural
+Computation, 9, 1735, doi: 10.1162/neco.1997.9.8.1735
+Jiang, Y., Pan, Z., Zhang, X., et al. 2024, arXiv e-prints,
+arXiv:2402.03182, doi: 10.48550/arXiv.2402.03182
+Ke, G., Meng, Q., Finley, T., et al. 2017, in Proceedings of
+the 31st International Conference on Neural Information
+Processing Systems, NIPS’17 (Red Hook, NY, USA:
+Curran Associates Inc.), 31493157
+Lee, Y. S., Beers, T. C., Sivarani, T., et al. 2008, AJ, 136,
+2022, doi: 10.1088/0004-6256/136/5/2022
+Li, S., Li, Y.-B., Luo, A.-L., et al. 2025, ApJS, 281, 58,
+doi: 10.3847/1538-4365/ae1586
+Li, Y.-Y., Bai, Y., Wang, C., et al. 2024, arXiv e-prints,
+arXiv:2404.10757, doi: 10.48550/arXiv.2404.10757
+Li, Z., Zhao, G., Chen, Y., Liang, X., & Zhao, J. 2022,
+MNRAS, 517, 4875, doi: 10.1093/mnras/stac1959
+Liang, J., Bu, Y., Tan, K., et al. 2022, The Astronomical
+Journal, 163, 153, doi: 10.3847/1538-3881/ac4d97
+Luo, A. L., Zhao, Y.-H., Zhao, G., et al. 2015, Research in
+Astronomy and Astrophysics, 15, 1095,
+doi: 10.1088/1674-4527/15/8/002
+Meng, Q., Ke, G., Wang, T., et al. 2016, in Proceedings of
+the 30th International Conference on Neural Information
+Processing Systems, NIPS’16 (Red Hook, NY, USA:
+Curran Associates Inc.), 12791287
+Nate Gruver, Marc Finzi, S. Q., & Wilson, A. G. 2023, in
+Advances in Neural Information Processing Systems
+
+16 Lu et al.
+6000 8000 10000 12000
+Actual T eff
+5000
+6000
+7000
+8000
+9000
+10000
+11000
+12000Predicted T eff
+num=24
+=41
+=380
+A
+4000 5000 6000 7000 8000
+Actual T eff
+4000
+5000
+6000
+7000
+8000Predicted T eff
+num=237
+=17
+=164
+F
+4000 4500 5000 5500 6000 6500
+Actual T eff
+4000
+4500
+5000
+5500
+6000
+6500Predicted T eff
+num=438
+=6
+=123
+G
+4000 4500 5000 5500
+Actual T eff
+3750
+4000
+4250
+4500
+4750
+5000
+5250
+5500
+5750Predicted T eff
+num=161
+=-63
+=128
+K
+3500 4000 4500 5000
+Actual T eff
+3250
+3500
+3750
+4000
+4250
+4500
+4750
+5000
+5250Predicted T eff
+num=44
+=-102
+=147
+M
+4000 6000 8000 10000 12000
+Actual T eff
+4000
+6000
+8000
+10000
+12000Predicted T eff
+num=904
+=-5
+=138
+ALL
+0.900
+0.925
+0.950
+0.975
+1.000
+1.025
+1.050
+1.075
+1.100
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+2
+4
+6
+8
+10
+Count
+Figure 1. Teﬀ compared with Gaia-ESO.
+Ness, M., Hogg, D. W., Rix, H.-W., Ho, A. Y. Q., &
+Zasowski, G. 2015, ApJ, 808, 16,
+doi: 10.1088/0004-637X/808/1/16
+O’Briain, T., Ting, Y.-S., Fabbro, S., et al. 2021, ApJ, 906,
+130, doi: 10.3847/1538-4357/abca96
+Parker, L., Lanusse, F., Shen, J., et al. 2025, arXiv e-prints,
+arXiv:2510.17960, doi: 10.48550/arXiv.2510.17960
+Ramachandra, N., Ting, Y.-S., Sun, Z., Wells, A., & Habib,
+S. 2025, arXiv e-prints, arXiv:2508.10075,
+doi: 10.48550/arXiv.2508.10075
+Shao, M., Wang, H., Li, Y., et al. 2025, arXiv e-prints,
+arXiv:2511.08970, doi: 10.48550/arXiv.2511.08970
+Shetrone, M., Beaton, R. L., Hayes, C. R., et al. 2025,
+arXiv e-prints, arXiv:2511.04365,
+doi: 10.48550/arXiv.2511.04365
+Smolinski, J. P., Lee, Y. S., Beers, T. C., et al. 2011, AJ,
+141, 89, doi: 10.1088/0004-6256/141/3/89
+Steinmetz, M., Guiglion, G., McMillan, P. J., et al. 2020,
+AJ, 160, 83, doi: 10.3847/1538-3881/ab9ab8
+Stoppa, F., Bulmus, T., Bloemen, S., et al. 2025, Nature
+Astronomy, 9, 1869, doi: 10.1038/s41550-025-02670-z
+Ting, Y.-S., Conroy, C., Rix, H.-W., & Cargile, P. 2019,
+ApJ, 879, 69, doi: 10.3847/1538-4357/ab2331
+Vaswani, A., Shazeer, N., Parmar, N., et al. 2017, in
+Advances in Neural Information Processing Systems, ed.
+I. Guyon, U. V. Luxburg, S. Bengio, H. Wallach,
+R. Fergus, S. Vishwanathan, & R. Garnett, Vol. 30
+(Curran Associates, Inc.).
+https://proceedings.neurips.cc/paper_ﬁles/paper/2017/
+ﬁle/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf
+Wang, Y., Zhang, S.-R., Momtaz, A., et al. 2024, arXiv
+e-prints, arXiv:2404.10019,
+doi: 10.48550/arXiv.2404.10019
+Xiang, M., Ting, Y.-S., Rix, H.-W., et al. 2019, ApJS, 245,
+34, doi: 10.3847/1538-4365/ab5364
+Xiang, M.-S., Liu, X.-W., Shi, J.-R., et al. 2017, MNRAS,
+464, 3657, doi: 10.1093/mnras/stw2523
+Xie, T., Wan, Y., Huang, W., et al. 2023, arXiv e-prints,
+arXiv:2308.13565, doi: 10.48550/arXiv.2308.13565
+Zhang, Q., Ding, K., Lyv, T., et al. 2024a, arXiv e-prints,
+arXiv:2401.14656, doi: 10.48550/arXiv.2401.14656
+
+A review of AGB star 17
+2.0 2.5 3.0 3.5 4.0 4.5
+Actual logg
+2.0
+2.5
+3.0
+3.5
+4.0
+4.5Predicted logg
+num=24
+=0.02
+=0.40
+A
+2 3 4
+Actual logg
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+4.5Predicted logg
+num=237
+=0.04
+=0.19
+F
+1 2 3 4
+Actual logg
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+4.5Predicted logg
+num=438
+=-0.06
+=0.23
+G
+1 2 3 4 5
+Actual logg
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+4.5
+5.0Predicted logg
+num=161
+=0.04
+=0.17
+K
+1 2 3 4 5
+Actual logg
+1
+2
+3
+4
+5Predicted logg
+num=44
+=-0.13
+=0.26
+M
+1 2 3 4 5
+Actual logg
+1
+2
+3
+4
+5Predicted logg
+num=904
+=-0.02
+=0.22
+ALL
+0.900
+0.925
+0.950
+0.975
+1.000
+1.025
+1.050
+1.075
+1.100
+Count
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+Count
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+1
+2
+3
+4
+5
+6
+Count
+Figure 2. logg compared with Gaia-ESO.
+Zhang, X., Chowdhury, R. R., Gupta, R. K., & Shang, J.
+2024b, arXiv e-prints, arXiv:2402.01801,
+doi: 10.48550/arXiv.2402.01801
+Zhao, F., Li, Y., Liu, Z., et al. 2025, Machine Learning:
+Science and Technology, 6, 045005,
+doi: 10.1088/2632-2153/ae0c56
+Zhao, X., Huang, Y., Xue, G., et al. 2026, ApJ, 998, 189,
+doi: 10.3847/1538-4357/ae2c7e
+Zheng, Z.-P., Qiu, B., Luo, A. L., & Li, Y.-B. 2020, PASP,
+132, 024504, doi: 10.1088/1538-3873/ab5ed7
+
+18 Lu et al.
+2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0
+Actual [Fe/H]
+2.0
+1.5
+1.0
+0.5
+0.0
+Predicted [Fe/H]
+num=24
+=-0.06
+=0.33
+A
+2.5
+ 2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=237
+=-0.02
+=0.13
+F
+2.5
+ 2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=438
+=-0.05
+=0.15
+G
+1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=161
+=-0.00
+=0.18
+K
+2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0
+Actual [Fe/H]
+2.0
+1.5
+1.0
+0.5
+0.0
+Predicted [Fe/H]
+num=44
+=0.17
+=0.38
+M
+2.5
+ 2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=904
+=-0.03
+=0.16
+ALL
+0.900
+0.925
+0.950
+0.975
+1.000
+1.025
+1.050
+1.075
+1.100
+Count
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+0.900
+0.925
+0.950
+0.975
+1.000
+1.025
+1.050
+1.075
+1.100
+Count
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+4.5
+5.0
+Count
+Figure 3. [Fe/H] compared with Gaia-ESO.
+
+A review of AGB star 19
+5000 6000 7000 8000 9000
+Actual T eff
+5000
+6000
+7000
+8000
+9000Predicted T eff
+num=170
+=280
+=186
+A
+5000 6000 7000 8000
+Actual T eff
+4500
+5000
+5500
+6000
+6500
+7000
+7500
+8000Predicted T eff
+num=12894
+=108
+=98
+F
+4000 4500 5000 5500 6000 6500
+Actual T eff
+4000
+4500
+5000
+5500
+6000
+6500Predicted T eff
+num=26036
+=28
+=86
+G
+3500 4000 4500 5000 5500 6000
+Actual T eff
+3500
+4000
+4500
+5000
+5500
+6000Predicted T eff
+num=5710
+=-49
+=114
+K
+3200 3400 3600 3800 4000
+Actual T eff
+3200
+3400
+3600
+3800
+4000Predicted T eff
+num=293
+=-42
+=86
+M
+3000 4000 5000 6000 7000 8000 9000
+Actual T eff
+3000
+4000
+5000
+6000
+7000
+8000
+9000Predicted T eff
+num=45103
+=42
+=105
+ALL
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+10
+20
+30
+40
+50
+60
+Count
+10
+20
+30
+40
+50
+60
+Count
+2.5
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+20.0
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+25
+50
+75
+100
+125
+150
+175
+200
+225
+Count
+Figure 4. Teﬀ compared with Galah DR4.
+
+20 Lu et al.
+2.5 3.0 3.5 4.0 4.5
+Actual logg
+2.5
+3.0
+3.5
+4.0
+4.5Predicted logg
+num=217
+=0.01
+=0.23
+A
+1 2 3 4 5
+Actual logg
+1
+2
+3
+4
+5Predicted logg
+num=12894
+=0.03
+=0.13
+F
+0 1 2 3 4 5
+Actual logg
+0
+1
+2
+3
+4
+5Predicted logg
+num=26036
+=-0.00
+=0.14
+G
+1 2 3 4 5
+Actual logg
+1
+2
+3
+4
+5Predicted logg
+num=5710
+=0.07
+=0.13
+K
+0 1 2 3 4 5
+Actual logg
+0
+1
+2
+3
+4
+5Predicted logg
+num=324
+=-0.06
+=0.24
+M
+0 1 2 3 4 5
+Actual logg
+0
+1
+2
+3
+4
+5Predicted logg
+num=45181
+=0.02
+=0.14
+ALL
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+20
+40
+60
+80
+100
+120
+Count
+20
+40
+60
+80
+100
+120
+Count
+10
+20
+30
+40
+50
+60
+70
+80
+Count
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+4.0
+Count
+50
+100
+150
+200
+250
+Count
+Figure 5. logg compared with Galah DR4.
+
+A review of AGB star 21
+2
+ 1
+ 0
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=217
+=0.11
+=0.13
+A
+2
+ 1
+ 0
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=12894
+=-0.01
+=0.07
+F
+2
+ 1
+ 0
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=26036
+=-0.02
+=0.07
+G
+2.5
+ 2.0
+ 1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=5710
+=0.03
+=0.09
+K
+1.5
+ 1.0
+ 0.5
+ 0.0 0.5
+Actual [Fe/H]
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=324
+=0.19
+=0.28
+M
+2
+ 1
+ 0
+Actual [Fe/H]
+2.5
+2.0
+1.5
+1.0
+0.5
+0.0
+0.5
+Predicted [Fe/H]
+num=45181
+=-0.01
+=0.08
+ALL
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+Count
+10
+20
+30
+40
+50
+60
+70
+Count
+20
+40
+60
+80
+100
+120
+Count
+5
+10
+15
+20
+25
+30
+Count
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Count
+25
+50
+75
+100
+125
+150
+175
+Count
+Figure 6. [Fe/H] compared with Galah DR4.
+
+22 Lu et al.
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000018/uni00000017/uni00000019/uni00000017/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000019
+/uni0000003e/uni00000024/uni0000004f/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000006/uni00000020/uni0000001c/uni0000001c/uni00000016/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000015
+/uni0000003e/uni00000026/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni0000001b
+/uni00000010/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000006/uni00000020/uni00000019/uni00000019/uni0000001b/uni00000017/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000015
+/uni0000003e/uni00000026/uni00000044/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000014/uni00000011/uni00000018
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni0000001a/uni00000019/uni0000001b/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000017/uni00000017
+/uni0000003e/uni00000026/uni00000048/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000006/uni00000020/uni00000019/uni00000015/uni0000001b/uni00000019/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000019
+/uni0000003e/uni00000026/uni00000055/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000014/uni00000011/uni00000015/uni00000018
+/uni00000006/uni00000020/uni00000019/uni00000013/uni00000013/uni00000014/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni0000001c
+/uni0000003e/uni00000026/uni00000058/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000015/uni00000011/uni00000018/uni00000010/uni00000015/uni00000011/uni00000013/uni00000010/uni00000014/uni00000011/uni00000018/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018
+/uni00000010/uni00000015/uni00000011/uni00000018
+/uni00000010/uni00000015/uni00000011/uni00000013
+/uni00000010/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000018/uni00000013/uni00000017/uni00000019/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000015/uni00000016
+/uni0000003e/uni00000029/uni00000048/uni00000012/uni0000002b/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000006/uni00000020/uni00000019/uni00000016/uni00000017/uni0000001c/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000017
+/uni0000003e/uni00000030/uni0000004a/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000006/uni00000020/uni00000019/uni00000016/uni00000017/uni0000001c/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000015
+/uni0000003e/uni00000030/uni00000051/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000014/uni00000011/uni00000013
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000019/uni00000017/uni00000016/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni0000001a
+/uni0000003e/uni00000031/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000016/uni00000010/uni00000013/uni00000011/uni00000015/uni00000010/uni00000013/uni00000011/uni00000014/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000014/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000016
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000016
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000010/uni00000013/uni00000011/uni00000014
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000014
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000016
+/uni00000006/uni00000020/uni00000019/uni00000018/uni00000015/uni00000014/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000013/uni0000001a
+/uni0000003e/uni00000031/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000014/uni00000011/uni00000018
+/uni00000006/uni00000020/uni00000018/uni0000001c/uni00000015/uni00000018/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000015/uni0000001c
+/uni0000003e/uni00000032/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019
+/uni0000002a/uni00000024/uni0000002f/uni00000024/uni0000002b/uni00000010/uni00000027/uni00000035/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000018/uni0000001a/uni0000001c/uni0000001c/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000014
+/uni0000003e/uni00000036/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019
+/uni0000002a/uni00000024/uni0000002f/uni00000024/uni0000002b/uni00000010/uni00000027/uni00000035/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000006/uni00000020/uni00000018/uni00000016/uni00000017/uni00000014/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000017
+/uni0000003e/uni00000037/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000015 /uni00000017 /uni00000019 /uni0000001b /uni00000014/uni00000013
+/uni00000026/uni00000052/uni00000058/uni00000051/uni00000057
+Figure 7. Abundance compared with Gaia ESO.
+
+A review of AGB star 23
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000013/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000017/uni0000001b/uni00000015/uni0000001b/uni00000013/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni0000001a
+/uni0000003e/uni00000024/uni0000004f/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000014/uni00000011/uni00000015/uni00000018
+/uni00000014/uni00000011/uni00000018/uni00000013
+/uni00000006/uni00000020/uni00000014/uni00000015/uni00000015/uni0000001a/uni0000001a/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000016
+/uni0000003e/uni00000026/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000006/uni00000020/uni00000019/uni00000014/uni00000018/uni00000015/uni00000015/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000017
+/uni0000003e/uni00000026/uni00000044/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000018/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000014/uni00000011/uni00000018
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni0000001b/uni00000016/uni00000019/uni0000001a/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000017/uni00000013
+/uni0000003e/uni00000026/uni00000048/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000014/uni00000011/uni00000013/uni00000013
+/uni00000006/uni00000020/uni00000018/uni00000019/uni00000018/uni00000019/uni00000014/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000019
+/uni0000003e/uni00000026/uni00000055/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000006/uni00000020/uni00000018/uni00000015/uni00000015/uni0000001b/uni0000001a/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000015/uni00000013
+/uni0000003e/uni00000026/uni00000058/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000016/uni00000010/uni00000015/uni00000010/uni00000014/uni00000013/uni00000014
+/uni00000010/uni00000016
+/uni00000010/uni00000015
+/uni00000010/uni00000014
+/uni00000013
+/uni00000014
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000017/uni00000017/uni00000018/uni00000018/uni0000001c/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000015/uni00000019
+/uni0000003e/uni00000029/uni00000048/uni00000012/uni0000002b/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019/uni00000013/uni00000011/uni0000001b
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000006/uni00000020/uni00000018/uni00000019/uni00000014/uni00000019/uni00000019/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000017
+/uni0000003e/uni00000030/uni0000004a/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013/uni00000011/uni00000015/uni00000018/uni00000013/uni00000011/uni00000018/uni00000013/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000015/uni00000018
+/uni00000013/uni00000011/uni00000018/uni00000013
+/uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000006/uni00000020/uni00000018/uni00000019/uni00000018/uni00000018/uni0000001b/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000016
+/uni0000003e/uni00000030/uni00000051/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni0000001b/uni0000001b/uni00000014/uni0000001c/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni0000001b
+/uni0000003e/uni00000031/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000006/uni00000020/uni00000018/uni0000001c/uni00000015/uni00000014/uni00000013/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000013/uni0000001b
+/uni0000003e/uni00000031/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000014/uni00000011/uni00000013/uni00000010/uni00000013/uni00000011/uni00000018/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000018/uni00000014/uni00000011/uni00000013/uni00000014/uni00000011/uni00000018
+/uni00000010/uni00000014/uni00000011/uni00000013
+/uni00000010/uni00000013/uni00000011/uni00000018
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000018
+/uni00000014/uni00000011/uni00000013
+/uni00000014/uni00000011/uni00000018
+/uni00000006/uni00000020/uni00000018/uni00000019/uni0000001a/uni0000001a/uni00000014/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000015/uni0000001a
+/uni0000003e/uni00000032/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019/uni00000013/uni00000011/uni0000001b/uni00000014/uni00000011/uni00000013
+/uni0000002a/uni00000024/uni0000002f/uni00000024/uni0000002b/uni00000010/uni00000027/uni00000035/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000014/uni00000011/uni00000013
+/uni00000052/uni00000058/uni00000055/uni00000003/uni00000050/uni00000052/uni00000047/uni00000048/uni0000004f
+/uni00000006/uni00000020/uni00000017/uni0000001c/uni00000019/uni00000015/uni00000016/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000015
+/uni0000003e/uni00000036/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000010/uni00000013/uni00000011/uni00000019/uni00000010/uni00000013/uni00000011/uni00000017/uni00000010/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000013/uni00000013/uni00000011/uni00000015/uni00000013/uni00000011/uni00000017/uni00000013/uni00000011/uni00000019/uni00000013/uni00000011/uni0000001b
+/uni0000002a/uni00000024/uni0000002f/uni00000024/uni0000002b/uni00000010/uni00000027/uni00000035/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000019
+/uni00000010/uni00000013/uni00000011/uni00000017
+/uni00000010/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000013
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000006/uni00000020/uni00000017/uni00000019/uni00000019/uni00000014/uni00000019/uni0000000f/uni00000003/uni00000020/uni00000013/uni00000011/uni00000014/uni00000017
+/uni0000003e/uni00000037/uni0000004c/uni00000012/uni00000029/uni00000048/uni00000040
+/uni00000015/uni00000013 /uni00000017/uni00000013 /uni00000019/uni00000013 /uni0000001b/uni00000013 /uni00000014/uni00000013/uni00000013/uni00000014/uni00000015/uni00000013
+/uni00000026/uni00000052/uni00000058/uni00000051/uni00000057
+Figure 8. Abundance compared with GALAH DR4.

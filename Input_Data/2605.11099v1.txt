@@ -1,0 +1,715 @@
+Title: Survey Footprint Explorer: A Browser-Based Interactive Tool for Visualizing and Cross-Matching Astronomical Survey Footprints
+Authors: S. L. Ahad, R. Brilenkov, J. E. Taylor
+Published: 2026-05-11
+Categories: astro-ph.IM, astro-ph.CO, astro-ph.GA
+
+Survey Footprint Explorer:A Browser-Based Interactive
+Tool for Visualizing and Cross-Matching Astronomical Survey
+Footprints
+Syeda Lammim Ahad ∗1,2,3, Ruslan Brilenkov 4,5, and James E. Taylor 1,2
+1Waterloo Centre for Astrophysics, University of Waterloo, Waterloo, ON N2L 3G1, Canada
+2Department of Physics and Astronomy, University of Waterloo, Waterloo, ON N2L 3G1, Canada
+3Center for Astronomy, Space Science and Astrophysics, Independent University, Bangladesh, Dhaka 1229,
+Bangladesh
+4Kapteyn Astronomical Institute, University of Groningen, Landleven 12, 9747 AD Groningen, The Netherlands
+5Definity Insurance Company, 111 Westmount Road South, Waterloo, ON N2J 4S4, Canada
+Version 2.5.0 — May 13, 2026
+Keywords:multi-order coverage maps, footprint visualisation, catalogue cross-matching, browser-based
+tools, software
+Abstract
+We present theSurvey Footprint Explorer(v2.5.0) a browser-based interactive tool for visualising and
+comparing the sky footprints of major astronomical imaging surveys. The tool is implemented entirely
+in client-side JavaScript and requires no server infrastructure, making it immediately accessible from
+any modern web browser. Thirteen survey footprints are currently included: Euclid DR1, LSST Wide-
+Fast-Deep, the Nancy Grace Roman HLWAS and HLTDS (full and deep tiers), DESI Legacy Imaging
+Survey DR9, the Dark Energy Survey (DES), the Subaru Hyper Suprime-Cam survey (HSC), the Kilo-
+Degree Survey (KiDS), the Ultraviolet Near-Infrared Optical Northern Survey (UNIONS), the eROSITA
+All-Sky Survey (eRASS1), and the Atacama Cosmology Telescope Legacy (ACT) survey spanning
+wavelengths from X-ray to near-infrared and covering footprints from 7.7 deg2 to 21524.4 deg2. Survey
+footprints are encoded as Multi-Order Coverage (moc) maps and rendered via two complementary views:
+an interactive globe powered by Aladin Lite v2, and a full-sky equirectangular projection. Allmoc
+intersection calculations, including multi-survey overlap area computation and per-source membership
+testing, are performed client-side. Users may upload source catalogues in CSV or TSV format and
+download an augmented version with boolean survey membership columns appended. The link to access
+the tool is provided at the end of the Summary section.
+1 Introduction
+Astronomy is entering an era of unprecedented large-
+scale and deep imaging surveys. Missions and pro-
+grams such as theEuclidspace telescope (Euclid
+Collaboration et al., 2025), the Vera C. Rubin Ob-
+servatory’s Legacy Survey of Space and Time (LSST;
+Ivezić et al. 2019), the Nancy Grace Roman Space
+Telescope High Latitude Wide Area Survey (Roman
+HLWAS; Akeson et al. 2019), and the DESI Legacy
+Imaging Survey (Dey et al., 2019) together will im-
+age billions of galaxies across a significant fraction of
+the extragalactic sky. The scientific returns of these
+programs are greatly amplified by combining data
+across surveys – whether for multi-wavelength char-
+acterisation, weak lensing tomography, calibration of
+photometric redshifts, or selection of spectroscopic
+targets. Any such cross-survey analysis requires a
+clear understanding of which regions of sky are cov-
+ered by each survey, where footprints overlap, and
+which sources in a given catalogue fall within a given
+coverage area.
+Survey footprints are most naturally represented
+using Multi-Order Coverage (moc) maps (Fernique,
+Allen, et al., 2015; Fernique, Boch, et al., 2022), an
+International Virtual Observatory Alliance (IVOA)
+standard based on the HEALPix spherical pixelisa-
+tion scheme (Górski et al., 2005).mocmaps encode
+sky regions as sets of HEALPix cells at adaptively
+chosen resolutions, enabling compact storage and
+fast set-theoretic operations (e.g., union, intersec-
+tion, difference) on arbitrary sky regions through
+simple integer arithmetic. Python libraries such as
+mocpy (Boch, Donaldson, et al., 2023) andhealpy
+(Zonca et al., 2019) provide full programmatic ac-
+1
+arXiv:2605.11099v1  [astro-ph.IM]  11 May 2026
+
+cess tomocgeneration and set operations, but they
+operate on individual files and do not offer a unified
+environment for loading, visualising, and comparing
+the footprints of multiple surveys side by side.
+Existing interactive tools for footprint visualisation
+include Aladin Desktop (Boch and Fernique, 2014),
+a powerful Java application, and the CDS Aladin
+Lite browser widget, which rendersmocoverlays on
+an interactive sky globe. However, these tools do not
+natively support quantitative multi-survey intersec-
+tion calculations, catalogue upload with per-survey
+membership testing, or export of an augmented
+catalogue to disk.topcat(Taylor, 2005) can han-
+dle catalogue cross-matching but requires a local
+installation and does not directly visualisemocfoot-
+prints. No lightweight, zero-install, browser-based
+tool currently combines all of: (i) multi-survey foot-
+printvisualisationintwocomplementaryprojections,
+(ii) client-sidemocintersection area computation,
+and (iii) per-source catalogue membership determi-
+nation with downloadable augmented output.
+Here we present theSurvey Footprint Explorer(ver-
+sion 2.4.0), a static web application that addresses
+this gap. The tool runs entirely in the browser
+with no server-side computation and no software
+installation, relying on a WebAssembly-compiled
+Rustmocengine for all coverage calculations. It
+provides interactive access to the footprints of ten
+major surveys spanning X-ray to near-infrared wave-
+lengths and supports upload of custommocfiles
+and source catalogues. The remainder of this pa-
+per is organised as follows. Section 2 describes the
+user-facing features of the tool. Section 3 details
+the survey footprints currently included and their
+mocencoding. Section 4 describes the technical im-
+plementation. Section 5 presents three illustrative
+use cases. Section 6 summarises and outlines future
+work.
+2 Software Description
+2.1 Overview
+TheSurvey Footprint Exploreris a single-page web
+application with a two-panel layout: a fixed side-
+bar containing all controls, and a full-height map
+panel housing the sky view. The application state,
+including survey selection, display preferences, and
+any uploaded catalogue, is optionally persisted to
+browser localStorage so that the user’s session is
+restored on return visits. Each user’s application
+state is stored only in their browser.
+2.2 Survey Selection and Layering
+Surveys are selected via a dropdown panel contain-
+ing labelled checkboxes, one per survey. Multiple
+Figure 1: Survey selection.
+surveys may be selected simultaneously; their foot-
+print overlays are rendered in the order they appear
+in the list, with the survey at the top of the list
+drawn on top. The user may drag and reorder sur-
+veys within the list to control layering. A “Select
+all” option is available for rapid global comparison.
+The sidebar Coverage panel displays the number
+of currently selected surveys and, once computed,
+the intersection area of all selected footprints in
+square degrees (see Section 4.2 for the computation
+method).
+2.3 Map Views
+2.3.1 Aladin Globe View
+The primary view embeds Aladin Lite v2 (Boch and
+Fernique, 2014), an interactive sky globe rendered
+in a <canvas> element within the browser. Survey
+footprints are loaded asmocoverlays using the
+native Aladin Litemocrendering pipeline. The
+user may rotate and zoom the globe interactively.
+An anchormoc(a small, invisible reference region)
+is maintained at all times so that the Aladin Lite
+instance does not collapse when no survey is selected.
+A colour-coded legend bar appears along the bottom
+of the globe and updates dynamically as surveys are
+selected or deselected.
+2.3.2 Equirectangular View
+A second view presents a full-sky equirectangular
+(plate carrée) projection rendered as an SVG el-
+2
+
+ement using D3.js v7 (Bostock, Ogievetsky, and
+Heer, 2011). Right ascension runs from360◦ to0 ◦
+(left to right, matching the astronomical conven-
+tion) and declination from−90◦ to+90 ◦ (bottom
+to top). Survey footprints in this view are rendered
+from pre-computed GeoJSON files (one per survey)
+rather than directly from the FITSmoc, avoiding
+in-browser FITS parsing for this projection. Op-
+tional overlays, such as the coordinate grid (RA
+every30 ◦, Dec every30◦), the Galactic plane, and
+the Ecliptic plane, can be toggled independently via
+controls in the map bottom bar. An in-map leg-
+end with coloured rectangular swatches and survey
+labels is rendered directly on the SVG, providing
+a publication-ready figure with a single click. The
+equirectangular view can be exported as a PDF
+document via the “Download map (PDF)” button.
+2.4 Cross-Match Mode
+Activating the “Show cross-match only” toggle
+switches both map views to a cross-match display
+mode. In this mode, all selected survey overlays are
+desaturated to a grey colour, and only the region of
+sky common to all selected surveys is highlighted in
+white. The intersection area reported in the Cov-
+erage panel is updated to reflect the cross-matched
+region. This mode facilitates rapid visual and quan-
+titative assessment of survey co-coverage.
+2.5 Source Catalogue Upload and
+Augmentation
+Users may upload a source catalogue in comma-
+separated (CSV) or tab-separated (TSV) format.
+The file must contain columns namedra and dec
+(case-insensitive); additional column name variants
+such as radeg, decl, and declination are also
+recognised through fuzzy matching. Right ascen-
+sion values recorded in hours are automatically de-
+tected (either from the column name, e.g.,ra_hr, or
+from the value range 0–24) and converted to degrees
+before plotting.
+Once uploaded, sources are plotted as pink circles
+on both the Aladin globe and the equirectangular
+map. For each selected survey, the tool computes
+whether each source falls within the survey footprint
+usingthe filterCoos()operationoftheWebAssem-
+blymocengine (Section 4.2). The user can then
+download an augmented version of the catalogue as
+a CSV file with a boolean column (true = inside,
+false = outside) appended for each selected survey.
+Column names follow the pattern<survey_id>, e.g.,
+euclid, lsst_wfd. An example is demonstrated in
+Sec. 5.2.
+2.6 CustommocUpload
+In addition to the built-in surveys, users may upload
+their own sky region as amocin FITS format. The
+uploadedmocis displayed as an overlay on both
+map views with a distinct pink colour and a labelled
+legend entry. The labelled legend entry matches the
+uploaded filename. It participates fully in intersec-
+tion calculations and catalogue membership testing,
+enabling cross-matching against user-defined regions
+as well as the standard survey footprints.
+2.7 Colour Themes
+Three perceptual colour palettes are provided, se-
+lectable from a dropdown in the sidebar:Rainbow
+(default), the Paul Tol 14-colour Discrete Rainbow
+palette, providing maximum spectral contrast be-
+tween simultaneously displayed surveys;Iridescent,
+a sequential blue-to-plum palette from the Paul Tol
+Iridescent scheme, suitable for ordered or ranked
+comparisons; andVivid, a high-saturation variant
+optimised for presentations and printed posters. All
+three palettes are designed to be accessible to readers
+with colour vision deficiencies (Tol, 2021).
+2.8 Dark and Light UI Themes
+The application supports both a dark UI theme (de-
+fault, dark navy background) and a light UI theme
+(light grey background), toggled by a switch in the
+topbar.
+The equirectangular map background colour adapts
+to the active UI theme to maintain the sky overlay’s
+legibility in both modes. The preference is persisted
+tolocalStorage.
+2.9 Session Persistence
+When the “Remember selections on this device” pref-
+erence is enabled, the full application state is seri-
+alised to browser localStorage on every change.
+This includes the active survey selection and order-
+ing, colour theme, projection, cross-match mode,
+and any uploaded catalogue data. The state is auto-
+matically restored on the next page load, enabling a
+work session to resume without re-uploading data.
+3 Survey Footprints
+3.1 Multi-Order Coverage Maps
+Survey footprints in theSurvey Footprint Explorer
+are stored and processed as Multi-Order Coverage
+(moc) maps, the IVOA standard format for repre-
+senting sky regions on the sphere (Fernique, Allen,
+et al., 2015; Fernique, Boch, et al., 2022).moc
+maps use the HEALPix hierarchical pixelisation of
+3
+
+the sphere (Górski et al., 2005) at adaptively chosen
+resolutions, encoding a sky region as a sorted list of
+HEALPix cell indices. This representation supports
+exact set-theoretic operations (union, intersection,
+difference, complement) through simple sorted-list
+arithmetic, making it well-suited for multi-survey
+overlap calculations.
+AllmocFITS files in theSurvey Footprint Explorer
+are stored using NUNIQ pixel encoding with the
+pre_v2=True flag to ensure compatibility with Al-
+adin Lite v2. The HEALPix order used for each
+survey reflects a compromise between angular reso-
+lution and file size; orders in the range 7 to 9 (pixel
+scales of≈28–7 arcmin) are used throughout.
+3.2 MOC Generation Pipeline
+Surveymocfiles were generated from publicly avail-
+able coverage masks, polygon vertices, and pointing
+lists using standard HEALPix operations. HEALPix
+pixel indices covered by each survey are identified
+and converted to MOC format usingmocpy (Boch,
+Donaldson, et al., 2023) with NUNIQ encoding and
+the pre_v2=True flag to ensure compatibility with
+Aladin Lite v2.
+3.3 Included Surveys
+Table 1 summarises the thirteen survey footprints
+currently included in version 2.5.0 of theSurvey
+Footprint Explorer.
+3.3.1 Notes on Individual Surveys
+KiDS:The KiDS footprint is derived from the
+KiDS-N and KiDS-S science-quality binary masks
+(WCS CAR projection, 1 arcmin pixels), which en-
+code the usable area after removal of bright stars,
+chip gaps, and artefacts. The resultingmocarea
+of 891 deg2 is therefore smaller than the full KiDS
+survey tile footprint (≈1350 deg2).
+Euclid DR1:The Euclid Data Release 1 (DR1)
+footprint is derived from the DR1 input HEALPix
+coverage map, with all non-zero pixels converted
+directly to amoc. This corresponds to an area of
+≈2109 deg2.
+HSC:The Subaru Hyper Suprime-Cam Survey
+footprint is derived from the rectangular field defini-
+tions in the LAMBDA footprint file1, combining the
+1Here “LAMBDA footprint file” refers to the
+footprint.txt configuration file of the NASA Legacy
+Archive for Microwave Background Data Analysis
+(LAMBDA) Footprint Library, which enumerates sur-
+vey regions using entries such as polygons and rectangle
+bounds; see https://lambda.gsfc.nasa.gov/toolbox/
+footprint/configfile.html; accessed 2026-05-08.
+Fall 1 Equatorial, Fall 2 Equatorial, Spring Equato-
+rial, and North fields into a singlemoc. The area of
+≈1653 deg2, therefore, reflects these rectangle-based
+footprint definitions.
+DES:TheDarkEnergySurveyfootprintisderived
+from the DES-polygon boundary in the LAMBDA
+footprint file, which is converted directly into a
+polygon-basedmoc.
+UNIONS:The Ultraviolet Near-Infrared Opti-
+cal Northern Survey footprint is derived from the
+released celestial HEALPix footprint map in the
+ugriz bands, with finite non-zero pixels converted
+directly to amoc. This corresponds to an area of
+≈6194 deg2.
+DESI Legacy DR9:The DESI Legacy DR9 foot-
+print is derived from the current brick-union in-
+gestion workflow. Consequently, values in Table 1
+should be interpreted as the areas of the specific foot-
+print products distributed with the application, not
+as canonical survey-wide areas under all selection
+criteria.
+eRASS1:The ROSITA All-Sky Survey footprint
+was generated from the SRG/eROSITA first all-
+sky survey sky tile catalogue (Merloni et al., 2024),
+covering the Western Galactic hemisphere observed
+by the German eROSITA consortium during the
+first all-sky scan.
+LSST WFD:The Legacy Survey of Space and
+Time Wide Fast Deep (WFD) footprint is derived
+from the current Rubin scheduler area map, selecting
+the low-dust and Virgo regions and converting the re-
+sulting HEALPix pixels to amoc. The≈17719 deg2
+area should therefore be interpreted as the area of
+this adopted WFD region definition, rather than a
+universal LSST footprint under all scheduling as-
+sumptions.
+Roman HL W AS (F ull and Deep Tiers):The
+Nancy Grace Roman Space Telescope has not yet
+been launched at the time of writing. The HLWAS
+footprints are based on the ROTAC-approved tiling
+plan (Hirata 2024) from the public repository
+hirata10/RomanHLWASTools. Two separatemoc
+files are generated:Roman HL W AScovers the
+Wide and Medium imaging tiers (5314.0 deg2), and
+Roman HL W AS Deep Tiercovers the two deep
+calibration fields at COSMOS and XMM-LSS, to-
+talling 35.6 deg2.
+Roman HLTDS (Full and Deep Tiers):
+The Roman High-Latitude Time-Domain Survey
+(HLTDS) footprints are based on an approximate
+4
+
+Table 1: Survey footprints included inSurvey Footprint Explorerv2.5.0. Areas are computed directly
+from the distributed FITSmocfiles using moc.sky_fraction× 41252.96 deg2. Reported values are
+MOC-definition dependent; they describe the exact footprint products currently distributed with the
+application.
+Survey Label Wavelength Area (deg 2) Reference
+Kilo-Degree Survey KiDS opt 891.2 Jong et al. (2013)
+Euclid Data Release 1 Euclid DR1 opt/NIR 2108.5 Euclid Collaboration
+et al. (2025)
+Hyper Suprime-Cam Survey HSC opt/NIR 1653.4 Aihara et al. (2018)
+Dark Energy Survey DES opt/NIR 5155.0 Dark Energy Survey
+Collaboration et al.
+(2016)
+UNIONS UNIONS opt 6194.2 Gwyn et al. (2025)
+DESI Legacy Imaging DR9 DESI Legacy DR9 opt/IR 20813.1 Dey et al. (2019)
+eROSITA All-Sky Survey eRASS1 X-ray 21524.4 Merloni et al. (2024)
+LSST Wide-Fast-Deep LSST WFD opt 17719.2 Ivezić et al. (2019)
+Roman HLWAS (Wide+Medium) Roman HLWAS NIR 5314.0 Akeson et al. (2019)
+Roman HLWAS Deep Tier Roman HLWAS Deep opt/NIR 35.6 Hirata (2024)
+Roman HLTDS Roman HLTDS opt/NIR 28.1 Observations Time
+Allocation Committee
+and Community Survey
+Definition Committees
+(2025)
+Roman HLTDS Deep Roman HLTDS Deep opt/NIR 7.7 Observations Time
+Allocation Committee
+and Community Survey
+Definition Committees
+(2025)
+ACT Legacy Survey ACT Legacy mm 11245.0 Aguena et al. (2026)
+project-local pointing model derived from the pub-
+lished field centres, tier structure, and pointing
+counts in the Roman User Documentation (Observa-
+tions Time Allocation Committee and Community
+Survey Definition Committees, 2025).2 The survey
+is divided into four tiers: North Wide (38 pointings),
+North Deep (7 pointings), South Wide (27 point-
+ings), and South Deep (16 pointings). Twomocfiles
+are generated:Roman HL TDScombines all four
+tiers(88pointings, 28.1deg 2), andRoman HL TDS
+Deepcovers only the two deep tiers (23 pointings,
+7.7 deg2).
+ACT Legacy:The Atacama Cosmology Tele-
+scope Legacy footprint is intended to represent the
+unionoftheACTEQUandSouthsurveyregions, fol-
+lowing the LAMBDA Footprint Library definitions,
+which reference the released 148GHz HEALPix hit
+maps for the two components.
+2https://roman-docs.stsci.edu/roman-community-
+defined-surveys/high-latitude-time-domain-survey; accessed
+2026-05-08. Minor technical details remain subject to change
+in the official HLTDS implementation.
+4 Technical Implementation
+4.1 Frontend Stack
+TheSurvey Footprint Exploreris implemented as
+a static single-page web application requiring no
+server-side computation. The frontend is written in
+vanilla JavaScript (ES2022 modules) and depends
+on four external libraries loaded from CDN: Al-
+adin Lite v2 (Boch and Fernique, 2014) for interac-
+tive sky globe rendering with nativemocoverlay
+support; D3.js v7 (Bostock, Ogievetsky, and Heer,
+2011) for SVG-based equirectangular map construc-
+tion and GeoJSON polygon rendering; jsPDF 2.5
+for client-side PDF generation; and jQuery 3.7, re-
+quired by Aladin Lite v2 for the Document Object
+Model (DOM) event handling. No build toolchain,
+bundler, or transpiler is used. The live applica-
+tion is available athttps://www.lammimahad.com/
+survey-footprint-explorer.
+4.2 WebAssembly MOC Engine
+Allmocoperations – coverage area computation,
+multi-survey intersection, and per-source member-
+ship testing – are performed client-side using a
+WebAssembly-compiled Rustmoclibrary (CDS
+Strasbourg, 2023). The engine supports all stan-
+dard set-theoretic operations (union, intersection,
+5
+
+difference) on arbitrary sky regions, enabling sub-
+second computation of multi-survey overlap areas
+and per-source membership tests without transmit-
+ting data to any external server.
+5 Illustrative Use Cases
+We present three worked examples that illustrate the
+primary use cases of theSurvey Footprint Explorer.
+5.1 Use Case A: Multi-Survey Foot-
+print Comparison and Overlap
+Quantification
+A common preliminary task in multi-survey anal-
+yses is to quantify the sky area jointly covered by
+two or more observing programs. As an illustrative
+case, we consider the overlap among the Euclid DR1
+footprint, the LSST Wide-Fast-Deep (WFD) region,
+and the full Roman High Latitude Wide Area Sur-
+vey (HLWAS) footprint. In this workflow, the user
+selects these three surveys from the survey menu,
+after which the intersection area is reported in the
+Coverage panel. The shared region can be isolated
+by enabling the “Show cross-match only” option,
+which suppresses the full individual footprints and
+displays only their common sky area in white on
+both map projections.
+The equirectangular projection is especially useful
+for interpreting this overlap in an astrophysical con-
+text. When the Galactic plane overlay is enabled,
+regions of the intersection that lie close to the plane
+can be readily identified, allowing users to assess the
+extenttowhichGalacticextinctionmaycontaminate
+or limit extragalactic applications. A publication-
+quality visualisation of the resulting overlap can then
+be exported directly as a PDF using the “Download
+map (PDF)” control in the lower bar of the equirect-
+angular map (Figure 2).
+5.2 Use Case B: Source Cata-
+logue Cross-Matching and Survey
+Membership
+This functionality is useful for checking whether
+a sample of target objects (e.g., galaxies, galaxy
+clusters) is present in one or more surveys. The
+sourcecatalogueusedhereisaCSVfilewithcolumns
+RA_deg and DEC_deg, and they are checked for the
+same three surveys as shown in Sec. 5.1, Euclid DR1,
+LSST WFD, and Roman HLWAS.
+The user uploads the catalogue via “Upload catalog”
+in the sidebar. The application detects thera and
+dec column names, parses the coordinates, and plots
+all sources on both map views. The user can select
+the target surveys before or after the source cata-
+logue is uploaded. After clicking “Download catalog
+(augmented)”, the application callsfilterCoos()
+for each survey’smocagainst the full source list and
+writes a new CSV file containing three additional
+boolean columns: in_euclid_dr1, in_lsst_wfd,
+and in_roman_hlwas. For a catalogue of 50000
+sources, the membership computation and down-
+load can be completed in under two seconds on a
+typical laptop browser, with all processing occur-
+ring locally in the WebAssembly engine; no data is
+transmitted to any external server (Figure 3).
+5.3 Use Case C: Overlay of a Custom
+Sky Region
+If a user wants to check the overlap of a custom
+survey footprint, for example, a set of proposed
+spectroscopic follow-up tiles, as amocFITS file
+using mocpy, with any of the listed surveys in the
+tool, or wants to check a custom source catalogue
+with the custom survey footprint, they can use this
+functionality.
+The user clicks “Upload MOC”, selects their FITS
+file, and the custom region is immediately rendered
+in both map views with a pink overlay and a labelled
+legend entry (same as the name of their FITS file).
+They can select surveys from the survey dropdown
+menu before or after uploading theirmocfile to
+check overlap. The Coverage panel reports the area
+of intersection between the two regions. Activat-
+ing “Show cross-match only” highlights the sky area
+covered by both the custommocand the selected
+surveys. If a catalogue of tile centres is available,
+the user can upload it and download the augmented
+CSV to flag which tiles fall within the target survey
+footprint, facilitating rapid prioritisation of follow-
+up resources (Figure 4).
+6 Summary and Future Work
+6.1 Summary
+We presented theSurvey Footprint Explorer(ver-
+sion 2.5.0), a browser-based interactive tool for vi-
+sualising, comparing, and cross-matching the foot-
+prints of major astronomical imaging surveys. The
+key properties of the tool are:
+• Zero-install access:The application runs en-
+tirely in the browser as a static web page, requir-
+ing no Python environment, no local software
+installation, and no server connection for its
+core functionality.
+• Thirteen built-in survey footprints:span-
+ning wavelengths from X-ray (eRASS1) to
+near-infrared (Euclid DR1, Roman HLWAS),
+with per-survey coverage areas from 7.7 to
+6
+
+Figure 2: Use Case A: overlap quantification across Euclid DR1, LSST WFD, and Roman HLWAS.
+Interface snapshot showing the selected survey workflow. The top panel shows the corresponding survey
+footprint colours, while the bottom panel shows the overlapping area with “Show cross-match only”
+enabled.
+21524.4 deg 2. For the current v2.5.0 MOC
+set, the sum of individual survey areas is
+80880.1 deg2, while the union sky coverage is
+34104.7 deg2 due to substantial overlap.
+• Client-sidemocengine:All coverage area
+computations and per-source membership tests
+are performed using a WebAssembly-compiled
+Rustmocengine, enabling sub-second intersec-
+tion calculations for catalogues of tens of thou-
+sands of sources with data contained within the
+user’s browser.
+• Dual map views:An interactive Aladin
+Lite v2 globe provides familiar sky navigation,
+while an SVG-based equirectangular projection
+offers a publication-ready full-sky view with
+optional Galactic and Ecliptic overlays and one-
+click PDF export.
+• Catalogue augmentation pipeline:Users
+may upload CSV or TSV catalogues and down-
+load an augmented version with per-survey
+boolean membership columns, facilitating rapid
+sample selection for multi-survey analyses.
+• Custommocinclusion:Users may upload
+custom survey footprint as amocFITS file, and
+perform all the other functionalities of the tool
+that are available for the built-in surveys. The
+user’s custom footprint information, similar to
+all the other user side data, is only available to
+the user.
+The tool is freely available at https://www.
+lammimahad.com/survey-footprint-explorer.
+7
+
+Figure 3: Use Case B: source-catalogue membership analysis. App-oriented view of catalogue upload and
+survey selection.
+Figure 4: Use Case C: overlap quantification across Euclid DR1, LSST WFD, and a custommocregion.
+The interface snapshot is showing the selected survey workflow.
+An illustrated user guide is avail-
+able at https://www.lammimahad.com/
+survey-explorer-instructions.
+6.2 Future Work
+We will continue to include more publicly available
+large survey footprints. Any updates will be listed
+in the illustrated user guide. Any suggestions for
+including specific surveys are welcome.
+Acknowledgements
+The authors thank Matt Hilton for sharing the
+ACT survey footprints. TheSurvey Footprint Ex-
+plorerwas developed in part with the assistance
+of Claude Code (Anthropic), an AI coding assis-
+tant (Anthropic, 2024). Claude Code contributed to
+the implementation of the survey processor Python
+pipeline, the Roman HLWASmocgeneration code,
+and portions of the JavaScript application logic.
+This development approach, in which AI tools accel-
+erate implementation while all scientific decisions,
+validation, and design choices remain with the hu-
+8
+
+man authors, follows emerging practice in astro-
+nomical software development. In accordance with
+the authorship guidelines of major journals (Nature
+Portfolio, AAS journals, A&A), Claude Code is not
+listed as an author; its contribution is explicitly
+disclosed here.
+Author contributions:S. L. Ahad: Con-
+ceptualization, software, visualization, writing.
+R. Brilenkov: Software, writing. J. E. Taylor: Con-
+ceptualization, review.
+References
+Aguena, M., S. Aiola, S. Allam, et al. (Jan.
+2026). “The Atacama Cosmology Telescope: DR6
+Sunyaev-Zel’dovich Selected Galaxy Clusters Cat-
+alog”. In:The Open Journal of Astrophysics9,
+p. 55863.doi: 10 . 33232 / 001c . 155863. arXiv:
+2507.21459 [astro-ph.CO].
+Aihara, H., N. Arimoto, R. Armstrong, et al. (2018).
+“The Hyper Suprime-Cam SSP Survey: Overview
+and Survey Design”. In:PASJ70, S4.doi: 10.
+1093/pasj/psx066.
+Akeson, R., L. Armus, E. Bachelet, et al. (2019).The
+Wide Field Infrared Survey Telescope: 100 Hubbles
+for the 2020s. arXiv:1902.05569.url: https://
+arxiv.org/abs/1902.05569.
+Anthropic (2024).Claude Code: AI-powered coding
+assistant. Software.url: https://claude.ai/
+claude-code.
+Boch, T., T. Donaldson, D. Durand, et al. (2023).
+mocpy: MOC Python library. GitHub repository.
+url:https://github.com/cds-astro/mocpy.
+Boch, T. and P. Fernique (2014). “Aladin Lite: Em-
+bed your Sky Atlas in the Browser”. In:Astronom-
+ical Data Analysis Software and Systems XXIII.
+Ed. by N. Manset and P. Forshay. Vol. 485. ASP
+Conf. Ser. Pp. 277–280.
+Bostock, M., V. Ogievetsky, and J. Heer (2011). “D3:
+Data-Driven Documents”. In:IEEE Transactions
+on Visualization and Computer Graphics17.12,
+pp. 2301–2309.doi:10.1109/TVCG.2011.185.
+CDS Strasbourg (2023).cds-moc-rust: Rust imple-
+mentation of the MOC standard, compiled to We-
+bAssembly. GitHub repository.url: https : / /
+github.com/cds-astro/cds-moc-rust.
+Dark Energy Survey Collaboration, T. Abbott, F. B.
+Abdalla, et al. (2016). “The Dark Energy Survey:
+more than dark energy — an overview”. In:MN-
+RAS460, pp. 1270–1299.doi: 10.1093/mnras/
+stw641.
+Dey, A., D. J. Schlegel, D. Lang, et al. (2019).
+“Overview of the DESI Legacy Imaging Surveys”.
+In:AJ157, p. 168.doi: 10.3847/1538- 3881/
+ab089d.
+Euclid Collaboration, Y. Mellier, Abdurro’uf, et
+al. (May 2025). “Euclid: I. Overview of the Eu-
+clid mission”. In:A&A697, A1, A1.doi: 10 .
+1051/0004-6361/202450810. arXiv:2405.13491
+[astro-ph.CO].
+Fernique, P., M. Allen, T. Boch, et al. (2015). “MOC
+— HEALPix Multi-Order Coverage map”. In:A&A
+578, A114.doi: 10.1051/0004-6361/201526075.
+Fernique, P., T. Boch, T. Donaldson, et al. (2022).
+Multi-Order Coverage (MOC) Version 2.0. IVOA
+Recommendation.url: https : / / ivoa . net /
+documents/MOC/.
+Górski, K. M., E. Hivon, A. J. Banday, et al. (2005).
+“HEALPix: A Framework for High-Resolution Dis-
+cretization and Fast Analysis of Data Distributed
+on the Sphere”. In:ApJ622, pp. 759–771.doi:
+10.1086/427976.
+Gwyn, Stephen, Alan W. McConnachie, Jean-
+Charles Cuillandre, et al. (Mar. 2025). “UNIONS:
+The Ultraviolet Near-Infrared Optical Northern
+Survey”. In:arXiv e-prints, arXiv:2503.13783,
+arXiv:2503.13783.doi: 10.48550/arXiv.2503.
+13783. arXiv:2503.13783 [astro-ph.GA].
+Hirata, C. (2024).RomanHL W ASTools: ROTAC-
+approved tiling data for the Roman HL W AS.
+GitHub repository.url: https://github.com/
+hirata10/RomanHLWASTools.
+Ivezić, Ž., S. M. Kahn, J. A. Tyson, et al. (2019).
+“LSST: From Science Drivers to Reference Design
+and Anticipated Data Products”. In:ApJ873,
+p. 111.doi:10.3847/1538-4357/ab042c.
+Jong, J. T. A. de, G. A. Verdoes Kleijn, K. H.
+Kuijken, et al. (2013). “The Kilo-Degree Survey”.
+In:Experimental Astronomy35, pp. 25–44.doi:
+10.1007/s10686-012-9306-1.
+Merloni, A., G. Lamer, T. Liu, et al. (2024).
+“The SRG/eROSITA all-sky survey. First X-ray
+maps and cluster catalogue: first all-sky survey
+(eRASS1)”. In:A&A682, A34.doi: 10 . 1051 /
+0004-6361/202347165.
+Observations Time Allocation Committee, Roman
+and Core Community Survey Definition Commit-
+tees (May 2025). “Roman Observations Time Al-
+location Committee: Final Report and Recom-
+mendations”. In:arXiv e-prints, arXiv:2505.10574,
+arXiv:2505.10574.doi: 10.48550/arXiv.2505.
+10574. arXiv:2505.10574 [astro-ph.IM].
+Taylor, M. B. (2005). “TOPCAT & STIL: Starlink
+Table Infrastructure Library and Applications”. In:
+Astronomical Data Analysis Software and Systems
+XIV. Ed. by P. Shopbell, M. Britton, and R. Ebert.
+Vol. 347. ASP Conf. Ser. Pp. 29–33.
+Tol, P. (2021).Colour Schemes. SRON Technical
+Note SRON/EPS/TN/09-002.url: https : / /
+personal.sron.nl/~pault/.
+Zonca, A., L. P. Singer, D. Lenz, et al. (2019).
+“healpy: equal area pixelization and spherical har-
+monics transforms for data on the sphere”. In:
+Journal of Open Source Software4.34, p. 1298.
+doi:10.21105/joss.01298.
+9

@@ -4,6 +4,7 @@ Friendly explainer that makes academic concepts easy to understand
 """
 
 import os
+import json
 import faiss
 import pickle
 import numpy as np
@@ -24,6 +25,7 @@ class AstrophysicsRAGChatbot:
         self,
         index_path: str = "faiss_index/astrophysics.index",
         metadata_path: str = "faiss_index/metadata.pkl",
+        chunks_file: str = "chunked_papers.json",
         embedding_model: str = "all-MiniLM-L6-v2",
         top_k: int = 5
     ):
@@ -62,7 +64,13 @@ class AstrophysicsRAGChatbot:
             self.metadata = pickle.load(f)
         
         self.top_k = top_k
-        
+
+        # Load chunks file once at startup — avoids repeated disk I/O on every query
+        print(f"✓ Loading chunks from {chunks_file}")
+        with open(chunks_file, 'r', encoding='utf-8') as f:
+            self.chunks = json.load(f)['chunks']
+        print(f"✓ Loaded {len(self.chunks):,} chunks into memory")
+
         # System prompt for friendly explainer personality
         self.system_prompt = """You are a friendly astrophysics research assistant who makes complex scientific concepts easy to understand. 
 
@@ -124,39 +132,33 @@ Remember: Your goal is to make astrophysics accessible and exciting for everyone
         
         return context_texts, sources
     
-    def retrieve_context_with_text(self, query: str, chunks_file: str = "chunked_papers.json") -> Tuple[List[str], List[Dict]]:
+    def retrieve_context_with_text(self, query: str, top_k: int = None) -> Tuple[List[str], List[Dict]]:
         """
-        Retrieve relevant context with actual text from chunks file
-        
+        Retrieve relevant context using the in-memory chunks loaded at startup.
+
         Args:
             query: User's question
-            chunks_file: Path to chunked papers JSON
-            
+            top_k: Number of chunks to return; defaults to self.top_k
+
         Returns:
             Tuple of (context_texts, source_metadata)
         """
-        import json
-        
-        # Load chunks file (we'll cache this in production)
-        with open(chunks_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        chunks = data['chunks']
-        
+        k = top_k if top_k is not None else self.top_k
+
         # Encode query
         query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)
         faiss.normalize_L2(query_embedding)
-        
+
         # Search FAISS index
-        distances, indices = self.index.search(query_embedding, self.top_k)
-        
-        # Get context and metadata
+        distances, indices = self.index.search(query_embedding, k)
+
         context_texts = []
         sources = []
-        
+
         for idx, score in zip(indices[0], distances[0]):
-            chunk = chunks[idx]
+            chunk = self.chunks[idx]
             context_texts.append(chunk['text'])
-            
+
             sources.append({
                 'paper_id': chunk['metadata']['paper_id'],
                 'section': chunk['metadata']['section'],
@@ -164,7 +166,7 @@ Remember: Your goal is to make astrophysics accessible and exciting for everyone
                 'chunk_index': chunk['metadata']['chunk_index'],
                 'source_file': chunk['metadata']['source_file']
             })
-        
+
         return context_texts, sources
     
     def format_context(self, context_texts: List[str], sources: List[Dict]) -> str:

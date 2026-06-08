@@ -1,0 +1,1956 @@
+Title: Detecting Gravitational-Wave Anisotropies with Simulation-Based Inference
+Authors: Anna-Malin Lemke, Andrea Mitridate, Thomas Konstandin, Mauro Pieroni, James Alvey
+Published: 2026-05-22
+Categories: astro-ph.CO, astro-ph.IM
+
+Imperial–TP–2026–AM–01
+DESY-26-070
+Detecting Gravitational-Wave Anisotropies with Simulation-Based Inference
+Anna-Malin Lemke ,1 Andrea Mitridate ,2 Thomas Konstandin ,1 Mauro Pieroni ,3 and James Alvey 4, 5
+1Deutsches Elektronen-Synchrotron DESY, Notkestr. 85, 22607 Hamburg, Germany ∗
+2Abdus Salam Centre for Theoretical Physics, Imperial College, London, SW7 2AZ, UK †
+3Instituto de Estructura de la Materia (IEM), CSIC, Serrano 121, 28006 Madrid, Spain
+4Kavli Institute for Cosmology Cambridge, Madingley Road, Cambridge CB3 0HA, United Kingdom
+5Institute of Astronomy, University of Cambridge,
+Madingley Road, Cambridge CB3 0HA, United Kingdom
+Over the last five years, multiple Pulsar Timing Array (PTA) collaborations have reported mount-
+ing evidence for a gravitational-wave background (GWB) at nanohertz frequencies. Measuring
+anisotropies in the sky distribution of the GWB power is one of the most promising ways to identify
+and characterize its source. These anisotropies are expected to manifest as deviations from the
+Hellings-Downs (HD) correlations between the timing residuals of different pulsars. Current search
+strategies include Bayesian methods, which model anisotropies in the timing residuals likelihood,
+and faster frequentist approaches, which construct correlation estimators from timing residuals and
+use these to test the isotropic assumption. However, frequentist methods rely on the assumption
+that correlation estimators are Gaussian-distributed, an assumption that is not justified and that –
+as we will show – severely limits detection sensitivity. In this work, we present a Simulation-Based
+Inference (SBI) framework that replaces the analytic Gaussian likelihood used in frequentist searches
+with a neural network classifier trained on synthetic data. This approach captures the non-Gaussian
+structure of the data and significantly improves performance. Specifically, we find that the proba-
+bility of 3σdetection increases by approximately 90% for single-hotspot scenarios and by 200% for
+double-hotspot scenarios compared to standard frequentist methods.
+CONTENTS
+I. Introduction 1
+II. PTA searches for GWB anisotropies 2
+A. Bayesian 3
+B. Frequentist 3
+III. Limitations of current techniques 4
+A. Non-Gaussianities 4
+B. Cross-correlation covariance 4
+C. Intermediate map reconstruction 5
+IV. The SBI approach 5
+A. Forward modeling 5
+B. Network architecture 8
+C. Training 10
+V. Results 11
+A. Assumptions and validation 13
+VI. Conclusions 13
+Acknowledgments 14
+A. Classification as Bayesian Model Comparison 15
+References 15
+∗ anna-malin.lemke@desy.de
+† a.mitridate@imperial.ac.uk
+I. INTRODUCTION
+Pulsar timing arrays (PTAs) operate by monitoring the
+radio emission from collections of galactic millisecond
+pulsars. The exceptional rotational stability of millisec-
+ond pulsars allows for the measurement of their rota-
+tional, astrometric, and binary parameters (as well as
+other ephemeris parameters) from the arrival times of
+these radiation pulses. These parameters are then used
+to construct atiming modelthat can be used to predict
+future pulses’ times of arrival (TOAs) [1–3].
+In 1983, Hellings & Downs suggested that the correla-
+tions between the TOA deviations from timing model
+predictions could be used to detect GW signals that
+would otherwise be buried under instrumental and pul-
+sar noise. Indeed, they showed that the presence of a
+gravitational-wave background (GWB) would induce a
+characteristic correlation pattern in the timing residuals
+across pulsar pairs, a pattern that depends uniquely on
+the angular separation between pulsars on the sky [4].
+Forty years after the original Hellings & Downs (HD)
+prediction, several PTA collaborations have reported the
+first evidence for a GWB by measuring – at different lev-
+els of significance – stochastic TOA perturbations with an
+interpulsar correlation pattern compatible with the HD
+predictions [5–9]. While further data is needed to confirm
+this discovery, the question of the GWB’s origin has al-
+ready sparked tremendous interest. Indeed, while a pop-
+ulation of supermassive black hole binaries (SMBHBs)
+provides a compelling explanation (see, for example,
+Refs. [10, 11]), alternative primordial sources (such as
+cosmic strings, phase transitions, scalar-induced GWs,
+or inflationary gravitational waves) cannot be ruled out
+arXiv:2605.24082v1  [astro-ph.CO]  22 May 2026
+
+2
+at the moment (see, for example, Refs. [11, 12]).
+One of the most promising avenues to identify the
+GWB origin is to search for anisotropies in the sky dis-
+tribution of its power. Indeed, SMBHBs are expected
+to produce localized anisotropies corresponding to the
+locations of bright binaries (see, for example, Refs. [13–
+15]) within the sensitivity reach of future PTAs (see, for
+example, Refs. [14–17]). In contrast, most cosmologi-
+cal sources would generate a nearly isotropic GWB with
+anisotropies well below the sensitivity of current and fu-
+ture PTAs [18, 19]. Consequently, any detection of sig-
+nificant anisotropies would provide strong evidence for
+an astrophysical origin of the signal.
+GWB anisotropies manifest in PTA observations by
+modifying the HD correlations induced in the timing
+residuals by the GWB [20]. Searches for these devia-
+tions from the HD correlation pattern have been carried
+out using both Bayesian and frequentist techniques. In
+Bayesian approaches (see, for example, Refs. [13, 21, 22]),
+the measured timing residuals are analyzed to recon-
+struct the GWB sky map. In frequentist approaches,
+the timing residuals are first compressed into cross-
+correlation estimators, which are then used to test the
+isotropic assumption (see, for example, Refs. [16, 22]).
+Frequentist searches are significantly faster than their
+Bayesian counterparts, enabling extensive simulation
+campaigns that would be computationally prohibitive
+otherwise. For instance, this speed advantage allows one
+to derive robust null distributions by analyzing thousands
+of mock datasets that contain isotropic GWB signals, or
+to explore the sensitivity of anisotropic searches to dif-
+ferent SMBHB population parameters (see, for example,
+Refs. [15, 23]).
+However, the speed of frequentist anisotropy searches
+comes at the price of several assumptions that limit
+their sensitivity. A critical assumption is that cross-
+correlation estimators extracted from the timing residu-
+als are Gaussian-distributed. Indeed, as already pointed
+out in Ref. [24], these cross-correlation estimators do not
+follow a Gaussian distribution. The authors of Ref. [24]
+derived analytical marginalized distributions for indi-
+vidual cross-correlation coefficients, but the fullN pair-
+dimensional joint distribution (withN pair ∼7000 for
+current PTA datasets) remains challenging to derive an-
+alytically.
+In this work, we address this limitation by developing
+a simulation-based inference (SBI) framework that cir-
+cumvents the need for an analytical likelihood. Instead of
+relying on the Gaussian approximation, we train a graph
+neural network classifier on synthetic data to distinguish
+between isotropic and anisotropic GWBs. This data-
+driven approach naturally captures the non-Gaussian and
+correlated structure of the cross-correlation estimators,
+significantly improving anisotropy detection sensitivity.
+Specifically, the probability of 3σdetection for a sin-
+gle GWB hotspot increases by approximately 90% com-
+pared to standard frequentist methods, while for two
+hotspots the detection probability increases by approxi-
+mately 200%.
+This paper is organized as follows. In Sec. II, we review
+current strategies for anisotropy searches in PTA obser-
+vations. In Sec. III, we discuss the limitations of these
+frequentist search strategies. In Sec. IV, we introduce the
+SBI framework developed in this work. Our main results,
+together with a validation of our newly proposed search
+pipeline, are discussed in Sec. V. Finally, we conclude in
+Sec. VI.
+II. PTA SEARCHES FOR GWB ANISOTROPIES
+In this section, we briefly review how GWB anisotropies
+manifest in PTA data, as well as the Bayesian (Sec. II A)
+and frequentist (Sec. II B) strategies used to detect them.
+This review serves mainly to establish notation and set
+the stage for our discussion; for a more detailed discus-
+sion, see, for example, Refs. [13, 16, 22, 23].
+The metric perturbation,h ij(t,x), associated with a
+GWB produced by far-away sources can be written as a
+superposition of plane-waves:
+hij(t,x) =
+X
+A
+Z ∞
+−∞
+d f
+Z
+S2
+dˆΩ ˜hA(f, ˆΩ)ei2πf(t− ˆΩ·x)eA
+ij(ˆΩ),
+(1)
+wherefis the GW frequency, ˆΩ the direction of prop-
+agation of the plane waves,A= +,×labels the two
+GW polarizations,e A
+ij are the GW polarization tensors,
+and ˜hA(f, ˆΩ) are two complex functions (one for each
+GW polarization) satisfying ˜h∗
+A(f, ˆΩ) = ˜hA(−f, ˆΩ). For
+a GWB arising from the overlapping signal of a large
+number of sources, the functions ˜hA(f, ˆΩ) can be treated
+as Gaussian random variables, fully characterized by the
+two-point function:1
+⟨˜h∗
+A(f, ˆΩ)˜hA′(f ′, ˆΩ′)⟩=δ AA′δ(f−f ′)δ( ˆΩ, ˆΩ′)H(f, ˆΩ),
+(2)
+where the functionH(f, ˆΩ) can be factorized as
+H(f, ˆΩ) =H(f)P( ˆΩ, f), withH(f) being the GWB
+power spectrum andP( ˆΩ, f) the (normalized) sky map
+describing the distribution of GWB power on the sky.
+One of the main goals of anisotropy searches is to test if
+the signal observed in PTA data is consistent with the
+isotropic assumption, i.e.P( ˆΩ, f) = 1 (here we have
+normalized the sky map such that
+R
+dˆΩP( ˆΩ, f) = 4π).
+The stochastic signal produced by the GWB in the
+timing residuals,δt a(t), can be described by the two point
+function
+⟨δta(ti)δtb(tj)⟩=
+Z ∞
+−∞
+d f ρab(f)Φ(f)e 2πif(t j −ti) ,(3)
+1 Here we have further assumed the GWB is unpolarized, sta-
+tionary, and homogeneous, which gives rise to the factorsδ AA′,
+δ(f−f ′), andδ( ˆΩ, ˆΩ′), respectively.
+
+3
+where the indicesa, brun over pulsars andi, jrun over
+TOAs, and we have defined the timing residuals power
+spectral density Φ(f)≡2H(f)/(3πf 2) and the cross-
+correlations between pulsar pairs,ρ ab, as
+ρab(f) = 3
+2
+X
+A
+Z
+S2
+dˆΩ
+4π RA
+a (f, ˆΩ)RA
+b (f, ˆΩ)P( ˆΩ, f).(4)
+The response function,R A
+a (f, ˆΩ), for thea th pulsar in the
+array is given by
+RA
+a (f, ˆΩ)≡F A
+a (ˆΩ)
+h
+1−e −2πif La(1+ˆpa·ˆΩ)
+i
+,(5)
+where
+F A
+a (ˆΩ)≡ ˆpi
+aˆpj
+a
+2(1 + ˆΩ·ˆpa)
+eA
+ij(ˆΩ),(6)
+with ˆpa being the unit vector pointing from Earth to the
+ath pulsar, andL a the distance from Earth to thea th
+pulsar in the array. The first term in the square brackets
+of Eq. (5) corresponds to the “Earth term”, while the
+exponential in the brackets is usually called the “pulsar
+term”.
+For an isotropic GWB, the integral in Eq. (4) does not
+depend on the power spectrum, and the cross-correlations
+between pulsars become proportional to the well-known
+Hellings-Downs (HD) function [4]:
+Γab ≡ 1
+2 δab + 1
+2 − 1
+4 xab + 3
+2 xab lnx ab,(7)
+wherex ab = (1−ˆp a ·ˆpb)/2. Therefore, any search for
+GWB anisotropies consists of testing whether the GWB-
+induced signal correlations follow the HD correlation pat-
+tern. In the remainder of this section, we will review ex-
+isting Bayesian and frequentist approaches to this prob-
+lem.
+A. Bayesian
+Bayesian search strategies use the full information en-
+coded in the timing residuals by building a likelihood
+that takes the form: 2
+p(δt|η) = exp
+ 
+− 1
+2 δtT K−1δt
+
+p
+det(2πK)
+,(8)
+whereK ab(η) =⟨δt aδtb⟩is the covariance matrix of tim-
+ing residuals, andδt a is a vector containing the measured
+timing residuals for thea th pulsar. This covariance ma-
+trix, in addition to noise sources, will also include the
+2 In this schematic discussion of the PTA likelihood, we are ignor-
+ing the contributions from the timing model parameters, which
+are typically marginalized over in the full analysis.
+contribution from the GWB defined in Eq. (3). Bayesian
+search strategies then derive posterior distributions for
+the sky map parameters, included inη, by sampling the
+likelihood using Markov Chain Monte Carlo (MCMC)
+techniques.
+A major downside of Bayesian searches is their com-
+putational cost. For the NANOGrav 15-year dataset, a
+frequency-resolved Bayesian search takes on the order of
+weeks to complete. This high computational cost makes
+it challenging both to calibrate the searches and to use
+them in forecast studies, as both tasks would require run-
+ning multiple instances of the searches on synthetic data
+to derive null distributions and estimate detection prob-
+abilities. While GPU-accelerated data analysis tools –
+such asDiscovery[25, 26] – could help mitigate this is-
+sue, frequentist searches remain considerably faster and
+more straightforward to calibrate.
+B. Frequentist
+Frequentist searches typically proceed in three steps:
+1. The timing residuals are compressed into an esti-
+mator of the cross-correlation coefficients, ˆρab,k, as
+follows:
+ˆρab,k =δt T
+a ·w ab,k ·δt b ,(9)
+wherekindexes the frequency bin, and the weights,
+wab,k, are defined such that the estimator is unbi-
+ased and has minimal variance (see Sec. IV A for
+more details).
+2. An estimator for the GWB sky map, ˆP( ˆΩ, f), is
+constructed by maximizing the following Gaussian
+likelihood:
+p(ˆρk|Pk) = exp[− 1
+2(ˆρk −RP k)TΣ−1
+k (ˆρk −RP k)]p
+det(2πΣk)
+,
+(10)
+whereΣ k is the covariance matrix of the cross-
+correlation estimators,RP k is the discrete form
+of the integral in Eq. (4), withP k being a vector
+containing the GWB power in each equal-area pixel
+for the sky map at thek-th frequency bin, and the
+(quadratic) response matrixRgiven by:
+Rp,ab ≡ 3
+2Npix
+h
+F +
+a,pF +
+b,p +F ×
+a,pF ×
+b,p
+i
+,(11)
+wherepruns over a set ofN pix equal-area pix-
+els of the GWB sky map, and we have defined
+F A
+a,p ≡F A
+a (ˆΩp) with ˆΩp a unit vector pointing from
+thep th pixel to the Earth location. The normaliza-
+tion ofRis chosen such that for an isotropic sky
+we recover the HD correlations, i.e.RP k =Γfor
+
+4
+Pk,p = 1.3
+3. The sky map reconstructed in this way is used to
+define a detection statistic that quantifies devia-
+tions from the isotropic null hypothesis (see discus-
+sion below).
+Several possible combinations of map parametriza-
+tions and detection statistics can be used in frequen-
+tist searches [23]. In this work, we compare the clas-
+sifier to the frequentist results obtained using a ra-
+diometer basis, which was shown to be one of the best-
+performing parametrizations [23] for detecting localized
+GWB hotspots. In this parametrization, the GWB power
+is assumed to be dominated by a single bright pixel.
+Under this assumption, rather than reconstructing the
+GWB power distribution across the entire sky, we eval-
+uate one pixel at a time and determine the power re-
+quired in each pixel to optimally fit the measured cross-
+correlations. These optimal pixel values can be derived
+analytically as
+ˆPk = diag(Mk)−1Xk,(12)
+whereM k =R TΣ−1
+k Ris the Fisher information ma-
+trix andX k =R TΣ−1
+k ρk is the “dirty map”. In this
+parametrization, the inverse of the diagonal elements of
+the Fisher matrix provides an estimate of the uncer-
+tainty associated with each reconstructed pixel value, i.e.,
+σk;p = (M k;pp)−1/2. This radiometer map parametriza-
+tion is then combined with the Max Radiometer SNR de-
+tection statistic, defined as SNR = max[Pk;p/σk;p], where
+the maximum is evaluated across all pixels of the recon-
+structed map.
+III. LIMITATIONS OF CURRENT
+TECHNIQUES
+In this section, we discuss some of the assumptions that
+limit the sensitivity of frequentist anisotropy searches.
+We focus on limitations that our SBI method is designed
+to address.
+A. Non-Gaussianities
+The likelihood function in Eq. (10), which is used to re-
+construct the GWB sky maps, implicitly assumes that
+the cross-correlation estimators, ˆρk, follow a Gaussian
+distribution. However, this assumption does not hold
+true. This can be seen in Fig. 1, where we show the
+distribution of one of these cross-correlation estimators
+3 The pulsar term is ignored in the discretized form of the re-
+sponse, as its contribution to Eq. (4) averages out in the case of
+an isotropic GWB.
+−4 −2 0 2 4
+(ˆρab − Γab)/σab
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+PDF
+True Distribution
+Gaussian Fit
+FIG. 1. Distribution of cross-correlation estimators in the sec-
+ond frequency bin across many isotropic GWB realizations
+for a single pulsar pair (blue histogram), compared with a
+Gaussian fit (orange dashed line). The estimators are nor-
+malized by subtracting the expected Hellings-Downs value
+and dividing by their standard deviation,σ ab, defined as
+σab ≡Σ 1/2
+ab,ab/Φ2, where Φ 2 is the amplitude of the GWB
+in the second frequency bin. The cross-correlation estima-
+tors are normalized by the GWB amplitude such that for an
+isotropic sky⟨ˆρab⟩= Γ ab.
+across many realizations of an isotropic GWB, and com-
+pare it with a Gaussian fit. From this figure, it is clear
+that the marginalized distribution of ˆρdeviates from a
+Gaussian distribution, and follows instead a generalized
+χ2 distribution, in agreement with the analytical results
+derived in Ref. [24]. While in this figure we single out
+a single pulsar pair, similar deviations from Gaussianity
+are observed for all pulsar pairs in the dataset.
+While Ref. [24] provides analytical marginalized distri-
+butions for individual cross-correlation coefficients, de-
+riving the fullN pair-dimensional joint distribution an-
+alytically remains challenging. The SBI framework in-
+troduced in the next section sidesteps this difficulty by
+training a classifier to distinguish between isotropic and
+anisotropic GWBs directly from mock cross-correlation
+estimators. This approach captures the non-Gaussian,
+correlated structure of the data without requiring an an-
+alytical likelihood.
+B. Cross-correlation covariance
+The covariance matrix,Σ k, entering the likelihood of
+Eq. (10) depends on the pulsar cross-correlations. How-
+
+5
+ever, these quantities depend on the GWB sky map,
+which is what we are trying to estimate in an anisotropy
+search. In current searches, HD cross-correlations are as-
+sumed when constructing the covariance matrix, but this
+is an approximation whose impact on the final results is
+difficult to quantify.
+The SBI approach sidesteps this problem by not re-
+quiring an explicitly specified covariance matrix for the
+cross-correlations. The covariance structure is natu-
+rally encoded in the training data through our forward
+modeling process: each simulated dataset—isotropic or
+anisotropic—produces cross-correlation estimators whose
+covariances reflect the underlying sky map. The classi-
+fier learns to distinguish between these cases by captur-
+ing the statistical structure of the estimators—including
+their means, covariances, and higher-order non-Gaussian
+features.
+C. Intermediate map reconstruction
+In classical frequentist searches, once a sky map is ob-
+tained by maximizing the likelihood in Eq. (10), a detec-
+tion statistic must be constructed to quantify the devia-
+tion from isotropy contained in the data. However, if we
+are only interested in detecting deviations from isotropy,
+this intermediate map-making step is unnecessary, as the
+optimal test statistic can be constructed directly from
+cross-correlations. Moreover, this approach introduces
+several arbitrary choices, such as the parametrization of
+the GWB sky map and the form of the detection statistic,
+with no guarantee that any particular choice represents
+the optimal test for anisotropy.
+As we will discuss in the next section, with the SBI
+method proposed in this work, we can bypass these in-
+termediate steps and construct a classifier that operates
+directly on the cross-correlation coefficients and learns a
+detection statistic from data.
+IV. THE SBI APPROACH
+As just discussed in Sec. III, classical frequentist searches
+rely on intermediate map reconstruction and analytic
+Gaussian approximations to formulate a test statistic for
+anisotropy. However, if the primary goal is to detect
+a deviation from isotropy (i.e., hypothesis testing), this
+intermediate map-making step is unnecessary. Further-
+more, by the Neyman-Pearson lemma, the optimal de-
+tection statistic for distinguishing between two compet-
+ing hypotheses – an isotropic GWB (hypothesisH 0) and
+an anisotropic GWB (hypothesisH 1) – is the likelihood
+ratio or, in a Bayesian framework, the Bayes factor [27].
+Traditionally, computing the Bayes factor requires
+evaluating the marginal likelihood of the data under both
+models. For PTA cross-correlation estimators, evaluating
+this integral is intractable because the true joint prob-
+ability distribution is highly complex, correlated, and
+non-Gaussian (as shown in Fig. 1). Standard Bayesian
+searches bypass this by performing computationally ex-
+pensive MCMC sampling directly on the timing residu-
+als, while frequentist searches compromise by assuming
+an analytic, but inaccurate, Gaussian likelihood for the
+cross-correlation estimators.
+To overcome these limitations, we apply ideas from
+Simulation-Based Inference. SBI is now an extensively
+utilized framework across astrophysics and cosmology
+(and beyond); see Ref. [28] for a review and Refs. [29–
+32] for applications to PTA data analysis. While most of
+these applications have been in the context of Bayesian
+parameter estimation, Ref. [33] recently demonstrated
+that Bayesian model comparison can be entirely recast
+as a classification optimization problem (see also [34]).
+In particular, if a neural network is trained to classify
+simulated data as belonging to eitherH 0 orH 1, the net-
+work asymptotically learns the density ratio between the
+two data-generating distributions. By utilizing specific
+loss functions during training, the output of the classi-
+fier directly provides an amortized estimate of the Bayes
+factor (see App. A for more details).
+In this work, we apply this methodology to the PTA
+anisotropy search. Rather than specifying an explicit,
+approximate analytic likelihood, we implicitly define the
+true distributions via forward modeling. We then train a
+neural network classifier directly on the cross-correlation
+estimators to distinguish between mock isotropic and
+anisotropic GWB signals. This approach yields several
+major advantages:
+1.Optimality:It directly estimates the Bayes
+factor, learning the optimal non-linear detection
+statistic directly from the data.
+2.Accuracy:It captures the non-Gaussian structure
+and covariance of the cross-correlation estimators
+without requiring analytical derivations.
+3.Efficiency:It bypasses both the arbitrary choices
+inherent in classical map reconstruction and the
+massive computational cost of MCMC, allowing for
+near-instantaneous inference once the network is
+trained.
+The exact test statistic, or Bayes factor, that is learnt
+depends on the forward modeling assumptions in the var-
+ious data generation pipelines (e.g. regarding the ampli-
+tude, number, and distribution of anisotropies). Below,
+we discuss our specific choices for these assumptions and,
+therefore, the hypothesis test we are implicitly carrying
+out.
+A. Forward modeling
+To generate the mock cross-correlations used to train and
+test our classifier, we follow as closely as possible the
+procedure that would be used to derive cross-correlation
+
+6
+estimators from real PTA timing residuals. Specifically,
+following Ref. [23], we proceed in three steps:
+1.Timing residuals generation(Sec. IV A 1): We
+generate mock timing residuals in which we inject
+white and intrinsic red noise, as well as GWB sig-
+nals.
+2.Noise parameter inference(validation dataset
+only, Sec. IV A 2): For a subset of the mock data,
+used later for validation, we perform a Bayesian run
+(which models the GWB as common uncorrelated
+red noise) to obtain posterior distributions for noise
+and GWB parameters.
+3.Cross-correlation estimation(Sec. IV A 3): We
+construct the cross-correlation estimators from the
+timing residuals.
+In the remainder of this section, we provide more details
+on each of these three steps.
+1. Timing residuals generation
+We start by generating mock timing residuals for each
+of the 120 pulsars observed by regional PTAs comprising
+the International Pulsar Timing Arrays (IPTA). In do-
+ing so, we adopt the sky positions, observation times, and
+measured noise properties from the most recent data re-
+leases from each of these collaborations [9, 35–38]. We as-
+sume that the residuals receive contributions from three
+processes: white noise, intrinsic red noise (IRN), and
+GWB (which we model as an isotropic component plus
+anisotropic contributions). Therefore, we model the tim-
+ing residuals as
+δt=δt WN +δt IRN +δt GWB +δt CW ,(13)
+whereδt WN represents the white noise contribution,
+δtIRN the intrinsic red noise,δt GWB the contribution
+from the isotropic component of the GWB, andδt CW
+the contribution from the anisotropic component that we
+model as a sum of continuous wave (CW) sources.
+White noise– To reduce the dataset to a compu-
+tationally manageable size, we construct epoch-averaged
+TOAs by combining all observations of a pulsar at dif-
+ferent radio frequencies within a given PTA and observa-
+tional epoch into a single effective observation. We com-
+pute the effective white noise of the averaged observation,
+σTOA, from the full white noise matrix,N, which con-
+tains measurement uncertainties, additional white noise
+contributions (EFAC and EQUAD), and pulse jitter for
+all individual TOAs within a given epoch [39]: 4
+σ2
+TOA =
+hX
+i,j
+ 
+N −1
+ij
+i−1
+.(14)
+4 Notice that this epoch-averaging procedure tends to underesti-
+mate the white-noise contribution to the timing residuals. While
+inflating TOA uncertainties could mitigate this effect, we choose
+The white noise contribution to the timing residuals is
+then modeled as a Gaussian process, whose two-point
+function is given by:
+⟨δtWN,iδtWN,j⟩=δ ijσ2
+TOA ,(15)
+whereiandjindex the TOAs of a given pulsar. For
+each observation, we then simulate white noise by draw-
+ing from a zero-mean Gaussian distribution with variance
+given byσ 2
+TOA.
+Intrinsic red noise– For all pulsars that show evi-
+dence for significant intrinsic red noise according to the
+noise analyses from the individual PTAs [9, 35, 38, 40],
+we include this process in our datasets. Following stan-
+dard conventions, we model IRN as a Gaussian process,
+for which we can write a single random realization as:
+δtIRN,i =F a=
+NfX
+j=1
+h
+Xj sin(2πfjti) +Y j cos(2πfjti)
+i
+,
+(16)
+where alternatingX,Ycoefficients make up the Fourier
+coefficient vectora, the design matrixFcontains alter-
+nating columns of sine and cosine components evaluated
+at the observation times,f j =j/T psr whereT psr is the
+individual observation baseline for each pulsar, and we
+truncate the sum atN f = 30 following the convention
+of Ref. [5]. We then generate the IRN contribution to
+the timing residuals by sampling, for each pulsar, a set
+of Fourier coefficients from a zero-mean Gaussian distri-
+bution with covariance given by:
+⟨Y a
+i Y b
+j ⟩=⟨X a
+i X b
+j ⟩=δ ijδab φa(fi),(17)
+where the IRN power spectral density (PSD) is
+parametrized as
+φa(f) = A2
+a
+12π2
+ f
+yr−1
+−γa
+yr3
+Tobs
+,(18)
+whereT obs is the total observing time, and the amplitude
+Aa and slopeγ a are pulsar-dependent parameters set to
+the maximum posterior values obtained in Refs. [9, 35,
+38, 40].
+Isotropic GWB component– We model the contri-
+bution of the isotropic component of the GWB similarly
+to IRN, i.e., by decomposing it into Fourier components
+and sampling the Fourier coefficients from a Gaussian
+distribution. However, compared to IRN, the Fourier co-
+efficients of different pulsars are now correlated according
+to the HD curve, such that the two-point function now
+reads:
+⟨Y a
+i Y b
+j ⟩=⟨X a
+i X b
+j ⟩=δ ij Γab Φa(fi),(19)
+not to do so because the classical method used as a reference
+in this work employs the same approach. In this way, while the
+overall sensitivity scale reported here may be overestimated, the
+relative performance comparison with the classical method re-
+mains unbiased.
+
+7
+where the GWB power spectrum is parametrized as
+Φ(f) =
+A2
+gwb
+12π2
+ f
+yr−1
+−γgwb
+yr3∆f .(20)
+The Fourier components are drawn for a discrete fre-
+quency array ranging fromf min = 1/(10T obs) up to
+fmax = 300/T obs with spacing ∆f= 1/(10T obs). The
+timing residuals are obtained by applying a fast Fourier
+transform to the Fourier components and then interpo-
+lating into the observation times.
+Anisotropic GWB component– In this work,
+we model GWB anisotropies as a superposition of
+GWB hotspots. This is justified by the expecta-
+tion that SMBHBs produce localized anisotropies cor-
+responding to the brightest individual binaries in the
+population [13–15]. We model these hotspots as CW sig-
+nals produced by individual SMBHB binaries. The con-
+tribution of a CW signal to the timing residuals of the
+ath pulsar is given by [41]:
+δta(t) = hcf −3/2
+GW
+2πT 1/2
+obs
+n
+F +
+a (ˆΩ)
+h
+cos(2ψ)
+
+sin(ϕ0 + 2ωtp)−sin(ϕ 0 + 2ωt)
+
++ sin(2ψ)
+
+cos(ϕ0 + 2ωtp)−cos(ϕ 0 + 2ωt)
+i
++F ×
+a (ˆΩ)
+h
+sin(2ψ)
+
+sin(ϕ0 + 2ωt)−sin(ϕ 0 + 2ωtp)
+
++ cos(2ψ)
+
+cos(ϕ0 + 2ωtp)−cos(ϕ 0 + 2ωt)
+io
+,
+(21)
+whereh c denotes the characteristic strain of the source
+associated with the hotspot,ω= 2πf GW withf GW the
+frequency of the GW,ψis the polarization angle, andϕ 0
+is the initial phase. For each CW source that we inject in
+the data, ˆΩ is drawn from a uniform distribution across
+the sky, while bothψandϕ 0 are drawn from a uniform
+distribution,U(0,2π). The effect of the pulsar term is
+encoded in the pulsar time,t p(t) = (t−L a(1−cosµ)),
+with cosµ=− ˆΩ·ˆpa. To reflect our lack of knowledge
+about the true pulsar distances, we generate new values
+ofL a for every realization by drawing from a uniform dis-
+tributionU(0.5 kpc,1.5 kpc). The characteristic strain
+for a hotspot contributing to a fractionx hot of the power
+at frequencyf hot is given by
+hc = √xhot Agwb
+ fhot
+yr−1
+−0.5 (γgwb−3)
+,(22)
+where, in this work, we setγ gwb = 13/3. To ensure
+that our classifier learns to detect anisotropies rather
+than amplitude variations, we reduce the isotropic GWB
+spectral density, Φiso(fhot), by the power contributed by
+the hotspots, ensuring that the total GWB amplitude
+remains constant across isotropic and anisotropic real-
+izations:
+Φ(fhot)→
+√
+1−x hot Φ(fhot).(23)
+Figure 2 demonstrates this explicitly, showing how the
+distributions of recovered GWB amplitudes overlap for
+isotropic and anisotropic realizations.
+After simulating all signal components, the approach
+closest to a true dataset analysis would include fitting
+a timing model to each of the pulsars. This, however,
+significantly increases runtimes and is therefore not fea-
+sible for large datasets. Therefore, for thetrainingand
+validationdata sets, we only marginalize over linear de-
+viations from the true timing model parameters when de-
+riving the cross-correlation estimators (see Sec. IV A 3 for
+more details). We have verified that this procedure does
+not significantly affect the distribution of these estima-
+tors [23]. Moreover, we also generate a smallertest real
+dataset for which we do perform full timing model fits
+(using the software packagepta-replicator[42]). In
+Sec. V, we use this realistic validation dataset to explic-
+itly assess the impact of the timing model approximation
+on classifier performance.
+2. Noise run
+The weightsw ab,k entering the definition of the cross-
+correlation estimators in Eq. (9) depend on the noise and
+GWB parameters. In real PTA analyses, posterior distri-
+butions for these quantities would be obtained through
+single-pulsar runs and a preliminary Bayesian analysis
+modeling the GWB as common uncorrelated red noise
+(CURN). To marginalize over red noise parameters, the
+cross-correlations and their uncertainties are then calcu-
+lated over multiple random draws from the posterior dis-
+tributions, resulting in what is referred to as the “noise-
+marginalized optimal statistic” (NMOS) [43]. However,
+this procedure is computationally expensive 5; therefore,
+for thetrainingandvalidationdatasets, we set white
+noise, IRN, and GWB parameters to their injected val-
+ues. Previous work has shown that fixing white noise,
+5 As a single analysis run takes multiple hours using the CPU-
+basedenterprisepackage, or over 10 minutes with the GPU-
+basedDiscovery[25, 26], it is not feasible to repeat this for the
+full training dataset containingO(10 6) independent simulations.
+
+8
+0.0 0.2 0.4 0.6 0.8 1.0
+Φ 2 [s2] ×10−13
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+PDF
+×1013
+Isotropic
+Anisotropic
+FIG. 2. Distribution of the recovered timing residuals PSD
+induced by the GWB in the second frequency bin, ˆΦ2 ≡
+ˆΦ(f2)∆f, of the training data. The orange histogram shows
+the distribution for isotropic GWB realizations, while the blue
+histogram shows the one for anisotropic realizations contain-
+ing a varying number of hotspots with varying strength. The
+vertical dashed line indicates the injected amplitude value,
+Φ2 = 3.7×10 −14 [s2].
+IRN and GWB parameters to their true values does not
+significantly change the distribution of cross-correlation
+estimators when considering a large number of simulated
+datasets [23, 43]. Nevertheless, for the smallertest real
+we do perform NMOS runs, so that we can explicitly as-
+sess how this approximation affects the performance of
+our classifier (see Sec. V).
+Specifically, for each timing residuals realization in
+test real, we perform a CURN run to derive the pos-
+terior distributions of the intrinsic red noise parameters
+(log10 Aa, γa) and GWB parameters (log 10 Agwb, γgwb).
+We perform these runs using the GPU-accelerated code
+Discovery[25, 26], assuming a power-law spectral tem-
+plate with 30 and 14 frequency bins for the IRN and
+GWB, respectively. Then, for each of the timing residu-
+als realizations, we draw 1000 samples of IRN and GWB
+parameters from these posterior distributions and derive
+the corresponding cross-correlation estimators according
+to the procedure outlined in Sec. IV A 3. Therefore, for
+test real, we obtain 1000 sets of these estimators per
+realization, capturing the uncertainty introduced by im-
+perfect knowledge of the noise and GWB parameters.
+3. Cross-correlation estimation
+Finally, for each set of mock timing residuals, we use
+the software packageDEFIANTto construct the cross-
+correlation estimators given in Eq. (9), where the weights,
+wab,k, are given by [44, 45]:
+wab,k = P −1
+a · ˜Sab,k ·P −1
+b
+tr
+h
+P −1a · ˜Sab,k ·P −1
+b · ˜S′
+ab,k
+i .(24)
+The cross-covariance matrix is defined as ˜S′
+ab,k ≡
+FaΦF T
+b /Φ(fk) and ˜Sab,k ≡F a ˜ϕkF T
+b , where ˜ϕk is a fre-
+quency selector of the form
+˜ϕ1 = diag(1,1,0,0, . . . ,0,0),
+...
+˜ϕNf = diag(0,0,0,0, . . . ,1,1).
+(25)
+The elements of the auto-covariance matrix of pulsara
+are given by:
+Pa,ij ≡D a,ij +F a,ik(Φ +φ a)kk′Fa,jk ′ ,(26)
+where the indicesiandjrun over the TOAs andk
+runs over the frequency bins, and we have definedΦ=
+diag(Φ(f1),Φ(f 1),Φ(f 2),Φ(f 2), . . .)∆f, and similarly for
+φa. The matrixD a is given by
+Da =N+M aEM T
+a ,(27)
+whereNis the white noise matrix, andMis an
+NTOA ×mmatrix whose elements are the partial deriva-
+tives of the TOAs with respect to themtiming model
+parameters, evaluated at their best-fit values. The ma-
+trixEis diagonal with very large entries (typically 10 40),
+effectively imposing a flat prior on the timing model pa-
+rameters. WhenD a is inverted, this choice marginalizes
+over uncertainties in the timing model parameters.
+Once a set ofunnormalizedcross-correlation estima-
+tors is derived using Eq. (9) in conjunction with the
+weights given above, we can construct an estimator of
+the GWB PSD in each frequency bin as [44, 45]:
+ˆΦk = ΓTΣ−1
+k ˆρk
+ΓTΣ−1
+k Γ ,(28)
+whereΣ k,ab,cd ≡ ⟨ˆρab,k ˆρcd,k⟩−⟨ˆρk,ab⟩⟨ˆρk,cd⟩is the covari-
+ance matrix of the estimators as derived in [44], which
+includes contributions from both pulsar noise and GWB
+self-noise (i.e., cosmic variance in the cross-correlation
+coefficients [46, 47]). These PSD estimates are then used
+to normalize the cross-correlation estimators such that
+their expectation value is given by⟨ˆρab,k⟩=ρ ab(fk).
+B. Network architecture
+As detailed in this section, the main task we are try-
+ing to solve is a binary classification problem: given a
+
+9
+<latexit sha1_base64="viqGWyreD8DAuVxd9b0BpzK9ce8=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXspukeqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX31My/J82i+W3Io7B1olXkZKkKHRL371BhFJBJWGcKx113Nj46dYGUY4nRZ6iaYxJmM8pF1LJRZU++n84Ck6s8oAhZGyJQ2aq78nUiy0nojAdgpsRnrZm4n/ed3EhFd+ymScGCrJYlGYcGQiNPseDZiixPCJJZgoZm9FZIQVJsZmVLAheMsvr5JWteLVKrW7i1L9OosjDydwCmXw4BLqcAsNaAIBAc/wCm+Ocl6cd+dj0Zpzsplj+APn8wcJGY/t</latexit>
+h(n)
+2
+<latexit sha1_base64="1U2SF75S3GjQtxaljUiPTmBX4KA=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOo7z2mZXk+7RdLbsWdA60SLyMlyNDoF796g4gkgkpDONa667mx8VOsDCOcTgu9RNMYkzEe0q6lEguq/XR+8BSdWWWAwkjZkgbN1d8TKRZaT0RgOwU2I73szcT/vG5iwis/ZTJODJVksShMODIRmn2PBkxRYvjEEkwUs7ciMsIKE2MzKtgQvOWXV0nrouLVKrW7aql+ncWRhxM4hTJ4cAl1uIUGNIGAgGd4hTdHOS/Ou/OxaM052cwx/IHz+QMHj4/s</latexit>
+h(n)
+1
+<latexit sha1_base64="LF6tM+Hb0NMUuNXjqhIcDnkIYM4=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX3tMy/J82i+W3Io7B1olXkZKkKHRL371BhFJBJWGcKx113Nj46dYGUY4nRZ6iaYxJmM8pF1LJRZU++n84Ck6s8oAhZGyJQ2aq78nUiy0nojAdgpsRnrZm4n/ed3EhFd+ymScGCrJYlGYcGQiNPseDZiixPCJJZgoZm9FZIQVJsZmVLAheMsvr5LWRcWrVWp31VL9OosjDydwCmXw4BLqcAsNaAIBAc/wCm+Ocl6cd+dj0Zpzsplj+APn8wcPQY/x</latexit>
+h(n)
+6
+<latexit sha1_base64="pflB6641GcyI3qymbZWxNXdNXWg=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzTCvPpZFNy4r2FZox5JJM21oJjMkGaEM8xtuXCji1p9x59+YPgQVPXDhcM693HtPkDAqlWV9GIW19Y3NreJ2aWd3b/+gfHjUlXEqMOngmMXiNkCSMMpJR1HFyG0iCIoCRnrB9HLu9+6JkDTmN2qWED9CY05DipHS0oAMM9fL77IqP8+H5YplWm6jaXvQMh2nUfNcTTzHbdYsaJvWAhWwQntYfh+MYpxGhCvMkJR920qUnyGhKGYkLw1SSRKEp2hM+ppyFBHpZ4ubc3imlREMY6GLK7hQv09kKJJyFgW6M0JqIn97c/Evr5+qsOlnlCepIhwvF4UpgyqG8wDgiAqCFZtpgrCg+laIJ0ggrHRMJR3C16fwf9J1TLtu1q+9SutiFUcRnIBTUAU2aIAWuAJt0AEYJOABPIFnIzUejRfjddlaMFYzx+AHjLdPqXiReQ==</latexit>
+e(n)
+34
+<latexit sha1_base64="w2y3Vnai0B7+yCi4t6N25ybN9Fw=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquSvVY9OKxgv2Qdi3ZNNuGJtklyQpl6a/w4kERr/4cb/4b03YP2vpg4PHeDDPzgpgzbVz328mtrK6tb+Q3C1vbO7t7xf2Dpo4SRWiDRDxS7QBrypmkDcMMp+1YUSwCTlvB6Gbqt56o0iyS92YcU1/ggWQhI9hY6WHYO39My/J00iuW3Io7A1omXkZKkKHeK351+xFJBJWGcKx1x3Nj46dYGUY4nRS6iaYxJiM8oB1LJRZU++ns4Ak6sUofhZGyJQ2aqb8nUiy0HovAdgpshnrRm4r/eZ3EhFd+ymScGCrJfFGYcGQiNP0e9ZmixPCxJZgoZm9FZIgVJsZmVLAheIsvL5PmWcWrVqp3F6XadRZHHo7gGMrgwSXU4Bbq0AACAp7hFd4c5bw4787HvDXnZDOH8AfO5w8Ko4/u</latexit>
+h(n)
+3
+<latexit sha1_base64="5WYP5/dR94NPHAX7dY+ZERjrn6s=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX31My/J82i+W3Io7B1olXkZKkKHRL371BhFJBJWGcKx113Nj46dYGUY4nRZ6iaYxJmM8pF1LJRZU++n84Ck6s8oAhZGyJQ2aq78nUiy0nojAdgpsRnrZm4n/ed3EhFd+ymScGCrJYlGYcGQiNPseDZiixPCJJZgoZm9FZIQVJsZmVLAheMsvr5LWRcWrVWp31VL9OosjDydwCmXw4BLqcAsNaAIBAc/wCm+Ocl6cd+dj0Zpzsplj+APn8wcMLY/v</latexit>
+h(n)
+4
+<latexit sha1_base64="0BVZBasNi5LwUqXuAkr4LdrkMQM=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquaPVY9OKxgv2Qdi3ZNNuGJtklyQpl6a/w4kERr/4cb/4b03YP2vpg4PHeDDPzgpgzbVz328mtrK6tb+Q3C1vbO7t7xf2Dpo4SRWiDRDxS7QBrypmkDcMMp+1YUSwCTlvB6Gbqt56o0iyS92YcU1/ggWQhI9hY6WHYu3hMy/J00iuW3Io7A1omXkZKkKHeK351+xFJBJWGcKx1x3Nj46dYGUY4nRS6iaYxJiM8oB1LJRZU++ns4Ak6sUofhZGyJQ2aqb8nUiy0HovAdgpshnrRm4r/eZ3EhFd+ymScGCrJfFGYcGQiNP0e9ZmixPCxJZgoZm9FZIgVJsZmVLAheIsvL5PmWcWrVqp356XadRZHHo7gGMrgwSXU4Bbq0AACAp7hFd4c5bw4787HvDXnZDOH8AfO5w8Nt4/w</latexit>
+h(n)
+5
+<latexit sha1_base64="QlRzSLtU/+2u/XjpkGqioxfIvsw=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzTCvPpZFNy4r2FZox5JJM21oJjMkGaEM8xtuXCji1p9x59+YPgQVPXDhcM693HtPkDAqlWV9GIW19Y3NreJ2aWd3b/+gfHjUlXEqMOngmMXiNkCSMMpJR1HFyG0iCIoCRnrB9HLu9+6JkDTmN2qWED9CY05DipHS0oAMM8fN77IqP8+H5YplWm6jaXvQMh2nUfNcTTzHbdYsaJvWAhWwQntYfh+MYpxGhCvMkJR920qUnyGhKGYkLw1SSRKEp2hM+ppyFBHpZ4ubc3imlREMY6GLK7hQv09kKJJyFgW6M0JqIn97c/Evr5+qsOlnlCepIhwvF4UpgyqG8wDgiAqCFZtpgrCg+laIJ0ggrHRMJR3C16fwf9J1TLtu1q+9SutiFUcRnIBTUAU2aIAWuAJt0AEYJOABPIFnIzUejRfjddlaMFYzx+AHjLdPpmGRdw==</latexit>
+e(n)
+23
+<latexit sha1_base64="NFHZ6/HJwT/rIopQtTyri0o2YUU=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIKvWZndZWZzPBsUSslGl3nA8iGzXrVe9iiGeW2lUEXRstEAJrNAaFN/7w5ikERWacKxUz0GJ9jMsNSOczgr9VNEEkwke0Z6hAkdU+dni5hk8M8oQhrE0JTRcqN8nMhwpNY0C0xlhPVa/vbn4l9dLddjwMyaSVFNBlovClEMdw3kAcMgkJZpPDcFEMnMrJGMsMdEmpoIJ4etT+D/puLZTs2vXXql5sYojD07AKSgDB9RBE1yBFmgDAhLwAJ7As5Vaj9aL9bpszVmrmWPwA9bbJ6+mkX0=</latexit>
+e(n)
+56
+<latexit sha1_base64="B6y8TPwYZY3+eQI8VuPkUu3Jc6I=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIPOqs7usLM5ng2IJ2ahSbzgeRLbr1qtexRDPrTSqCDo2WqAEVmgNiu/9YUzSiApNOFaq56BE+xmWmhFOZ4V+qmiCyQSPaM9QgSOq/Gxx8wyeGWUIw1iaEhou1O8TGY6UmkaB6YywHqvf3lz8y+ulOmz4GRNJqqkgy0VhyqGO4TwAOGSSEs2nhmAimbkVkjGWmGgTU8GE8PUp/J90XNup2bVrr9S8WMWRByfgFJSBA+qgCa5AC7QBAQl4AE/g2UqtR+vFel225qzVzDH4AevtE6yPkXs=</latexit>
+e(n)
+45
+<latexit sha1_base64="2+RT1//2UezSNDovav39lcZLezc=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIKu5s7usLM5ng2IJ2ahSbzgeRLbr1qtexRDPrTSqCDo2WqAEVmgNiu/9YUzSiApNOFaq56BE+xmWmhFOZ4V+qmiCyQSPaM9QgSOq/Gxx8wyeGWUIw1iaEhou1O8TGY6UmkaB6YywHqvf3lz8y+ulOmz4GRNJqqkgy0VhyqGO4TwAOGSSEs2nhmAimbkVkjGWmGgTU8GE8PUp/J90XNup2bVrr9S8WMWRByfgFJSBA+qgCa5AC7QBAQl4AE/g2UqtR+vFel225qzVzDH4AevtE6sGkXo=</latexit>
+e(n)
+62
+<latexit sha1_base64="7p1CSTELxB6HibH5qae1rcL97Tc=">AAAB9XicdVDLSsNAFJ3UV62vqks3g0WoCCFJ08ey4MZlBWsLbVom00k7dDIJMxOlhPyHGxeKuPVf3Pk3Th+Cih64cDjnXu69x48ZlcqyPozc2vrG5lZ+u7Czu7d/UDw8upVRIjBp44hFousjSRjlpK2oYqQbC4JCn5GOP72c+507IiSN+I2axcQL0ZjTgGKktDQgw7TmZIO0zC/s82xYLFmmVak3bBdapuPUq25FE9epNKoWtE1rgRJYoTUsvvdHEU5CwhVmSMqebcXKS5FQFDOSFfqJJDHCUzQmPU05Con00sXVGTzTyggGkdDFFVyo3ydSFEo5C33dGSI1kb+9ufiX10tU0PBSyuNEEY6Xi4KEQRXBeQRwRAXBis00QVhQfSvEEyQQVjqogg7h61P4P7l1TLtm1q7dUrO6iiMPTsApKAMb1EETXIEWaAMMBHgAT+DZuDcejRfjddmaM1Yzx+AHjLdPhJuR3Q==</latexit>
+e(n+1)
+62
+<latexit sha1_base64="0kpB64RGPqLLiZdl7q2l7yNfvTI=">AAAB9XicdVDLSgMxFM3UV62vqks3wSJUhGFefSwLblxWsLbQTksmzbShmcyQZJQy9D/cuFDErf/izr8xfQgqeuDC4Zx7ufeeIGFUKsv6MHJr6xubW/ntws7u3v5B8fDoVsapwKSFYxaLToAkYZSTlqKKkU4iCIoCRtrB5HLut++IkDTmN2qaED9CI05DipHSUp8MMsed9bMyv7DPZ4NiyTItt1a3PWiZjlOreK4mnuPWKxa0TWuBElihOSi+94YxTiPCFWZIyq5tJcrPkFAUMzIr9FJJEoQnaES6mnIUEelni6tn8EwrQxjGQhdXcKF+n8hQJOU0CnRnhNRY/vbm4l9eN1Vh3c8oT1JFOF4uClMGVQznEcAhFQQrNtUEYUH1rRCPkUBY6aAKOoSvT+H/5NYx7apZvfZKjcoqjjw4AaegDGxQAw1wBZqgBTAQ4AE8gWfj3ng0XozXZWvOWM0cgx8w3j4Bf/CR2g==</latexit>
+e(n+1)
+23
+<latexit sha1_base64="gIPiMzOnWmIUFO2UAQlJLxtTr00=">AAAB9XicdVDLSgMxFM3UV62vqks3wSJUhGFefSwLblxWsLbQTksmzbShmcyQZJQy9D/cuFDErf/izr8xfQgqeuDC4Zx7ufeeIGFUKsv6MHJr6xubW/ntws7u3v5B8fDoVsapwKSFYxaLToAkYZSTlqKKkU4iCIoCRtrB5HLut++IkDTmN2qaED9CI05DipHSUp8MMteb9bMyv7DPZ4NiyTItt1a3PWiZjlOreK4mnuPWKxa0TWuBElihOSi+94YxTiPCFWZIyq5tJcrPkFAUMzIr9FJJEoQnaES6mnIUEelni6tn8EwrQxjGQhdXcKF+n8hQJOU0CnRnhNRY/vbm4l9eN1Vh3c8oT1JFOF4uClMGVQznEcAhFQQrNtUEYUH1rRCPkUBY6aAKOoSvT+H/5NYx7apZvfZKjcoqjjw4AaegDGxQAw1wBZqgBTAQ4AE8gWfj3ng0XozXZWvOWM0cgx8w3j4BgwuR3A==</latexit>
+e(n+1)
+34
+<latexit sha1_base64="9UrsoS5S2QaL1dN7ScLREAgLJQ8=">AAAB9XicdVDLSsNAFJ3UV62vqks3g0WoCCFJk7bLghuXFawttGmZTCft0MkkzEyUEvofblwo4tZ/ceffOH0IKnrgwuGce7n3niBhVCrL+jBya+sbm1v57cLO7t7+QfHw6FbGqcCkhWMWi06AJGGUk5aiipFOIgiKAkbaweRy7rfviJA05jdqmhA/QiNOQ4qR0lKfDDLXm/WzMr+wz2eDYskyrUqtbrvQMh2n5rkVTVynUvcsaJvWAiWwQnNQfO8NY5xGhCvMkJRd20qUnyGhKGZkVuilkiQIT9CIdDXlKCLSzxZXz+CZVoYwjIUuruBC/T6RoUjKaRTozgipsfztzcW/vG6qwrqfUZ6kinC8XBSmDKoYziOAQyoIVmyqCcKC6lshHiOBsNJBFXQIX5/C/8mtY9pVs3rtlhreKo48OAGnoAxsUAMNcAWaoAUwEOABPIFn4954NF6M12VrzljNHIMfMN4+AYYmkd4=</latexit>
+e(n+1)
+45
+<latexit sha1_base64="+L28lJkNNPera5Gl6L7cnGw2a/M=">AAAB9XicdVDLSsNAFJ3UV62vqks3g0WoCCFJk7bLghuXFawttGmZTCft0MkkzEyUEvofblwo4tZ/ceffOH0IKnrgwuGce7n3niBhVCrL+jBya+sbm1v57cLO7t7+QfHw6FbGqcCkhWMWi06AJGGUk5aiipFOIgiKAkbaweRy7rfviJA05jdqmhA/QiNOQ4qR0lKfDDKvOutnZX5hn88GxZJlWpVa3XahZTpOzXMrmrhOpe5Z0DatBUpgheag+N4bxjiNCFeYISm7tpUoP0NCUczIrNBLJUkQnqAR6WrKUUSkny2unsEzrQxhGAtdXMGF+n0iQ5GU0yjQnRFSY/nbm4t/ed1UhXU/ozxJFeF4uShMGVQxnEcAh1QQrNhUE4QF1bdCPEYCYaWDKugQvj6F/5Nbx7SrZvXaLTW8VRx5cAJOQRnYoAYa4Ao0QQtgIMADeALPxr3xaLwYr8vWnLGaOQY/YLx9AolBkeA=</latexit>
+e(n+1)
+56
+<latexit sha1_base64="JazORusY3tBs8O0KIP3yCpCuvXM=">AAAB8nicbVBNSwMxEM36WetX1aOXYBEqQtkVrR4LXjxWsB+wXUs2zbah2WRJZoWy9Gd48aCIV3+NN/+NabsHbX0w8Hhvhpl5YSK4Adf9dlZW19Y3Ngtbxe2d3b390sFhy6hUU9akSijdCYlhgkvWBA6CdRLNSBwK1g5Ht1O//cS04Uo+wDhhQUwGkkecErCSP+x5j1lFnntnk16p7FbdGfAy8XJSRjkavdJXt69oGjMJVBBjfM9NIMiIBk4FmxS7qWEJoSMyYL6lksTMBNns5Ak+tUofR0rbkoBn6u+JjMTGjOPQdsYEhmbRm4r/eX4K0U2QcZmkwCSdL4pSgUHh6f+4zzWjIMaWEKq5vRXTIdGEgk2paEPwFl9eJq2Lqler1u4vy/WrPI4COkYnqII8dI3q6A41UBNRpNAzekVvDjgvzrvzMW9dcfKZI/QHzucP3rGQTw==</latexit>
+h(n+1)
+1
+<latexit sha1_base64="q1XoOhJ8NPMbQ3sdd4tdK6GMRoU=">AAAB8nicbVBNSwMxEM36WetX1aOXYBEqQtktUj0WvHisYD9gu5Zsmm1Ds8mSzApl6c/w4kERr/4ab/4b03YP2vpg4PHeDDPzwkRwA6777aytb2xubRd2irt7+weHpaPjtlGppqxFlVC6GxLDBJesBRwE6yaakTgUrBOOb2d+54lpw5V8gEnCgpgMJY84JWAlf9SvPWYVeeldTPulslt158CrxMtJGeVo9ktfvYGiacwkUEGM8T03gSAjGjgVbFrspYYlhI7JkPmWShIzE2Tzk6f43CoDHCltSwKeq78nMhIbM4lD2xkTGJllbyb+5/kpRDdBxmWSApN0sShKBQaFZ//jAdeMgphYQqjm9lZMR0QTCjalog3BW355lbRrVa9erd9flRteHkcBnaIzVEEeukYNdIeaqIUoUugZvaI3B5wX5935WLSuOfnMCfoD5/MH3wmQTA==</latexit>
+h(n+1)
+2
+<latexit sha1_base64="xhzUv7dBHn+G1bbd3IttSzg/oNU=">AAAB8nicbVBNSwMxEM36WetX1aOXYBEqQtmVUj0WvHisYD9gu5Zsmm1Ds8mSzApl6c/w4kERr/4ab/4b03YP2vpg4PHeDDPzwkRwA6777aytb2xubRd2irt7+weHpaPjtlGppqxFlVC6GxLDBJesBRwE6yaakTgUrBOOb2d+54lpw5V8gEnCgpgMJY84JWAlf9SvPWYVeeldTPulslt158CrxMtJGeVo9ktfvYGiacwkUEGM8T03gSAjGjgVbFrspYYlhI7JkPmWShIzE2Tzk6f43CoDHCltSwKeq78nMhIbM4lD2xkTGJllbyb+5/kpRDdBxmWSApN0sShKBQaFZ//jAdeMgphYQqjm9lZMR0QTCjalog3BW355lbSvql69Wr+vlRteHkcBnaIzVEEeukYNdIeaqIUoUugZvaI3B5wX5935WLSuOfnMCfoD5/MH4iGQTg==</latexit>
+h(n+1)
+4
+<latexit sha1_base64="rBPBpyrlLi18QrI4WOl/+9eLwbE=">AAAB8nicbVBNSwMxEM36WetX1aOXYBEqQtkVrR4LXjxWsB+wXUs2zbah2WRJZoWy9Gd48aCIV3+NN/+NabsHbX0w8Hhvhpl5YSK4Adf9dlZW19Y3Ngtbxe2d3b390sFhy6hUU9akSijdCYlhgkvWBA6CdRLNSBwK1g5Ht1O//cS04Uo+wDhhQUwGkkecErCSP+xdPWYVee6dTXqlslt1Z8DLxMtJGeVo9Epf3b6iacwkUEGM8T03gSAjGjgVbFLspoYlhI7IgPmWShIzE2Szkyf41Cp9HCltSwKeqb8nMhIbM45D2xkTGJpFbyr+5/kpRDdBxmWSApN0vihKBQaFp//jPteMghhbQqjm9lZMh0QTCjalog3BW3x5mbQuql6tWru/LNe9PI4COkYnqII8dI3q6A41UBNRpNAzekVvDjgvzrvzMW9dcfKZI/QHzucP462QTw==</latexit>
+h(n+1)
+5
+<latexit sha1_base64="tladE2zS/U+kHKWC6IKtHmeJ5NY=">AAAB8nicbVBNSwMxEJ2tX7V+VT16CRahIpRdkeqx4MVjBfsB27Vk02wbmk2WJCuUpT/DiwdFvPprvPlvTNs9aOuDgcd7M8zMCxPOtHHdb6ewtr6xuVXcLu3s7u0flA+P2lqmitAWkVyqbog15UzQlmGG026iKI5DTjvh+Hbmd56o0kyKBzNJaBDjoWARI9hYyR/1649ZVVx459N+ueLW3DnQKvFyUoEczX75qzeQJI2pMIRjrX3PTUyQYWUY4XRa6qWaJpiM8ZD6lgocUx1k85On6MwqAxRJZUsYNFd/T2Q41noSh7Yzxmakl72Z+J/npya6CTImktRQQRaLopQjI9HsfzRgihLDJ5Zgopi9FZERVpgYm1LJhuAtv7xK2pc1r16r319VGl4eRxFO4BSq4ME1NOAOmtACAhKe4RXeHOO8OO/Ox6K14OQzx/AHzucP5TmQUA==</latexit>
+h(n+1)
+6
+<latexit sha1_base64="P2JeKZc+T+zK/E7+7jQut1xEN78=">AAAB8nicbVBNSwMxEM36WetX1aOXYBEqQtlVqR4LXjxWsB+wXUs2zbah2WRJZoWy9Gd48aCIV3+NN/+NabsHbX0w8Hhvhpl5YSK4Adf9dlZW19Y3Ngtbxe2d3b390sFhy6hUU9akSijdCYlhgkvWBA6CdRLNSBwK1g5Ht1O//cS04Uo+wDhhQUwGkkecErCSP+xdPmYVee6dTXqlslt1Z8DLxMtJGeVo9Epf3b6iacwkUEGM8T03gSAjGjgVbFLspoYlhI7IgPmWShIzE2Szkyf41Cp9HCltSwKeqb8nMhIbM45D2xkTGJpFbyr+5/kpRDdBxmWSApN0vihKBQaFp//jPteMghhbQqjm9lZMh0QTCjalog3BW3x5mbQuql6tWru/Kte9PI4COkYnqII8dI3q6A41UBNRpNAzekVvDjgvzrvzMW9dcfKZI/QHzucP4JWQTQ==</latexit>
+h(n+1)
+3
+<latexit sha1_base64="TIwponG2dITy1iwTjH8iCj8oKS4=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOo7z2mZfd82i+W3Io7B1olXkZKkKHRL371BhFJBJWGcKx113Nj46dYGUY4nRZ6iaYxJmM8pF1LJRZU++n84Ck6s8oAhZGyJQ2aq78nUiy0nojAdgpsRnrZm4n/ed3EhFd+ymScGCrJYlGYcGQiNPseDZiixPCJJZgoZm9FZIQVJsZmVLAheMsvr5LWRcWrVWp31VL9OosjDydwCmXw4BLqcAsNaAIBAc/wCm+Ocl6cd+dj0Zpzsplj+APn8wepDI+u</latexit>
+h(0)
+1
+<latexit sha1_base64="tRLo0BPPihwwx71cQP1zFfxoUK8=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXspukeqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX31My+75tF8suRV3DrRKvIyUIEOjX/zqDSKSCCoN4VjrrufGxk+xMoxwOi30Ek1jTMZ4SLuWSiyo9tP5wVN0ZpUBCiNlSxo0V39PpFhoPRGB7RTYjPSyNxP/87qJCa/8lMk4MVSSxaIw4chEaPY9GjBFieETSzBRzN6KyAgrTIzNqGBD8JZfXiWtasWrVWp3F6X6dRZHHk7gFMrgwSXU4RYa0AQCAp7hFd4c5bw4787HojXnZDPH8AfO5w+qlo+v</latexit>
+h(0)
+2
+<latexit sha1_base64="1teCvowh9C50ypxfWv7v/Fe/wrA=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquSvVY9OKxgv2Qdi3ZNNuGJtklyQpl6a/w4kERr/4cb/4b03YP2vpg4PHeDDPzgpgzbVz328mtrK6tb+Q3C1vbO7t7xf2Dpo4SRWiDRDxS7QBrypmkDcMMp+1YUSwCTlvB6Gbqt56o0iyS92YcU1/ggWQhI9hY6WHYO39My+7ppFcsuRV3BrRMvIyUIEO9V/zq9iOSCCoN4VjrjufGxk+xMoxwOil0E01jTEZ4QDuWSiyo9tPZwRN0YpU+CiNlSxo0U39PpFhoPRaB7RTYDPWiNxX/8zqJCa/8lMk4MVSS+aIw4chEaPo96jNFieFjSzBRzN6KyBArTIzNqGBD8BZfXibNs4pXrVTvLkq16yyOPBzBMZTBg0uowS3UoQEEBDzDK7w5ynlx3p2PeWvOyWYO4Q+czx+sII+w</latexit>
+h(0)
+3
+<latexit sha1_base64="1l8RnVgT9gK05JBe/V250UprhjM=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX31My+75tF8suRV3DrRKvIyUIEOjX/zqDSKSCCoN4VjrrufGxk+xMoxwOi30Ek1jTMZ4SLuWSiyo9tP5wVN0ZpUBCiNlSxo0V39PpFhoPRGB7RTYjPSyNxP/87qJCa/8lMk4MVSSxaIw4chEaPY9GjBFieETSzBRzN6KyAgrTIzNqGBD8JZfXiWti4pXq9TuqqX6dRZHHk7gFMrgwSXU4RYa0AQCAp7hFd4c5bw4787HojXnZDPH8AfO5w+tqo+x</latexit>
+h(0)
+4
+<latexit sha1_base64="DivtKR2m9iBAA6+DPANEjGa4DCU=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquaPVY9OKxgv2Qdi3ZNNuGJtklyQpl6a/w4kERr/4cb/4b03YP2vpg4PHeDDPzgpgzbVz328mtrK6tb+Q3C1vbO7t7xf2Dpo4SRWiDRDxS7QBrypmkDcMMp+1YUSwCTlvB6Gbqt56o0iyS92YcU1/ggWQhI9hY6WHYu3hMy+7ppFcsuRV3BrRMvIyUIEO9V/zq9iOSCCoN4VjrjufGxk+xMoxwOil0E01jTEZ4QDuWSiyo9tPZwRN0YpU+CiNlSxo0U39PpFhoPRaB7RTYDPWiNxX/8zqJCa/8lMk4MVSS+aIw4chEaPo96jNFieFjSzBRzN6KyBArTIzNqGBD8BZfXibNs4pXrVTvzku16yyOPBzBMZTBg0uowS3UoQEEBDzDK7w5ynlx3p2PeWvOyWYO4Q+czx+vNI+y</latexit>
+h(0)
+5
+<latexit sha1_base64="NnB/12HRh5xm7OC0qTLB+yzq6z8=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx6MVjBfsh7VqyabYNTbJLkhXK0l/hxYMiXv053vw3pu0etPXBwOO9GWbmBTFn2rjut5NbW9/Y3MpvF3Z29/YPiodHLR0litAmiXikOgHWlDNJm4YZTjuxolgEnLaD8c3Mbz9RpVkk780kpr7AQ8lCRrCx0sOoX3tMy+75tF8suRV3DrRKvIyUIEOjX/zqDSKSCCoN4VjrrufGxk+xMoxwOi30Ek1jTMZ4SLuWSiyo9tP5wVN0ZpUBCiNlSxo0V39PpFhoPRGB7RTYjPSyNxP/87qJCa/8lMk4MVSSxaIw4chEaPY9GjBFieETSzBRzN6KyAgrTIzNqGBD8JZfXiWti4pXq9TuqqX6dRZHHk7gFMrgwSXU4RYa0AQCAp7hFd4c5bw4787HojXnZDPH8AfO5w+wvo+z</latexit>
+h(0)
+6
+<latexit sha1_base64="197/PIO4h6ANXsDSxahToPvsFfM=">AAAB83icdVDJSgNBEO2JW4xb1KOXxiDEy9CzZDkGvXiMYBIhGUNPpydp0rPQ3SOEYX7DiwdFvPoz3vwbO4ugog8KHu9VUVXPTziTCqEPo7C2vrG5Vdwu7ezu7R+UD4+6Mk4FoR0S81jc+lhSziLaUUxxepsIikOf054/vZz7vXsqJIujGzVLqBficcQCRrDS0oAOM9vJ77IqOs+H5QoykdNoWi5Epm03aq6jiWs7zRqClokWqIAV2sPy+2AUkzSkkSIcS9m3UKK8DAvFCKd5aZBKmmAyxWPa1zTCIZVetrg5h2daGcEgFroiBRfq94kMh1LOQl93hlhN5G9vLv7l9VMVNL2MRUmqaESWi4KUQxXDeQBwxAQlis80wUQwfSskEywwUTqmkg7h61P4P+naplU369dupXWxiqMITsApqAILNEALXIE26AACEvAAnsCzkRqPxovxumwtGKuZY/ADxtsnR+2ROQ==</latexit>
+e(0)
+23
+<latexit sha1_base64="xdhbPGdryr0hgucz/cgXiNKyjFE=">AAAB83icdVDJSgNBEO2JW4xb1KOXxiDEy9CzZDkGvXiMYBIhGUNPpydp0rPQ3SOEYX7DiwdFvPoz3vwbO4ugog8KHu9VUVXPTziTCqEPo7C2vrG5Vdwu7ezu7R+UD4+6Mk4FoR0S81jc+lhSziLaUUxxepsIikOf054/vZz7vXsqJIujGzVLqBficcQCRrDS0oAOM8fN77IqOs+H5QoykdNoWi5Epm03aq6jiWs7zRqClokWqIAV2sPy+2AUkzSkkSIcS9m3UKK8DAvFCKd5aZBKmmAyxWPa1zTCIZVetrg5h2daGcEgFroiBRfq94kMh1LOQl93hlhN5G9vLv7l9VMVNL2MRUmqaESWi4KUQxXDeQBwxAQlis80wUQwfSskEywwUTqmkg7h61P4P+naplU369dupXWxiqMITsApqAILNEALXIE26AACEvAAnsCzkRqPxovxumwtGKuZY/ADxtsnSwSROw==</latexit>
+e(0)
+34
+<latexit sha1_base64="Wa2kQ7N64APF5JaRWyJ75M5lEKU=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIPOqs7usjM5ng2IJ2ahSbzgeRLbr1qtexRDPrTSqCDo2WqAEVmgNiu/9YUzSiApNOFaq56BE+xmWmhFOZ4V+qmiCyQSPaM9QgSOq/Gxx8wyeGWUIw1iaEhou1O8TGY6UmkaB6YywHqvf3lz8y+ulOmz4GRNJqqkgy0VhyqGO4TwAOGSSEs2nhmAimbkVkjGWmGgTU8GE8PUp/J90XNup2bVrr9S8WMWRByfgFJSBA+qgCa5AC7QBAQl4AE/g2UqtR+vFel225qzVzDH4AevtE04bkT0=</latexit>
+e(0)
+45
+<latexit sha1_base64="BVms4K0qTKMqIpIjJcVIuaS59XI=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIKvWZndZGZ3PBsUSslGl3nA8iGzXrVe9iiGeW2lUEXRstEAJrNAaFN/7w5ikERWacKxUz0GJ9jMsNSOczgr9VNEEkwke0Z6hAkdU+dni5hk8M8oQhrE0JTRcqN8nMhwpNY0C0xlhPVa/vbn4l9dLddjwMyaSVFNBlovClEMdw3kAcMgkJZpPDcFEMnMrJGMsMdEmpoIJ4etT+D/puLZTs2vXXql5sYojD07AKSgDB9RBE1yBFmgDAhLwAJ7As5Vaj9aL9bpszVmrmWPwA9bbJ1EykT8=</latexit>
+e(0)
+56
+<latexit sha1_base64="cT793ySiTHiMWw0ezt146ywI/7o=">AAAB83icdVDLSgMxFM3UV62vqks3wSLUzZCZTh/LohuXFWwrtGPJpJk2NJMZkoxQhv6GGxeKuPVn3Pk3pg9BRQ9cOJxzL/feEyScKY3Qh5VbW9/Y3MpvF3Z29/YPiodHHRWnktA2iXksbwOsKGeCtjXTnN4mkuIo4LQbTC7nfveeSsVicaOnCfUjPBIsZARrI/XpIKu5s7usjM5ng2IJ2ahSbzgeRLbr1qtexRDPrTSqCDo2WqAEVmgNiu/9YUzSiApNOFaq56BE+xmWmhFOZ4V+qmiCyQSPaM9QgSOq/Gxx8wyeGWUIw1iaEhou1O8TGY6UmkaB6YywHqvf3lz8y+ulOmz4GRNJqqkgy0VhyqGO4TwAOGSSEs2nhmAimbkVkjGWmGgTU8GE8PUp/J90XNup2bVrr9S8WMWRByfgFJSBA+qgCa5AC7QBAQl4AE/g2UqtR+vFel225qzVzDH4AevtE0ySkTw=</latexit>
+e(0)
+62
+3
+<latexit sha1_base64="M2o/l4dt5ppOTMUwAJX4wpRun30=">AAAB/XicdVDLSgNBEJz1bXytj5uXwSB4WnbXkMRb1IN6kSgmBpIlzE5m45DZBzO9YlyCv+LFgyJe/Q9v/o2TGEFFCxqKqm66u/xEcAW2/W5MTE5Nz8zOzecWFpeWV8zVtbqKU0lZjcYilg2fKCZ4xGrAQbBGIhkJfcEu/d7h0L+8ZlLxOLqAfsK8kHQjHnBKQEttc6MF7AZkmJ2cVmsX+Oh8v3o8aJt523KL7t7uLratgltyCo4mZadUdl3sWPYIeTRGtW2+tToxTUMWARVEqaZjJ+BlRAKngg1yrVSxhNAe6bKmphEJmfKy0fUDvK2VDg5iqSsCPFK/T2QkVKof+rozJHClfntD8S+vmUJQ9jIeJSmwiH4uClKBIcbDKHCHS0ZB9DUhVHJ9K6ZXRBIKOrCcDuHrU/w/qbuWU7SKZ4V85WAcxxzaRFtoBzmohCroGFVRDVF0i+7RI3oy7owH49l4+WydMMYz6+gHjNcP33KU4A==</latexit>
+INPUT GRAPH
+<latexit sha1_base64="bBvOR2eyY2LLwVX07DDa607kdHc=">AAACB3icdVDJSgNBFOyJW4xb1KMgjUHwFCbBLHgKePEYwSyQDKGn8yZp0rPQ/UYMQ25e/BUvHhTx6i9482/sLOKCFjwoqt7jUeVGUmi07XcrtbS8srqWXs9sbG5t72R395o6jBWHBg9lqNou0yBFAA0UKKEdKWC+K6Hljs6nfusalBZhcIXjCByfDQLhCc7QSL3sYRfhBpWfiECgYJJCfwDUA4axAj3pZXN2vmTbxVKVLkjlixTy9gw5skC9l33r9kMe+xAgl0zrTsGO0EmYQsElTDLdWEPE+IgNoGNowHzQTjLLMaHHRulTL1RmAqQz9ftFwnytx75rNn2GQ/3bm4p/eZ0YvapjIkYxQsDnj7xYUgzptBTaFwo4yrEhjCtTBKd8yBTjaKrLmBI+k9L/SbOYL5Tz5cvTXO1sUUeaHJAjckIKpEJq5ILUSYNwckvuySN5su6sB+vZepmvpqzFzT75Aev1AzNlmio=</latexit>
+initial edge features
+<latexit sha1_base64="d93OXgqClpVHRcxraNu0OtdQWQs=">AAACB3icdVDJSgNBFOyJW4xb1KMgjUHwFCbBLHgKePEYwSyQhNDTeZM06ekZut+IIeTmxV/x4kERr/6CN//GziIuaMGDouo9HlVeJIVB1313EkvLK6tryfXUxubW9k56d69uwlhzqPFQhrrpMQNSKKihQAnNSAMLPAkNb3g+9RvXoI0I1RWOIugErK+ELzhDK3XTh22EG9TBWCiBgkmqwh5QHxjGGsykm8642YLr5gtluiClL5LLujNkyALVbvqt3Qt5HIBCLpkxrZwbYWfMNAouYZJqxwYixoesDy1LFQvAdMazHBN6bJUe9UNtRyGdqd8vxiwwZhR4djNgODC/van4l9eK0S93bMQoRlB8/siPJcWQTkuhPaGBoxxZwri2RXDKB0wzjra6lC3hMyn9n9Tz2VwxW7w8zVTOFnUkyQE5IickR0qkQi5IldQIJ7fknjySJ+fOeXCenZf5asJZ3OyTH3BePwBOAZo7</latexit>
+initial node features
+<latexit sha1_base64="77APcQnSxUCY8EUGgq+GeBqTGYY=">AAACBnicdVDLSgNBEJz1GeMr6lGEwSB4WnY3IYk3owgKwfhKVJIQZieTZHD2wUyvGJacvPgrXjwo4tVv8ObfOIkRVLSgoajqprvLDQVXYFnvxtj4xOTUdGImOTs3v7CYWlquqiCSlFVoIAJ54RLFBPdZBTgIdhFKRjxXsHP3anfgn18zqXjgn0EvZA2PdHze5pSAlpqptTqwG5BevFs+rJZLlbOD8mGxhEvFy72T034zlbZMJ+dsZTLYMrNO3s7amhTsfMFxsG1aQ6TRCEfN1Fu9FdDIYz5QQZSq2VYIjZhI4FSwfrIeKRYSekU6rKapTzymGvHwjT7e0EoLtwOpywc8VL9PxMRTque5utMj0FW/vYH4l1eLoF1oxNwPI2A+/VzUjgSGAA8ywS0uGQXR04RQyfWtmHaJJBR0ckkdwten+H9SdUw7Z+aOs+ntnVEcCbSK1tEmslEebaN9dIQqiKJbdI8e0ZNxZzwYz8bLZ+uYMZpZQT9gvH4AnHGX9Q==</latexit>
+CONVOLUTIONAL LAYERS
+<latexit sha1_base64="LlFPFKhkoHEL+3zz+5PLVdHpkgI=">AAACJHicdVBNS1tBFJ1ntdqoNbbLbgaD4Cq8SP1ANwGRthux0KiQhHDfvPvi4LyZx8ydYHjkx7jxr7jpoh904cbf4iRGrKUeGDiccw937kkKJR3F8W0082p27vX8wpvK4tLy25Xq6rsTZ7wV2BJGGXuWgEMlNbZIksKzwiLkicLT5OJg7J8O0Dpp9DcaFtjNoa9lJgVQkHrV/Q7hJdm81CZFniGQt+g4WOS+SIEw5d5J3efAP305OuTC6IFRfhwe9aq1uL4Vx5tbu3xKdp5Iox5PUGNTHPeqvzqpET5HTUKBc+1GXFC3BEtSKBxVOt5hAeIC+tgOVEOOrltOjhzx9aCkPDM2PE18ov6dKCF3bpgnYTIHOnf/emPxf17bU7bbLaUuPKEWD4syrzgZPm6Mp9KiIDUMBISV4a9cnIMFQaHXSijh8VL+MjnZrDe269tfP9aae9M6FtgHtsY2WIPtsCb7zI5Ziwl2xW7YD/Yzuo6+R7+jPw+jM9E08549Q3R3D/LBpZw=</latexit>
+node features are updated using a GINE convolution
+<latexit sha1_base64="FYdh8tN350aA33VGNdDyinBqe60=">AAAB+XicdVDJSgNBEO2JW4zbqEcvjUHwNMxMQhJvcQNvRklMIAmhp9NJmvQsdNcEw5A/8eJBEa/+iTf/xs4iqOiDgsd7VVTV8yLBFdj2h5FaWl5ZXUuvZzY2t7Z3zN29OxXGkrIaDUUoGx5RTPCA1YCDYI1IMuJ7gtW94fnUr4+YVDwMqjCOWNsn/YD3OCWgpY5ptoDdg/ST28vTi+taddIxs7blFtyTXA7bVt4tOnlHk5JTLLkudix7hixaoNIx31vdkMY+C4AKolTTsSNoJ0QCp4JNMq1YsYjQIemzpqYB8ZlqJ7PLJ/hIK13cC6WuAPBM/T6REF+pse/pTp/AQP32puJfXjOGXqmd8CCKgQV0vqgXCwwhnsaAu1wyCmKsCaGS61sxHRBJKOiwMjqEr0/x/+TOtZyCVbjJZ8tnizjS6AAdomPkoCIqoytUQTVE0Qg9oCf0bCTGo/FivM5bU8ZiZh/9gPH2CZizk6o=</latexit>
+READOUT
+<latexit sha1_base64="ndRggzr6rR2GAb1ownP6CYyttzU=">AAACOXicbVDLahsxFNU4fbhu07jtshsRU7BpMDOhOIFQMO4mixYcqB/gcQeNfG0LazSDdKfEDPNb2fQvuit0k0VC6TY/EPlR6to9IDg65x6ke8JECoOu+8Mp7D14+Ohx8Unp6bP95wflFy+7Jk41hw6PZaz7ITMghYIOCpTQTzSwKJTQC2cfFn7vK2gjYvUZ5wkMIzZRYiw4QysF5TYEGQvzL1lVvfVqOX1PfYRLzD59bOd+S0yq04D9MY/8MzoNws3r37TNLuZrQbni1t0l6C7x1qRC1mgH5e/+KOZpBAq5ZMYMPDfBYcY0Ci4hL/mpgYTxGZvAwFLFIjDDbLl5Tt9YZUTHsbZHIV2qm4mMRcbMo9BORgynZttbiP/zBimOT4eZUEmKoPjqoXEqKcZ0USMdCQ0c5dwSxrWwf6V8yjTjaMsu2RK87ZV3Sfe47jXqjYt3lWZrXUeRvCaHpEo8ckKa5Jy0SYdwckV+khty63xzrp1fzu/VaMFZZ16Rf+Dc3QMrkqof</latexit>
+e(n+1)
+ab = MLP
+(
+h(n+1)
+a ,h(n+1)
+b ,e(n)
+ab
+)
+<latexit sha1_base64="vdn1dI0GkepiENP0zf4SwER2G68=">AAACJXicbVBNSwMxEM36WetX1aOXYBH0YNkVqR4UinrwqGBV6NYym2bb0GR3SbJCCftnvPhXvHiwiODJv2K67UFbHwTevDfDZF6QcKa06345M7Nz8wuLhaXi8srq2nppY/NOxakktE5iHsuHABTlLKJ1zTSnD4mkIAJO74PexdC/f6JSsTi61f2ENgV0IhYyAtpKrdIpbRkIskez5+5nZ34ogRi/C9qX3Th3DowvBb66zPIqM75iHQGjolUquxU3B54m3piU0RjXrdLAb8ckFTTShINSDc9NdNOA1IxwmhX9VNEESA86tGFpBIKqpsmvzPCuVdo4jKV9kca5+nvCgFCqLwLbKUB31aQ3FP/zGqkOT5qGRUmqaURGi8KUYx3jYWS4zSQlmvctASKZ/SsmXbBJaRts0YbgTZ48Te4OK161Ur05KtfOx3EU0DbaQXvIQ8eohq7QNaojgp7RK3pHA+fFeXM+nM9R64wzntlCf+B8/wCCZqaO</latexit>
+e(0)
+ab =
+ˆωab→HDab
+εab
+<latexit sha1_base64="4ntqcqewxWNAExpTtSr0JEUV9Tg=">AAAB/HicbVBNS8NAEN34WetXtEcvwSLUS0lEqheh6MVjBfsBbQyT7aZdutmE3Y0QQvwrXjwo4tUf4s1/47bNQVsfDDzem2Fmnh8zKpVtfxsrq2vrG5ulrfL2zu7evnlw2JFRIjBp44hFoueDJIxy0lZUMdKLBYHQZ6TrT26mfveRCEkjfq/SmLghjDgNKAalJc+sjD14yGr2aX41GIPK4twDz6zadXsGa5k4BamiAi3P/BoMI5yEhCvMQMq+Y8fKzUAoihnJy4NEkhjwBEakrymHkEg3mx2fWydaGVpBJHRxZc3U3xMZhFKmoa87Q1BjuehNxf+8fqKCSzejPE4U4Xi+KEiYpSJrmoQ1pIJgxVJNAAuqb7XwGARgpfMq6xCcxZeXSees7jTqjbvzavO6iKOEjtAxqiEHXaAmukUt1EYYpegZvaI348l4Md6Nj3nrilHMVNAfGJ8/GXCUcQ==</latexit>
+h(0)
+a =ˆpa
+⋮
+⋮
+⋮
+⋮
+<latexit sha1_base64="EbpaXJEod6dztMDEcapJgW+oCOg=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx4MWTVLAf0q4lm2bb0CS7JFmhLP0VXjwo4tWf481/Y9ruQVsfDDzem2FmXhBzpo3rfju5tfWNza38dmFnd2//oHh41NJRoghtkohHqhNgTTmTtGmY4bQTK4pFwGk7GF/P/PYTVZpF8t5MYuoLPJQsZAQbKz2M+rXHtHx7Pu0XS27FnQOtEi8jJcjQ6Be/eoOIJIJKQzjWuuu5sfFTrAwjnE4LvUTTGJMxHtKupRILqv10fvAUnVllgMJI2ZIGzdXfEykWWk9EYDsFNiO97M3E/7xuYsIrP2UyTgyVZLEoTDgyEZp9jwZMUWL4xBJMFLO3IjLCChNjMyrYELzll1dJ66Li1Sq1u2qp7mVx5OEETqEMHlxCHW6gAU0gIOAZXuHNUc6L8+58LFpzTjZzDH/gfP4A2VWPwA==</latexit>
+h(N)
+6
+<latexit sha1_base64="5O2UD214HLT1MyAj4Gn5g8rn3ic=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquaPVY8OJJKtgPadeSTbNtaJJdkqxQlv4KLx4U8erP8ea/MW33oK0PBh7vzTAzL4g508Z1v53cyura+kZ+s7C1vbO7V9w/aOooUYQ2SMQj1Q6wppxJ2jDMcNqOFcUi4LQVjK6nfuuJKs0ieW/GMfUFHkgWMoKNlR6GvYvHtHx7OukVS27FnQEtEy8jJchQ7xW/uv2IJIJKQzjWuuO5sfFTrAwjnE4K3UTTGJMRHtCOpRILqv10dvAEnVilj8JI2ZIGzdTfEykWWo9FYDsFNkO96E3F/7xOYsIrP2UyTgyVZL4oTDgyEZp+j/pMUWL42BJMFLO3IjLEChNjMyrYELzFl5dJ86ziVSvVu/NSzcviyMMRHEMZPLiEGtxAHRpAQMAzvMKbo5wX5935mLfmnGzmEP7A+fwB18uPvw==</latexit>
+h(N)
+5
+<latexit sha1_base64="T/whb++WsSIxFOpo0JEFTR5SZzE=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx4MWTVLAf0q4lm2bb0CS7JFmhLP0VXjwo4tWf481/Y9ruQVsfDDzem2FmXhBzpo3rfju5tfWNza38dmFnd2//oHh41NJRoghtkohHqhNgTTmTtGmY4bQTK4pFwGk7GF/P/PYTVZpF8t5MYuoLPJQsZAQbKz2M+tXHtHx7Pu0XS27FnQOtEi8jJcjQ6Be/eoOIJIJKQzjWuuu5sfFTrAwjnE4LvUTTGJMxHtKupRILqv10fvAUnVllgMJI2ZIGzdXfEykWWk9EYDsFNiO97M3E/7xuYsIrP2UyTgyVZLEoTDgyEZp9jwZMUWL4xBJMFLO3IjLCChNjMyrYELzll1dJ66Li1Sq1u2qp7mVx5OEETqEMHlxCHW6gAU0gIOAZXuHNUc6L8+58LFpzTjZzDH/gfP4A1kGPvg==</latexit>
+h(N)
+4
+<latexit sha1_base64="hdr9pmI0Mb1Mxd+fcpWHwd1oLk8=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsquSvVY8OJJKtgPadeSTbNtaJJdkqxQlv4KLx4U8erP8ea/MW33oK0PBh7vzTAzL4g508Z1v53cyura+kZ+s7C1vbO7V9w/aOooUYQ2SMQj1Q6wppxJ2jDMcNqOFcUi4LQVjK6nfuuJKs0ieW/GMfUFHkgWMoKNlR6GvfPHtHx7OukVS27FnQEtEy8jJchQ7xW/uv2IJIJKQzjWuuO5sfFTrAwjnE4K3UTTGJMRHtCOpRILqv10dvAEnVilj8JI2ZIGzdTfEykWWo9FYDsFNkO96E3F/7xOYsIrP2UyTgyVZL4oTDgyEZp+j/pMUWL42BJMFLO3IjLEChNjMyrYELzFl5dJ86ziVSvVu4tSzcviyMMRHEMZPLiEGtxAHRpAQMAzvMKbo5wX5935mLfmnGzmEP7A+fwB1LePvQ==</latexit>
+h(N)
+3
+<latexit sha1_base64="EP43gwCTn2qwvUXKxZFF3UhdbdY=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXspukeqx4MWTVLAf0q4lm2bb0CS7JFmhLP0VXjwo4tWf481/Y9ruQVsfDDzem2FmXhBzpo3rfju5tfWNza38dmFnd2//oHh41NJRoghtkohHqhNgTTmTtGmY4bQTK4pFwGk7GF/P/PYTVZpF8t5MYuoLPJQsZAQbKz2M+tXHtHx7Pu0XS27FnQOtEi8jJcjQ6Be/eoOIJIJKQzjWuuu5sfFTrAwjnE4LvUTTGJMxHtKupRILqv10fvAUnVllgMJI2ZIGzdXfEykWWk9EYDsFNiO97M3E/7xuYsIrP2UyTgyVZLEoTDgyEZp9jwZMUWL4xBJMFLO3IjLCChNjMyrYELzll1dJq1rxapXa3UWp7mVx5OEETqEMHlxCHW6gAU0gIOAZXuHNUc6L8+58LFpzTjZzDH/gfP4A0y2PvA==</latexit>
+h(N)
+2
+<latexit sha1_base64="EJSQNp/f3eZBOI6jllfFicI0WOA=">AAAB8HicbVBNSwMxEJ2tX7V+VT16CRahXsqulOqx4MWTVLAf0q4lm2bb0CS7JFmhLP0VXjwo4tWf481/Y9ruQVsfDDzem2FmXhBzpo3rfju5tfWNza38dmFnd2//oHh41NJRoghtkohHqhNgTTmTtGmY4bQTK4pFwGk7GF/P/PYTVZpF8t5MYuoLPJQsZAQbKz2M+t5jWr49n/aLJbfizoFWiZeREmRo9ItfvUFEEkGlIRxr3fXc2PgpVoYRTqeFXqJpjMkYD2nXUokF1X46P3iKzqwyQGGkbEmD5urviRQLrScisJ0Cm5Fe9mbif143MeGVnzIZJ4ZKslgUJhyZCM2+RwOmKDF8YgkmitlbERlhhYmxGRVsCN7yy6ukdVHxapXaXbVU97I48nACp1AGDy6hDjfQgCYQEPAMr/DmKOfFeXc+Fq05J5s5hj9wPn8A0aOPuw==</latexit>
+h(N)
+1
+<latexit sha1_base64="tjvnzzwG17Ie7Do4T2lDjf9kZYw=">AAAB8nicbVDLSgNBEJyNrxhfUY9eBoPgKeyKRI8BLx4jmAdsljA7mU2GzGOZ6RXCks/w4kERr36NN//GSbIHTSxoKKq66e6KU8Et+P63V9rY3NreKe9W9vYPDo+qxycdqzNDWZtqoU0vJpYJrlgbOAjWSw0jMhasG0/u5n73iRnLtXqEacoiSUaKJ5wScFKYDvK+kZgoPhtUa37dXwCvk6AgNVSgNah+9YeaZpIpoIJYGwZ+ClFODHAq2KzSzyxLCZ2QEQsdVUQyG+WLk2f4wilDnGjjSgFeqL8nciKtncrYdUoCY7vqzcX/vDCD5DbKuUozYIouFyWZwKDx/H885IZREFNHCDXc3YrpmBhCwaVUcSEEqy+vk85VPWjUGw/XtWZQxFFGZ+gcXaIA3aAmukct1EYUafSMXtGbB96L9+59LFtLXjFziv7A+/wBTriRPA==</latexit>
+pani
+<latexit sha1_base64="MPAlnBiO8A3BgsO2SIep5G8WcZo=">AAACOXicdVBLSxtRFL5jq6bxlbbLbi4NgqswEY3iSnDjooUITRQyIZy5cyZevI/hPsQwzN/qxn/hrtBNFy2lW/9A78SUtqIHLvfjO4/vnC8tBLcujr9ESy9eLq+sNl4119Y3Nrdar98MrfaG4YBpoc1FChYFVzhw3Am8KAyCTAWep1cndf78Go3lWn1yswLHEqaK55yBC9Sk1U9kqm/KpABT/z0mqzJhqBwarqbNnCsQVOkMaY7gvEFLk4SCQVqAtZhRp+nHD30aNDPtXVVNWu24sx/Hu/uHdAEO/oJuJ55HmyyiP2ndJZlmXgZNJsLMUTcu3LgE4zgTWDUTb7EAdgVTHAWoQKIdl/PLK7rt6x1ybcJTjs7ZfztKkNbOZBoqJbhL+zhXk0/lRt7lh+OSq8I7VOxBKPeiPre2kWbcIHNiFgAww8OulF2CARaMs81gwp9L6fNguNvp9jq9s7328dHCjgZ5R96THdIlB+SYnJI+GRBGPpOv5Dv5Ed1G36Kf0a+H0qVo0fOW/BfR/W85Oa5U</latexit>
+ﬁnal node features
+are passed to MLP readout
+<latexit sha1_base64="1wIyECeCnY0JTEu/mKAyoqQqSfg=">AAACdHicbVHLitRAFK3E19i+Wl240MXVpiHNSJOIjG6EYdy4GKUVe2agK4ZK9U13MZVKqKoMNkW+wL9z52e4cW2lJ4jOeOHC4Zx7uK+8lsLYOP4RhFeuXrt+Y+fm4NbtO3fvDe8/ODJVoznOeSUrfZIzg1IonFthJZ7UGlmZSzzOT992+vEZaiMq9dluakxLtlKiEJxZT2XDb+uMfXGR2k0mLbwBavGrde8PZy09EKsFRAnsAj1jGmsjZKUm9Dn0Dl/vJdOUmcuBCgW0ZHbNmXQf2oh51VFdwic8nLdUYmEjb8z/GDFzLG+BarFa2wl03dJsOIqn8TbgMkh6MCJ9zLLhd7qseFOislwyYxZJXNvUMW0Fl9gOaGOwZvyUrXDhoWIlmtRtj9bC2DNLKCrtU1nYsn87HCuN2ZR+yHG3mLmodeT/tEVji9epE6puLCp+3qhoJNgKug/AUmjkVm48YFwLPyvwNdOMW/+ngT9CcnHly+DoxTTZm+59fDnaP+jPsUMek2ckIgl5RfbJOzIjc8LJz+BRAMHT4Ff4JByF4/PSMOg9D8k/EU5/A4DgugM=</latexit>
+h(n+1)
+a = MLP
+[
+(1 +ω)h(n)
+a +
+∑
+b→N(a)
+ReLU
+(
+h(n)
+b +eab
+)]
+<latexit sha1_base64="Ay9PvQemDhgjouT/Cp1h3Yd1db0=">AAACIHicdVDLSgNBEJz1bXxFPXoZDIIXw0aMEU+CFw8KEYwKSQi9s73J4OyDmV41LPkUL/6KFw+K6E2/xkmM+EALGoqqbrq7vERJQ6776oyMjo1PTE5N52Zm5+YX8otLpyZOtcCaiFWszz0wqGSENZKk8DzRCKGn8My72O/7Z5eojYyjE+om2AyhHclACiArtfKVBuE16TBDv408QKBUo+GgkaeJD4Q+v5LU4cDpKt5Q0EXNjw6rvVa+4BbLrrtZ3uFDUvkipaI7QIENUW3lXxp+LNIQIxIKjKmX3ISaGWiSQmEv10gNJiAuoI11SyMI0TSzwYM9vmYVnwexthURH6jfJzIIjemGnu0MgTrmt9cX//LqKQU7zUxGSUoYiY9FQao4xbyfFvelRkGqawkILe2tXHRAgyCbac6G8Pkp/5+cbhZL28Xt463C3u4wjim2wlbZOiuxCttjB6zKakywG3bHHtijc+vcO0/O80friDOcWWY/4Ly9A0gZo6M=</latexit>
+edge features are updated with a two-layer MLP
+FIG. 3. Schematic representation of the GNN classifier used in this work. For clarity, this diagram omits the initial node and
+edge feature embeddings applied before the convolutional layers and the batch normalization applied after each convolutional
+layer. See the main text for a complete discussion of the network architecture.
+DatasetN samples Noise TMA gwb nhot xhot
+training4.6×10 6 fixed marg. [0.25,0.5,1,2,4]A NG15
+gwb [1,2, . . . ,8] [0.2,0.3, . . . ,0.9]
+validation5.7×10 5 fixed marg. [0.25,0.5,1,2,4]A NG15
+gwb [1,2, . . . ,8] [0.2,0.3, . . . ,0.9]
+test5.7×10 5 fixed marg. [0.25,0.5,1,2,4]A NG15
+gwb [1,2, . . . ,8] [0.2,0.3, . . . ,0.9]
+test real2.0×10 3 NMOS fit + marg.A NG15
+gwb 1 [0.4,0.8]
+TABLE I. Summary of the properties of the different datasets used in this work. For each dataset, we report: the number of
+samples (Nsamples); whether IRN and GWB parameters are fixed to their injected values or marginalized via NMOS; whether the
+timing model (TM) is marginalized over in the OS or also fitted at the timing residuals level; the GWB amplitudes considered
+(in units of the NANOGrav 15-year amplitude,A NG15
+gwb = 10 −14.67); the number of hotspots (n hot); and the fractional power
+in hotspots (x hot). For all the datasets, samples are split 50-50 between isotropic and anisotropic realizations, with equal
+representation across all combinations ofA gwb,n hot, andx hot values.
+set of cross-correlation estimators, we want to determine
+whether they are more likely to have been generated by
+an isotropic GWB (H0) or an anisotropic GWB contain-
+ing one or more hotspots (H1). To solve this problem, we
+start by representing the data as a graph, which we then
+feed into a Graph Neural Network (GNN). We have cho-
+sen this architecture because of the natural graph struc-
+ture of the data, and because GNNs are designed to cap-
+ture complex interactions between nodes and edges, mak-
+ing them well-suited to learn non-trivial patterns in the
+cross-correlation data that may indicate anisotropy.
+The primary objective of this work is to demonstrate
+the potential of SBI approaches to anisotropy searches
+rather than optimizing the network architecture. With
+this in mind, we implement a minimal GNN with the
+following architecture:
+1. Input graph : Each observation is represented as a
+fully-connected graph with one node for each pul-
+sar in the array. To each node of the initial graph,
+we associate a node attribute,h (0)
+a , given by the
+pulsar position in the sky,h (0)
+a = ˆpa. Similarly,
+for each edge, we associate an edge attribute,e (0)
+ab ,
+given by the whitened cross-correlation estimator
+for the pulsar pair connected by that edge. These
+whitened cross-correlations are obtained by sub-
+tracting the Hellings-Downs prediction from the
+cross-correlation estimator and dividing by the
+noise variance:
+e(0)
+ab = ˆρab −HD ab
+σab
+,(29)
+whereσ ab ≡Σ 1/2
+ab,ab/ˆΦ is the standard deviation of
+the normalized cross-correlation estimator. For our
+dataset containingN p = 120 pulsars, the graph
+has 120 nodes andN e = 2×N pair =N p(Np −
+1) = 14,280 directed edges, where the factor of
+2 accounts for representing each undirected edge
+as two directed edges with opposite orientations.
+Both the edge and node attributes are standardized
+to zero mean and unit variance across the entire
+training data set.
+2. Edge and node encoders : A linear projection maps
+
+10
+each one-dimensional node feature of the input
+graph into a higher-dimensional latent space with
+dimensiond h = 16. Edge features are also pro-
+jected into and h-dimensional latent space us-
+ing a two-layer Multilayer Perceptron (MLP): the
+first layer maps the one-dimensional edge feature
+to dimensiond h, followed by a Gaussian Error
+Linear Units (GELU) [48] activation; the second
+layer applies a linear transformation within thed h-
+dimensional space. This producesN e edge embed-
+dings of dimensiond h.
+3. Convolutional layers: Two GINE convolutional
+layers [49] update node features by aggregating
+neighboring node and edge features and using the
+following update rule:
+h(n+1)
+a = MLP
+h
+(1 +ε)h (n)
+a
++
+X
+b∈N(a)
+ReLU
+
+h(n)
+b +e ab
+
+
+ .
+(30)
+whereϵis a (learnable) scalar parameter that
+controls the relative weighting of the node’s own
+embedding versus the aggregated messages from
+its neighbors, the sum in the second term aggre-
+gates information from all neighboring nodes, and
+ReLU is the Rectified Linear Unit function de-
+fined as ReLU(x) = max[0, x]. The MLP used by
+the GINE convolution consists of two linear layers
+with hidden dimensiond h and GELU activation:
+Linear(dh →d h)→GELU→Linear(d h →d h).
+Each convolutional layer is followed by batch nor-
+malization and a residual connection (i.e., the in-
+put node features are added to the layer output,
+h(n+1)
+a =h (n+1)
+a +h (n)
+a ).
+After the first GINE layer, edge features are up-
+dated using a two-layer MLP that takes as in-
+put the concatenated embeddings of the source
+node, destination node, and current edge feature:
+e(1)
+ab = MLP(h(1)
+a ,h (1)
+b ,e (0)
+ab ), where this MLP maps
+from dimension 3d h tod h via Linear(3dh →d h)→
+GELU→Linear(d h →d h).
+4. Readout: After the convolutional layers, the fi-
+nal node embeddings from allN p pulsars are con-
+catenated into a single vector of dimensionN p ×
+dh = 7,680 and passed through a three-layer MLP
+readout: Linear(7,680→1,024)→GELU→
+Dropout(0.2)→Linear(1,024→256)→GELU→
+Dropout(0.2)→Linear(256→1), producing a sin-
+gle logit (unnormalized log-probability) for binary
+classification.
+0.2 0.4 0.6 0.8 1.0
+False Positive Rate
+0.2
+0.4
+0.6
+0.8
+1.0
+True Positive Rate
+N = 16,000
+N = 32,000
+N = 64,000
+N = 128,000
+N = 256,000
+N = 512,000
+N = 1,024,000
+N = 2,048,000
+FIG. 4. ROC curves for the GNN classifier trained on datasets
+of varying size, fromN= 1.6×10 4 toN≃2×10 6 samples,
+and tested on anisotropic signals constituted by a single GWB
+hotspot contributing 80% of the total GWB power in the sec-
+ond frequency bin.
+C. Training
+Following the procedure discussed in Sec. IV A, we gen-
+erate four separate datasets. Thetrainingdataset, con-
+sisting of approximately 4.6 million samples, is used to
+train the classifier. 6 The training progress is monitored
+using avalidationdataset containing approximately 0.6
+million samples, and the final network performance is de-
+rived using atestdata set of equal size. All datasets are
+equally split between isotropic and anisotropic GWB re-
+alizations. The number and intensity of GWB hotspots
+injected in the anisotropic realizations, as well as the
+amplitude of the isotropic GWB component, are varied
+across a grid of values summarized in Table I. We also
+generate a smaller validation subset,test real, contain-
+ing 2000 samples that we use to validate some of the as-
+sumptions made in generating the training data (see the
+discussion in Secs. IV A 1 and IV A 2).
+We train the network using Binary Cross-Entropy
+(BCE) loss (see App. A for more details) with the
+AdamW optimizer (learning rate 10 −3, weight decay
+10−3) for up to 10 epochs. A ReduceLROnPlateau
+6 As a reference, generating 10 5 samples for the training dataset
+takes approximately 35 CPU hours, making large-scale dataset
+simulation feasible on standard multi-core compute nodes. Al-
+though not explored in this work, the data-generation pipeline
+could be re-implemented injaxfor more efficient vectorized and
+parallelized simulation.
+
+11
+0.2 0.4 0.6 0.8 1.0
+False Positive Rate
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+True Positive Rate
+1 hotspot
+0.01 0.02 0.030.1
+0.2
+0.3
+0.4
+0.5
+0.2 0.4 0.6 0.8 1.0
+False Positive Rate
+2 hotspots
+0.01 0.02 0.030.0
+0.1
+0.2
+0.3
+GNN
+Classical
+FIG. 5. ROC curves for the SBI classifier (blue lines) and the classical frequentist method (orange lines). In the left panel, we
+report the performance of the classifier for anisotropic signals constituted by a single GWB hotspot contributing 80% of the
+total GWB power in the second frequency bin versus an isotropic GWB. In the right panel, we show the results for anisotropic
+skies containing two GWB hotspots, each contributing 40% of the GWB power in the second frequency bin versus an isotropic
+GWB. We also indicate with a blue (orange) arrow the expected rate of detections with 3σsignificance for the SBI classifier
+(classical frequentist search). The insets show a zoomed-in version of the low false positive rate region, with the x-axis lower
+limit set to 3×10 −3, such that the y-axis intercept gives the expected 3σdetection rate.
+scheduler halves the learning rate when validation loss
+plateaus for 3 consecutive epochs, with early stopping af-
+ter 5 epochs without improvement. We monitor training
+progress on a separate held-outvalidationset. Model
+weights are restored to the checkpoint that achieved the
+best validation performance. To assess whether our re-
+sults are data-limited, we train the same model on differ-
+ent dataset sizes, ranging from 1.6×10 4 samples to the
+full 5.76×10 6 samples, and evaluate the resulting classifi-
+cation performance. This allows us to check how perfor-
+mance scales with training set size. As shown in Fig. 4,
+we find that model performance saturates when the train-
+ing set exceeds 10 5 samples, suggesting we are not data-
+limited and that adding more training data would not
+yield significant improvements.
+V. RESULTS
+In this section, we assess the capabilities of the SBI clas-
+sifier developed for this work. We start by comparing its
+performance with that of the best-performing frequen-
+tist search strategy identified in Ref. [23] (i.e., a max-
+SNR detection statistic combined with a radiometer map
+parametrization, as described in Sec. II), using thetest
+dataset. Both methods are benchmarked against two
+anisotropic signals: a single bright hotspot contributing
+80% of the GWB power in the second frequency bin and
+two bright hotspots each contributing 40% of the power
+in the second bin.7 We evaluate classifier performance us-
+ing receiver operating characteristic (ROC) curves, which
+quantify the trade-off between detection rate (true posi-
+tive rate) and false alarm rate (false positive rate) as we
+vary the classification threshold.
+Figure 5 shows the ROC curves for both methods on
+these two benchmark scenarios. We find that the SBI
+classifier significantly outperforms the classical method.
+For the 1-hotspot case, the expected 3σdetection rate
+is 21% compared with 11% for the classical frequentist
+method—an improvement of approximately 90%. For the
+2-hotspot case, the 3σdetection rates are 9% (SBI) versus
+3% (classical), representing an improvement of 200%. In
+deriving these results, we only used test data where the
+GWB amplitude was fixed to the value measured in the
+NANOGrav 15-year data [5], i.e. log 10 AGWB =−14.76.
+Figure 6 shows the performance of the SBI classifier as
+we vary the number of GWB hotspots between one and
+7 For the two-hotspots case, the results of the classical meth-
+ods—derived in Ref. [23]—placed the two hotspots at random
+sky locations while always keeping their angular separation fixed
+to 90 ◦; in this work, we do not impose this constraint. We do
+not expect this difference to affect the results in any meaningful
+way.
+
+12
+0.25 0.50 0.75 1.00
+False Positive Rate
+0.2
+0.4
+0.6
+0.8
+1.0
+True Positive Rate
+1 hotspot
+0.25 0.50 0.75 1.00
+False Positive Rate
+2 hotspots
+0.25 0.50 0.75 1.00
+False Positive Rate
+3 hotspots
+xhot = 20%
+xhot = 40%
+xhot = 60%
+xhot = 80%
+FIG. 6. ROC curves for the SBI classifier for different anisotropic signals: one GWB hotspot (left panel), two GWB hotspots
+(central panel), three GWB hotspots (right panel). In each panel, the different lines correspond to different choices for the
+total contribution of the hotspots to the total GWB power: 20% (red curve), 40% (yellow curve), 60% (dark blue curve), and
+80% (light blue curve).
+three and their total contribution to the GWB power in
+the second frequency bin between 20% and 80%. We as-
+sume equal-strength hotspots such that the anisotropic
+power is distributed uniformly among them; e.g., for two
+hotspots contributing 80% of the total GWB, each con-
+tributes 40%. As expected, increasing the number of
+hotspots while keeping their total contribution to the
+GWB fixed decreases classifier performance, since the
+sky becomes increasingly isotropic. Similarly, for a fixed
+number of hotspots, the classifier performance decreases
+as their total contribution to the GWB decreases.
+Our working assumption is that the SBI classifier
+outperforms frequentist methods by capturing the non-
+Gaussian distribution of the cross-correlation estimators.
+To test this assumption, we train and validate both meth-
+ods on a set of unrealistic data for which the cross-
+correlation estimators are forced to follow a multivari-
+ate normal distribution with a mean given by Eq. (4)
+and a fixed covariance matrixΣ k8. Moreover, to pro-
+vide a well-defined performance target, we fix both the
+position and intensity of the GWB hotspot when gen-
+erating these data. This allows the classical method to
+perform a likelihood ratio test with fully specified hy-
+potheses: null (isotropic sky) versus alternative (known
+hotspot configuration). By the Neyman-Pearson Lemma,
+the likelihood ratio test is the optimal detection statis-
+tic in this setting and should strictly outperform the SBI
+classifier.9 The results of this test are shown in Fig. 7.
+8 The covariance matrix for the cross-correlation coefficients de-
+pends on the GWB sky map. When generating the Gaussian
+dataset, we fixΣ k to values corresponding to an isotropic sky,
+matching the assumption used in the classical frequentist likeli-
+hood.
+9 When the hotspot location and amplitude are unknown and
+From this figure, we see that when cross-correlation esti-
+mators follow a Gaussian distribution, both approaches
+achieve comparable performance. This result validates
+our assumption that the SBI classifier’s advantage stems
+from its ability to capture the non-Gaussian structure of
+the estimators, which is lost in the classical approach.
+Notice that for this specific test, we use a simpler net-
+work architecture consisting of an MLP with two hidden
+layers for the classifier, since the GNN tends to overfit
+on this smaller dataset with its simpler cross-correlation
+distribution.
+A possible concern is that the specific examples of
+GWB anisotropies used in the training data could in-
+duce an implicit inductive bias in the classifier and reduce
+its sensitivity to GWB anisotropies that it never encoun-
+tered during the training process. To check the amount of
+inductive bias introduced by the specific choice of GWB
+anisotropies in our training set, we tested the perfor-
+mance of a classifier trained only on GWB anisotropies
+constituted by a single hotspot containing 80% of the
+power. We then evaluated this specialized classifier on
+test data containing signals with different hotspot con-
+figurations: multiple hotspots (n hot = 2,3) and varying
+power fractions (x hot = 0.4,0.8). Despite never encoun-
+tering these configurations during training, the classifier
+maintained robust performance, with ROC curves com-
+parable to those of the fully-trained classifier shown in
+Fig. 6.
+must be reconstructed from the data, the classical frequentist
+method is no longer guaranteed to be optimal by the Neyman-
+Pearson Lemma. In this case, we find that while performance
+remains comparable, the SBI classifier can outperform the clas-
+sical method even when cross-correlations follow a Gaussian dis-
+tribution.
+
+13
+Finally, it should be noted that, in estimating the per-
+formance of both the SBI classifier and classical frequen-
+tist search, we are analyzing only the frequency bin at
+which the signal was injected. Therefore, all the detec-
+tion significance measures reported in this section should
+be understood as local significances. In a realistic anal-
+ysis, we would have to search for signals in multiple fre-
+quency bins, which would introduce a trials factor that
+reduces the global significance [23].
+A. Assumptions and validation
+To make the generation ofO(10 6) training samples feasi-
+ble, we had to resort to some simplifying assumptions. In
+this subsection, we discuss these assumptions and, where
+possible, explicitly check their impact on our results. The
+three main assumptions made in generating the train-
+ing data are (see Sec. IV A for a detailed discussion of
+the data generation procedure and associated approxi-
+mations):
+•In deriving the cross-correlation estimators from
+the mock timing data, we assumed perfect knowl-
+edge of the noise parameters. In a real measure-
+ment, these noise parameters would be unknown
+and would need to be inferred from the data.
+Typically, a preliminary Bayesian analysis mod-
+eling the GWB as a CURN process is performed
+to obtain posterior distributions for these quanti-
+ties. These posteriors are then used to marginalize
+over noise parameter uncertainties by computing
+cross-correlation estimators and associated detec-
+tion statistics over multiple random draws from the
+noise posteriors.
+•We do not perform a full timing model fit of the
+timing residuals after injecting noise and signal in
+the data. Instead, we marginalize over linear devia-
+tions from the true timing model parameters in the
+derivation of the cross-correlation estimators [50]
+(for more details, see Sec. IV A 3).
+•The statistical properties of the noise and signals
+injected into the data perfectly match those as-
+sumed in our likelihood model. In real PTA data,
+there will inevitably be deviations between the as-
+sumed noise models and the actual noise processes,
+as well as unmodeled effects such as timing glitches
+and instrumental systematics.
+All these approximations also apply to the mock data
+needed to calibrate classical frequentist methods and are
+unlikely to introduce a systematic bias favoring the SBI
+classifier in our comparison. Nevertheless, we explicitly
+verify that the classifier’s performance remains robust
+when tested on more realistic data that relaxes some of
+these simplifying assumptions.
+To do this, we use thetest realdataset that drops
+the first two assumptions mentioned above and more
+0.2 0.4 0.6 0.8 1.0
+False Positive Rate
+0.2
+0.4
+0.6
+0.8
+1.0
+True Positive Rate
+SBI
+Classical
+FIG. 7. ROC curves comparing the SBI classifier (blue)
+and classical frequentist method (orange) on mock cross-
+correlation data artificially forced to follow a Gaussian dis-
+tribution.
+closely follows the procedure used in analyzing real data
+(see the discussion at the end of Sec. IV A for more de-
+tails). The results of this test are summarized in Fig. 8.
+From this figure, we see that the classifier’s performance
+is not significantly degraded when applied to this more
+realistic dataset. It is worth noting that, when using
+noise-marginalized data, we have multiple classifier prob-
+abilities for each realization of the timing residuals, since
+each choice of the noise parameters gives a different set of
+cross-correlation estimators (see discussion in Sec. IV A).
+We aggregate these by taking the median classifier prob-
+ability across noise draws for each data realization, which
+provides a noise-averaged detection statistic while natu-
+rally accounting for noise parameter uncertainties.
+While we can explicitly assess the impact of the first
+two assumptions usingtest real, the third assumption
+remains challenging to test using simulated data. A pos-
+sibility would be to validate the classifier using sky scram-
+bles of real PTA data, where pulsar positions are ran-
+domly rotated to destroy anisotropic correlations while
+maintaining realistic noise and systematics. We defer
+this analysis to an upcoming work.
+VI. CONCLUSIONS
+In this work, we have demonstrated that the Gaussian
+assumption underlying classical frequentist anisotropy
+searches significantly limits their sensitivity and intro-
+duced a simulation-based inference framework to address
+this limitation. Our approach trains a neural network
+
+14
+0.2 0.4 0.6 0.8 1.0
+False Positive Rate
+0.2
+0.4
+0.6
+0.8
+1.0
+True Positive Rate
+xhot = 40%
+xhot = 80%
+test_real
+test
+FIG. 8. ROC curves for the SBI classifier tested on mock data
+generated with (solid lines) and without (dashed lines) the
+inclusions of noise-marginalization and a full timing-model
+fit. Orange and blue lines correspond to different anisotropic
+signal assumptions: a single hotspot contributing 80% of the
+GWB power in the second frequency bin (blue) and a single
+hotspot contributing 40% (orange).
+classifier on synthetic data to learn a detection statis-
+tic directly from cross-correlation estimators, without re-
+quiring approximate Gaussian likelihoods or intermediate
+sky map reconstruction.
+Using a benchmark strategy similar to that devel-
+oped in Ref. [23], we find that this SBI classifier sig-
+nificantly outperforms the frequentist methods adopted
+in anisotropy searches by the NANOGrav [22] and
+MeerKAT [51] collaborations, delivering approximately
+90% (200%) improvements in 3σdetection rates for sin-
+gle (double) hotspot anisotropies. These improvements
+primarily stem from the classifier’s ability to capture
+the non-Gaussian structure of cross-correlation estima-
+tors. We validate this interpretation by showing that
+both methods perform equally well when estimators are
+artificially constrained to follow a Gaussian distribution.
+Furthermore, while the classifier was trained on data gen-
+erated under simplifying assumptions (perfect knowledge
+of noise parameters and no timing model refitting), we
+have verified that its performance remains robust when
+applied to more realistic validation datasets that include
+noise parameter marginalization and full timing model
+fits.
+While our results represent a promising step to-
+ward an optimal and fast detection strategy for GWB
+anisotropies, several directions remain for future work.
+The classifier could be improved in several ways. First,
+the classifier developed in this work analyzes only a sin-
+gle frequency bin at a time; extending it to perform
+joint multi-frequency classification would enable it to ex-
+ploit frequency correlations present in the data. Sec-
+ond, the network architecture presented here serves as
+a proof of principle; further optimization of the archi-
+tecture and training procedure may yield additional per-
+formance gains. Third, while our current implementa-
+tion focuses solely on hypothesis testing, it could be ex-
+tended to perform map reconstruction. Finally, training
+classifiers directly on timing residuals rather than com-
+pressed cross-correlation estimators could preserve phase
+and polarization information, though at increased com-
+putational cost.
+Beyond these improvements, further testing and val-
+idation are needed. First, we plan to test the classi-
+fier on realistic simulations of SMBHB populations, both
+to assess its performance on more complex anisotropy
+patterns and to update previous detection forecasts for
+SMBHB-generated GWBs (see, for example, Ref. [15]).
+Second, applying the classifier to real PTA datasets
+would provide important insight into how unmodeled
+noise sources, timing glitches, and instrumental system-
+atics affect performance. Finally, several new frequentist
+search strategies have been recently proposed (see, for ex-
+ample, Refs. [52–55]), and while in this work we focused
+on methods previously adopted in collaboration searches,
+benchmarking our SBI classifier against these newer ap-
+proaches would also be valuable.
+ACKNOWLEDGMENTS
+The authors thank Bjorn Larsen and Joe Romano for
+helpful comments on the draft. AM acknowledges sup-
+port from a Royal Society University Research Fellow-
+ship (URF-R1-251896). AM acknowledges the hospi-
+tality of DESY, Hamburg, where a large part of this
+work was completed. AL and AM are members of the
+NANOGrav Collaboration. NANOGrav is supported by
+NSF Physics Frontier Center award #2020265. This
+work used the Maxwell computational resources oper-
+ated at Deutsches Elektronen-Synchrotron DESY, Ham-
+burg (Germany). JA is supported by a fellowship from
+the Kavli Foundation. The work of MP is supported
+by the Comunidad de Madrid under the Programa de
+Atracci´ on de Talento Investigador with number 2024-
+T1TEC-3134. MP acknowledges the hospitality of Impe-
+rial College London, which provided office space during
+parts of this project. TK and AL acknowledge support
+by the Deutsche Forschungsgemeinschaft (DFG, Ger-
+man Research Foundation) under Germany’s Excellence
+Strategy – EXC 2121 “Quantum Universe” – 390833306.
+AL thanks the Gravitational Physics Group at ETH
+Zurich for support, hospitality and helpful discussions
+during the final parts of this project.
+
+15
+Appendix A: Classification as Bayesian Model
+Comparison
+In this appendix, we outline the mathematical justifi-
+cation for using a standard neural network classifier to
+estimate the Bayes factor, as presented in [33].
+Consider a datasetx(in our case, the cross-correlation
+estimators ˆρab,k) and two competing models:H 0 repre-
+senting the null hypothesis (an isotropic GWB) andH 1
+representing the alternative hypothesis (an anisotropic
+GWB). Then, the Bayes factorK, which acts as our de-
+tection statistic, is defined as the ratio of the model evi-
+dences:
+K(x)≡ p(x|H0)
+p(x|H1) .(A1)
+To compute this without evaluating the intractable
+marginal likelihoods, we train a neural networkρ ϕ(x) =
+σ(fϕ(x)) to perform binary classification, whereσ(u) =
+(1 + exp(−u))−1 is the sigmoid function. This network
+ρϕ takes the dataxas input and outputs a value be-
+tween 0 and 1. We provide the network with simulated
+data drawn from the two data distributionsp(x|H 0) and
+p(x|H1).
+The network is trained to minimize the standard Bi-
+nary Cross-Entropy (BCE) loss. The global optimization
+objective (the expected loss over all possible data real-
+izations) is given by the functional:
+L[ρϕ] =−
+Z
+dx
+
+p(x|H0) logρ ϕ(x)
++p(x|H 1) log[1−ρ ϕ(x)]
+
+(A2)
+Minimizing this functional with respect toρ ϕ(x)
+(δL[ρϕ]/δρϕ = 0), we find that the optimal networkρ ⋆
+ϕ
+satisfies:
+p(x|H0)
+ρ⋆
+ϕ(x) − p(x|H1)
+1−ρ ⋆
+ϕ(x) = 0.(A3)
+Solving forρ ⋆
+ϕ(x), we see that a perfectly trained, globally
+optimal network is directly related to the Bayes factorK
+via:
+ρ∗
+ϕ(x) = K(x)
+1 +K(x) .(A4)
+We can finally use the properties of the sigmoid func-
+tionσto demonstrate that the optimal networkf ⋆
+ϕ(x) is
+simply the log-Bayes factor:
+f ⋆
+ϕ(x) = logK(x) = log p(x|H0)
+p(x|H1) .(A5)
+As such, by simply training a standard binary classifier to
+converge on forward-modeled mock data, we are able to
+directly access the (log-)Bayes factorK(x) via our neural
+network estimator.
+[1] G. B. Hobbs, R. T. Edwards, and R. N. Manchester,
+“tempo2, a new pulsar-timing package - I. An overview:
+tempo2, a new pulsar-timing package - I. Overview,”
+Monthly Notices of the Royal Astronomical Society369
+no. 2, (2006) 655–672.http://mnras.oxfordjournals.
+org/cgi/doi/10.1111/j.1365-2966.2006.10302.x.
+[2] D. R. Lorimer and M. Kramer,Handbook of Pulsar
+Astronomy, vol. 4. 2004.
+[3] J. H. Taylor, “Pulsar timing and relativistic gravity,”
+Class. Quant. Grav.10(1993) S167–S174.
+[4] R. W. Hellings and G. S. Downs, “Upper Limits on the
+Isotropic Gravitational Radiation Background from
+Pulsar Timing Analysis,”Astrophys. J. Lett.265(1983)
+L39–L42.
+[5]NANOGravCollaboration, G. Agazieet al., “The
+NANOGrav 15-year Data Set: Evidence for a
+Gravitational-Wave Background,”Astrophys. J. Lett.
+951no. 1, (June, 2023) L8,arXiv:2306.16213
+[astro-ph.HE].
+[6]EPTA, InPTA:Collaboration, J. Antoniadiset al.,
+“The second data release from the European Pulsar
+Timing Array - III. Search for gravitational wave
+signals,”Astron. Astrophys.678(2023) A50,
+arXiv:2306.16214 [astro-ph.HE].
+[7]PPTACollaboration, D. J. Reardonet al., “Search for
+an isotropic gravitational-wave background with the
+Parkes Pulsar Timing Array,”The Astrophysical
+Journal Letters951no. 1, (June, 2023) L6,
+arxiv:2306.16215 [astro-ph.HE].
+[8]CPTACollaboration, H. Xuet al., “Searching for the
+nano-Hertz stochastic gravitational wave background
+with the Chinese Pulsar Timing Array Data Release I,”
+Research in Astronomy and Astrophysics23no. 7,
+(June, 2023) 075024,arXiv:2306.16216
+[astro-ph.HE].
+[9]MeerKATCollaboration, M. T. Mileset al., “The
+MeerKAT Pulsar Timing Array: the 4.5-yr data release
+and the noise and stochastic signals of the millisecond
+pulsar population,”Mon. Not. Roy. Astron. Soc.536
+no. 2, (2024) 1467–1488,arXiv:2412.01148
+[astro-ph.HE].
+[10]NANOGravCollaboration, G. Agazieet al., “The
+NANOGrav 15 yr Data Set: Constraints on
+Supermassive Black Hole Binaries from the
+
+16
+Gravitational-wave Background,”Astrophys. J. Lett.
+952no. 2, (2023) L37,arXiv:2306.16220
+[astro-ph.HE].
+[11]EPTA, InPTACollaboration, J. Antoniadiset al.,
+“The second data release from the European Pulsar
+Timing Array - IV. Implications for massive black holes,
+dark matter, and the early Universe,”Astron.
+Astrophys.685(2024) A94,arXiv:2306.16227
+[astro-ph.CO].
+[12]NANOGravCollaboration, A. Afzalet al., “The
+NANOGrav 15 yr Data Set: Search for Signals from
+New Physics,”Astrophys. J. Lett.951no. 1, (2023)
+L11,arXiv:2306.16219 [astro-ph.HE].
+[13] S. R. Taylor and J. R. Gair, “Searching For Anisotropic
+Gravitational-wave Backgrounds Using Pulsar Timing
+Arrays,”Physical Review D88no. 8, (Oct., 2013)
+084001,arxiv:1306.5395 [gr-qc].
+[14] E. C. Gardiner, L. Z. Kelley, A.-M. Lemke, and
+A. Mitridate, “Beyond the Background:
+Gravitational-wave Anisotropy and Continuous Waves
+from Supermassive Black Hole Binaries,”Astrophys. J.
+965no. 2, (2024) 164,arXiv:2309.07227
+[astro-ph.HE].
+[15] A.-M. Lemke, A. Mitridate, and K. A. Gersbach,
+“Detecting gravitational wave anisotropies from
+supermassive black hole binaries,”Phys. Rev. D111
+no. 6, (2025) 063068,arXiv:2407.08705
+[astro-ph.HE].
+[16] N. Pol, S. R. Taylor, and J. D. Romano, “Forecasting
+pulsar timing array sensitivity to anisotropy in the
+stochastic gravitational wave background,”The
+Astrophysical Journal940no. 2, (Dec., 2022) 173,
+arxiv:2206.09936 [astro-ph.HE].
+[17] P. F. Depta, V. Domcke, G. Franciolini, and M. Pieroni,
+“Pulsar timing array sensitivity to anisotropies in the
+gravitational wave background,”Phys. Rev. D111
+no. 8, (2025) 083039,arXiv:2407.14460
+[astro-ph.CO].
+[18] C. Caprini and D. G. Figueroa, “Cosmological
+Backgrounds of Gravitational Waves,”Classical and
+Quantum Gravity35no. 16, (July, 2018) 163001.
+http://arxiv.org/abs/1801.04268.
+[19] N. Bartolo, D. Bertacca,et al., “Probing Anisotropies of
+the Stochastic Gravitational Wave Background with
+LISA,”JCAP11no. 11, (Nov., 2022) 009.
+http://arxiv.org/abs/2201.08782.
+[20] C. M. F. Mingarelli, T. Sidery, I. Mandel, and
+A. Vecchio, “Characterising gravitational wave
+stochastic background anisotropy with Pulsar Timing
+Arrays,”Physical Review D88no. 6, (Sept., 2013)
+062005.http://arxiv.org/abs/1306.5394.
+[21] S. R. Tayloret al., “Limits on anisotropy in the
+nanohertz stochastic gravitational-wave background,”
+Physical Review Letters115no. 4, (July, 2015) 041101,
+arxiv:1506.08817 [astro-ph.HE].
+[22]NANOGravCollaboration, G. Agazieet al., “The
+NANOGrav 15 yr Data Set: Search for Anisotropy in
+the Gravitational-wave Background,”Astrophys. J.
+Lett.956no. 1, (2023) L3,arXiv:2306.16221
+[astro-ph.HE].
+[23] T. Konstandin, A.-M. Lemke, A. Mitridate, and
+E. Perboni, “Prospects and limitations of PTAs
+anisotropy searches — the frequentist case,”JCAP02
+(2026) 084,arXiv:2509.07074 [astro-ph.CO].
+[24] J. S. Hazboun, P. M. Meyers, J. D. Romano,
+X. Siemens, and A. M. Archibald, “Analytic
+distribution of the optimal cross-correlation statistic for
+stochastic gravitational-wave-background searches using
+pulsar timing arrays,”Phys. Rev. D108no. 10, (2023)
+104050,arXiv:2305.01116 [gr-qc].
+[25] M. Vallisneri, P. M. Meyers, D. Wright, A. D. Johnson,
+J. G. Baier, and R. van Haasteren,
+“nanograv/discovery.” Nov., 2025.
+https://github.com/nanograv/discovery.
+[26] M. Vallisneriet al., “Discovery: the next-generation
+pulsar-timing-array data-analysis package,”in
+preparation.
+[27] J. Neyman and E. S. Pearson, “On the Problem of the
+Most Efficient Tests of Statistical Hypotheses,”Phil.
+Trans. Roy. Soc. Lond. A231no. 694-706, (1933)
+289–337.
+[28] K. Cranmer, J. Brehmer, and G. Louppe, “The frontier
+of simulation-based inference,”Proceedings of the
+National Academy of Sciences117no. 48, (Dec., 2020)
+30055–30062.http://arxiv.org/abs/1911.01429.
+arXiv:1911.01429 [stat].
+[29] D. Shih, M. Freytsis, S. R. Taylor, J. A. Dror, and
+N. Smyth, “Fast Parameter Inference on Pulsar Timing
+Arrays with Normalizing Flows,”Phys. Rev. Lett.133
+no. 1, (2024) 011402,arXiv:2310.12209
+[astro-ph.IM].
+[30] M. Vallisneri, M. Crisostomi, A. D. Johnson, and P. M.
+Meyers, “Rapid Parameter Estimation for
+Pulsar-Timing-Array Datasets with Variational
+Inference and Normalizing Flows,”Phys. Rev. Lett.135
+no. 7, (2025) 071401,arXiv:2405.08857 [gr-qc].
+[31] J. Lai and C. Li, “Accelerated Bayesian inference for
+pulsar timing arrays: Normalizing flows for rapid model
+comparison across stochastic gravitational-wave
+background sources,”Phys. Rev. D112no. 2, (2025)
+023533,arXiv:2504.04211 [astro-ph.CO].
+[32] N. Laalet al., “Deep Neural Emulation of the
+Supermassive Black Hole Binary Population,”
+Astrophys. J.982no. 1, (2025) 55,arXiv:2411.10519
+[astro-ph.IM].
+[33] N. Jeffrey and B. D. Wandelt, “Evidence Networks:
+simple losses for fast, amortized, neural Bayesian model
+comparison,”Mach. Learn. Sci. Tech.5no. 1, (2024)
+015008,arXiv:2305.11241 [cs.LG].
+[34] N. Anau Montel, J. Alvey, and C. Weniger, “Tests for
+model misspecification in simulation-based inference:
+From local distortions to global model checks,”Phys.
+Rev. D111no. 8, (2025) 083013,arXiv:2412.15100
+[astro-ph.IM].
+[35]EPTA, InPTACollaboration, J. Antoniadiset al.,
+“The second data release from the European Pulsar
+Timing Array - II. Customised pulsar noise models for
+spatially correlated gravitational waves,”Astron.
+Astrophys.678(2023) A49,arXiv:2306.16225
+[astro-ph.HE].
+[36]EPTA, InPTACollaboration, J. Antoniadiset al.,
+“The second data release from the European Pulsar
+Timing Array I. The dataset and timing analysis,”
+Astronomy & Astrophysics(June, 2023) ,
+arxiv:2306.16224 [astro-ph.HE].
+[37]NANOGravCollaboration, G. Agazieet al., “The
+NANOGrav 15 yr Data Set: Observations and Timing
+of 68 Millisecond Pulsars,”Astrophys. J. Lett.951
+
+17
+no. 1, (2023) L9,arXiv:2306.16217 [astro-ph.HE].
+[38]PPTACollaboration, A. Zic, D. J. Reardon,et al.,
+“The Parkes Pulsar Timing Array Third Data Release,”
+Publ. Astron. Soc. Austral.40(July, 2023) e049.
+http://arxiv.org/abs/2306.16230.
+[39] J. Ellis and R. van Haasteren, “jellis18/pal2: Pal2.”
+Jan., 2017.https://doi.org/10.5281/zenodo.251456.
+[40]NANOGravCollaboration, G. Agazie,
+A. Anumarlapudi,et al., “The NANOGrav 15-Year
+Data Set: Detector Characterization and Noise
+Budget,”The Astrophysical Journal Letters951no. 1,
+(June, 2023) L10.http://arxiv.org/abs/2306.16218.
+[41] B. B´ ecsy, N. J. Cornish, and M. C. Digman, “Fast
+Bayesian analysis of individual binaries in pulsar timing
+array data,”Phys. Rev. D105no. 12, (2022) 122003,
+arXiv:2204.07160 [gr-qc].
+[42] B. B´ ecsy, J. Hazboun, and A. Johnson,
+“pta replicator,” GitHub repository, 2025.
+https://github.com/bencebecsy/pta_replicator.
+Available at
+https://github.com/bencebecsy/pta_replicator.
+[43] S. J. Vigeland, K. Islo, S. R. Taylor, and J. A. Ellis,
+“Noise-marginalized optimal statistic: A robust hybrid
+frequentist-Bayesian statistic for the stochastic
+gravitational-wave background in pulsar timing arrays,”
+Phys. Rev. D98(2018) 044003,arXiv:1805.12188
+[astro-ph.IM].
+[44] K. A. Gersbach, S. R. Taylor, P. M. Meyers, and J. D.
+Romano, “Spatial and spectral characterization of the
+gravitational-wave background with the PTA optimal
+statistic,”Phys. Rev. D111no. 2, (2025) 023027,
+arXiv:2406.11954 [astro-ph.IM].
+[45] K. A. Gersbach, S. R. Taylor, B. B´ ecsy, A.-M. Lemke,
+A. Mitridate, and N. Pol, “Mapping the
+gravitational-wave background across the spectrum
+with a next-generation anisotropic per-frequency
+optimal statistic,”Phys. Rev. D113no. 10, (2026)
+103031,arXiv:2509.07090 [astro-ph.IM].
+[46] T. Konstandin, A.-M. Lemke, A. Mitridate, and
+E. Perboni, “The impact of cosmic variance on PTAs
+anisotropy searches,”JCAP04(2025) 059,
+arXiv:2408.07741 [astro-ph.CO].
+[47] V. Domcke, G. Franciolini, and M. Pieroni, “Cosmic
+Variance in Anisotropy Searches at Pulsar Timing
+Arrays,”arXiv:2508.21131 [astro-ph.CO].
+[48] D. Hendrycks and K. Gimpel, “Gaussian Error Linear
+Units (GELUs),”arXiv e-prints(June, 2016)
+arXiv:1606.08415,arXiv:1606.08415 [cs.LG].
+[49] W. Hu, B. Liu, J. Gomes, M. Zitnik, P. Liang,
+V. Pande, and J. Leskovec, “Strategies for Pre-training
+Graph Neural Networks,”arXiv e-prints(May, 2019)
+arXiv:1905.12265,arXiv:1905.12265 [cs.LG].
+[50] A. D. Johnson, P. M. Meyers,et al., “The NANOGrav
+15-year Gravitational-Wave Background Methods,”
+Physical Review D109no. 10, (May, 2024) 103012.
+http://arxiv.org/abs/2306.16223.
+[51]MeerKATCollaboration, K. Grunthal, R. S. Nathan,
+et al., “The MeerKAT Pulsar Timing Array: Maps of
+the gravitational-wave sky with the 4.5 year data
+release,”Monthly Notices of the Royal Astronomical
+Society536no. 2, (Dec., 2024) 1501–1517.
+http://arxiv.org/abs/2412.01214.
+[52] B. E. Moreschi, S. Valtolina, A. Sesana, G. Shaifullah,
+M. Falxa, L. Speri, D. Izquierdo-Villalba, and
+A. Chalumeau, “Dissecting the nanoHz gravitational
+wave sky: frequency-correlated anisotropy induced by
+eccentric supermassive black hole binaries,”
+arXiv:2506.14882 [astro-ph.GA].
+[53] G. Cusin, C. Pitrou, M. Pijnenburg, and A. Sesana,
+“Measuring anisotropies in the PTA band with
+cross-correlations.” Feb., 2025.
+http://arxiv.org/abs/2502.17401.
+[54] D. Agarwal, J. D. Romano, Y. Ali-Ha¨ ımoud, and T. L.
+Smith, “Addressing leakage and mode suppression in
+angular power spectrum estimation for
+gravitational-wave backgrounds using pulsar timing
+arrays.” Feb., 2026.
+http://arxiv.org/abs/2602.20075.
+[55] M. Cury lo, E. Thrane, P. D. Lasky, and D. S. Gaynor,
+“A comprehensive framework for phase-coherent
+mapping of the gravitational-wave sky with pulsar
+timing arrays.” Apr., 2026.
+http://arxiv.org/abs/2604.19073. arXiv:2604.19073
+[astro-ph].

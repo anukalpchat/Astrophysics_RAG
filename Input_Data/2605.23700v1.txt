@@ -1,0 +1,1589 @@
+Title: New substellar candidates identified through deep learning in the F150 sample of the large-scale SHINE direct imaging survey
+Authors: Carles Cantero Mitjans, Mariam Sabalbal, Olivier Absil, Marc Van Droogenbroeck, Damien Ségransan, Philippe Delorme
+Published: 2026-05-22
+Categories: astro-ph.EP, astro-ph.IM, astro-ph.SR
+
+Astronomy&Astrophysicsmanuscript no. main©ESO 2026
+May 25, 2026
+New substellar candidates identified through deep learning in the
+F150 sample of the large-scale SHINE direct imaging survey
+C. Cantero1, M. Sabalbal2, O. Absil2,⋆ , M. Van Droogenbroeck3, D. Ségransan1, P. Delorme4
+1 Geneva Observatory, University of Geneva, Chemin Pegasi 51, 1290 Versoix, Switzerland
+2 STAR Institute, Université de Liège, Allée du Six Août 19C, 4000 Liège, Belgium
+3 Montefiore Institute, Université de Liège, 4000 Liège, Belgium
+4 IPAG, Univ. Grenoble Alpes, CNRS, Grenoble, France
+Received September 15, 1996; accepted March 16, 1997
+ABSTRACT
+Context.The SPHERE High-contrast Imaging survey for Exoplanets (SHINE) represents one of the largest and most sensitive direct
+imaging campaigns conducted to date, targeting over 400 young, nearby stars with the goal of detecting and characterizing giant
+exoplanets and brown dwarfs. This extensive dataset offers a unique opportunity to revisit observations using modern, data-driven
+approaches, potentially uncovering new substellar candidates that may have been overlooked by classical analysis techniques.
+Aims.In this context, our study focuses on reprocessing and reanalyzing the so-called F150 sample, a well-defined subset of 150
+main-sequence stars within 100 pc observed in the H-band with VLT/SPHERE as part of the SHINE survey.
+Methods.We apply NA-SODINN, a supervised deep learning model specifically tailored for detecting faint planetary signals in an-
+gular differential imaging (ADI) sequences. Designed to model local noise properties and capture spatial context, NA-SODINN is
+particularly effective at distinguishing real companions from residual speckle noise. To translate the model’s pixel-wise confidence
+maps into actionable detections, we introduce a novel F1-score-based thresholding strategy. This principled approach balances sensi-
+tivity and specificity, addressing a key limitation in current deep learning-based methods.
+Results.NA-SODINN recovers all known companions and some of the debris disks in the F150 sample, and identifies 13 new
+substellar candidates not reported in previous studies: ten detected in both the H2 and H3 bands, and three in only one band. For the
+ten sources detected in both bands, we use the H2–H3 color–magnitude diagram to perform a first assessment of their nature. Based
+on this analysis, we identify two ambiguous cases and three photometrically promising candidates. However, in light of the currently
+available multi-epoch SPHERE data, only the candidate around Smethells 20 remains a strong target for follow-up.
+Key words.methods: data analysis – methods: statistical – techniques: image processing – techniques: high angular resolution –
+planets and satellites: detection
+1. Introduction
+Exoplanet direct imaging has become crucial for complement-
+ing indirect detection methods. Since the first direct detection
+of an exoplanet (Chauvin et al. 2004), the field of high contrast
+imaging (HCI) has become an essential tool not only for detect-
+ing young, self-luminous giant planets at wide separations (typ-
+ically between 10 and 100 au) but also for enabling follow-up
+low-resolution spectroscopy of these objects, providing crucial
+insights into their chemical composition and atmospheric prop-
+erties. Having access to this wide orbit space enables statistical
+analyzes that help constrain occurrence rates, shedding light on
+the initial conditions of protoplanetary disks (Janson et al. 2021),
+and serving as critical tracers of formation mechanisms and dy-
+namical histories, ultimately refining current formation models
+(e.g., Bowler 2016).
+To date, HCI has been able to detect around 60 substellar
+companions around young nearby stars, mostly thanks to the im-
+plementation of HCI surveys over the past two decades. Early
+surveys, with sample sizes of 50–100 stars, led to the discovery
+of some of the first planetary-mass companions at large sepa-
+rations (>100 au) or with low mass ratios relative to their host
+stars (i.e., Chauvin et al. 2004; Chauvin et al. 2005b; Neuhäuser
+⋆ F.R.S.-FNRS Research Director
+et al. 2005; Lafrenière et al. 2008). These discoveries paved the
+way for the detection of the most iconic directly imaged plan-
+etary systems, including HR 8799 bcde (Marois et al. 2008b)
+andβ-Pictoris b (Lagrange et al. 2009). More recent large-scale
+surveys, such as the Gemini Planet Imager Exoplanet Survey
+(GPIES, Nielsen et al. 2019) and the SpHere INfrared survey
+for Exoplanets (SHINE, Chauvin et al. 2017), have expanded
+their sample sizes to 600 and 400 stars, respectively. So far, these
+new generation surveys have only led to the discovery of five
+giants, 51 Eri b (Macintosh et al. 2015), HIP 65426 b (Chau-
+vin et al. 2017), PDS 70 b and c (Keppler et al. 2018), and
+HD143811 (AB)b (Squicciarini, V . et al. 2025), and some higher
+mass brown dwarfs (Konopacky et al. 2016; Cheetham et al.
+2018). This relatively low number of HCI detections compared
+to expectations from radial velocity extrapolations (i.e., Cum-
+ming et al. 2008) is not solely indicative of a true absence of
+wide-orbit planets. Rather, it also highlights the substantial ob-
+servational challenges, such as image contrast, that continue to
+limit the sensitivity of HCI surveys.
+In HCI, contrast refers to the extreme flux ratio between a
+bright host star and its much fainter planetary companion. In
+the near-infrared, typical contrasts for young giant planets range
+from 10 −4 to 10 −6. Achieving such contrasts using 8–10 me-
+ter ground-based telescopes requires a combination of precise
+Article number, page 1 of 20
+arXiv:2605.23700v1  [astro-ph.EP]  22 May 2026
+
+A&A proofs:manuscript no. main
+instrumentation and advanced data processing. On the instru-
+mental side, extreme adaptive optics (AO) systems and HCI in-
+struments work in synergy during observations to correct for
+atmospheric turbulence and employ dedicated coronagraphs to
+suppress stellar light, respectively (Kenworthy & Haffert 2025).
+However, starlight is never perfectly removed in coronagraphic
+images. Residual wavefront errors and optical imperfections pro-
+duce quasi-static speckles that can mimic planetary signals in
+both shape and brightness (Males et al. 2021). These limitations
+naturally lead to the algorithmic side, where observational strate-
+gies combined with image post-processing techniques are used
+to suppress these residual speckles, reach deeper contrasts, and
+recover companion signatures. The most widely used observing
+strategy on ground-based telescopes is angular differential imag-
+ing (ADI, Marois et al. 2006), in which coronagraphic images
+are acquired in pupil-tracking mode: the telescope pupil remains
+fixed while the image rotates over time due to the Earth’s ro-
+tation. As a result, speckles associated with the telescope and
+instrument optical train remain mostly fixed in the focal plane
+while the astrophysical signals rotate around the star as a func-
+tion of the parallactic angle. This generates a sequence of coro-
+nagraphic images (ADI sequence, hereafter) that contains rich
+angular diversity and allows post-processing algorithms to ef-
+fectively disentangle true planetary signals from residual image
+noise.
+Over the past two decades, numerous image post-processing
+techniques have been developed to improve planet detection in
+ADI datasets (see Cantalloube et al. 2020, for a review). Among
+these, a major family relies on point spread function (PSF) sub-
+traction. These methods aim to build a model of the stellar PSF
+from the ADI sequence and subtract it from each frame. The
+residuals are then derotated and combined based on their paral-
+lactic angles, producing a final image in which residual speck-
+les are further attenuated and spatially decorrelated. This out-
+put is referred to as the processed frame. Among PSF subtrac-
+tion techniques, principal component analysis (PCA, Soummer
+et al. 2012; Amara & Quanz 2012) and its extension, annular
+PCA (Absil et al. 2013; Gomez Gonzalez et al. 2016), have be-
+come standard approaches in major HCI surveys (e.g., Nielsen
+et al. 2019; Janson et al. 2021; Langlois et al. 2021). Their
+widespread use is largely due to several practical advantages:
+PCA is computationally efficient, has a solid mathematical foun-
+dation, requires minimal hyperparameter tuning (Bonse et al.
+2024), and is currently integrated into major HCI pipelines such
+as VIP (Gomez Gonzalez et al. 2017; Christiaens et al. 2023),
+PynPoint (Stolker et al. 2019), and pyKLIP (Wang et al. 2015).
+Recently, machine learning, and in particular deep learning, has
+emerged as a powerful alternative that can be adapted to work
+in synergy with PSF subtraction techniques like PCA, delivering
+superior performance in tasks such as exoplanet signal detec-
+tion (e.g., Gomez Gonzalez et al. 2018; Flasseur et al. 2024) and
+speckle noise modeling (Yip et al. 2020; Wolf et al. 2024). A
+notable example is NA-SODINN (Cantero et al. 2023), a recent
+supervised binary classifier based on convolutional neural net-
+works (CNNs). It enhances detection sensitivity on ADI-PCA
+processed frames by learning deep spatio-temporal correlations
+of residual speckle noise across different noise regimes and in-
+corporates signal-to-noise (S/N) curves as additional predictors,
+which provide complementary information about companion-
+like features. This multi-dimensional learning strategy has en-
+abled NA-SODINN to outperform traditional techniques, secur-
+ing top ranks in the first phase of the Exoplanet Imaging Data
+Challenge (EIDC, Cantalloube et al. 2020).
+In this study, we aim to leverage the power of NA-SODINN
+to reprocess the F150 sample from the SHINE survey in search
+of new substellar candidates. To improve its applicability to
+large-scale survey analysis, we introduce two key modifica-
+tions to the original pipeline: (1) an automated,F 1-score-driven
+method for selecting optimal detection thresholds in each output
+map, enhancing interpretability and improving candidate selec-
+tion; and (2) contrast curve generation to quantify detection sen-
+sitivity across the survey. Aside from these additions, the core al-
+gorithm remains unchanged. Thus, this work represents the first
+application of NA-SODINN to real data from a large-scale HCI
+survey, providing not only an opportunity to search for new com-
+panions but also to critically assess the algorithm’s performance,
+limitations, and future development paths.
+This paper is structured as follows: Section 2 introduces
+the SHINE survey and its observing strategy, with a particular
+focus on the F150 sample used in this study. It also summa-
+rizes the current status of the full survey and the complementary
+snapSHINE program. Section 3 details the full data reduction
+process of the F150 sample, including image preprocessing, an
+overview of the NA-SODINN algorithm, the new thresholding
+strategy for candidate identification, the generation of final de-
+tection maps for each target, and the sensitivity analysis through
+contrast curves. Section 4 presents the detected candidate com-
+panions and their analysis. Finally, Section 5 discusses the im-
+plications of our results and summarizes the main conclusions.
+2. SHINE survey
+The SHINE survey (Chauvin et al. 2017) represents one of
+the most ambitious large-scale direct imaging campaigns. Con-
+ducted over 200 nights between February 2015 and September
+2021, the survey was carried out in visitor mode at the Very
+Large Telescope (VLT) using the Spectro-Polarimeter High-
+contrast Exoplanet REsearch (SPHERE, Beuzit et al. 2019),
+combining its SAXO extreme adaptive optics system (Fusco
+et al. 2006) and its apodized pupil Lyot coronagraph (APLC,
+Soummer 2005). It targeted a statistically robust sample of over
+400 young, nearby stars, with a comprehensive set of scientific
+objectives. These included the detection of new giant exoplan-
+ets and circumstellar disks, the characterization of the atmo-
+spheres of both newly discovered and previously known exo-
+planets, the investigation of giant planet formation mechanisms,
+and the study of the dynamical architecture of planetary systems.
+Each observation spanned approximately one to two hours
+employing ADI. Observations were conducted in one of two
+SPHERE configurations: IRDIFS or IRDIFS-EXT. Both modes
+enable the simultaneous use of the InfraRed Dual-beam Imager
+and Spectrograph (IRDIS, Dohlen et al. 2008) and the Integral
+Field Spectrograph (IFS, Claudi et al. 2008; Mesa et al. 2015),
+offering complementary spectral coverage across near-infrared
+wavelengths. In IRDIFS mode, IFS captures data in the YJ spec-
+tral bands within a compact 1 ′′.77×1 ′′.77 field of view, while
+IRDIS operates in Dual-Band Imaging mode (DBI, Vigan et al.
+2010) using the H2-H3 filter pair (DB-H23), providing a broader
+11′′ ×11 ′′ field of view. In the extended IRDIFS-EXT mode,
+IFS expands its coverage to include the YJH bands, and IRDIS
+switches to the K1-K2 filter pair (DB-K12). This latter setup
+is particularly suited for detecting red, young L-type planets
+in nearby star-forming regions, such as HD 95086 b in Sco-
+Cen (Chauvin et al. 2018).
+To date, SHINE has led to various discoveries: the giant exo-
+planet HIP 65426 b (Chauvin et al. 2017), the first unambiguous
+detection of the protoplanet PDS 70 b embedded in a protoplan-
+Article number, page 2 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+Fig. 1: Distributions of the main features extracted from the ADI sequences of the F150 sample. The number of frames in the
+sequence (blue) corresponds to the final value obtained after applying the Pearson correlation analysis described in Section 3.1.∆rot
+(orange) refers to the total field rotation during the sequence. The three rightmost panels correspond to atmospheric conditions:r 0
+(green) indicates the mean seeing,τ 0 (red) the mean coherence time, and airmass (purple).
+etary disk (Keppler et al. 2018), one brown dwarf (HIP 64892 B,
+Cheetham et al. 2018), four new disk detections (Lagrange et al.
+2016; Feldt et al. 2017; Sissa et al. 2018; Perrot et al. 2019a), as
+well as 78 new stellar companions (Bonavita et al. 2022).
+2.1. The F150 sample
+An initial statistical analysis was performed on the first 150 tar-
+gets observed between 2015 and 2017, referred to as the F150
+sample1. Fig. 1 shows the distribution of the main characteristics
+of the F150 sample. This subset was selected to be representa-
+tive of the full survey and formed the basis of a trilogy of papers
+published in 2021.
+In the first paper, Desidera et al. (2021) analyzed in detail
+the stellar properties of the F150 sample by combining indi-
+cators such as kinematics, moving group membership, lithium
+absorption, rotation periods, and chromospheric activity to esti-
+mate stellar ages and masses. The sample spans a broad range
+of spectral types, from B to M stars, with 53 BA stars, 77 FGK
+stars, and 20 M-type stars. The median age is 45 Myr, with 90%
+of the sample falling between 11 and 450 Myr. Stellar masses
+range from 0.57 to 2.37M ⊙, with a median of 1.15M ⊙, and the
+median distance is approximately 48 pc.
+The observational setup and data processing for the F150
+sample were presented in a second paper by Langlois et al.
+(2021). In total, 16 substellar companions were identified in the
+sample, eight brown dwarfs and eight planetary-mass compan-
+ions, with most having been previously reported by earlier direct
+imaging campaigns. Additionally, 1483 candidate point sources
+were detected in the IRDIS field of view across all epochs us-
+ing PCA through the SpeCal pipeline. Of these, 1176 were con-
+firmed as background sources through follow-up observations or
+archival data, while 307 remained single-epoch detections and
+were considered as new candidates. Notably, more than 95% of
+these detections were obtained with the H2-H3 filter pair (DB-
+H23). Candidate prioritization was based on color-magnitude di-
+agrams (CMDs), which led to the rejection of 44% of the H23
+candidates as likely contaminants; ambiguous cases were sched-
+uled for second-epoch follow-up.
+Building upon these detection results, Vigan et al. (2021)
+carried out in a third paper a statistical analysis aimed at con-
+straining the occurrence rates of wide-separation giant planets.
+By converting contrast curves to mass limits using evolutionary
+models and comparing the results with both parametric and pop-
+1 The table with all the ADI sequences and their main characteristics,
+including atmospheric conditions, is available at the CDS viahttps:
+//cdsarc.cds.unistra.fr/viz-bin/cat/J/A+A/706/A275
+ulation synthesis models, they derived occurrence rates across
+different spectral types.
+2.2. Current status
+With the completion of the initial F150 sample analysis, the
+SHINE survey advanced to its full statistical phase, expand-
+ing the sample to 400 stars and accumulating over 700 high-
+contrast datasets. This enlarged dataset significantly increased
+the number of detected point sources, mostly single-epoch de-
+tections with IRDIS in the H2-H3 filter pair. To discriminate be-
+tween physical companions and background contaminants, the
+snapSHINE program was proposed. Unlike the deeper SHINE
+exposures designed for discovery and spectral characterization,
+snapSHINE was conceived as a rapid second-epoch astrometric
+follow-up survey. It used shorter exposure times and simplified
+observing sequences, enabling the confirmation or rejection of
+large numbers of candidates with minimal telescope time. While
+less sensitive than SHINE, snapSHINE was optimized to deliver
+reliable astrometric measurements at separations beyond∼0.5",
+where most single-epoch sources are located.
+As part of a new series of SHINE publications analyzing the
+full dataset, Chomez, A. et al. (2025) recently presented the ob-
+serving strategy, data quality assessment, and point source analy-
+sis for the combined SHINE and snapSHINE samples. In a simi-
+lar spirit to the earlier work of Langlois et al. (2021) on the F150
+data, this new analysis applies the PACO-ASDI post-processing
+algorithm, which enhances contrast limits by up to two mag-
+nitudes. More than 3500 point sources were detected and clas-
+sified in this (re)processing effort. Although no new confirmed
+exoplanets were identified, the improved sensitivity revealed 24
+additional promising sources.
+More recently, Sabalbal et al. (2026) reprocessed the F150
+sample using RSM (Dahlqvist et al. 2020), a post-processing
+algorithm that achieved similarly top-ranked detection perfor-
+mance to NA-SODINN in the EIDC (Cantalloube et al. 2020).
+They reported a gain in median sensitivity of about a factor of
+two at∼1 ′′ and of∼4–5 at smaller angular separations relative
+to standard PCA, reaching performance comparable to PACO on
+the same datasets. Additionally, RSM yielded 87 detected sig-
+nals, including 38 not recovered in the PACO-based analysis,
+and highlighted one particularly promising single-epoch candi-
+date.
+3. Methodology
+This section describes the complete data reduction process ap-
+plied to each ADI sequence of the F150 sample. It begins with
+Article number, page 3 of 20
+
+A&A proofs:manuscript no. main
+the initial SPHERE pre-processing steps, continues through the
+generation of final detection maps using the NA-SODINN algo-
+rithm, and concludes with the assessment of the survey’s sensi-
+tivity based on contrast curve analysis.
+3.1. Raw data pre-processing
+The SHINE F150 sample was pre-processed with the SPHERE
+data reduction and handling software (Pavlov et al. 2008), imple-
+mented at the High-Contrast Data Centre2 (HC-DC, Maire et al.
+2016; Delorme et al. 2017; Galicher et al. 2018; Beuzit et al.
+2019). The initial reduction steps for the IRDIS data involved
+standard calibrations, including dark subtraction, flat-fielding,
+bad pixel correction, and background subtraction. Precise center-
+ing of the star was achieved using four satellite spots imprinted
+on the IRDIS images via a specific pattern applied to the de-
+formable mirror. For each target in the sample, the output of
+this pre-processing is the ADI sequence with re-centered frames
+(individual detector integrations), along with the corresponding
+list of de-rotation angles required for ADI post-processing. For
+more details, including SPHERE calibration, we refer to Lan-
+glois et al. (2021).
+3.2. Image processing
+For this study, we considered two additional operations on each
+ADI sequence. First, each frame in the sequence is cropped to
+a 190×190 pixel region centered on the star, corresponding to
+a field of view radius of approximately 1 ′′.2. This inner region
+aligns with the area most effectively corrected by the SAXO
+extreme-AO system and where NA-SODINN has shown supe-
+rior performance compared to standard PSF subtraction tech-
+niques (Cantero et al. 2023). Second, using theVIPPython
+package (Gomez Gonzalez et al. 2017; Christiaens et al. 2023),
+low-quality frames are identified and removed by computing the
+Pearson correlation between each frame and the median frame in
+the sequence. Frames with correlation values below 0.8 are dis-
+carded, as they potentially correspond to frames affected by poor
+AO correction or fast atmospheric variations. This threshold was
+chosen as a good trade-offbetween preserving data volume and
+filtering out frames that degrade post-processing performance.
+Both operations contribute to reducing the computational cost
+for the post-processing.
+3.3. Advanced ADI post-processing
+To search for companion candidates in each ADI sequence,
+we use the NA-SODINN (Cantero et al. 2023) post-processing
+algorithm, standing for Noise-Adaptive Supervised exOplanet
+detection via Direct Imaging with a deep Neural Network. It
+represents an upgraded version of SODINN (Gomez Gonzalez
+et al. 2018), its predecessor, and is a binary classifier model de-
+signed to distinguish between companion point-like signatures
+and residual noise in annular PCA residual frames (ADI-PCA
+processed frames, hereafter). In this section, we provide a brief
+overview of the NA-SODINN processing pipeline, which con-
+sists of four main steps. For a more detailed description, we refer
+to Cantero et al. (2023).
+2 https://hc-dc.cnrs.fr/?rubrique16&lang=en
+3.3.1. First step: Identification of noise regimes
+Given an ADI sequence, the computation starts with a prelimi-
+nary analysis of the residual noise distribution across the ADI-
+PCA processed frame. While this residual noise has often been
+(implicitly) assumed to be Gaussian —an assumption that pro-
+duces high false positive detection rates (Marois et al. 2008a;
+Mawet et al. 2014) since it is not valid at small angular separa-
+tions (Pairet et al. 2019; Dahlqvist et al. 2020; Daglayan et al.
+2022, 2024)— NA-SODINN does not explicitly assume a spe-
+cific probability distribution. Instead, it acknowledges that in-
+dependent of the exact noise distribution, two non-overlapping
+noise regimes generally exist with different statistical proper-
+ties: a non-Gaussian regime at small separations, dominated by
+residual speckle noise, and a Gaussian regime at larger sepa-
+rations, where speckle noise becomes smaller than background
+noise. NA-SODINN identifies and spatially delimits these noise
+regimes within the ADI-PCA processed frame. As detailed later
+in Section 3.3.2, this stratification strategy of the field of view en-
+ables the generation of independent training sets that accurately
+capture the statistical correlations of each noise distribution.
+3.3.2. Second step: Generation of training sets
+Once the noise regimes are identified, NA-SODINN proceeds
+with the generation of the training sets. For each regime, an in-
+dependent dataset is created, consisting of two classes: the exo-
+planet class (c +) and the noise class (c −). Both classes are rep-
+resented by hundreds of thousands of sequences of square im-
+age patches along with their corresponding signal-to-noise (S/N)
+curves (Fig. 2). These samples are generated annulus by annulus
+within each considered regime.
+Ac + patch sequence is generated through three consecutive
+actions. First, the instrumental PSF is injected3 at a random pixel
+within the considered noise regime. The flux of the injection is
+randomly selected such that the injection yields a S/N between 2
+and 4 in the ADI-PCA processed frame produced with one sin-
+gle principal component. This modified ADI sequence is then
+processed using annular PCA with multiplek-subtraction lev-
+els (i.e., varying numbers of principal components). This results
+inkdifferent ADI-PCA processed frames. Finally, from each of
+these, a square patch is cropped around the injection coordinates,
+forming a sequence ofkpatches that together constitute a single
+c+ training sample (Fig. 2a). This sample contains local spatio-
+temporal pixel correlations of the synthetic injection that repre-
+sent its evolution in PCA space (differentk-subtraction levels).
+The associated S/N curve is computed following the definition
+from Mawet et al. (2014), measuring the S/N of the injection
+at eachk-subtraction level. This curve encodes additional infor-
+mation about the interaction between the injected signal and the
+residual noise in the rest of the annulus (Cantero et al. 2023).
+Ac − patch sequence and its S/N curve (Fig. 2b) are gener-
+ated using the same procedure, except that no fake companion
+is injected. Since each ADI sequence yields only one realization
+of residual noise (per pixel), the number ofc − samples is limited
+to the total number of pixels in the annulus, which increases the
+risk of overfitting. To deal with this issue, NA-SODINN makes
+use of data augmentation techniques such as rotations, averages,
+and shifts to producec − training samples. As a result, these sam-
+ples capture similar spatial and temporal correlations to thec +
+3 In HCI, a planetary injection is defined as the process of pasting the
+AO-corrected instrumental PSF (centered, cropped, and scaled to the
+desired contrast) to every frame in the ADI sequence at specific coordi-
+nates following field rotation.
+Article number, page 4 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+(a)c + samples: Exoplanet class
+(b)c − samples: Residual noise class
+Fig. 2: Illustration of the training set used by NA-SODINN, showing three examples of patch sequences from thec+ class (exoplanet,
+top) and three from thec − class (residual noise, bottom). Each sample consists of a sequence ofN k =15 image patches, each
+extracted from an ADI-PCA processed frame obtained with a different number of principal components, fromk=2 tok=30 in
+steps of two. The S/N value displayed inside each patch is the S/N measured at the correspondingk, and the collection of these
+values across the sequence forms the associated S/N curve. For thec + class, the three samples are ordered by increasing injected
+flux, with injections selected such that the initial S/N at the first principal componentk=1 lies in the range 2–4. Askincreases, the
+S/N typically rises at first as PCA better models and removes speckle noise, and then may decrease at higherkwhen the algorithm
+starts to subtract the planetary signal partially (self-subtraction). The patch size is set to twice the PSF FWHM (4 pixels in this case),
+resulting in 8×8 pixel patches.
+class, but purely due to residual noise. The same number and or-
+der ofk-subtraction levels are used as for thec + class to ensure
+the same noise subtraction in both classes.
+3.3.3. Third step: Training
+NA-SODINN continues by training a separate detection model
+for each noise regime using its corresponding training set.
+The network consists of two concatenated convolutional-LSTM
+blocks (Shi et al. 2015) with spatial 3D dropout (Srivastava et al.
+2014) and MaxPooling-3D layers (Boureau et al. 2010), extract-
+ing spatio-temporal correlations from patch sequences. The re-
+sulting feature maps are flattened and concatenated with the cor-
+responding S/N curves, forming a vector that also encodes S/N
+correlations. This vector is passed through a fully connected
+layer with 128 hidden units, a rectified linear unit (ReLU) ac-
+tivation function (Nair & Hinton 2010), and dropout regular-
+ization. The output layer consists of a sigmoid unit, providing
+a confidence score between 0 and 1. The network weights are
+initialized using a Xavier uniform initializer and optimized via
+backpropagation with a binary cross-entropy loss function. An
+Adam optimizer is employed with a learning rate of 0.003 and
+mini-batches of 64 training samples. Training is guided by an
+early stopping condition based on validation loss, with typically
+7–10 epochs yielding∼99.9 validation accuracy.
+3.3.4. Fourth step: Confidence map
+The final stage of NA-SODINN involves applying the trained
+models to detect real companions in the same ADI sequence
+used for training 4. In the same fashion as the training set gen-
+eration, inference is performed annulus by annulus within each
+corresponding noise regime. Given a pixel coordinate within
+a regime’s annulus, NA-SODINN first extracts the associated
+patch sequence and S/N curve. These inference samples are fed
+into the trained model corresponding to the pixel’s regime, which
+returns a confidence score between 0 and 1. This score reflects
+the model’s confidence that the pixel belongs to thec + class in
+such a way that higher scores (closer to 1) indicate likely com-
+panion detections, and lower scores point to regions dominated
+by residual noise. Repeating this process across the full field of
+view produces the confidence map: a pixel-level image aligned
+with the target’s field of view (i.e., Fig. 3-right), where compan-
+ion detection can be performed by defining a confidence thresh-
+old.
+3.4. Interpreting confidence maps
+3.4.1. The confidence calibration problem
+NA-SODINN is a data-driven framework designed to detect
+companion signatures in ADI sequences. This approach aims to
+offer two main advantages with respect to more standard post-
+processing techniques: (1) it achieves an improved balance be-
+tween sensitivity and specificity across all angular separations
+and noise regimes (see Cantero et al. 2023), and (2) it aims to en-
+hance interpretability through confidence maps that, unlike tradi-
+4 In NA-SODINN, training and inference are performed on the same
+ADI sequence to ensure consistency of residual noise statistics. Since
+noise regimes are empirically defined and dataset-dependent, using ex-
+ternal ADI sequences to build thec − class and increase noise diver-
+sity could introduce domain mismatch effects. Noise diversity is instead
+achieved through data augmentation of thec − class.
+Article number, page 5 of 20
+
+A&A proofs:manuscript no. main
+Fig. 3: Comparison between the S/N map (left), computed using annular PCA withk=20 principal components, and the confidence
+map (right), computed using NA-SODINN trained with faint companion injections, for thesph1SPHERE ADI sequence from
+EIDC (Cantalloube et al. 2020). The small dashed circles in white indicate the true locations of the injected fake companions c1
+and c2, while the red circles mark the positions of all NA-SODINN false positives if the detection threshold was set to a confidence
+score of 0.4 (see text). For both c1 and c2 injections, the S/N map highlights their sigma detection level while the confidence map
+shows the median confidence of all pixels located within a 1−λ/Daperture. The circular concentric masked area with a radius of
+∼3λ/Dat the center of each image indicates the inner working angle.
+tional processed frames or their S/N maps, provide a more homo-
+geneous and reproducible basis for identifying candidate com-
+panions across different angular separations and noise regimes.
+Although both approaches ultimately rely on thresholding, con-
+fidence maps are based on patterns learned directly from the data
+rather than on residual intensities or S/N values alone.
+However, confidence maps must be interpreted with cau-
+tion. The confidence scores produced by binary classifiers,
+while bounded between 0 and 1 via a sigmoid activation (Sec-
+tion 3.3.3), do not represent calibrated probabilities (Tao et al.
+2023) and therefore cannot be interpreted as such. Instead, they
+reflect the model’s internal certainty, which can be misleading.
+As a result, selecting an appropriate detection threshold cannot
+be based solely on intuition or on the assumption that a high
+score equates to a high probability of a true companion. This lim-
+itation becomes more pronounced when we aim to process large
+HCI surveys, such as the F150 sample, where NA-SODINN may
+flag numerous candidate companions with varying confidence
+levels.
+Figure 3 illustrates this challenge, using thesph1SPHERE
+ADI sequence from the Exoplanet Imaging Data Chal-
+lenge (Cantalloube et al. 2020). The left panel shows the S/N
+map obtained via annular PCA, where the two injected com-
+panions are highlighted with white circles: c1, located at a sep-
+aration of∼650 mas with a significance of 4.9σ, and c2, at
+∼300 mas with a lower value of 2.7σ. In the corresponding
+NA-SODINN confidence map (right panel), c1 receives a high
+model confidence score ¯c∼0.96, while c2 is assigned a moder-
+ate score ¯c∼0.55. At first glance, this behavior might suggest a
+simple monotonic relation between apparent signal strength and
+model confidence: brighter companions receive higher scores,
+and fainter ones receive lower scores. However, the confidence
+map also contains several additional bright spots at similar sep-
+arations (marked with red dashed circles) that are not asso-
+ciated with any injected companion. These false positives re-
+ceive confidence scores in the same 0.4–0.6 range as c2, mak-
+ing them indistinguishable from a real detection based solely on
+raw confidence. This overlap illustrates a key issue: intermedi-
+ate confidence values do not correspond to calibrated probabil-
+ities and cannot be directly interpreted as such. Without a prin-
+cipled thresholding mechanism, users are left to subjectively de-
+cide whether a pixel value like 0.55 represents a true companion
+or residual noise.
+Several techniques have been proposed in the deep learning
+community to address this calibration problem. Overall, these
+can be categorized into three main groups. The first consists of
+post-hoc calibration methods, which aim to adjust model predic-
+tions after training by learning additional parameters on a held-
+out calibration dataset with the same properties as the training
+set. Examples include Platt scaling (Platt 1999), isotonic regres-
+sion (Zadrozny & Elkan 2002), histogram binning (Zadrozny &
+Elkan 2001), Bayesian binning (Naeini et al. 2015), beta calibra-
+tion (Kull et al. 2017), and temperature scaling (Guo et al. 2017).
+The second category involves regularization-based approaches
+that aim to improve calibration indirectly by enhancing model
+generalization. These include data augmentation techniques like
+Mixup (Thulasidasan et al. 2019) and AugMix (Hendrycks et al.
+2020), ensemble methods (Lakshminarayanan et al. 2017), and
+explicit regularization strategies such as weight decay (Guo et al.
+2017). Finally, the third category focuses on modifying the train-
+ing loss function by introducing an auxiliary differentiable surro-
+gate loss to approximate expected calibration error (Karandikar
+et al. 2021), or replacing the standard cross-entropy loss with al-
+ternatives such as mean squared error (Hui & Belkin 2021), in-
+verse focal loss (Wang et al. 2021), or focal loss variants (Gupta
+et al. 2021).
+While these approaches offer promising avenues for improv-
+ing the interpretability of confidence maps, their adaptation to
+NA-SODINN is beyond the scope of this paper. Therefore, rather
+than interpreting confidence scores as probabilities, we adopt an
+alternative strategy tailored to the NA-SODINN architecture and
+for the analysis of the F150 sample: a threshold-optimization ap-
+proach that seeks to identify, per annulus, the confidence value
+that maximizes detection performance. Specifically, this means
+selecting the confidence threshold that optimizes the trade-off
+Article number, page 6 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+Fig. 4: Output of NA-SODINN’s proposed thresholding strategy for thesph1case shown in Fig. 3.Left: Threshold mask indicating
+the optimal confidence threshold per annulus, i.e., the value that maximizes the meanF1 score across injection-recovery realizations.
+The overlaid white labels complement the colour map by showing the selected thresholds at each annulus.Right: Final binary
+detection map obtained by applying the threshold mask to the original confidence map of Fig. 3.
+between false positives (FP) and false negatives (FN), on a per-
+dataset basis.
+3.4.2. Defining robust confidence thresholds
+In its original form, NA-SODINN performs inference annulus by
+annulus, scoring all pixels in the ADI sequence using the trained
+model corresponding to the local noise regime (Section 3.3.4).
+Once all pixels in an annulus are scored, NA-SODINN imme-
+diately proceeds to score all pixels in the next annulus without
+evaluating the reliability of the resulting confidence scores. In
+the proposed approach, this gap is addressed by introducing a
+dedicated injection-recovery step.
+After scoring all pixels in a given annulus, NA-SODINN
+temporarily pauses inference and generates a set ofn=50 syn-
+thetic cubes, each created by duplicating the original ADI se-
+quence and injecting two fake companions with random fluxes
+and positions restricted to the same annular region. Inference is
+then re-run on each of thesensynthetic cubes, computing con-
+fidence scores only for the pixels within the target annulus. To
+assess detection performance, a dense grid of confidence thresh-
+olds between 0 and 1 is defined. For each threshold in the grid,
+the model’s outputs are compared with the known injection po-
+sitions, allowing for the calculation of true positives (TPs), false
+positives (FPs), and false negatives (FNs). These basic indicators
+are then used to compute theF 1-score (see Section A) at each
+threshold. This procedure yields anF 1-score curve for everyn
+realization, characterizing model performance as a function of
+the confidence threshold, as described in Sabalbal et al. (2026).
+Because the same number of fake companions is injected in each
+synthetic cube, the resulting individualF 1 scores are computed
+under the same number of positive priors, which allows their av-
+eraging to remain meaningful (Piérard & Van Droogenbroeck
+2020). Averaging thenindividualF 1 curves therefore provides a
+robust estimate of detection performance across thresholds, and
+the confidence value at which the mean curve reaches its max-
+imum is selected as the optimal threshold for that annulus, as
+it offers the best trade-offbetween detection completeness and
+reliability.
+This injection-recovery process is repeated independently for
+each annulus across the field of view. For each annulus, the con-
+fidence threshold corresponding to the maximum of the mean
+F1 curve is selected as the optimal value. These optimal thresh-
+olds are then used by NA-SODINN to construct a threshold map,
+an annulus-wise mask that assigns to each pixel the confidence
+threshold associated with its angular separation (Fig. 4, left). Ap-
+plying this spatially varying threshold to the NA-SODINN con-
+fidence map yields what we refer to as theF 1 map: a binary
+detection map in which activated pixel blobs represent regions
+where the underlying signal meets the model’s strongest inter-
+nal criteria for being distinguishable from noise, given the lo-
+cal noise regime and learned data characteristics. This approach
+resolves the ambiguity inherent in raw, uncalibrated confidence
+values by providing a clear and objective decision rule for de-
+tection. Figure 4-right shows the resultingF 1 map for thesph1
+dataset, which successfully recovers both injected companions
+(c1 and c2) without introducing any false positives.
+3.5. Contrast curves
+To assess the detection limits achieved by a post-processing al-
+gorithm in an HCI survey, contrast curves are typically computed
+from S/N maps using the standard 5σcriterion (e.g., Mawet et al.
+2014; Langlois et al. 2021; Chomez, A. et al. 2025). In this ap-
+proach, contrast is estimated at each angular separation from the
+computation of the noise standard deviation and the throughput.
+NA-SODINN, however, produces confidence maps that as-
+sign a confidence score to each pixel rather than a flux-based
+S/N ratio. Since these confidence values do not follow the sta-
+tistical assumptions underlying the classical 5σframework, the
+standard definition of contrast cannot be applied consistently.
+Instead, we adopt an empirical completeness-based definition,
+following the injection-recovery philosophy of Dahlqvist et al.
+(2021). For each annulus, we first fix the detection threshold
+to the annulus-dependent confidence threshold derived in Sec-
+tion 3.4.2, which is the value that maximizes theF 1-score. At
+each angular separation, 20 synthetic companions are then in-
+jected at different azimuths, and their fluxes are iteratively ad-
+justed until NA-SODINN recovers 95% of them at this fixed
+threshold. A synthetic companion is considered recovered if it
+is detected at the expected location in the resulting binary detec-
+tion map. The corresponding flux is taken as the contrast limit at
+that separation. This completeness-based contrast therefore pro-
+vides an empirical estimate of the detection sensitivity of the
+Article number, page 7 of 20
+
+A&A proofs:manuscript no. main
+algorithm, without relying on assumptions about the underlying
+noise distribution.
+4. Results
+NA-SODINN was run separately on each preprocessed ADI se-
+quence of the F150 sample. This involved, for every sequence,
+first identifying noise regimes (Section 3.3.1), and then, for each
+regime, generating training data (Section 3.3.2), training a Conv-
+LSTM binary classifier (Section 3.3.3), and performing infer-
+ence (Section 3.3.4), ultimately producing both confidence and
+F1 maps (Section 3.4.2). Hereafter, we refer to both of them as
+detection maps. For targets with multiple observational epochs,
+each epoch was processed independently, meaning the full NA-
+SODINN pipeline was applied separately to each one. Similarly,
+H2 and H3 filter sequences for the same target were treated as
+distinct datasets.
+A valid detection was defined as an ensemble of one or
+more connected pixels (Cantalloube et al. 2020) appearing in the
+confidence map, passing the threshold mask, and therefore also
+present in theF 1 binary map. Applying this criterion within our
+reduced field of view, NA-SODINN identified a total of 30 point-
+like candidate sources across 19 targets in the full survey, ex-
+cluding confirmed gravitationally bound companions and disks.
+Some of these candidates had already been reported in previous
+studies, while others are newly identified here. To facilitate their
+analysis, this section is organized as follows. In Section 4.1, we
+review previously reported sources recovered by NA-SODINN,
+including confirmed substellar companions, detections previ-
+ously classified as background contaminants or ambiguous cases
+in the literature, and known disks. In Section 4.2, we present the
+candidate sources not reported by earlier studies. Finally, Sec-
+tion 4.3 concludes with an evaluation of the sensitivity limits
+reached by NA-SODINN for the F150 sample.
+Two appendices complement this section. A selection of NA-
+SODINN detection maps is provided in Section B, including
+some of the confirmed recovered planets and disks, as well as the
+candidate sources newly identified in this work. Section C sum-
+marizes the main properties of the target stars around which NA-
+SODINN identified new candidates (Table C.1), together with
+the characterization of the candidates themselves (Table C.2).
+4.1. Previously reported discoveries
+4.1.1. Known substellar companions
+All confirmed companions present in the F150 sample were de-
+tected by NA-SODINN with high confidence scores. This in-
+cludes the seven brown dwarfs PZ Tel B (Biller et al. 2010),
+HD 115470 B (Cheetham et al. 2018),ηTel B (Lowrance et al.
+2000), CD-35 2722 B (Wahhaj et al. 2011), HD 143567 B
+(Lafrenière et al. 2011), HD 206893 B (Milli et al. 2017a),
+and CD-52 381 B (Chauvin et al. 2005a); as well as the nine
+planetary-mass companions 51 Eri b (Macintosh et al. 2015),β
+Pic b (Lagrange et al. 2009), HD 95086 b (Rameau et al. 2013),
+HR 8799 c, d, and e (Marois et al. 2008b, 2010), HD 116434 b
+(Chauvin et al. 2017), GJ 504 b (Kuzuhara et al. 2022), and AB
+Pic b (Chauvin et al. 2005b).
+For illustrative purposes, Fig. B.1 presents four examples of
+these detections recovered in both the H2 and H3 filters. For in-
+stance, Fig. B.1a shows the case of HR 8799. We observe that
+the three giant planets HR 8799 c, d, and e are recovered by
+NA-SODINN, while planet b is not detected as it falls outside
+our reduced 1 ′′.2 field of view. The presence of low-mass inner
+companion interior to HR 8799 e could help stabilize the sys-
+tem dynamically (Go´ zdziewski & Migaszewski 2014), although
+deep SPHERE observations have ruled out planets more mas-
+sive than∼3-4M Jup in the 7.5-10 au range (Wahhaj et al. 2021).
+In Fig. B.1a, aside from the detection of planets c, d, and e, the
+NA-SODINN confidence maps also reveal a few other blobs that
+did not pass the threshold mask. Notably, in the H3 filter, a clus-
+ter of pixels with∼0.8 confidence appears at a slightly smaller
+angular separation than planet e. Although this signal could be
+considered significant, we opted not to include it in our posterior
+analysis due to its non-detection in the H2 filter and the absence
+of a corresponding signal in other epochs. For the systems HIP
+65426, PZ Tel, andβPic, whose NA-SODINN detection maps
+are shown in Figs. B.1b to B.1d, the known substellar compan-
+ions are robustly recovered within the considered field of view.
+No additional significant point-like sources are identified in the
+corresponding confidence or binary maps. The same result is ob-
+tained for the other analogous systems in the F150 sample, in-
+cluding the seven brown dwarf hosts and the three additional
+exoplanet host stars.
+4.1.2. Background contaminants and ambiguous cases
+Seventeen NA-SODINN detections correspond to candidate
+point sources previously reported by Langlois et al. (2021),
+Chomez, A. et al. (2025), and Sabalbal et al. (2026). In those
+studies, these sources were ultimately classified either as back-
+ground contaminants or as ambiguous cases. Five of them
+were identified as background contaminants, around HD175726,
+HD151726, HD148055, and HD107821, based on their posi-
+tion in color-magnitude diagrams and/or rejection via the com-
+mon proper-motion test. Six others were flagged as ambigu-
+ous, around HD113457, HD107301, OUPup, and HD326277,
+typically because the astrometric and/or photometric measure-
+ments were not sufficiently reliable for a robust assessment.
+The remaining six are found in systems with additional note-
+worthy structures: two lie beyond the debris disk of HD115600
+(Fig. B.2b), and four are found in systems for which we also
+report new candidates (Section 4.2): three around HD168210
+(Fig. B.3b) and one around HD 164249 (Fig. B.3f).
+4.1.3. Known debris disks
+The F150 sample includes twelve confirmed debris disks. Nine
+of these were previously known, corresponding to the targets:β
+Pic (Lagrange et al. 2019), NZ Lup (Boccaletti et al. 2019), HD
+115600 (Gibbs et al. 2019), HD 197481 (Boccaletti, A. et al.
+2018), HD 15115 (Engler et al. 2019), HD 61005 (Olofsson
+et al. 2016), HD 377 (Choquet et al. 2016), CE Ant (Olofsson
+et al. 2018), and HD 109573 (Milli et al. 2017b). The remaining
+three, HD 160305 (Perrot et al. 2019b), HD 106906 (Lagrange
+et al. 2016), and HD 131835 (Feldt et al. 2017), were discov-
+ered within the SHINE survey. These disks were typically found
+around young stars, with a median stellar age of 24 Myr, and are
+most often observed at high inclinations, with a median value of
+i=82° (Langlois et al. 2021), except for the case of CE Ant,
+which was detected at low inclination through polarimetric dif-
+ferential imaging (Olofsson et al. 2018). This prevalence of high-
+inclination detections is likely due to a selection bias introduced
+by ADI, which favors the detection of edge-on, optically thin
+disks through enhanced forward scattering and improved con-
+trast performance.
+Article number, page 8 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+Given our smaller field of view and the fact that the NA-
+SODINN neural network is trained to identify point-like sources
+rather than extended sources, we recovered, as shown in Fig. B.2,
+partial disk morphologies in only three of these systems. For ex-
+ample, Fig. B.2a shows the case of HD 109573, an A0V star
+with an estimated age of 10±3 Myr (Bell et al. 2015) and at
+a distance of 71.91±0.70 pc (Gaia Collaboration et al. 2023),
+that harbors one of the disks with the highest fractional luminos-
+ity, shaped as a thin ring of semi-major axis∼77 au inclined
+by∼76°. We can observe that the NA-SODINN recovery of the
+disk morphology in both filters is surprisingly good, with very
+high confidence scores and no additional spurious detections.
+We attribute this unexpected result to the interplay between the
+S/N curves included during training (see Section 3.3.2) and their
+correlation with the patch sequence. Although thec + patch se-
+quences contained only centered point-like source injections of
+varying fluxes and different noise levels, and no extended struc-
+tures, the exceptionally high flux of HD109573’s disk produced
+strong S/N values across the corresponding S/N curves. This al-
+lowed the network to almost recover the full disk despite its lack
+of explicit training on extended features.
+Figure B.2b presents the case of HD 115600, an F2V/F3V
+star with an estimated age of∼15 Myr and located at 109.6±
+0.5 pc (Gaia Collaboration et al. 2023). This system harbors a
+smaller debris disk with a semi-major axis of∼48 au and an
+inclination of∼79°. In contrast to HD109573, we observe that
+NA-SODINN struggles to recover the complete morphology of
+this disk, leaving significant gaps along its structure. Here, part
+of the disk lies within the speckle-dominated regime. As a result,
+despite the disk being intrinsically bright, the lower and more
+irregular S/N response in this area prevents the network from
+confidently identifying the entire ring, limiting the recovery to
+fragmented portions of the disk.
+Finally, Fig. B.2c shows HD 197481 (AU Mic), an M3IVe
+star at 9.725±0.005 pc that hosts two confirmed hot Neptunes
+(Plavchan et al. 2020; Martioli, E. et al. 2020) and possibly a
+third planet (Wittrock et al. 2023). Its edge-on disk, one of the
+largest and brightest known, extends from 40 to 120 au. In this
+case, NA-SODINN detects only a minor portion of the disk and
+no substellar candidates.
+4.2. New candidates
+In addition to the known companions, our analysis revealed
+13 new candidates around 11 stars not previously reported in
+the literature. Table C.1 provides the main properties of these
+stars. We group these detections into two categories: 10 candi-
+dates detected in both H2 and H3 bands, including Smethells 20
+(three candidates), HD 168210,πAra, CD-51 10924,βLeo, HD
+164249, CD-57 1054, and CE Ant; and 3 candidates detected in
+only one of the two bands, namely CD-48, HD 55279, and HD
+219482. Figures B.3 and B.4 show the NA-SODINN detection
+maps for both groups, respectively.
+The relative astrometry and photometry of these new candi-
+dates were estimated using the negative fake companion method
+(NEGFC, Wertz et al. 2017), as implemented in theVIPpackage
+(Gomez Gonzalez et al. 2017; Christiaens et al. 2023). Impor-
+tantly, this characterization step is independent of NA-SODINN:
+while NA-SODINN was used to identify the candidate locations,
+the estimation of their astrometry and photometry relies solely
+on the signal present in the final ADI-PCA post-processed frame.
+Therefore, this procedure is only applicable to candidates that re-
+main sufficiently visible after ADI-PCA processing. In practice,
+the method consists of injecting a fake companion with nega-
+Fig. 5: H2–H3 color–magnitude diagram of the 10 NA-SODINN
+candidates detected in both bands (black circles with photomet-
+ric uncertainties and labels). Previously known SHINE com-
+panions are shown as green stars. Candidate sources reported
+by Chomez, A. et al. (2025) and Sabalbal et al. (2026) are
+overplotted and colour-coded according to their final classifi-
+cation: ambiguous (PACO-AMB; light green), background con-
+taminants rejected through proper-motion analysis (PACO-BG
+PM; red), background contaminants rejected through the CMD
+(PACO-BG CMD; yellow), promising candidates from PACO
+(PACO promising; blue), additional background sources iden-
+tified by RSM (RSM-BG; purple), and RSM false positives
+(RSM-FP; aqua). The grey shaded region indicates the empir-
+ical background-exclusion zone defined by Chomez, A. et al.
+(2025), while horizontal dashed lines and labels mark approx-
+imate spectral-type transitions.
+tive flux at the approximate location of the detected candidate in
+the ADI sequence. If the injected negative source has the correct
+position and flux, it will cancel the candidate signal in the ADI-
+PCA post-processed frame. To achieve this, the separation, po-
+sition angle, and flux of the negative companion were adjusted
+through an iterative procedure that involved two steps. First, a
+Nelder-Mead simplex algorithm was used to obtain initial esti-
+mates. Second, these estimates were refined, and statistical un-
+certainties were obtained by sampling the posterior distributions
+with an MCMC sampler. Table C.2 presents this characterization
+for all the new candidates.
+After deriving the astrometry and photometry, we placed the
+10 candidates detected in both bands on a color–magnitude dia-
+gram (CMD; Fig. 5; see also Bonnefoy et al. 2018) to evaluate
+their nature. The CMD is a well-established diagnostic for distin-
+guishing substellar companions from background contaminants,
+particularly beyond the L/T transition where silicate and iron
+clouds dissipate and methane absorption dominates, producing
+the characteristic blueward shift of T dwarfs. Following Chomez,
+Article number, page 9 of 20
+
+A&A proofs:manuscript no. main
+A. et al. (2025), we also show the empirically defined exclusion
+region that traces the locus of the dominant SHINE contaminants
+(field K- and M-type stars). For context, Fig. 5 additionally in-
+cludes the population of previously confirmed SHINE compan-
+ions, as well as the candidate detections reported by Chomez, A.
+et al. (2025) and Sabalbal et al. (2026), using PACO and RSM al-
+gorithms, respectively, color-coded by their final classifications.
+Note that the RSM signals presented in this diagram represent an
+updated version of the results published in Sabalbal et al. (2026),
+with signal characterization now performed using NEGFC.
+Based on their photometric and astrometric properties, we
+preliminarily classify our candidates into three categories: (i)
+background, when the source is unlikely to be physically bound
+to the host star and is most probably a field star projected by
+chance within the field of view (see Section 4.2.1); (ii)ambigu-
+ous, when the available measurements do not allow a clear dis-
+tinction between a background contaminant and a bound com-
+panion, often due to large uncertainties or conflicting indicators
+(see Section 4.2.2); and (iii)promising, when the source proper-
+ties are consistent with expectations for substellar companions,
+making it a plausible bound object and, therefore, a good target
+for follow-up observations (see Section 4.2.3). The three candi-
+dates detected in only one band cannot be placed on the H2–H3
+CMD and are therefore leftundefinedat this stage. This clas-
+sification is also highlighted in Table C.2 and in NA-SODINN
+detection maps of Figs. B.3 and B.4.
+4.2.1. Background
+Substellar candidates labeled as background contaminants are
+those that fall within the exclusion region in the CMD of Fig. 5.
+We identify five clear cases: HD168210 b,βLeo b, CE Ant b,
+CD-57 1054 b, and CD-51 10924 b.
+The HD 168210 system (Perugini et al. 2021) has been the
+subject of several HCI surveys, including the VLT/NaCo Large
+Program (Chauvin, G. et al. 2015) and the International Deep
+Planet Survey (Galicher, R. et al. 2016), which reported multi-
+ple candidate sources that were later confirmed as background
+stars. In our analysis, NA-SODINN recovers four sources (see
+Fig. B.3b): three of them match previously reported background
+contaminants, while an additional candidate, HD168210b, is de-
+tected with very high confidence (∼0.98) at a projected sepa-
+ration of∼569±20 mas. In the CMD, this source falls well
+inside both empirical exclusion regions and overlaps the locus
+of background stars.
+A similar situation is found inβLeo (HIP 57632), a bright
+A3V star with a prominent infrared excess from circumstellar
+dust (e.g., Cote 1987). NA-SODINN recovers a single candidate
+at∼373±24 mas (Fig. B.3e), detected with high confidence
+(∼0.97). However, its photometry lies squarely within the exclu-
+sion region in the CMD, favoring a background interpretation.
+Moreover,βLeo has a very large proper motion (∼500 mas/yr),
+so a stationary background source would be expected to show a
+substantial relative displacement with respect to the star between
+epochs and could therefore appear at noticeably different (and
+potentially larger) separations in earlier high-contrast imaging
+datasets. However, proper-motion vetting and dedicated follow-
+up observations are beyond the scope of this paper and are left
+for future work.
+CE Ant (TW A 7) is an M2 star and a member of the TW
+Hydra young association (Webb et al. 1999). It hosts a nearly
+pole-on debris disk with multiple rings (Choquet et al. 2016;
+Ren et al. 2021), and recently Lagrange et al. (2025b) reported
+the direct imaging of a cold, sub-Jovian planet at∼1 ′′.5 with
+JWST/MIRI—well outside our reduced field of view. Within our
+data, NA-SODINN recovers a point-like source at∼328±28
+mas (Fig. B.3h), whose photometry lies securely within the ex-
+clusion regions of the CMD, again pointing to a background con-
+taminant.
+Among the young moving group members, CD-57 1054
+(HIP 23309) stands out as a nearby M0 dwarf associated with
+theβPic moving group (Lee & Song 2024). This star has been
+the focus of several exoplanet searches, including SHINE; how-
+ever, no companions have yet been confirmed. Recently, Gollotti
+et al. (2024) identified two dips in TESS light curves that suggest
+a possible planet, but follow-up HARPS radial velocities remain
+inconclusive. In this context, the NA-SODINN detection maps
+(Fig. B.3g) reveal several faint features, of which only one meets
+the threshold mask criterion. The candidate, at∼555±30 mas,
+lies inside the inner exclusion region of the CMD, close to its
+boundary, with colors similar to CE Ant b. Its CMD placement
+favors a background interpretation.
+The field M-dwarf CD-51 10924 (GJ 676 A) is part of a
+wide binary and hosts one of the most diverse planetary systems
+known around such stars. Forveille et al. (2011) first identified
+a massive companion (planet b) through radial-velocity moni-
+toring and detected an additional long-term drift that could not
+be explained by the stellar companion GJ 676 B, suggesting the
+presence of a second giant planet c; this was later confirmed by
+Anglada-Escudé, G. & Tuomi, M. (2012), who also discovered
+two inner super-Earths (planets d and e) around GJ 676 A. In our
+NA-SODINN detection maps (Fig. B.3d), a point-like source is
+clearly recovered at a separation of∼287±27 mas in the sin-
+gle F150 epoch available for this target. In the CMD (Fig. 5),
+the source lies within the exclusion region. Astrometrically, the
+candidate would fall between planets b and c if bound, yet its
+brightness is inconsistent with such a scenario, favoring a back-
+ground interpretation.
+4.2.2. Ambiguous
+Substellar candidates labeled as ambiguous are those that, within
+their photometric uncertainties, fall along the boundaries of
+the exclusion regions in Fig. 5. We identify two such cases:
+Smethells 20 c and d.
+The young star Smethells 20 (or TYC 9073-762-1) is a mem-
+ber of theβPictoris moving group (Binks & Jeffries 2017;
+Shan et al. 2017), and to date, no substellar companions have
+been confirmed in this system. Previous HCI surveys, includ-
+ing SHINE, as well as the MASSIVE program with VLT/NaCo
+(Lannier et al. 2016) and the Gemini/NICI Planet-Finding Cam-
+paign (Biller et al. 2013), reported additional candidate sources
+at wider separations, outside our reduced field of view, which
+were classified as background objects. However, as shown in
+Fig. B.3a, NA-SODINN identifies multiple candidate compan-
+ions in the only epoch available in the F150 sample for this
+star. The two outer candidates, Smethells 20 c and d, at angu-
+lar separations of∼450±30 mas and∼680±28 mas (see
+Table C.2), respectively, lie at the edge of the exclusion region
+in the CMD (Fig. 5). Their near-neutral colors are consistent
+with the L/T transition, with dust-free to moderately dusty at-
+mospheres. If physically bound, their photometry is consistent
+with∼6–8M Jup companions according to the AMES-DUSTY
+evolutionary model, although their uncertainties also place them
+within the background locus, leaving their nature ambiguous.
+Article number, page 10 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+4.2.3. Promising
+Substellar candidates classified as promising are those that lie
+entirely outside the exclusion regions. We identify three such
+cases: Smethells 20 b,πAra b, and HD 164249 b.
+Unlike Smethells 20 c and d, the inner candidate (Fig. B.3a)
+detected at∼220 mas from the star (Table C.2), designated
+Smethells 20 b, lies outside the exclusion regions in Fig. 5.
+Within the photometric uncertainties, its position appears more
+consistent with∼9–11M Jup companions according to the
+AMES-DUSTY evolutionary model, while its relatively H2 -
+H3 color suggests the onset of CH 4 absorption in the near-IR,
+characteristic of young early-T substellar objects. No additional
+SPHERE epochs are currently available for an astrometric check
+of common proper motion. We also identified several archival
+NACO observations of this target, including a relatively deepL ′
+pupil-tracking sequence, although the small angular separation
+of the candidate is likely to limit the constraining power of these
+data.
+Figure B.3c presents the detection maps of the starπAra
+(Zakhozhay et al. 2022). In this case, NA-SODINN identifies
+a faint source at∼900±25 mas. To date, no bound compan-
+ions have been confirmed around this system. Previous HCI,
+including HST/ACS coronagraphy (Doering et al. 2007), the
+SHINE survey, and the Gemini Planet-Finding Campaign (Wah-
+haj et al. 2013), likewise reported only background sources or
+non-detections. A second epoch, obtained on 2019-05-19 and
+available through the HC-DC, was also analyzed with NA-
+SODINN, but the candidate detected in the F150 epoch was not
+recovered.
+The F6 star HD 164249 (HIP 88399) is a member of theβ
+Pictoris moving group and hosts a known M2 stellar compan-
+ion, HD 164249 B. An infrared excess, first detected with WISE
+(Wright et al. 2010), Spitzer (Chen et al. 2014), and Herschel
+(Eiroa et al. 2013), revealed the presence of a debris disk that
+was later spatially resolved with ALMA (Pawellek et al. 2021).
+Despite the absence of a direct detection in multiple SPHERE
+epochs (Mesa, D. et al. 2022), the star exhibits a significant
+proper motion anomaly indicative of an additional low-mass
+companion. Recent analyzes suggest the presence of a Jupiter-
+like planet with a mass of∼4–5M Jup at a semi-major axis of
+∼7 au (Gratton, R. et al. 2024; González-Payo, J. et al. 2024;
+Lagrange et al. 2025a), although this companion remains un-
+confirmed. The NA-SODINN detection maps reveal two point
+sources (Fig. B.3f): one located close to the outer edge of the
+field of view, which was also reported and classified as a back-
+ground contaminant by Langlois et al. (2021), and another faint
+source at∼330 mas (∼16 au). Although this latter detection
+does not coincide with the separation predicted for the puta-
+tive low-mass companion inferred from astrometry, its position
+in the CMD (Fig. 5) overlaps with the locus of planetary-mass
+objects, making it an interesting candidate. However, five addi-
+tional SPHERE epochs available through the HC-DC and ob-
+tained between 2015 and 2019 were also analyzed with NA-
+SODINN, and the same candidate was not recovered in any of
+them.
+4.3. Sensitivity limits
+As a final step in the reprocessing of the F150 sample with NA-
+SODINN, we computed 95% completeness contrast curves for
+each target following the procedure described in Section 3.5. The
+resulting curves in the IRDIS H2 and H3 filters are shown in
+Fig. 6. Beyond the inner working angle (∼200 mas), the median
+Fig. 6: NA-SODINN contrast curves, based on 95% complete-
+ness, computed for the set of ADI sequences in the F150 sample
+in both H2 (blue) and H3 (red) pass band filters. Thin curves rep-
+resent individual sequences, while the thick curves correspond to
+the median contrast curve in each band. The gray shaded region
+marks the inner working angle.
+95% completeness contrast improves rapidly, reaching∼10 −5 at
+∼250 mas in both filters, with slightly deeper limits in H2. At
+∼1 ′′, the median contrast reaches values close to∼10 −6 in both
+H2 and H3.
+As discussed in Section 3.5, these limits are not directly
+equivalent to standard 5σcontrast curves. Nevertheless, a com-
+parison with previous IRDIS results obtained with PCA (Lan-
+glois et al. 2021), PACO (Chomez, A. et al. 2025), and RSM
+(Sabalbal et al. 2026) remains informative at the survey level.
+Relative to those methods, the NA-SODINN contrast curves ex-
+hibit a markedly reduced target-to-target dispersion over the full
+separation range. In terms of sensitivity gain, NA-SODINN ap-
+pears broadly comparable to RSM within the reduced field of
+view explored here, and therefore also to PACO, given the simi-
+lar performance reported for RSM and PACO in that separation
+regime.
+5. Conclusions
+In this work, we presented a reanalysis of the F150 sample
+(Desidera et al. 2021; Langlois et al. 2021; Vigan et al. 2021)
+from the SPHERE High-contrast Imaging survey for Exoplan-
+ets (SHINE, Chauvin et al. 2017) using the recently devel-
+oped deep-learning detection algorithm NA-SODINN (Cantero
+et al. 2023). Given NA-SODINN’s proven ability to discrimi-
+nate faint substellar companions from residual speckle noise in
+ADI–PCA processed frames, our objective was to search for ad-
+ditional companion candidates in this first public SHINE release
+that may have been missed by previous analyzes.
+To achieve this, we introduced two new modifications to the
+algorithm. First, since NA-SODINN produces confidence maps
+with uncalibrated probabilities rather than standard S/N maps,
+we implemented a principled detection criterion based on an
+F1-score-driven thresholding strategy. This procedure masks the
+confidence map annulus by annulus, providing an objective cri-
+terion for companion detection. Second, to compute detection
+limits, we adopted contrast curves based on 95% completeness
+instead of the classical 5σcriterion, and we optimized NA-
+Article number, page 11 of 20
+
+A&A proofs:manuscript no. main
+SODINN pipeline to calculate these curves for each target in the
+survey.
+Based on these improvements and within the broader con-
+text of recent SHINE re-analyzes, we reprocessed the full
+F150 sample on a sequence-by-sequence basis, establishing NA-
+SODINN as a competitive deep-learning alternative to existing
+approaches, such as the original PCA-based processing by Lan-
+glois et al. (2021), the PACO-based full-survey reprocessing by
+Chomez, A. et al. (2025), and the RSM-based reprocessing of
+the F150 sample by Sabalbal et al. (2026). NA-SODINN recov-
+ered all previously known companions in the survey, detected
+part of the circumstellar disks, and identified 30 additional sub-
+stellar candidates. Of these, 17 had already been reported in the
+aforementioned studies and classified as either background con-
+taminants or ambiguous cases. The remaining 13 sources, found
+around 11 stars, are reported here for the first time. Among
+them, three were detected in only one of the two IRDIS H23
+spectral bands, while 10 were identified in both. For these 10
+sources, we used the H2-H3 color-magnitude diagram to ob-
+tain a first-order assessment of their nature, classifying them
+into three groups: five background contaminants, two ambigu-
+ous cases, and three photometrically promising companion can-
+didates around the stars Smethells,πAra, and HD 164249. How-
+ever, only the candidate Smethells 20 b remains as promising
+based on the currently available data, while the non-recovery of
+πAra b and HD 164249 b in additional SPHERE epochs weak-
+ens their candidacy.
+This study represents the first application of NA-SODINN to
+real data from a large high-contrast imaging survey. It therefore
+provides a benchmark for validating the method on survey obser-
+vations and highlights clear directions for improvement. First,
+the per-sequence reduction strategy proved effective, but at the
+expense of substantial computational cost: processing a single
+ADI sequence in one band with NA-SODINN typically requires
+10-30 hours in its current CPU multiprocessing implementation.
+This cost depends mainly on the number of frames in the se-
+quence and, in particular, on the computation of the contrast
+curve, which is the dominant bottleneck. Reducing this cost will
+likely require the adaptation of alternative computational strate-
+gies. For example, clustering-based approaches (e.g., Dahlqvist
+et al. 2022; Sabalbal et al. 2026) could be used to group ADI
+sequences with similar characteristics (e.g., atmospheric condi-
+tions) and enable the training of a single NA-SODINN model
+per cluster rather than training a separate model for each se-
+quence. Second, the presented reprocessing approach can be ex-
+tended beyond the F150 sample. A natural next step would be to
+reanalyze the full SHINE survey, enabling a more comprehen-
+sive statistical assessment of the companion population, and to
+adapt the pipeline to other ground-based HCI programs such as
+Gemini-GPIES (Nielsen et al. 2019), NACO-ISPY (Launhardt
+et al. 2020), and SPHERE-BEAST (Janson et al. 2021).
+The field of HCI is rapidly evolving with the development
+of powerful post-processing techniques based on diverse princi-
+ples for speckle modeling, speckle suppression, and point-like
+source detection. Applying such algorithms to archival surveys
+represents a cost-effective strategy to maximize their scientific
+return, as demonstrated in this work. Our results illustrate the
+potential of deep-learning approaches not only to recover known
+companions but also to reveal previously undetected candidates,
+underscoring the importance of re-examining existing datasets
+with modern tools while preparing for the next generation of HCI
+instruments such as SAXO+(Galland et al. 2024) and GPI 2.0
+(Chilcote et al. 2024).
+Acknowledgements.This work has been carried out within the framework of
+the National Center of Competence in Research PlanetS supported by the
+Swiss National Science Foundation. The authors would like to thank the
+open-source Python scientific community, and in particular the developers
+of the Keras deep learning library (Abadi et al. 2016) and the VIP high-
+contrast imaging package (Gomez Gonzalez et al. 2017; Christiaens et al.
+2023), which were key to this work. We also extend our gratitude to the Ex-
+oplanet Imaging Data Challenge community (Cantalloube et al. 2020) for fos-
+tering a collaborative environment and contributing valuable tools and bench-
+marks to the field of HCI. We thank the entire SPHERE consortium for their
+long-standing efforts in the design, operation, and continued support of the
+SPHERE instrument, which made this survey possible. This work has made
+use of the High Contrast Data Centre, jointly operated by OSUG/IPAG (Greno-
+ble),PYTHEAS/LAM/CeSAM (Marseille), OCA/Lagrange (Nice), Observatoire
+de Paris/LESIA (Paris), and Observatoire de Lyon/CRAL, and is supported by a
+grant from Labex OSUG@2020(Investissements d’avenir – ANR10 LABX56).
+This project has received funding from the European Research Council (ERC)
+under the European Union’s Horizon 2020 research and innovation program
+(grant agreement No 819155), and from the Wallonia-Brussels Federation (grant
+for Concerted Research Actions).
+References
+Abadi, M., Barham, P., Chen, J., et al. 2016, in USENIX Conf. Oper. Syst. Des.
+Implement. (OSDI), 265–283
+Absil, O., Milli, J., Mawet, D., et al. 2013, A&A, 559, 1
+Amara, A. & Quanz, S. P. 2012, MNRAS, 427, 948
+Anglada-Escudé, G. & Tuomi, M. 2012, A&A, 548, A58
+Bell, C. P. M., Mamajek, E. E., & Naylor, T. 2015, MNRAS, 454, 593
+Beuzit, J.-L., Vigan, A., Mouillet, D., et al. 2019, A&A, 631, 1
+Biller, B. A., Liu, M. C., Wahhaj, Z., et al. 2010, ApJL, 720, L82
+Biller, B. A., Liu, M. C., Wahhaj, Z., et al. 2013, ApJ, 777, 160
+Binks, A. S. & Jeffries, R. D. 2017, MNRAS, 469, 579
+Boccaletti, A., Thébault, P., Pawellek, N., et al. 2019, A&A, 625, A21
+Boccaletti, A., Sezestre, E., Lagrange, A.-M., et al. 2018, A&A, 614, A52
+Bonavita, M., Gratton, R., Desidera, S., et al. 2022, A&A, 663, A144
+Bonnefoy, M., Perraut, K., Lagrange, A. M., et al. 2018, A&A, 618, A63
+Bonse, M. J., Gebhard, T. D., Dannert, F. A., et al. 2024, arXiv preprint
+arXiv:2406.01809
+Boureau, Y .-L., Ponce, J., & LeCun, Y . 2010, in Int. Conf. Mach. Learn. (ICML),
+Haifa, Israel, 111–118
+Bowler, B. P. 2016, Publications of the Astronomical Society of the Pacific, 128,
+102001
+Cantalloube, F., Gomez-Gonzalez, C., Absil, O., et al. 2020, in Adaptive Optics
+Systems VII, ed. D. Schmidt, L. Schreiber, & E. Vernet (SPIE), 321
+Cantero, C., Absil, O., Dahlqvist, C.-H., & Van Droogenbroeck, M. 2023, A&A,
+680, A86
+Chauvin, G., Desidera, S., Lagrange, A. M., et al. 2017, in SF2A-2017: Pro-
+ceedings of the Annual meeting of the French Society of Astronomy and As-
+trophysics, ed. C. Reylé, P. Di Matteo, F. Herpin, E. Lagadec, A. Lançon,
+Z. Meliani, & F. Royer, Di
+Chauvin, G., Desidera, S., Lagrange, A.-M., et al. 2017, A&A, 605, L1
+Chauvin, G., Gratton, R., Bonnefoy, M., et al. 2018, A&A, 617, A76
+Chauvin, G., Lagrange, A.-M., Dumas, C., et al. 2004, A&A, 425, L29–L32
+Chauvin, G., Lagrange, A. M., Lacombe, F., et al. 2005a, A&A, 430, 1027
+Chauvin, G., Lagrange, A. M., Zuckerman, B., et al. 2005b, A&A, 438, L29
+Chauvin, G., Vigan, A., Bonnefoy, M., et al. 2015, A&A, 573, A127
+Cheetham, A., Bonnefoy, M., Desidera, S., et al. 2018, A&A, 615, A160
+Chen, C. H., Mittal, T., Kuchner, M., et al. 2014, ApJS, 211, 25
+Chilcote, J., Konopacky, Q., Hamper, R., et al. 2024, in Ground-based and Air-
+borne Instrumentation for Astronomy X, ed. J. J. Bryant, K. Motohara, &
+J. R. D. Vernet, V ol. 13096, International Society for Optics and Photonics
+(SPIE), 1309699
+Chomez, A., Delorme, P., Lagrange, A.-M., et al. 2025, A&A, 697, A99
+Choquet, É., Perrin, M. D., Chen, C. H., et al. 2016, ApJL, 817, L2
+Christiaens, V ., Gonzalez, C. A. G., Farkas, R., et al. 2023, Journal of Open
+Source Software, 8, 4774
+Claudi, R. U., Turatto, M., Gratton, R. G., et al. 2008, in Society of Photo-Optical
+Instrumentation Engineers (SPIE) Conference Series, V ol. 7014, Ground-
+based and Airborne Instrumentation for Astronomy II, ed. I. S. McLean &
+M. M. Casali, 70143E
+Cote, J. 1987, A&A, 181, 77
+Cumming, A., Butler, R. P., Marcy, G. W., et al. 2008, Publications of the Astro-
+nomical Society of the Pacific, 120, 531–554
+Daglayan, H., Vary, S., Absil, O., et al. 2024, A&A, 692, A126
+Daglayan, H., Vary, S., Cantalloube, F., Absil, P.-A., & Absil, O. 2022, in Int.
+Conf. Image Process. Appl. Syst. (IPAS), 1–5
+Article number, page 12 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+Dahlqvist, C.-H., Cantalloube, F., & Absil, O. 2020, A&A, 633, 1
+Dahlqvist, C.-H., Louppe, G., & Absil, O. 2021, A&A, 646, 1
+Dahlqvist, C. H., Milli, J., Absil, O., et al. 2022, A&A, 666, A33
+Delorme, P., Meunier, N., Albert, D., et al. 2017, in Annual meeting of the French
+Society of Astronomy and Astrophysics (SF2A)
+Desidera, S., Chauvin, G., Bonavita, M., et al. 2021, A&A, 651, A70
+Doering, R. L., Meixner, M., Holfeltz, S. T., et al. 2007, AJ, 133, 2122
+Dohlen, K., Langlois, M., Saisse, M., et al. 2008, in Ground-based and Airborne
+Instrumentation for Astronomy II, V ol. 7014, 70143L
+Eiroa, C., Marshall, J. P., Mora, A., et al. 2013, A&A, 555, A11
+Engler, N., Boccaletti, A., Schmid, H. M., et al. 2019, A&A, 622, A192
+Feldt, M., Olofsson, J., Boccaletti, A., et al. 2017, A&A, 601, A7
+Flasseur, O., Bodrito, T., Mairal, J., et al. 2024, MNRAS, 527, 1534
+Forveille, T., Bonfils, X., Lo Curto, G., et al. 2011, A&A, 526, A141
+Fusco, T., Rousset, G., Sauvage, J-.F annd Petit, C., et al. 2006, Optics Express,
+14, 7515
+Gaia Collaboration, Vallenari, A., Brown, A. G. A., et al. 2023, A&A, 674, A1
+Galicher, R., Boccaletti, A., Mesa, D., et al. 2018, A&A, 615, A92
+Galicher, R., Marois, C., Macintosh, B., et al. 2016, A&A, 594, A63
+Galland, N., Raynaud, H.-F., Kasper, M., et al. 2024, in Adaptive Optics Systems
+IX, ed. K. J. Jackson, D. Schmidt, & E. Vernet, V ol. 13097, International
+Society for Optics and Photonics (SPIE), 1309711
+Gibbs, A., Wagner, K., Apai, D., et al. 2019, AJ, 157, 39
+Gollotti, G. A., Tzanidakis, A., Wainer, T. M., & Davenport, J. R. A. 2024, Re-
+search Notes of the AAS, 8, 293
+Gomez Gonzalez, C., Absil, O., Absil, P.-A., et al. 2016, A&A, 589, 1
+Gomez Gonzalez, C., Absil, O., & Van Droogenbroeck, M. 2018, A&A, 613, 1
+Gomez Gonzalez, C., Wertz, O., Absil, O., et al. 2017, AJ, 154, 7:1
+González-Payo, J., Caballero, J. A., Gorgas, J., et al. 2024, A&A, 689, A302
+Go´ zdziewski, K. & Migaszewski, C. 2014, MNRAS, 440, 3140
+Gratton, R., Bonavita, M., Mesa, D., et al. 2024, A&A, 685, A119
+Guo, C., Pleiss, G., Sun, Y ., & Weinberger, K. Q. 2017, in Int. Conf. Mach.
+Learn. (ICML), V ol. 70, 1321–1330
+Gupta, K., Rahimi, A., Ajanthan, T., et al. 2021, in Int. Conf. Learn. Represent.
+(ICLR)
+Hendrycks, D., Mu, N., Cubuk, E. D., et al. 2020, in International Conference on
+Learning Representations
+Hui, L. & Belkin, M. 2021, in Int. Conf. Learn. Represent. (ICLR)
+Janson, M., Squicciarini, V ., Delorme, P., et al. 2021, A&A, 646, A164
+Janson, M., Squicciarini, Vito, Delorme, Philippe, et al. 2021, A&A, 646, A164
+Karandikar, A., Cain, N., Tran, D., et al. 2021, in Adv. Neural Inf. Process. Syst.
+(NeurIPS), ed. A. Beygelzimer, Y . Dauphin, P. Liang, & J. W. Vaughan
+Kenworthy, M. A. & Haffert, S. Y . 2025, Annual Review of Astronomy and
+Astrophysics, 63, 179
+Keppler, M., Benisty, M., Müller, A., et al. 2018, A&A, 617, 1
+Konopacky, Q. M., Rameau, J., Duchêne, G., et al. 2016, ApJ, 829, L4
+Kull, M., Silva Filho, T., & Flach, P. 2017, in Int. Conf. Artif. Intell. Stat., 623–
+631
+Kuzuhara, M., Currie, T., Takarada, T., et al. 2022, ApJL, 934, 1
+Lafrenière, D., Jayawardhana, R., Janson, M., et al. 2011, ApJ, 730, 42
+Lafrenière, D., Jayawardhana, R., & van Kerkwijk, M. H. 2008, AJ, 689, L153
+Lagrange, A. M., Gratadour, D., Chauvin, G., et al. 2009, A&A, 493, L21
+Lagrange, A. M., Kiefer, F., Rubini, P., et al. 2025a, arXiv e-prints,
+arXiv:2501.10488
+Lagrange, A. M., Langlois, M., Gratton, R., et al. 2016, A&A, 586, L8
+Lagrange, A. M., Meunier, N., Rubini, P., et al. 2019, Nature Astronomy, 3, 1135
+Lagrange, A. M., Wilkinson, C., Mâlin, M., et al. 2025b, Nature, 642, 905
+Lakshminarayanan, B., Pritzel, A., & Blundell, C. 2017, in Adv. Neural Inf. Pro-
+cess. Syst. (NeurIPS) (Curran Associates Inc.), 6405–6416
+Langlois, M., Gratton, R., Lagrange, A.-M., et al. 2021, A&A, 651, A71
+Lannier, J., Delorme, P., Lagrange, A. M., et al. 2016, A&A, 596, A83
+Launhardt, Henning, Th., Quirrenbach, A., et al. 2020, A&A, 635, A162
+Lee, J. & Song, I. 2024, AJ, 967, 113
+Lowrance, P. J., Schneider, G., Kirkpatrick, J. D., et al. 2000, ApJ, 541, 390
+Macintosh, B., Graham, J. R., Barman, T., et al. 2015, Science, 350, 64
+Maire, A.-L., Langlois, M., Dohlen, K., et al. 2016, in Ground-based and Air-
+borne Instrumentation for Astronomy VI, V ol. 9908, 990834
+Males, J. R., Fitzgerald, M. P., Belikov, R., & Guyon, O. 2021, Publications of
+the Astronomical Society of the Pacific, 133, 1
+Marois, C., Lafreniere, D., Doyon, R., Macintosh, B., & Nadeau, D. 2006, ApJ,
+641, 556
+Marois, C., Lafreniere, D., Macintosh, B., & Doyon, R. 2008a, ApJ, 673, 647
+Marois, C., Macintosh, B., Barman, T., et al. 2008b, Science, 322, 1348
+Marois, C., Zuckerman, B., Konopacky, Q. M., Macintosh, B., & Barman, T.
+2010, Nature, 468, 1080
+Martioli, E., Hébrard, G., Correia, A. C. M., Laskar, J., & Lecavelier des Etangs,
+A. 2020, A&A, 649, A177
+Mawet, D., Milli, J., Wahhaj, Z., et al. 2014, ApJ, 792, 1
+Mesa, D., Gratton, R., Zurlo, A., et al. 2015, A&A, 576, A121
+Mesa, D., Bonavita, M., Benatti, S., et al. 2022, A&A, 665, A73
+Milli, J., Hibon, P., Christiaens, V ., et al. 2017a, A&A, 597, L2
+Milli, J., Vigan, A., Mouillet, D., et al. 2017b, A&A, 599, A108
+Naeini, M., Cooper, G., & Hauskrecht, M. 2015, AAAI Conf. Artif. Intell., 2015,
+2901
+Nair, V . & Hinton, G. 2010, in Int. Conf. Mach. Learn. (ICML), Haifa, Israël,
+807–814
+Neuhäuser, R., Guenther, E. W., Wuchterl, G., et al. 2005, A&A, 435, L13
+Nielsen, E. L., De Rosa, R. J., Macintosh, B., et al. 2019, AJ, 158, 1
+Olofsson, J., Samland, M., Avenhaus, H., et al. 2016, A&A, 591, A108
+Olofsson, J., van Holstein, R. G., Boccaletti, A., et al. 2018, A&A, 617, A109
+Pairet, B., Cantalloube, F., Gomez Gonzalez, C. A., Absil, O., & Jacques, L.
+2019, MNRAS, 487, 2262
+Pavlov, A., Möller-Nilsson, O., Feldt, M., et al. 2008, in Advanced Software and
+Control for Astronomy II, V ol. 7019, 701939
+Pawellek, N., Wyatt, M., Matrà, L., Kennedy, G., & Yelverton, B. 2021, MN-
+RAS, 502, 5390
+Perrot, C., Thebault, P., Lagrange, A.-M., et al. 2019a, A&A, 626, A95
+Perrot, C., Thebault, Philippe, Lagrange, Anne-Marie, et al. 2019b, A&A, 626,
+A95
+Perugini, G. M., Marsden, S. C., Waite, I. A., et al. 2021, MNRAS, 508, 3304
+Piérard, S., Deliège, A., & Van Droogenbroeck, M. 2026, in IEEE/CVF Conf.
+Comput. Vis. Pattern Recognit. (CVPR) (IEEE)
+Piérard, S. & Van Droogenbroeck, M. 2020, in IEEE Int. Conf. Image Process.
+(ICIP) (IEEE), 3234–3238
+Platt, J. 1999, Advances in large margin classifiers, 10, 61
+Plavchan, P., Barclay, T., Gagné, J., et al. 2020, Nature, 582, 497
+Rameau, J., Chauvin, G., Lagrange, A.-M., et al. 2013, ApJ, 772, 2
+Ren, B., Choquet, É., Perrin, M. D., et al. 2021, AJ, 914, 95
+Sabalbal, M., Absil, O., Dahlqvist, C.-H., & Delorme, P. 2026, A&A, 706, A275
+Shan, Y ., Yee, J. C., Bowler, B. P., et al. 2017, ApJ, 846, 93
+Shi, X., Chen, Z., Wang, H., et al. 2015, in Adv. Neural Inf. Process. Syst.
+(NeurIPS), V ol. 1, 802–810
+Sissa, E., Olofsson, J., Vigan, A., et al. 2018, A&A, 613, L6
+Soummer, R. 2005, ApJL, 618, 161
+Soummer, R., Pueyo, L., & Larkin, J. 2012, ApJL, 755, 1
+Squicciarini, V ., Mazoyer, J., Wilkinson, C., et al. 2025, A&A, 702, L10
+Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., & Salakhutdinov, R.
+2014, J. Mach. Learn. Res., 15, 1929
+Stolker, T., Bonse, M. J., Quanz, S. P., et al. 2019, A&A, 621, A59
+Tao, L., Dong, M., & Xu, C. 2023, in Int. Conf. Mach. Learn. (ICML), PMLR,
+33833–33849
+Thulasidasan, S., Chennupati, G., Bilmes, J., Bhattacharya, T., & Michalak, S.
+2019, On mixup training: improved calibration and predictive uncertainty for
+deep neural networks (Curran Associates Inc.), 1–12
+Vigan, A., Fontanive, C., Meyer, M., et al. 2021, A&A, 651, A72
+Vigan, A., Moutou, C., Langlois, M., et al. 2010, MNRAS, 407, 71
+Wahhaj, Z., Liu, M. C., Biller, B. A., et al. 2011, ApJ, 729, 139
+Wahhaj, Z., Liu, M. C., Nielsen, E. L., et al. 2013, AJ, 773, 179
+Wahhaj, Z., Milli, J., Romero, C., et al. 2021, A&A, 648, A26
+Wang, D.-B., Feng, L., & Zhang, M.-L. 2021, in Advances in Neural Informa-
+tion Processing Systems, ed. A. Beygelzimer, Y . Dauphin, P. Liang, & J. W.
+Vaughan
+Wang, J. J., Ruffio, J.-B., De Rosa, R. J., et al. 2015, pyKLIP: PSF Subtrac-
+tion for Exoplanets and Disks, Astrophysics Source Code Library, record
+ascl:1506.001
+Webb, R. A., Zuckerman, B., Platais, I., et al. 1999, ApJ, 512, L63
+Wertz, O., Absil, O., Gómez González, C. A., et al. 2017, A&A, 598, A83
+Wittrock, J. M., Plavchan, P. P., Cale, B. L., et al. 2023, AJ, 166, 232
+Wolf, T., Jones, B., & Bowler, B. 2024, AJ, 167, 92
+Wright, E. L., Eisenhardt, P. R. M., Mainzer, A. K., et al. 2010, AJ, 140, 1868
+Yip, K. H., Nikolaou, N., Coronica, P., et al. 2020, in Lect. Notes Comput. Sci.,
+V ol. 11908, Joint European Conference on Machine Learning and Knowledge
+Discovery in Databases (Springer Int. Publ.), 322–338
+Zadrozny, B. & Elkan, C. 2001, in Int. Conf. Mach. Learn. (ICML), V ol. 1
+Zadrozny, B. & Elkan, C. 2002, in ACM SIGKDD Int. Conf. Knowl. Discov.
+Data Min. (KDD), 694–699
+Zakhozhay, O. V ., Launhardt, R., Trifonov, T., et al. 2022, A&A, 667, L14
+Article number, page 13 of 20
+
+A&A proofs:manuscript no. main
+Appendix A: TheF 1-score
+In a detection problem, such as exoplanet detection with NA-
+SODINN, each candidate can be assigned to one of four cate-
+gories: true positive (TP), false positive (FP), or false negative
+(FN). These quantities form the basis for standard performance
+metrics such asprecision,recall(also namedtrue positive rate,
+TPR), and theF 1-score.
+In this work, a true positive corresponds to a detected in-
+jected planetary signal, while a false positive corresponds to a
+spurious detection caused by residual speckle noise or image ar-
+tifacts. We assume that the analyzed data sets do not contain real
+astrophysical companions, such as genuine exoplanets or back-
+ground stars, so that all positive detections can be unambigu-
+ously classified as either true or false.
+Precisionmeasures the fraction of positive detections that
+are correct, and is defined as
+Precision= TP
+TP+FP .(A.1)
+It ranges from 0 to 1. A value close to 1 indicates that most detec-
+tions correspond to injected planetary signals, with only a small
+number of false positives. However, optimizing only for high
+precision may lead to an overly conservative strategy in which
+faint or marginal signals are missed.
+Recall, on the other hand, measures the fraction of injected
+signals that are successfully recovered:
+Recall= TP
+TP+FN .(A.2)
+A high recall indicates that most injected companions present
+in the data are detected. In practice, however, increasing recall
+often comes at the expense of lower precision, since a more per-
+missive detection criterion generally yields more false positives.
+Because precision and recall are intrinsically coupled, the
+F1-score, defined as their harmonic mean, provides a convenient
+summary of the trade-offbetween the values of both quantities5:
+F1 = 2·Precision·Recall
+Precision+Recall = 2·TP
+2·TP+FP+FN .(A.3)
+A highF 1-score indicates that the method achieves both high
+completeness and high reliability, that is, it recovers a large frac-
+tion of injected signals while keeping the number of false detec-
+tions low. In the context of NA-SODINN, optimizing the detec-
+tion threshold using theF 1-score provides a practical compro-
+mise between precision and recall. This is particularly relevant
+in HCI, where the noise properties vary with angular separation
+and a single global threshold may not be optimal. By adapting
+the threshold on an annulus-by-annulus basis, the method yields
+a more robust and interpretable detection strategy.
+Appendix B: NA-SODINN detection maps
+In this appendix, we present all NA-SODINN detection maps
+for relevant targets in the F150 sample. The section is organized
+into figures, each grouping detection maps based on common
+5 Note that, whileF 1 is a good trade-offbetween the values of the
+precision and the recall, Piérard et al. (2026) have shown thatF 1 is not
+necessarily a good trade-offbetween the ranks obtained for the precision
+and the recall. In other words,F 1 is adequate for optimizing a method,
+as we do, but not necessarily for comparing algorithms.
+features among the targets. Figures B.1 and B.2 present detec-
+tion maps for targets with confirmed substellar companions and
+known protoplanetary disks, respectively. Figures B.3 and B.4
+display the maps for targets where new companion candidates
+were identified based on the detection criteria defined in Sec-
+tion 3.4.2. Detection maps for the remaining targets are omitted,
+as they are largely empty and contain no detections.
+Appendix C: Characterization of substellar
+candidates
+In this appendix, we summarize the main properties of the tar-
+get stars around which NA-SODINN identified new candidates
+(Table C.1), together with the characterization of the candidates
+themselves (Table C.2).
+Article number, page 14 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+(a) Target:HD 218396Observing date:2017-06-14
+(b) Target:HD 116434Observing date:2016-06-26
+(c) Target:PZ Tel AObserving date:2015-05-05
+(d) Target:β-PictorisObserving date:2015-12-25
+Fig. B.1: Detection maps for a selection of F150 targets where NA-SODINN identifies confirmed substellar companions. Each
+horizontal panel corresponds to a different target, as indicated below the panel, and includes four sub-maps: the two on the left show
+NA-SODINN confidence maps for the H2 and H3 filters, while the two on the right display the correspondingF 1 (binary) maps,
+generated by applying the computed threshold mask to the confidence maps (see Section 3.4.2). In each sub-map, the companion is
+indicated with a small dashed circle in yellow, the filter used is indicated in the bottom-left corner, and the central masked region
+corresponds to the inner working angle. The field orientation is standard: north is up and east is to the left.
+Article number, page 15 of 20
+
+A&A proofs:manuscript no. main
+(a) Target:HD 109573Observing date:2015-02-02
+(b) Target:HD 115600Observing date:2015-06-03
+(c) Target:HD 197481Observing date:2015-06-03
+Fig. B.2: Detection maps for the F150 sample targets in which NA-SODINN recovers known protoplanetary disks. For HD 115600
+(middle panel), the two sources at large angular separations (highlighted with yellow circles), located outside the inner disk, were
+previously classified as background contaminants (Langlois et al. 2021; Chomez, A. et al. 2025). The structure and interpretation of
+this figure follow the same format as in Fig. B.1.
+Article number, page 16 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+(a) Target:Smethells 20Observing date:2015-05-15CMD classification:Ambiguous (c, d) and Promising (b)
+(b) Target:HD 168210Observing date:2017-06-02CMD classification:Background contaminant
+(c) Target:πAraObserving date:2016-06-10CMD classification:Promising
+(d) Target:CD-51 10924Observing date:2015-05-05CMD classification:Background contaminant
+Fig. B.3: Detection maps for F150 sample targets where NA-SODINN identifies new candidates, yet unreported, detected in both the
+H2 and H3 pass-band filters. For HD 168210 (second panel), the three additional detections at large separations (without circle) were
+also classified as ambiguous cases (Langlois et al. 2021; Chomez, A. et al. 2025). Both the reference labels and the characterization
+of these detections can be found in Table C.2. The structure and interpretation of this figure follow the same format as in Fig. B.1.
+Article number, page 17 of 20
+
+A&A proofs:manuscript no. main
+(e) Target:βLeoObserving date:2015-05-30CMD classification:Background contaminant
+(f) Target:HD 164249Observing date:2018-04-10CMD classification:Promising
+(g) Target:CD-57 1054Observing date:2016-01-02CMD classification:Background contaminant
+(h) Target:CE AntObserving date:2017-02-06CMD classification:Background contaminant
+Fig. B.3: Continuation. For HD 164249 (second panel), the candidate at large separation (without circle) was also classified as
+background contaminant (Langlois et al. 2021; Chomez, A. et al. 2025).
+Article number, page 18 of 20
+
+Cantero et al.: NA-SODINN candidates in SHINE
+(a) Target:CD-48 2972Observing date:2015-11-29CMD classification:Undefined
+(b) Target:HD 55279Observing date:2017-02-07CMD classification:Undefined
+(c) Target:HD 219482Observing date:2015-09-30CMD classification:Undefined
+Fig. B.4: Detection maps for F150 sample targets where NA-SODINN identifies new companion candidates, detected in only one
+of the two passband filters (H2 or H3). The characterization of these detections can be found in Table C.2. The structure and
+interpretation of this figure follow the same format as in Fig. B.3.
+Article number, page 19 of 20
+
+A&A proofs:manuscript no. main
+Table C.1: Properties of the 11 targets around which NA-SODINN identified new companion candidates. The top panel shows
+targets with candidates detected in both the H2 and H3 filters, while the bottom panel shows targets with candidates detected in only
+one of the two filters. The two panels are ordered by decreasing right ascension (RA).
+Main Name Other-ID Gaia-ID RA DEC H mag Sp. type Age [Myr] Distance [pc]
+CD-57 1054 HIP 23309 4764027962957023104 05:00:47 -57:15:25 6.42 M0V 24±5 (1) 26.86
+CE Ant TW A 7 5444751795151480320 10:42:30 -33:40:17 7.12 M2V 10±3 (1) 34.10
+β-Leo HIP 57632 - 11:49:03+14:34:19 1.92 A3V 50±10 (1) 11.00
+CD-51 10924 HIP 85647 5925209583053212800 17:30:11 -51:38:13 6.08 M0V 15.3 15.98
+π-Ara HIP 86305 5921246427739258112 17:38:05 -54:30:01 4.86 A7V 570±210 (2) 41.01
+HD 164249 HIP 88399 6702775135228913280 18:03:03 -51:38:56 6.02 F6V 15.3 49.30
+HD 168210 HIP 89829 4051081838710783232 18:19:52 -29:16:33 7.19 G5V 24±5 (1) 80.46
+Smethells 20 TYC 9073-762-1 6631685008336771072 18:46:52 -62:10:36 8.04 M1V 24±5 (1) 50.69
+HD 55279 HIP 33737 5208216951043609216 07:00:30 -79:41:45 7.83 K2V 45±10 (1) 63.45
+CD-48 2972 TYC 8128-1946-1 5506101790904438656 07:28:22 -49:08:37 8.13 G8V 50±10 (1) 87.21
+HD 219482 HIP 114948 6489909443564308224 23:16:57 -62:00:04 4.60 F6V 300±150 (2) 20.44
+References.Ages are adopted from different sources: (1) based on membership in moving groups, associations, or clusters; (2) from
+Desidera et al. (2021). Distances are derived fromGaiaparallaxes.
+Table C.2: Characterization of the newly identified candidates detected by NA-SODINN, as shown in Figs. B.3 and B.4. The table is
+divided into eleven sections, each corresponding to a target listed in Table C.1, around which one or more companions are identified.
+The column CMD reports the candidate classification based on the analysis in Section 4.2.
+Candidate ID Band Separation [mas] Position angle [ ◦] Contrast∆mag CMD
+Smethells 20
+b H2 218.94±30.02 323.35±7.31 1.04±0.55×10 −4 9.95±0.65Promising
+H3 227.59±29.21 322.37±7.09 7.65±3.87×10 −5 10.29±0.69
+c H2 448.36±30.64 60.65±3.51 2.68±1.43×10 −5 11.33±0.79 Ambiguous
+H3 462.80±30.05 60.46±3.27 2.39±1.53×10 −5 11.42±0.74
+d H2 664.86±28.94 264.69±2.35 2.55±1.59×10 −5 11.34±0.72 Ambiguous
+H3 700.81±29.74 264.32±2.29 1.83±1.03×10 −5 11.91±0.83
+HD 168210
+b H2 569.35±21.03 185.00±1.10 3.82±2.17×10 −6 13.55±0.61 Background
+H3 568.91±26.80 185.15±2.55 5.33±2.42×10 −6 13.19±0.50
+πAra
+b H2 888.45±21.75 114.26±1.16 6.31±2.85×10 −6 13.00±0.51Promising
+H3 920.71±25.46 114.36±1.28 4.67±3.24×10 −6 13.33±0.79
+CD-51 10924
+b H2 280.09±27.01 210.62±5.14 2.22±1.43×10 −5 11.63±0.74 Background
+H3 294.78±26.33 210.21±4.27 1.46±0.91×10 −5 12.08±0.76
+βLeo
+b H2 370.09±23.98 175.30±2.87 1.48±0.62×10 −5 12.07±0.50 Background
+H3 377.84±24.67 178.50±4.15 2.68±1.15×10 −5 11.43±0.47
+HD 164249
+b H2 330.35±30.77 47.21±5.09 2.66±1.13×10 −5 11.43±0.74Promising
+H3 341.74±31.05 46.26±4.58 1.97±0.87×10 −5 11.34±0.79
+CD-57 1054
+b H2 552.91±30.26 92.61±2.74 7.60±3.78×10 −6 12.80±0.52 Background
+H3 560.06±29.50 92.32±2.51 6.95±4.12×10 −6 12.90±0.68
+CE Ant
+b H2 413.34±28.64 328.7±3.79 4.20±1.97×10 −6 13.43±0.62 Background
+H3 423.69±28.97 328.36±3.68 3.90±1.80×10 −6 13.53±0.51
+CD-48 2972
+b H2 305.32±31.39 337.29±5.55 1.73±1.01×10 −5 11.90±0.63 Undefined
+HD 55279
+b H2 318.60±27.84 302.87±4.23 2.91±1.57×10 −5 11.34±0.62 Undefined
+HD 219482
+b H3 399.89±24.64 47.17±3.22 2.00±1.23×10 −6 14.23±0.75 Undefined
+Article number, page 20 of 20

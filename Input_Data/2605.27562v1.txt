@@ -1,0 +1,2091 @@
+Title: A Semi-Supervised Variational Autoencoder for Generating Neutron Star Equations of State
+Authors: Tianqi Zhao, Fanglida Yan, Alex Ross, James M. Lattimer
+Published: 2026-05-26
+Categories: astro-ph.IM, astro-ph.HE
+
+A Semi-Supervised Variational Autoencoder for Generating Neutron Star Equations
+of State
+Tianqi Zhao,1, 2,∗ Fanglida Yan,3 Alex Ross,2 and James M. Lattimer4
+1Network for Neutrinos, Nuclear Astrophysics, and Symmetries (N3AS),
+University of California, Berkeley, CA 94720, USA
+2Institute for Nuclear Theory, University of Washington, Seattle, WA 98195, USA
+3Amazon Science, Seattle, WA 98109, USA
+4Department of Physics and Astronomy, Stony Brook University, Stony Brook, NY 11794, USA
+We develop a semi-supervised variational autoencoder (SSVAE) framework to reconstruct and
+generateneutronstar(NS)equationsofstate(EOS).TheSSVAEconsistsofanencodernetworkthat
+maps high-dimensional EOS data into a lower-dimensional latent space and a decoder network that
+reconstructs the full EOS from the latent representation. The latent space includes supervised NS
+observables derived from the training EOS data, as well as variational latent variables that capture
+additional EOS features learned automatically. Using a SSVAE trained on a Skyrme EOS dataset,
+we find that a latent space consisting of two supervised observables, the maximum massMmax and
+the canonical radiusR1.4, together with a single variational latent variable associated mainly with
+the EOS near the crust-core transition, is sufficient to reconstruct Skyrme EOSs with high fidelity.
+The decoder reconstructed EOSs reproduceMmax andR 1.4 with mean absolute percentage errors
+within0.14%. Sampling the latent space generates new EOSs that are causal, thermodynamically
+stable, and consistent with imposed constraints on the supervised observables. The framework
+therefore provides a compact and physically interpretable parameterization of the NS EOS that is
+well suited for Bayesian inference with multimessenger observations, including pulsar mass-radius
+measurements and gravitational wave data.
+I. INTRODUCTION
+The equation of state (EOS) of cold, beta equilibrated
+densematterdeterminestheglobalstructureofaneutron
+star (NS) [1, 2]. Among the many macroscopic quantities
+that can be derived from a given EOS, two are especially
+useful because they probe different density regimes and
+are already constrained by observation: the maximum
+gravitational mass,M max, and the radius of a canonical
+1.4M ⊙ star,R 1.4. The first is controlled primarily by
+the pressure at the highest densities reached in stable
+stars [3, 4], whereas the second is governed mainly by
+the pressure near twice the nuclear saturation density
+[1]. In this sense,Mmax andR 1.4 provide a compact and
+physically transparent summary of the high density and
+intermediate density behavior of the EOS [5–9]. This
+observable-first viewpoint is particularly useful because
+the underlying microscopic parameterizations are often
+high dimensional, while the astronomical data constrain
+only a few combinations of them.
+This mismatch is evident in standard EOS parameter-
+izations. In the basic Skyrme model [10], the EOS of
+uniform matter is specified by nine interaction parame-
+ters, while relativistic mean-field models are character-
+ized by a similarly high-dimensional set of couplings [11].
+Although these frameworks are useful for forward cal-
+culations, their microscopic parameters are not directly
+observable. Instead, neutron star observations constrain
+macroscopic stellar properties derived from the EOS, and
+∗ tianqi.zhao@berkeley.edu
+the underlying interaction parameters must therefore be
+inferred indirectly.
+The goal is to infer the neutron star EOS from obser-
+vational data. In conventional Bayesian approaches, this
+requires sampling high dimensional EOS model spaces,
+such as Skyrme or RMF parameterizations, while repeat-
+edlycomputingthecorrespondingEOSsandneutronstar
+observables throughout the inference [12, 13]. In many
+other studies, microscopic interaction models with high
+dimensional parameter spaces are bypassed, and the EOS
+is instead generated from phenomenological parameteri-
+zations. Many such parameterizations are based on Tay-
+lor expansions around a reference density, such as the
+vacuum limit [14], the crust-core transition density [15],
+or the empirical nuclear saturation baryon density,0.16
+fm−3 [1]. Such constructions can implicitly correlate the
+low density and high density EOS, since the same expan-
+sion coefficients control the behavior over an extended
+density range. Others use piecewise polytrope [16] or
+piecewise sound speed [17], which limit correlations in
+the pressure between different densities to within indi-
+vidual segments. Gaussian-process methods model the
+correlation explicitly with correlation length as a hyper-
+parameter, so that NS EOS can be sampled as an ran-
+dom functional by parameterizing the covariance matrix
+[18, 19]. In all of these cases, however, the EOS and the
+corresponding neutron star observables must still be eval-
+uated repeatedly during Bayesian inference. A related
+line of work seeks to establish a more direct mapping
+from global stellar observables to the underlying EOS.
+This has been pursued using empirical correlations based
+on comprehensive mass-radius curves [20–22], which can
+then be combined with observational data in a later in-
+INT-PUB-26-021
+N3AS-26-012
+arXiv:2605.27562v1  [astro-ph.IM]  26 May 2026
+
+2
+ference step [23].
+Machine learning methods have recently begun to ad-
+dress this problem. Early supervised approaches trained
+neural networks to infer dense matter properties or EOS
+parameters directly from neutron star observables, show-
+ing that meaningful information can be extracted from
+masses, radii, and tidal deformabilities [24–27]. More
+recently, variational autoencoder based approaches have
+been explored as a way to learn lower-dimensional rep-
+resentations of the EOS itself [28, 29]. These studies
+demonstrate that neural networks can accelerate EOS
+inference, but most focus either on the inverse mapping
+from observables to EOS or on latent representations
+without explicit supervision by physically transparent
+neutron star observables.
+In this work, we develop a semi-supervised variational
+autoencoder (SSVAE) for neutron star EOSs in which
+the latent space is partially supervised by the maximum
+mass,M max, and the canonical radius,R1.4. The remain-
+ing variational latent degrees of freedom encode residual
+EOS structure not specified by these observables. For
+the Skyrme EOS ensemble considered here, we find that
+one variational latent parameter together withMmax and
+R1.4 is already sufficient to reconstruct the EOSs with
+high fidelity. This yields a three-dimensional latent rep-
+resentation that is much simpler than the original nine-
+parameter Skyrme space, while remaining directly con-
+nected to neutron star phenomenology.
+The paper is organized as follows. In Sec. IIA and
+Sec. IIB, we summarize the Skyrme EOS model and the
+neutron star observables used in this work. In Sec. IIC,
+we describe the construction of the EOS dataset, and in
+Sec.IIEweintroducetheSSVAEframeworkandtraining
+procedure. The choice of hyperparameters is discussed in
+Sec. IIG. The main results, including the learned latent
+space, the dependence of reconstructed EOSs on the la-
+tent variables, and the reproduction of known EOSs, are
+presented in Sec. III. We conclude in Sec. IV.
+II. METHODS
+A. Energy Density F unctional
+Strongly interacting dense nuclear matter in NSs is of-
+ten described in the mean-field approximation, in which
+each nucleon moves in an average potential generated
+by the surrounding medium. This potential is expressed
+through an energy density functional constructed from
+the relevant densities and currents. Two widely used
+classes of such functionals are the nonrelativistic Skyrme
+model [10, 30, 31] and the relativistic mean-field (RMF)
+model [11, 32]. In this work, we use the Skyrme model
+to illustrate the SSVAE framework, since it provides a
+standard and computationally efficient EOS family with
+a multi-parameter structure rich enough to test dimen-
+sional reduction in latent space. For uniform nuclear
+matter, spin and current contributions vanish, and the
+Skyrme energy density takes the form [33],
+εN = (3π2nn)5/3
+10π2m∗n
++ (3π2np)5/3
+10π2m∗p
++H pot(nn, np),(1)
+where the first two terms are the kinetic energy of neu-
+trons and protons in terms of their respective baryon
+number density,nn/p, and effective mass,m∗
+n/p,
+mn/p
+m∗
+n/p
+= 1 + mn/p
+4
+n
+nB [t1(2 +x 1) +t 2(2 +x 2)]
++n n/p [−t1(1 + 2x1) +t 2(1 + 2x2)]
+o
+,
+(2)
+andH pot is the potential energy density given by
+Hpot = 1
+2 n2
+Bt0
+
+1 + x0
+2
+
+− 1
+2 (n2
+n +n 2
+p)t0
+ 1
+2 +x 0
+
++ 1
+24 nγ
+Bt3
+
+n2
+B(2 +x 3)−(n 2
+n +n 2
+p)(1 + 2x3)
+
+.
+(3)
+where total baryon number densitynB =n p +n n. The
+complete Skyrme model involves 9 parametersx 0,x 1,
+x2,x 3,t 0,t 1,t 2,t 3,γ, excluding the fixed neutron and
+proton masses,m n andm p.
+Uniform nuclear matter in the core of NS consists of
+nucleons and electrons. The total energy per baryon is
+E(nB, δ) =ε N (nB, δ)/nB +E e(nB, δ),(4)
+whereδ= (n n −n p)/nB denotes the isospin asymme-
+try. The nucleonic energy densityε N is described by
+the Skyrme energy density functional given in Eq. (1).
+The electron contributionEe corresponds to a free rela-
+tivistic electron gas. Imposing charge neutrality requires
+ne =n p = (1−δ)n B/2, leading to
+Ee(ne) = 1
+π2ne
+Z kF e
+0
+p
+k2 +m 2e k2 dk≈ 3
+5 kF e,(5)
+where the final expression applies in the ultra relativistic
+limit,k F e = (3π 2ne)1/3 ≫m e.
+A cold beta-equilibrated EOS is obtained by minimiz-
+ing the energy per baryon with respect to the isospin
+asymmetry at fixed baryon density,
+∂E(n B, δ)
+∂δ
+
+nB ,δ=δeq(nB )
+= 0.(6)
+This condition determines the equilibrium isospin asym-
+metryδ eq(nB)and therefore the composition of matter.
+The resulting barotropic EOS is then specified by
+ε(nB) =n B E(nB, δeq(nB)),
+P(n B) =n 2
+B
+d
+dnB
+E(nB, δeq(nB)),(7)
+which is equivalently expressed asP(ε), which deter-
+mines the neutron star structure through the TOV equa-
+tions, as discussed in Sec. IIB.
+
+3
+TABLE I. VAE boundary-value inputs at the core–crust tran-
+sition and at the maximum-density endpoint.
+Quantity Core–crust transition Maximum
+Baryon number densityn cc nmax
+Energy densityε cc εmax
+PressureP cc Pmax
+Although such an EOS formally extends to vanishing
+density and pressure, it should not be applied beyond
+the homogeneous core of a neutron star. Uniform nuclear
+matter becomes unstable to clustering below the crust-
+core transition densityn cc.n cc can be estimated using
+the thermodynamic spinodal condition1, which requires
+the Hessian matrix of the energy per baryon with respect
+to(n B, δ)to be positive definite,
+det[H] = ∂2E(nB, δ)
+∂n2
+B
+∂2E(nB, δ)
+∂δ 2 −
+ ∂2E(nB, δ)
+∂nB ∂δ
+2
+>0.
+(8)
+For matter in beta equilibrium, the stationarity condition
+∂E/∂δ= 0holds and the curvature∂ 2E/∂δ 2 >0ensures
+stability with respect to composition fluctuations. In this
+case, the spinodal condition reduces to
+∂2E(nB, δeq)
+∂n2
+B
+>0.(9)
+At density belown cc, the above stability condition Eq.
+(9) is violated, which marks the onset of an instability
+of uniform nuclear matter toward clustering into nuclei.
+This condition is generally more stringent than the hy-
+drodynamic stability criteriondP/dε >0, which ensures
+mechanical stability through the positivity of the total
+derivative as in Eq. (7). Once the crust-core transition
+densityn cc isdetermined, thebeta-equilibratedcoreEOS
+aboven cc is combined with the SLy4 crust EOS below
+the transition to construct a complete EOS extending
+to the stellar surface. In practice, the crust and core
+EOS tables are concatenated directly, and a narrow den-
+sity interval extending to about20%below the core-side
+transition point is reserved to ensure a smooth interpo-
+lation between the two. The interpolation is constructed
+so that the resulting EOS remains continuous and ther-
+modynamically stable across the matching region.
+B. Neutron Star Observables
+Neutron stars provide a unique laboratory for prob-
+ing the EOS of dense matter through their macroscopic
+1 A more complete treatment may include density-gradient and
+Coulomb terms, as in the dynamical method [34]. For Skyrme-
+type functionals, these finite-size effects generally reduce the
+crust-core transition density relative to the thermodynamic esti-
+mate by about10%[35, 36]. Since our goal here is to construct a
+training set based on the bulk EOS, we use the thermodynamic
+criterion for simplicity.
+observables. Accurate NS masses are obtained from ra-
+dio timing of binary pulsars, particularly in systems ex-
+hibiting measurable Shapiro delay [37–39]. Radius infor-
+mation is supplied by X-ray pulse-profile modeling with
+NICER [40, 41] and by gravitational-wave observations
+of binary neutron star mergers, which constrain the tidal
+deformability and hence the EOS [42, 43]. Relating these
+observations to the underlying microphysics requires the
+EOS to be connected to stellar structure through the
+Tolman-Oppenheimer-Volkoff equations [44, 45],
+dP
+dr =− G(m+ 4πP r 3/c2)(ε+P)
+r(rc2 −2Gm) ,(10)
+dm
+dr = 4πr 2 ε
+c2 (11)
+wherem(r)is the mass enclosed within radiusrandP(r)
+is the pressure at radiusr. Our TOV solver uses the
+SciPyLSODA method [46] to integrate Eq. (10) and
+Eq. (11) outward from the stellar center, wherem= 0,
+r= 0,ε=ε c, andP=P c, to the surfacer=R, defined
+by the conditionP(R) = 0, at which pointm(R) =M.
+Repeating this process across a range of central pressures
+Pc produces the full mass-radius (MR) relation,R(M).
+TheEOSε(P)isrequiredtoclosethesystemofequations
+and uniquely determines the neutron star MR relation.
+For a given EOS, e.g. SLy4 EOS in Fig. 7, there exists
+a maximum central pressureP max that yields a stable
+configuration, corresponding to the maximum neutron
+star massM max. The associated central baryon number
+densityn max and energy densityε max refer to the same
+configuration, which can be used as the upper bound of
+the EOS as in Tab. I. Precise measurements of NS masses
+from radio timing observations have already established
+a robust lower boundMmax ≳2M ⊙, placing strong con-
+straints on viable EOS models. Notably, the MR curve
+is nearly vertical over a broad mass range, indicating
+that neutron star radii remain approximately constant
+for canonical masses in the range1.1M⊙ to1.6M ⊙. A
+complementary and commonly quoted quantity derived
+from the MR relation is the radius of a1.4M⊙ neutron
+star, denotedR 1.4. BothM max andR 1.4 are used as
+supervised latent observables during training.
+C. T raining, validation and T est Data
+We use the Skyrme model discussed in Sec. IIA to
+derive our input EOS training data. The structure of the
+input data is an array of dimensionsN×dx, whereNis
+the number of distinct EOS. Among data of dimension
+dx = 107, the firstd c2s = 101columns are comprised of
+sound speed data, with the sound speedc2
+s given by the
+
+4
+TABLE II. Dataset splits used for training and evaluation.
+Split Size Purpose During training
+Training∼75% Update model weights Yes
+Validation∼15% Best model checkpoint selection & early stopping Yes
+Test∼10% Final unbiased evaluation No
+following equation:
+c2
+s,i =
+ dε
+dP
+−1
+P=P i
+(12)
+Pi = exp
+
+lnP cc + i
+dc2s −1
+ 
+lnP max −lnP cc
+
+,(13)
+whereP i defines a logarithmically spaced pressure grid
+betweenP cc andP max. And, the finald b = 6columns
+that comprise the input data are boundary conditions
+that set critical components of the NS structure for each
+EOS. This includes the baryon number densityncc, en-
+ergy densityε cc, and pressurePcc at the crust-core tran-
+sition calculated from Sec. IIA, as well as the maximum
+limits of baryon number densityn max, energy density
+εmax, and pressureP max which can be reached at the
+core of the most compact (and massive) stable NS in-
+troduced in Sec. IIB. The boundary value data used is
+summarized in Tab. I. We require all EOSs to satisfy
+ncc >0.02fm −3. In addition, the dataset includes only
+EOSs that support a maximum mass ofMmax >1.95M ⊙.
+This safety margin ensures that the physically relevant
+parameter space, including EOSs withMmax >2M ⊙ can
+be faithfully generated by the trained network without
+requiring extrapolation beyond the training data.
+Since the sound speed is defined in terms of the energy
+density rather than the mass density, it is expressed in
+natural units and therefore satisfies0< c 2
+s <1. The
+db = 6boundary values are also strictly positive. There-
+fore, theentireinputdataarrayisthenlog-scaledtomake
+the data distribution more symmetrically peaked. This
+data is then split into 3 datasets that are used for differ-
+ent purposes during training. The training split is sum-
+marized in Tab. II. The training set, which contains the
+majority of the data, is used to update the model param-
+eters by minimizing the cost function during the SSVAE
+training procedure. The validation set is used to moni-
+tor performance during training, determine the stopping
+point, and select the best-performing model without bi-
+asing the final evaluation. The test set is completely ex-
+cluded from training, including gradient calculations and
+parameter updates, and is reserved for the final assess-
+ment of model performance and unbiased reconstruction
+accuracy.
+D. Reconstructing EOS from Data
+Our primary goal is to generate new candidate NS
+EOS with the decoder part of the SSVAE given latent
+space parameters. The SSVAE outputs an array of size
+dx = 107,{c 2
+s(Pi)}i=0,..,dc2s
+−1 on the logarithmic pressure
+grid defined in Eq. (13), together with 6 boundary quan-
+tities introduced in Sec. IIC and summarized in Tab. I.
+These quantities define the valid thermodynamic range
+between the crust-core transition and the maximum cen-
+tral density of a stable neutron star.
+Starting from Eq. (12), the energy density is recon-
+structed as
+ε(P) =ε cc +
+Z P
+Pcc
+1
+c2s(lnP ′) dP ′,(14)
+wherec 2
+s(lnP)is obtained by spline interpolation of the
+discrete SSVAE output. The baryon number density is
+then computed from
+nB(P) =n cc exp
+"Z P
+Pcc
+1
+c2s(lnP ′)(ε+P ′) dP ′
+#
+,(15)
+with boundary conditionnB(Pcc) =n cc.
+The reconstructed core EOS{n B(P), ε(P), P}is fi-
+nally matched to the SLy4 crust EOS below the crust-
+core transition. In practice, the two EOS tables are con-
+catenated directly, and a narrow interval extending to
+about20%below the core-side transition density is used
+to interpolate smoothly between the crust and core seg-
+ments. This procedure yields a continuous and thermo-
+dynamically stable EOS over the full pressure range rel-
+evant for a stable neutron star. In this way, each set of
+latent parameter is mapped to a complete EOS.
+E. The semi-supervised variational autoencoder
+Figure 1 shows the overall framework of the SSVAE
+used in this work, and Tab. III summarizes the network
+architecture. The encoder maps each EOS input vectorx
+of dimensiondx = 107into a latent representationzcon-
+sisting of a supervised component of dimensionNs and
+a variational component of dimensionNv. The decoder
+then reconstructs the EOS data vector from latent layer
+z. Consequently, the encoder can be used to predict the
+observables associated with the supervised component of
+the latent space, while the decoder can serve as a genera-
+torofnewEOSsthatsharethesamestatisticalproperties
+as the EOS data used for training.
+Compared with a standard autoencoder, the SSVAE
+adopts a probabilistic latent representation rather than a
+purely deterministic one. In a conventional autoencoder,
+theencodercompressestheinputintoalatentvectorthat
+is directly passed to the decoder for reconstruction. In
+
+5
+EOS Dataset
+(Skyrme)
+x Encoder
+q(z |x;θz)
+logσ2
+v
+µv
+µs
+zv Decoder
+p(x |z;θx)
+Generated EoS
+µθx(z)zs
+y
+Mmax,R 1.4
+Dataset
+Supervised Cost
+Csup = 1
+NN s
+∑N
+i=1
+yi−zs,i
+2
+Recon. MAPE
+1
+N
+∑N
+i=1
+⏐⏐⏐ ˆyi−yi
+yi
+⏐⏐⏐
+ˆy
+Mmax,R 1.4
+Recon.
+Decoder MAPE
+1
+N
+∑N
+i=1
+⏐⏐⏐⏐
+ˆyi−zs,i
+zs,i
+⏐⏐⏐⏐
+TOV SolverTOV Solver
+KL Divergence
+CKL = 1
+NN v
+∑N
+i=1
+∑Nv
+j=1 KL
+[
+q(zv,j|xi;θz)∥p(zv,j )
+]
+Recon. Cost
+Crec = 1
+Nd x
+∑N
+i=1
+xi−µθx (zi)
+2
+Total Cost Function
+C = Crec + κCsup + ηCKL
+Encoder MAPE
+1
+N
+∑N
+i=1
+⏐⏐⏐⏐
+yi−zs,i
+zs,i
+⏐⏐⏐⏐
+FIG. 1. The framework of the semi-supervised variational autoencoder used in this work.
+the VAE framework, by contrast, the encoder produces
+the parameters of a latent distribution, while the decoder
+models the conditional distribution of the data given the
+latent variables. This formulation allows stochastic sam-
+pling in the latent space through the reparameterization
+trick, while maintaining differentiability during training.
+In the present SSVAE, the latent space is further sep-
+arated into supervised and variational sectors, so that
+selected physical quantities, such asMmax andR 1.4, are
+encoded explicitly in the supervised component.
+Formally, for an data samplexand latent variablez,
+the generative model is characterized by the priorp(z),
+the likelihoodp(x|z), the posteriorp(z|x), and the
+marginal likelihoodp(x), which satisfy Bayes’ theorem,
+p(x|z)p(z) =p(z|x)p(x).
+Because the exact posterior is generally intractable, we
+introduce neural networks to approximate the relevant
+probability distributions. Given a datasetX={x i}N
+i=1
+and a chosen priorp(z), our modeling goal is to learn the
+parameters of the likelihoodp(x|z)≈p(x|z;θ x)and
+thereby characterize the posteriorp(z|x)≈q(z|x;θ z)
+defined by neural network parametersθx andθ z. To ap-
+proach this, we aim to maximize the marginal likelihood
+of the data,
+J(θ x) =
+NX
+i=1
+log
+Z
+p(xi |z;θ x)p(z)dz,
+which requires integrating the product of the likelihood
+and the prior over the latent variables and summing over
+all data examples. This expression represents the prob-
+ability (evidence) of the data under the model. Taking
+the posteriorq(z|x;θ z)as variational distribution, we
+can rewrite
+J(θ x, θz) =
+NX
+i=1
+log
+Z
+q(z|x i;θ z) p(xi |z;θ x)p(z)
+q(z|x i;θ z) dz≥ J ELBO
+JELBO =
+NX
+i=1
+Z
+q(z|x i;θ z) log p(xi |z;θ x)p(z)
+q(z|x i;θ z) dz(16)
+=
+NX
+i=1
+Z
+q(z|x i;θ z) logp(x i |z;θ x)dz
+−KL(q(z|x i;θ z)∥p(z))] =
+NX
+i=1
+ji,ELBO (17)
+where Jensen’s inequality is used to derive the evi-
+dence lower bound (ELBO) in Eq. (16), and Kullback-
+Leibler (KL) in Eq. (17) is defined asKL (q(z)∥p(z)) =R
+q(z) log q(z)
+p(z) dz. This objective is jointly optimized with
+respect to the posterior parametersθz and the likelihood
+parametersθ x.
+In a vanilla variational autoencoder (VAE) [47] [48],
+the prior distribution over the latent variables is chosen
+to be a standard normal distribution:
+p(z) =N(0, I).
+And, the approximate posterior distribution is assumed
+to be Gaussian with a diagonal covariance matrix, whose
+meanandstandarddeviationareparameterizedbyaneu-
+
+6
+ral network:
+q(z|x;θ z) =N
+ 
+µθz (x),diag(σ 2
+θz (x))
+
+.
+In this work, we use a semi-supervised VAE framework
+(SSVAE) wherez= [z s, zv]consists of a standard varia-
+tional part,z v and a supervised partzs. The dimensions
+of the supervised and variational latent spaces are de-
+noted byNv andN s, respectively. The prior distribution
+of the latent variables are,
+p(zv) =N(0, I),(18)
+p(zs) = Uniform(S),S={z s ∈R Ns :g(z s)≤0}.(19)
+Here,g(z s)encodes non-diagonal boundary constraints
+defining the feasible region. The uniform prior corre-
+sponds to a constant density onSand zero elsewhere.
+And, the posterior distributions are,
+q(zv |x;θ zv ) =N
+ 
+µθzv (x),diag(σ 2
+θzv
+(x))
+
+(20)
+q(zs |x;θ zs ) =δ
+ 
+zs −µ θzs (x)
+
+(21)
+whereµ θzv (x),σ 2
+θzv
+(x)andµ θzs (x)are outputs of the
+encoder network, which consists of a sequence of dense
+layers, corresponding to Layers 1–4 in Table III.
+In addition, the SSVAE assumes Gaussian likelihood
+for the data:
+p(x, y|z;θ x) =p(x|z;θ x)p(y|z s)
+=N
+ 
+x|µ θx (z), σ2
+xI
+
+N
+ 
+y|z s, σ2
+yI
+
+,(22)
+where the first term on the right-hand side coincides with
+that of a vanilla VAE, whereµθx (z)denotes the output
+of the decoder network andσ 2
+x is typically assumed to
+be fixed. The second term corresponds to the supervised
+latent variablez s, which is constrained by the observed
+datay. Under these assumptions, the joint log-likelihood
+can be written as
+logp(x, y|z;θ x) =− 1
+2σ2x
+∥x−µ θx (z)∥2 − 1
+2σ2y
+∥y−z s∥2
+− dx
+2 log(2πσ 2
+x)− dy
+2 log(2πσ 2
+y),(23)
+whered x andd y =N s denote the dimensionalities ofx
+andy, respectively.
+Substituting this expression into the ELBO in Eq. (16)
+shows that maximizing the ELBO is equivalent, up to an
+additive constant, to minimizing a total cost function
+formed by summing the following per-sample contribu-
+tion over the dataset:
+−jELBO = Eq(zv|x)
+
+∥x−µ θx (z)∥2
+2σ2x
++ ∥y−µ θzs (x)∥2
+2σ2y
++ 1
+2
+NvX
+j=1
+
+µ2
+θzv ,j +σ 2
+θzv ,j −logσ 2
+θzv ,j −1
+
+,(24)
+wherez= [z s, zv]with the expected mean squared error
+achieved by batch sampling ofzv using the reparameter-
+ization trick:
+zv =µ θzv (x) +σ θzv (x)⊙ε, ε∼ N(0, I)
+zs =µ θzs (x),(25)
+which enables differentiable gradient-based optimiza-
+tion. The last term corresponds to the KL divergence
+KL(q(zv |x i;θ zv )∥p(z v)), which involves two normal dis-
+tribution and can be written analytically. The other KL
+divergence term involving supervised latent parameters
+KL(q(zs |x i;θ zs )∥p(z s))is an constant and can there-
+fore be neglected.
+Throughout training, a total cost function is con-
+structed to jointly optimize the reconstruction accuracy
+of the EOS, the supervised agreement between the pre-
+dicted and true supervised latent observable values, and
+the Kullback-Leibler divergence that regularizes the la-
+tent space toward a standard normal prior, thereby
+balancing physical fidelity, predictive performance, and
+latent-space smoothness. The cost function used is given
+by
+CSSV AE =− 2σ2
+x
+N dx
+JELBO =C rec +κC sup +ηC KL
+= 1
+N d x
+NX
+i=1
+∥xi −µ θx (zi)∥2 + κ
+N N s
+NX
+i=1
+yi −µ θzs (xi)
+2
++ η
+N N v
+NX
+i=1
+NvX
+j=1
+
+− 1
+2
+ 
+1 + logσ 2
+zv,i,j −µ 2
+zv,i,j −σ 2
+zv,i,j
+
+,
+(26)
+whereC rec is the reconstruction cost between the in-
+put and reconstructed data,C sup is the reconstruction
+cost between the input supervised latent observables and
+thosepredictedbytheencoder,C KL istheKLdivergence,
+andκ= σ2
+xNs
+σ2ydx
+, η= 2σ2
+xNv
+dx
+are weighting terms. The
+weighting terms are normalized byNv andN s, the di-
+mensions of the variational and supervised latent spaces,
+respectively. In practice,ηandκare treated as hyper-
+parameters. While their physical meaning can be traced
+back to the likelihood scalesσx andσ y as defined in the
+likelihood Eq. (22).
+F. Network architecture and training
+Above is the theoretical foundation for the semi-
+supervised variational autoencoder (SSVAE), whose ar-
+chitecture is shown in Fig. 1, and summarized in Tab.
+III. We use theSiLU(Sigmoid Linear Unit) activation
+function throughout the network.SiLUis a smooth vari-
+ant ofReLU(Rectified Linear Unit), allowing positive in-
+puts to pass largely unchanged while smoothly suppress-
+ing negative inputs toward zero [49]. The output activa-
+tion function consists of aNegSoftplusactivation func-
+tion for the first 101 columns, corresponding tologc2
+s(pi),
+
+7
+TABLE III. Neural network architecture.
+Layer Type Neurons Activation
+Input N/Ad x N/A
+Layer 1 Dense 128 SiLU
+Layer 2 Dense 64 SiLU
+Layer 3 Dense 64 SiLU
+Layer 4 DenseN s + 2Nv Linear
+Latent layer (a):µs SliceN s Linear
+Latent layer (b1):µ v SliceN v Linear
+Latent layer (b2):logσ 2
+v SliceN v Linear
+Latent layer (b):zv SamplingN v N/A
+Latent layer:z= [µ s, zv]ConcatenateN s +N v N/A
+Layer 5 Dense 64 SiLU
+Layer 6 Dense 64 SiLU
+Layer 7 Dense 128 SiLU
+Layer 8 Densed x Linear
+Output (a):logc 2
+s Sliced c2s NegSoftplus
+Output (b):[n, ε, p] cc,max Sliced b Linear
+Output Concatenated x N/A
+to enforce the causal constraint0<logc 2
+s(pi)<1. We
+find that varying the output activation function does not
+significantly affect the results of this work; however, the
+above choice performs slightly better among the tested
+options.
+The primary machine learning system we use is the
+Python packageTensorflow. We use a batch size of
+Nb = 64and a learning rate ofα= 0.0001. The input
+data, consisting of the array described in Sec. IIC and
+the supervised latent observables introduced in Sec. IIB,
+are standardized by subtracting the mean and scaling by
+the standard deviation, so that each quantity has zero
+mean and unit variance. For each training batch, the
+EOS data are written asX={x n}Nb
+n=1, where eachxn is
+a vector of dimensiondx = 107. PassingXthrough the
+encoder yields an output of dimension(2Nv +N s)×N b,
+corresponding toµ θzv (X),logσ θzv (X)andµ θzs (X). Ap-
+plying the stochastic sampling procedure in Eq. (25) then
+gives the latent representationz= [z s, zv], which has di-
+mension(N v +N s)×N b. The decoderµ θx (z)takes a
+batch of latent variables as input and outputs a matrix
+of dimensiond x ×N b, which is the same asX. The net-
+work weights and biases are updated after each training
+batch. At the end of each epoch, the validation cost is
+evaluated and compared with its values from previous
+epochs to monitor the progress of training. If no further
+improvement in the cost function is observed for five con-
+secutive epochs, the training is stopped. The checkpoint
+of weights and biases that yield the lowest cost function
+are restored and adopted for the subsequent analysis.
+G. Choice of hyper parameters
+For each combination of hyperparameters, withη=
+[0.1,0.01,0.001,0.0001],κ= [1,2,5,10], andN v =
+[1,2,3], we trained 10 SSVAE networks independently
+using different random seeds and initializations. The
+network performance is evaluated using the supervised
+observablesM max andR 1.4. For the test dataset, we
+consider three corresponding sets of supervised quanti-
+ties. First, we solve the TOV equations directly using
+the test EOS data to obtain the reference values. These
+are the same observables as those used for supervision
+during training, but here they are evaluated from the
+test EOSs. Second, we apply the encoder to the test EOS
+data, whichwerenotusedduringtraining, andobtainthe
+predicted supervised latent quantities. Third, we pass
+the latent variables through the decoder without stochas-
+tic sampling, using only the latent means, to reconstruct
+the EOS data. Solving the TOV equations for the re-
+constructed EOSs then gives the corresponding decoder
+generated values ofMmax andR 1.4. For each supervised
+quantity, we compute the mean absolute percentage error
+(MAPE), averaged over all EOSs in the test dataset, for
+three comparisons: the encoder MAPE, defined between
+the reference values and the encoder predictions; the de-
+coder MAPE, defined between the encoder predictions
+and the values obtained from the reconstructed EOSs;
+and the reconstruction MAPE, defined between the ref-
+erence values and the values obtained from the recon-
+structed EOSs. These quantities are illustrated schemat-
+ically in Fig. 1. In this framework, the encoder acts as
+an approximate TOV solver, providing fast predictions of
+the supervised observablesMmax andR 1.4 without direct
+numerical integration, as discussed in Sec. IIB. Accord-
+ingly, the encoder MAPE measures the accuracy of the
+encoder in reproducing these observables. The decoder,
+on the other hand, serves as an EOS generator condi-
+tioned onM max,R 1.4, and the additional variational la-
+tent parameters. The decoder MAPE is therefore partic-
+ularly important, since it quantifies how well the decoder
+generated EOSs retain the NS observables.
+The heatmaps of these three MAPEs, averaged over
+the 10 independently trained networks, are shown in
+Fig. 2. The results forM max andR 1.4 exhibit quali-
+tatively similar behavior and are therefore presented to-
+gether to avoid repetition. The heatmaps show that all
+three MAPEs decrease with increasingNv. This trend is
+expected, since a larger latent dimension provides more
+degrees of freedom and therefore allows the model to cap-
+ture more characteristics of the EOS dataset. However,
+the improvement obtained by increasingNv is subdom-
+inant, indicating that the EOS dataset can already be
+described effectively by one variational latent parame-
+ter together with two supervised latent parameters. The
+variation withηis the dominant source of change in the
+MAPEs, sinceηis proportional to the imposed disper-
+sionσ 2
+x in the likelihood for the training EOS dataset.
+A smallerηcorresponds to treating the EOS dataset as
+having a smaller intrinsic dispersion, and the limitη= 0
+reduces the VAE to a standard autoencoder. Although
+the accuracy improves asηdecreases, the posterior dis-
+tribution of the variational latent parameters becomes
+less constrained and tends to collapse onto a narrow hy-
+persurface. The impact ofκon the three MAPEs is dif-
+
+8
+= 0.0001
+= 0.001
+= 0.01
+= 0.1
+Encoder 0.10
+(0.08)
+0.06
+(0.05)
+0.03
+(0.03)
+0.02
+(0.02)
+0.10
+(0.08)
+0.06
+(0.05)
+0.03
+(0.03)
+0.02
+(0.02)
+0.12
+(0.13)
+0.07
+(0.07)
+0.04
+(0.03)
+0.02
+(0.02)
+0.54
+(0.75)
+0.47
+(0.62)
+0.14
+(0.20)
+0.05
+(0.08)
+Nv = 1
+0.01
+(0.02)
+0.01
+(0.02)
+0.01
+(0.01)
+0.01
+(0.02)
+0.02
+(0.02)
+0.02
+(0.02)
+0.01
+(0.02)
+0.01
+(0.01)
+0.10
+(0.10)
+0.05
+(0.05)
+0.03
+(0.03)
+0.02
+(0.02)
+0.48
+(0.67)
+0.35
+(0.48)
+0.05
+(0.09)
+0.03
+(0.05)
+Nv = 2
+0.01
+(0.02)
+0.01
+(0.01)
+0.01
+(0.02)
+0.01
+(0.02)
+0.02
+(0.02)
+0.01
+(0.02)
+0.01
+(0.02)
+0.01
+(0.02)
+0.07
+(0.06)
+0.04
+(0.04)
+0.02
+(0.02)
+0.02
+(0.02)
+0.40
+(0.59)
+0.10
+(0.15)
+0.05
+(0.06)
+0.03
+(0.03)
+Nv = 3
+0.2
+0.4
+MAPE of Mmax (%)
+= 0.0001
+= 0.001
+= 0.01
+= 0.1
+Decoder 0.10
+(0.13)
+0.10
+(0.13)
+0.11
+(0.15)
+0.13
+(0.16)
+0.11
+(0.15)
+0.10
+(0.14)
+0.12
+(0.16)
+0.12
+(0.17)
+0.15
+(0.22)
+0.16
+(0.18)
+0.15
+(0.17)
+0.16
+(0.20)
+0.31
+(0.42)
+0.32
+(0.44)
+0.29
+(0.35)
+0.25
+(0.31)
+0.07
+(0.10)
+0.08
+(0.12)
+0.08
+(0.12)
+0.08
+(0.11)
+0.07
+(0.12)
+0.07
+(0.11)
+0.10
+(0.12)
+0.09
+(0.14)
+0.12
+(0.17)
+0.12
+(0.17)
+0.11
+(0.14)
+0.12
+(0.17)
+0.30
+(0.29)
+0.24
+(0.31)
+0.17
+(0.23)
+0.24
+(0.26)
+0.07
+(0.10)
+0.06
+(0.11)
+0.07
+(0.12)
+0.07
+(0.11)
+0.07
+(0.11)
+0.08
+(0.10)
+0.09
+(0.13)
+0.08
+(0.14)
+0.10
+(0.13)
+0.10
+(0.13)
+0.12
+(0.15)
+0.11
+(0.14)
+0.28
+(0.35)
+0.17
+(0.25)
+0.22
+(0.26)
+0.20
+(0.26)
+0.1
+0.2
+0.3
+MAPE of Mmax (%)
+=1
+ =2
+ =5
+=10
+= 0.0001
+= 0.001
+= 0.01
+= 0.1
+Recon.
+0.14
+(0.17)
+0.12
+(0.15)
+0.11
+(0.16)
+0.13
+(0.16)
+0.15
+(0.18)
+0.12
+(0.15)
+0.13
+(0.16)
+0.12
+(0.17)
+0.19
+(0.22)
+0.17
+(0.19)
+0.16
+(0.17)
+0.16
+(0.20)
+0.51
+(0.73)
+0.52
+(0.71)
+0.31
+(0.36)
+0.25
+(0.30)
+=1
+ =2
+ =5
+=10
+0.07
+(0.10)
+0.08
+(0.12)
+0.08
+(0.12)
+0.08
+(0.12)
+0.07
+(0.11)
+0.07
+(0.11)
+0.11
+(0.12)
+0.09
+(0.14)
+0.16
+(0.18)
+0.13
+(0.16)
+0.11
+(0.14)
+0.12
+(0.17)
+0.51
+(0.66)
+0.38
+(0.52)
+0.18
+(0.21)
+0.24
+(0.25)
+=1
+ =2
+ =5
+=10
+0.07
+(0.10)
+0.06
+(0.12)
+0.07
+(0.12)
+0.07
+(0.11)
+0.07
+(0.11)
+0.08
+(0.10)
+0.10
+(0.13)
+0.08
+(0.14)
+0.11
+(0.13)
+0.10
+(0.13)
+0.12
+(0.15)
+0.11
+(0.14)
+0.42
+(0.62)
+0.18
+(0.24)
+0.22
+(0.25)
+0.20
+(0.26)
+0.1
+0.2
+0.3
+0.4
+0.5
+MAPE of Mmax (%)
+FIG. 2. Heatmaps of the MAPE for the first supervised latent observable,Mmax, averaged over 10 independently trained
+networks for each combination of the hyperparametersNv,κ, andη. The definitions of the encoder, decoder, and reconstruction
+MAPE are illustrated schematically in Fig. 1. The corresponding MAPE values for the other supervised latent observable,
+R1.4, show similar qualitative behavior and are indicated in brackets. The hyperparameter choice selected for further analysis
+is outlined by a red box.
+ferent. The encoder MAPE decreases with increasingκ,
+reflecting the larger relative weight ofCsup in the total
+cost function. By contrast, the decoder MAPE varies
+only weakly withκ. The reconstruction MAPE can be
+understood as reflecting contributions from both the en-
+coder and decoder errors, and therefore follows roughly
+the same trend as the encoder MAPE. At the same time,
+its magnitude is generally close to that of the decoder
+MAPE, since the decoder MAPE is larger than the en-
+coder MAPE except in the regime of very smallκor very
+largeη.
+Based on the MAPE heatmaps, we select a particular
+set of hyperparameters for further analysis in Sec. III.
+The adopted values areη= 0.01,κ= 5, and a variational
+latent dimensionality ofNv = 1. Although increasingN v
+can further reduce the MAPE, the improvement is mod-
+est and does not justify the additional model complexity.
+Likewise, although smaller values ofηimprove the accu-
+racy, they lead to a less regular latent-space structure, as
+discussed further in Sec. IIIA. Withη= 0.01andN v = 1
+fixed, the choiceκ= 5yields the lowest decoder MAPE.
+The selected hyperparameter combination is marked by
+a red box in Fig. 2. Among the 10 independently trained
+SSVAE networks for this hyperparameter combination,
+we select the one with the smallest combined decoder
+MAPE forM max andR 1.4. For the selected network, the
+decoder MAPE is0.14%forM max and0.12%forR 1.4,
+both of which are slightly smaller than the corresponding
+averages shown in Fig. 2.
+III. RESUL TS
+Having introduced the SSVAE framework in Sec. IIE
+and its hyperparameter selection in Sec. IIG, we now fo-
+cus on the network with the adopted hyperparameters
+η= 0.01,κ= 5, andN v = 1. As discussed above, this
+choice provides a good balance between reconstruction
+accuracy and latent space regularization, while avoiding
+unnecessary model complexity. Among the 10 indepen-
+
+9
+Mmax [M ] = 2.13+0.11
+0.10
+11.4
+12.0
+12.6
+13.2
+13.8
+R1.4 [km]
+R1.4 [km] = 12.71+0.53
+0.67
+1.9 2.0 2.1 2.2 2.3
+Mmax [M ]
+1.5
+0.0
+1.5
+3.0
+zv
+11.4 12.0 12.6 13.2 13.8
+R1.4 [km]
+1.5
+ 0.0 1.5 3.0
+zv
+zv = 0.00+1.05
+1.04
+FIG. 3. Two-dimensional marginalized distributions of the supervised and variational latent variables for the test dataset. The
+selected values ofMmax,R 1.4, andz v used to illustrate the latent space sensitivity of the reconstructed EOSs are indicated by
+dashed lines in the marginalized histograms and by stars, dots, and crosses, respectively, in the two-dimensional panels. The
+variational latent variablezv approximately follows a standard normal distribution.
+dently trained networks for this hyperparameter combi-
+nation, we select the one with the lowest combined de-
+coder MAPE inMmax andR 1.4 for the analysis presented
+in this section.
+In the following, we examine both the structure of the
+learned latent space and the physical properties of the
+EOSs generated by the decoder. In Sec. IIIA, We first
+analyze the distribution of the supervised observables
+Mmax andR 1.4, together with the variational latent pa-
+rameterz v, obtained from the encoder output for the test
+dataset. In Sec. IIIB, we then investigate how varying
+the latent variables affects the reconstructed EOSs gener-
+ated by the decoder and the corresponding neutron star
+properties. In this way, we show that the decoder can
+generate EOSs that preserve the target values ofMmax
+andR 1.4, while using the remaining latent degree of free-
+dom to encode physically meaningful variations in the
+EOS.
+A. Latent space
+Figure 3 shows the distribution of the supervised ob-
+servablesM max andR 1.4, together with the variational
+latent parameterz v, obtained from the encoder output
+for the test dataset described in Sec. IIC. Here,zv de-
+notes the mean of the variational latent variable,µzv, and
+does not include the stochastic sampling introduced by
+the reparameterization trick in Eq. (25). The encoder-
+predicted values of the supervised observables are very
+
+10
+0.0 0.2 0.4 0.6 0.8 1.0 1.2
+Baryon number density nB (fm 3)
+10 2
+10 1
+100
+101
+102
+Pressure P (MeV fm 3)
+0.15 0.20 0.25 0.30 0.35
+101
+10 11 12 13 14
+Radius R [km]
+0.5
+1.0
+1.5
+2.0Mass M [M ]
+Latent (Mmax, R1.4, zv)
+ R1.4 = 12.7 km, zv=0
+Mmax = 1.9 M
+Mmax = 2.0 M
+Mmax = 2.1 M
+Mmax = 2.2 M
+Mmax = 2.3 M
+FIG. 4. EOSsP(n B)(left panel) and the corresponding MR relations (right panel) generated by varying the supervised latent
+observableM max around the central value indicated by the circular marker in Fig. 3. In the right panel, the selected values of
+Mmax are indicated by the horizontal dashed lines. The other latent variables,R1.4 andz v, are held fixed, with the fixed value
+ofR 1.4 marked by the star symbols in the right panel. For each chosen value ofMmax, the corresponding EOS terminates at a
+different high density endpoint, determined by the central pressure of the maximum mass configuration.
+close to the corresponding values obtained by solving the
+TOVequationsdirectlyfortheEOSdata, consistentwith
+the encoder MAPE being below0.04%. The occupied re-
+gion in Fig. 3 therefore defines the latent parameter space
+associated with the test EOSs and serves as the basis for
+generating new EOSs with the decoder.
+The conditionM max >1.95M ⊙ is imposed from ob-
+servational constraints, leaving a small margin for gen-
+erating physically relevant EOSs that satisfyM max ≳
+2M ⊙. The supervised observables exhibit a strong
+positive correlation, with Pearson correlation coefficient
+r(Mmax, R1.4) = 0.82computed over the full test dataset,
+as both quantities are sensitive to the stiffness of the
+EOS. At the same time, they probe different density
+regimes. The maximum mass is primarily sensitive to
+the EOS at densities of order four times nuclear satura-
+tion density, whereasR 1.4 is mainly determined by the
+EOS around twice saturation density [4]. As a result, the
+region with largeR1.4 and lowM max is excluded by sta-
+bility requirements, since the pressure must continue to
+increase with density, corresponding to a positive sound
+speed squared. Conversely, the region with smallR 1.4
+and largeM max is excluded by causality, since the pres-
+sure cannot increase too rapidly with density, which re-
+quires the sound speed to remain below the speed of light.
+The variational latent variablez v approximately fol-
+lows a Gaussian distribution centered near zero, consis-
+tent with the regularizing effect of the KL divergence.
+The strength of this regularization increases with the hy-
+perparameterη. Although smaller values ofηimprove
+the reconstruction accuracy, the correlationsr(zv, Mmax)
+andr(z v, R1.4)increase, making the latent parameter
+space less regular and therefore less convenient for using
+the decoder as a controlled EOS generator. We adopt
+η= 0.01so thatz v remains only weakly correlated with
+bothM max andR 1.4, as shown in the lower three pan-
+els of Fig. 3. This indicates that the variational latent
+dimension captures a nontrivial degree of freedom in the
+EOS that is largely independent of the supervised ob-
+servables.
+B. Decoded EOS and Mass-Radius Curves
+To test the generative capability of the trained SSVAE
+model, we vary individual latent parameters around the
+central pointMmax = 2M ⊙,R 1.4 = 12.7km, andz v = 0.
+Each latent parameter is sampled over the supported
+range shown in Fig. 3, while the remaining parameters
+are held fixed. The resulting sets of latent parameters
+are decoded into EOSs, which are then used as input to
+the TOV equations to generate the corresponding MR
+relations. This procedure allows us to examine whether
+smooth variations in latent space produce smooth and
+physically meaningful changes in the EOS and in the cor-
+responding neutron star structure, and therefore whether
+the decoder provides a stable and interpretable genera-
+tive mapping from latent parameters to physical observ-
+ables.
+Figure 4 shows the sensitivity of the EOS and the cor-
+responding MR relations to variations inMmax. We fix
+the variational latent parameterzv = 0and the super-
+vised latent observableR 1.4 = 12.7km, while varying
+Mmax around the selected central value indicated by cir-
+cular points in Fig. 3. The decoded EOSs remain tightly
+clustered at intermediate baryon number densities, espe-
+cially aroundn B ≈0.25fm −3, the density range most
+relevant for determiningR 1.4. This is expected, since
+fixingR 1.4 largely constrains the pressure in the vicin-
+ity of a few times nuclear saturation density. At higher
+
+11
+0.0 0.2 0.4 0.6 0.8 1.0 1.2
+Baryon number density nB (fm 3)
+10 2
+10 1
+100
+101
+102
+Pressure P (MeV fm 3)
+0.15 0.20 0.25 0.30 0.35
+101
+SLy4
+10 11 12 13 14
+Radius R [km]
+0.5
+1.0
+1.5
+2.0Mass M [M ]
+Latent (Mmax, R1.4, zv)
+ Mmax = 2.1 M , zv=0
+R1.4 = 11.5 km
+R1.4 = 11.9 km
+R1.4 = 12.3 km
+R1.4 = 12.7 km
+R1.4 = 13.1 km
+R1.4 = 13.5 km
+FIG. 5. Same as Fig. 4, except that the supervised latent observableMmax and the variational latent parameterzv are held
+fixed, whileR 1.4 is varied from 11.5 km to 13.5 km. For comparison, the SLy4 EOS is also shown by the dashed blue curve.
+densities, however, the EOSs separate systematically as
+Mmax is varied. Larger values ofM max correspond to
+stiffer EOSs at high density, consistent with the need
+for greater pressure support in the inner core to stabilize
+more massive neutron stars against gravitational collapse
+[1]. This behavior is also consistent with the rough scal-
+ingM max ∝ε −1/2
+max for the maximum-mass configuration,
+which links a larger supported mass to a stiffer high-
+density EOS. Accordingly, the EOSs terminate at dif-
+ferent high-density endpoints, which reflect the central
+baryon density and pressure reached at the maximum-
+mass configuration for each model. The opposite trend
+at lower density should not be overinterpreted as an inde-
+pendent physical effect. Because the EOSs in the dataset
+are smooth functions of density, fixingR1.4 while vary-
+ingM max forces the trained decoder to redistribute the
+pressure variation across density in a correlated way. In
+practice, increasingMmax mainlystiffenstheEOSathigh
+density, while inducing only a comparatively small com-
+pensating shift at lower density.
+Figure 5 shows the same analysis as in Fig. 4, but now
+withM max andz v held fixed while the supervised latent
+observableR 1.4 is varied in steps of 0.4 km. In this case,
+the decoded EOSs remain relatively similar at high den-
+sities, corresponding to the inner core region, but sepa-
+rate clearly in the lower-density range highlighted by the
+zoomed panel on the left. This behavior is consistent
+with the well-known sensitivity of neutron star radii to
+the pressure near and somewhat above nuclear satura-
+tion density [50], where variations in the EOS primarily
+affect the outer core and envelope rather than the cen-
+tral high-density region. For reference, the exact SLy4
+EOS and its corresponding MR relation are also shown.
+The SLy4 EOS hasM max = 2.05M ⊙ andR 1.4 = 11.7
+km, and therefore lies between the generated EOSs with
+R1.4 = 11.5km andR 1.4 = 11.9km. Compared with
+these generated EOSs, SLy4 exhibits slightly higher pres-
+sure at low density and slightly lower pressure at high
+density, which is consistent with its smaller maximum
+mass relative to the fixed valueMmax = 2.1M ⊙ adopted
+for the generated EOSs.
+We perform the same analysis in Fig. 6, but now vary
+the variational latent parameterzv while holdingM max
+andR 1.4 fixed. The resulting EOSs are very similar
+overall, with the main differences appearing at baryon
+densitiesn B ≲0.1 fm −3. These low density variations
+translate primarily into differences in the radii of low
+mass neutron stars, especially for massesM≲1M ⊙.
+For the selected network,zv is positively correlated with
+the crust-core transition density and with the pressure in
+the density range between the crust-core transition and
+nB ≲0.1 fm −3. Consequently, larger values ofzv corre-
+spond to larger radii for low mass neutron stars. Across
+different training realizations, the same latent degree of
+freedom continues to act mainly on the low-density EOS,
+but the sign of the mapping is not fixed. In some net-
+works, largerz v produces larger low-mass radii, whereas
+in others it produces smaller low-mass radii, even though
+the reconstruction accuracy is comparable. This indi-
+cates that the mapping betweenzv and specific physical
+properties is not unique. Different trained networks may
+represent the same latent degree of freedom through a
+nonlinear reparameterization, or simply through a rever-
+sal of sign. This ambiguity reflects the lack of uniqueness
+of the latent representation learned by a nonlinear neural
+network.
+All three figures, Figs. 4–6, demonstrate that the su-
+pervised latent observablesMmax andR 1.4 can be repro-
+duced faithfully by the EOSs generated by the decoder.
+Some of the latent parameter sets considered here even
+extend beyond the range covered by the training data,
+for example when varyingMmax to1.9M ⊙ and2.3M ⊙
+while fixingR 1.4 = 12.7km, or varyingR 1.4 to 11.5 and
+13.5 km while fixingMmax = 2.1M ⊙. This indicates that
+the model has some capacity to extrapolate and generate
+new EOSsbeyond theparameter rangerepresentedin the
+
+12
+0.0 0.2 0.4 0.6 0.8 1.0 1.2
+Baryon number density nB (fm 3)
+10 2
+10 1
+100
+101
+102
+Pressure P (MeV fm 3)
+0.00 0.02 0.04 0.06 0.08 0.10
+10 2
+10 1
+100
+SLy4
+10 11 12 13 14
+Radius R [km]
+0.5
+1.0
+1.5
+2.0Mass M [M ]
+Latent (Mmax, R1.4, zv)
+ Mmax = 2.1 M ,
+ R1.4 = 12.7 km
+zv = 2
+zv = 1
+zv = 0
+zv = 1
+zv = 2
+FIG. 6. Same as Figs. 4 and 5, except that the supervised latent observablesMmax andR 1.4 are held fixed, while the variational
+latent parameterz v is varied from−2to2.
+training set. However, the accuracy with which the gen-
+erated EOSs reproduce the target supervised observables
+lowers in this extrapolating regime.
+C. Decoded reproduction of known EOS
+We now show that the SSVAE framework can ac-
+curately reproduce known EOSs by directly specifying
+the supervised latent observables corresponding to those
+models. As representative examples, we consider the
+SLy4 EOS, for whichMmax = 2.05M ⊙ andR 1.4 = 11.7
+km, and the SkI4 EOS, for whichM max = 2.19M ⊙
+andR 1.4 = 12.6km. Since the decoder MAPE for the
+supervised observables is about0.14%, as discussed in
+Sec. IIG, we treat the target values ofMmax andR 1.4
+as the means of the corresponding latent distributions
+and adopt0.14%of each target value as the associated
+standard deviation. For the variational latent parame-
+terz v, we pass the original EOS data through the en-
+coder and obtain the correspondingµ θzv andσ θzv for
+SLy4 and SkI4. The specific numerical value ofzv is not
+itself physically meaningful, since the learned variational
+latent parameter is not unique and varies across different
+training realizations. Using the means and variances of
+Mmax,R 1.4, andz v, we then generate ensembles of de-
+coded EOSs designed to reproduce the original SLy4 and
+SkI4 EOSs.
+Figure 7 compares the original EOSs and their corre-
+sponding MR relations with the ensembles of EOSs gen-
+erated by the decoder for SLy4 and SkI4. The bands of
+decoder-generated EOSs represent the1σcontours, while
+the means are indicated by the grey curves. The discrep-
+ancy between the decoded EOSs and the original EOSs is
+barely visible. Minor differences appear in the low-mass
+part of the SkI4 MR relation, arising from an approxi-
+mately10%deviation in the crust-core transition density
+of the decoded EOSs. However, the radii of low-mass
+neutron stars are extremely sensitive to the crust-core
+transition, so even a modest shift in the matching den-
+sity can produce a visible deviation in that regime. The
+accuracy of the crust-core transition density could likely
+be improved by introducing an additional hyperparam-
+eter that separately weights the reconstruction losses of
+the sound speed array and the boundary quantities. In
+terms of the likelihood model, this would correspond to
+introducing separate dispersions,σ x,c2s andσ x,d, for the
+firstd c2s = 101components and the lastd b = 6compo-
+nents, respectively, instead of using a single universalσx
+in Eq. (22).
+IV. CONCLUSION AND OUTLOOK
+In this work, we developed a semi-supervised vari-
+ational autoencoder framework for neutron star EOSs
+trained on Skyrme models. The original nine-parameter
+Skyrme description is reduced to three latent quantities:
+two supervised observables,Mmax andR 1.4, and one vari-
+ationallatentparameter,z v. Fortheselectedmodel, with
+η= 0.01,κ= 5, andN v = 1, thedecoderMAPEis0.14%
+forM max and0.12%forR 1.4. This low-dimensional rep-
+resentation is sufficient to generate EOSs that remain
+smooth, causal, and thermodynamically stable over the
+density range relevant for neutron stars.
+The three latent quantities were found to control dis-
+tinct parts of the EOS. VaryingMmax mainly changes the
+high-density stiffnessn B ≳0.6 fm −3and the upper part
+of the MR relation. VaryingR1.4 controlling the radii of
+canonical-mass stars mainly affects the pressure around
+nB ≈0.25 fm −3. At fixedMmax andR 1.4, varyingzv pro-
+duces comparatively small changes, concentrated mostly
+belown B ≲0.1 fm −3 and most visible in the radii of
+low-mass stars. The learned latent space is also well be-
+haved: the supervised observables follow the same joint
+distributionasthetrainingdata, whiletheselectedchoice
+
+13
+0.00 0.25 0.50 0.75 1.00
+Baryon number density nB (fm 3)
+200
+400
+600
+800Pressure P (MeV fm 3)
+SSVAE Reconstructed
+SLy4
+SkI4
+10 11 12
+Radius R [km]
+1.00
+1.25
+1.50
+1.75
+2.00
+2.25Mass M [M ]
+SSVAE Reconstructed
+FIG. 7. EOSsP(n B)and the corresponding MR relations generated by fixingMmax andR 1.4 to the target values of SLy4 and
+SkI4, andz v to the corresponding encoder inferred latent distributions, then decoding the EOSs. The shaded bands denote
+the1σspread of ensembles generated the decoder. The original SLy4 and SkI4 EOSs and their corresponding MR curves are
+shown for comparison.
+η= 0.01keepsz v only weakly correlated with them and
+approximately Gaussian.
+The decoder also reproduces known EOSs with high
+fidelity. For example, SLy4 and SkI4 are both recovered
+with discrepancies that are barely visible in the EOS and
+MR relations. The main residual difference appears in
+the low-mass part of the SkI4 MR curve and is associated
+with an approximately10%deviation in the crust-core
+transition density. The latent-space tests further show
+that the model retains some extrapolating capability. For
+example, it can generate EOSs withMmax = 1.9M ⊙ and
+2.3M ⊙ at fixedR 1.4 = 12.7km, although the training
+data span only the range1.95M ⊙ < M max <2.27M ⊙.
+In this regime, the fidelity with which the target observ-
+ables are reproduced gradually decreases.
+TheseresultsshowthattheSSVAEprovidesacompact
+surrogate for the original Skyrme parameter space. In-
+stead of exploring 9 microscopic parameters directly, one
+may work with 3 latent quantities that are much closer
+to neutron star observables. This makes the decoder a
+promising tool for Bayesian inference. Once trained, it
+can generate large ensembles of EOSs at negligible cost
+andmaythereforebecombinedwithMarkovchainMonte
+Carlo sampling to infer posterior distributions forMmax,
+R1.4, and the variational latent degree of freedom from
+multimessenger data.
+There are several natural directions for future work.
+A broader training set could include relativistic mean-
+field EOSs, chiral effective field theory based construc-
+tions, and hybrid hadron-quark EOSs including crossover
+transitions such as quarkyonic matter. Preliminary tests
+with9parameterrelativisticmean-fieldmodelsshowsim-
+ilar behavior, but two variational latent parameters are
+needed to reach comparable accuracy, see Github[51]. A
+third supervised observable such asR2.0 [4, 8, 52] might
+be included for more flexible EOS models. Besides, the
+reconstruction of boundary quantities could also be im-
+proved by replacing the single likelihood scaleσx with
+separate dispersions for the sound-speed array and the
+boundary data, namelyσ x,c2s for the firstd c2s = 101
+components andσ x,d for the lastd b = 6components.
+Finally, the present study focuses on smooth EOSs.
+Extending the framework to first-order phase transi-
+tions, where Maxwell constructions can produce vanish-
+ing sound speed and discontinuous structure [53, 54], will
+provide a more stringent test of how broadly this latent
+representation can describe dense matter.
+CODE AND DA T A A V AILABILITY
+The implementation of the semi-supervised variational
+autoencoder (SSVAE), together with training scripts,
+preprocessing routines, and datasets used in this work,
+is publicly available at Github[51].
+ACKNOWLEDGMENTS
+T. Z. and A. R. acknowledge the helpful discussion
+with Sanjay Reddy during Institute for Nuclear Theory
+Undergraduate Research Network (INTURN) program.
+T. Z. and A. R. are supported by N3AS’s National Sci-
+ence Foundation award No. 2020275. A. R. is supported
+by a scholarship from the Mary Gates Endowment for
+Students. J. M. L. acknowledges support from Grant
+DE-FG02-87ER40317 from the U.S. Dept. of Energy.
+
+14
+[1] J. M. Lattimer and M. Prakash. Neutron Star Structure
+and the Equation of State.The Astrophysical Journal,
+550(1):426–442, March 2001. doi:10.1086/319702.
+[2] James M Lattimer and Madappa Prakash. Neutron star
+observations: Prognosis for equation of state constraints.
+Physics reports, 442(1-6):109–165, 2007.
+[3] J. M. Lattimer. Neutron Stars and the Nuclear Mat-
+ter Equation of State.Annual Review of Nuclear and
+Particle Science, 71:433–464, September 2021. doi:
+10.1146/annurev-nucl-102419-124827.
+[4] Christian Drischler, Sophia Han, James M. Lattimer,
+Madappa Prakash, Sanjay Reddy, and Tianqi Zhao. Lim-
+iting masses and radii of neutron stars and their impli-
+cations.Phys. Rev. C, 103(4):045808, April 2021. doi:
+10.1103/PhysRevC.103.045808.
+[5] Ben Margalit and Brian D. Metzger. Constraining the
+Maximum Mass of Neutron Stars from Multi-messenger
+Observations of GW170817.The Astrophysical Journal
+Letters, 850(2):L19, December 2017. doi:10.3847/2041-
+8213/aa991c.
+[6] Elias R. Most, Lukas R. Weih, Luciano Rezzolla, and
+Jürgen Schaffner-Bielich. New Constraints on Radii and
+Tidal Deformabilities of Neutron Stars from GW170817.
+Phys. Rev. Lett., 120(26):261103, June 2018. doi:
+10.1103/PhysRevLett.120.261103.
+[7] Andreas Bauswein, Sebastian Blacker, Vimal Vijayan,
+Nikolaos Stergioulas, Katerina Chatziioannou, James A.
+Clark, Niels-Uwe F. Bastian, David B. Blaschke, Ma-
+teusz Cierniak, and Tobias Fischer. Equation of
+State Constraints from the Threshold Binary Mass
+for Prompt Collapse of Neutron Star Mergers.Phys.
+Rev. Lett., 125(14):141103, October 2020. doi:
+10.1103/PhysRevLett.125.141103.
+[8] Isaac Legred, Katerina Chatziioannou, Reed Essick,
+Sophia Han, and Philippe Landry. Impact of the PSR J
+0740 +6620 radius constraint on the properties of high-
+density matter.Phys. Rev. D, 104(6):063003, September
+2021. doi:10.1103/PhysRevD.104.063003.
+[9] Xieyuan Dong, Hong Shen, Jinniu Hu, and Ying Zhang.
+Equation of state for neutron stars with speed of sound
+constraints via bayesian inference.Physical Review D,
+112(6):063043, 2025.
+[10] Michael Bender, Paul-Henri Heenen, and Paul-Gerhard
+Reinhard. Self-consistent mean-field models for nuclear
+structure.Reviews of Modern Physics, 75(1):121–180,
+January 2003. doi:10.1103/RevModPhys.75.121.
+[11] Brian D. Serot and John Dirk Walecka. Recent Progress
+in Quantum Hadrodynamics.International Journal of
+Modern Physics E, 6(4):515–631, January 1997. doi:
+10.1142/S0218301397000299.
+[12] Mikhail V. Beznogov and Adriana R. Raduta. Bayesian
+inference of the dense matter equation of state
+built upon extended Skyrme interactions.Phys.
+Rev. C, 110(3):035805, September 2024. doi:
+10.1103/PhysRevC.110.035805.
+[13] Chun Huang, Laura Tolos, Constança Providência, and
+Anna Watts. Constraining a relativistic mean field model
+using neutron star mass–radius measurements ii: hyper-
+onic models.Monthly Notices of the Royal Astronomical
+Society, 536(4):3262–3275, 2025.
+[14] Ingo Tews, James M. Lattimer, Akira Ohnishi, and Ev-
+geni E. Kolomeitsev. Symmetry Parameter Constraints
+from a Lower Bound on Neutron-matter Energy.Astro-
+phys. J., 848(2):105, October 2017. doi:10.3847/1538-
+4357/aa8db9.
+[15] Lee Lindblom. Spectral representations of neutron-star
+equations of state.Phys. Rev. D, 82(10):103011, Novem-
+ber 2010. doi:10.1103/PhysRevD.82.103011.
+[16] Jocelyn S. Read, Benjamin D. Lackey, Benjamin J.
+Owen, and John L. Friedman. Constraints on a phe-
+nomenologically parametrized neutron-star equation of
+state.Phys. Rev. D, 79(12):124032, June 2009. doi:
+10.1103/PhysRevD.79.124032.
+[17] Sinan Altiparmak, Christian Ecker, and Luciano Rez-
+zolla. On the Sound Speed in Neutron Stars.The As-
+trophysical Journal Letters, 939(2):L34, November 2022.
+doi:10.3847/2041-8213/ac9b2a.
+[18] Philippe Landry and Reed Essick. Nonparametric in-
+ference of the neutron star equation of state from grav-
+itational wave observations.Physics Review D, 99(8):
+084049, April 2019. doi:10.1103/PhysRevD.99.084049.
+[19] Debora Mroczek, M. Coleman Miller, Jacquelyn
+Noronha-Hostler, and Nicolas Yunes. Searching for phase
+transitions in neutron stars with modified Gaussian pro-
+cesses.arXiv e-prints, art. arXiv:2302.07978, February
+2023. doi:10.48550/arXiv.2302.07978.
+[20] D. D. Ofengeim, P. S. Shternin, and T. Piran. Maxi-
+mal Mass Neutron Star as a Key to Superdense Matter
+Physics.Astronomy Letters, 49(10):567–574, November
+2023. doi:10.1134/S1063773723100055.
+[21] Bao-Jun Cai, Bao-An Li, and Zhen Zhang. Core states
+of neutron stars from anatomizing their scaled structure
+equations.The Astrophysical Journal, 952(2):147, 2023.
+[22] Boyang Sun and James M Lattimer. Correlations be-
+tween the neutron star mass–radius relation and the
+equation of state of dense matter.The Astrophysical
+Journal, 984(1):30, 2025.
+[23] Boyang Sun, Tianqi Zhao, and James M Lattimer. A
+new bayesian framework with natural priors to con-
+strain the neutron star equation of state.arXiv preprint
+arXiv:2601.04294, 2026.
+[24] Yuki Fujimoto, Kenji Fukushima, and Koichi Murase.
+Extensive studies of the neutron star equation of
+state from the deep learning inference with the ob-
+servational data augmentation.Journal of High
+Energy Physics, 2021(3):273, March 2021. doi:
+10.1007/JHEP03(2021)273.
+[25] Márcio Ferreira, Valéria Carvalho, and Constança
+Providência. Extracting nuclear matter properties from
+the neutron star matter equation of state using deep neu-
+ral networks.Phys. Rev. D, 106(10):103023, November
+2022. doi:10.1103/PhysRevD.106.103023.
+[26] Shriya Soma, Lingxiao Wang, Shuzhe Shi, Horst Stöcker,
+and Kai Zhou. Reconstructing the neutron star equation
+of state from observational data via automatic differen-
+tiation.Phys. Rev. D, 107(8):083028, April 2023. doi:
+10.1103/PhysRevD.107.083028.
+[27] Giulia Ventagli and Ippocratis D. Saltas. Deep learning
+inference of the neutron star equation of state.Jour-
+nal of Cosmology and Astroparticle Physics, 2025(1):073,
+January 2025. doi:10.1088/1475-7516/2025/01/073.
+
+15
+[28] Ming-Zhe Han, Shao-Peng Tang, and Yi-Zhong Fan.
+Nonparametric representation of neutron star equation
+of state using variational autoencoder.The Astrophysi-
+cal Journal, 950(2):77, 2023.
+[29] Márcio Ferreira and Michał Bejger. Conditional vari-
+ational autoencoder inference of neutron star equa-
+tion of state from astrophysical observations.Physics
+Review D, 111(2):023035, January 2025. doi:
+10.1103/PhysRevD.111.023035.
+[30] D. Vautherin and D. M. Brink. Hartree-Fock Cal-
+culations with Skyrme’s Interaction. I. Spherical Nu-
+clei.Phys. Rev. C, 5(3):626–647, March 1972. doi:
+10.1103/PhysRevC.5.626.
+[31] E. Chabanat, P. Bonche, P. Haensel, J. Meyer, and
+R. Schaeffer. A Skyrme parametrization from subnuclear
+to neutron star densities.Nuclear Physics A, 627:710–
+746, February 1997. doi:10.1016/S0375-9474(97)00596-4.
+[32] J. D. Walecka. A theory of highly condensed mat-
+ter.Annals of Physics, 83:491–529, January 1974. doi:
+10.1016/0003-4916(74)90208-5.
+[33] Tianqi Zhao, Zidu Lin, Bharat Kumar, Andrew W.
+Steiner, and Madappa Prakash. Characteriz-
+ing the nuclear models informed by PREX and
+CREX: a view from Bayesian inference.arXiv
+e-prints, art. arXiv:2406.05267, June 2024. doi:
+10.48550/arXiv.2406.05267.
+[34] C. Ducoin, Ph. Chomaz, and F. Gulminelli. Isospin-
+dependent clusterization of neutron-star matter.Nu-
+clear Physics A, 789(1-4):403–425, June 2007. doi:
+10.1016/j.nuclphysa.2007.03.006.
+[35] Jun Xu, Lie-Wen Chen, Bao-An Li, and Hong-Ru Ma.
+Locating the inner edge of the neutron star crust us-
+ing terrestrial nuclear laboratory data.Physical Review
+C—Nuclear Physics, 79(3):035802, 2009.
+[36] Camille Ducoin, Jérôme Margueron, Constança
+Providência, and Isaac Vidana. Core-crust transition
+in neutron stars: Predictivity of density developments.
+Physical Review C—Nuclear Physics, 83(4):045810,
+2011.
+[37] P. B. Demorest, T. Pennucci, S. M. Ransom, M. S. E.
+Roberts, and J. W. T. Hessels. A two-solar-mass
+neutron star measured using Shapiro delay.Nature
+(London), 467(7319):1081–1083, October 2010. doi:
+10.1038/nature09466.
+[38] John Antoniadis, Paulo C. C. Freire, Norbert Wex,
+Thomas M. Tauris, Ryan S. Lynch, Marten H. van
+Kerkwijk, Michael Kramer, Cees Bassa, Vik S. Dhillon,
+Thomas Driebe, Jason W. T. Hessels, Victoria M. Kaspi,
+Vladislav I. Kondratiev, Norbert Langer, Thomas R.
+Marsh, Maura A. McLaughlin, Timothy T. Pennucci,
+Scott M. Ransom, Ingrid H. Stairs, Joeri van Leeuwen,
+Joris P. W. Verbiest, and David G. Whelan. A Massive
+Pulsar in a Compact Relativistic Binary.Science, 340
+(6131):448, April 2013. doi:10.1126/science.1233232.
+[39] H. T. Cromartie, E. Fonseca, S. M. Ransom, P. B. De-
+morest, Z. Arzoumanian, H. Blumer, P. R. Brook, M. E.
+DeCesar, T. Dolch, J. A. Ellis, R. D. Ferdman, E. C.
+Ferrara, N. Garver-Daniels, P. A. Gentile, M. L. Jones,
+M. T. Lam, D. R. Lorimer, R. S. Lynch, M. A. McLaugh-
+lin, C. Ng, D. J. Nice, T. T. Pennucci, R. Spiewak, I. H.
+Stairs, K. Stovall, J. K. Swiggum, and W. W. Zhu. Rela-
+tivisticShapiro delay measurementsof anextremelymas-
+sive millisecond pulsar.Nature Astronomy, 4:72–76, Jan-
+uary 2020. doi:10.1038/s41550-019-0880-2.
+[40] M. C. Miller, F. K. Lamb, A. J. Dittmann, S. Bogdanov,
+Z. Arzoumanian, K. C. Gendreau, S. Guillot, W. C. G.
+Ho, J. M. Lattimer, M. Loewenstein, S. M. Morsink,
+P. S. Ray, M. T. Wolff, C. L. Baker, T. Cazeau, S. Man-
+thripragada, C. B. Markwardt, T. Okajima, S. Pollard,
+I. Cognard, H. T. Cromartie, E. Fonseca, L. Guillemot,
+M. Kerr, A. Parthasarathy, T. T. Pennucci, S. Ran-
+som, and I. Stairs. The Radius of PSR J0740+6620
+from NICER and XMM-Newton Data.The Astrophys-
+ical Journal Letters, 918(2):L28, September 2021. doi:
+10.3847/2041-8213/ac089b.
+[41] Thomas E. Riley, Anna L. Watts, Paul S. Ray,
+Slavko Bogdanov, Sebastien Guillot, Sharon M. Morsink,
+Anna V. Bilous, Zaven Arzoumanian, Devarshi Choud-
+hury, Julia S. Deneva, Keith C. Gendreau, Alice K.
+Harding, Wynn C. G. Ho, James M. Lattimer, Michael
+Loewenstein, Renee M. Ludlam, Craig B. Mark-
+wardt, Takashi Okajima, Chanda Prescod-Weinstein,
+Ronald A. Remillard, Michael T. Wolff, Emmanuel Fon-
+seca, H. Thankful Cromartie, Matthew Kerr, Timothy T.
+Pennucci, Aditya Parthasarathy, Scott Ransom, Ingrid
+Stairs, Lucas Guillemot, and Ismael Cognard. A NICER
+View of the Massive Pulsar PSR J0740+6620 Informed
+by Radio Timing and XMM-Newton Spectroscopy.The
+Astrophysical Journal Letters, 918(2):L27, September
+2021. doi:10.3847/2041-8213/ac0a81.
+[42] B. P. Abbott, R. Abbott, T. D. Abbott, F. Acernese,
+K. Ackley, C. Adams, T. Adams, P. Addesso, R. X. Ad-
+hikari, V. B. Adya, C. Affeldt, B. Agarwal, M. Agathos,
+K. Agatsuma, N. Aggarwal, O. D. Aguiar, L. Aiello,
+A. Ain, P. Ajith, B. Allen, G. Allen, A. Allocca, M. A.
+Aloy, P. A. Altin, A. Amato, A. Ananyeva, S. B. Ander-
+son, W. G. Anderson, S. V. Angelova, S. Antier, S. Ap-
+pert, K. Arai, M. C. Araya, J. S. Areeda, M. Arène,
+N. Arnaud, K. G. Arun, S. Ascenzi, G. Ashton, M. Ast,
+S. M. Aston, P. Astone, D. V. Atallah, F. Aubin,
+P. Aufmuth, C. Aulbert, K. AultONeal, C. Austin,
+A. Avila-Alvarez, S. Babak, P. Bacon, F. Badaracco,
+M. K. M. Bader, S. Bae, P. T. Baker, F. Baldac-
+cini, G. Ballardin, S. W. Ballmer, S. Banagiri, J. C.
+Barayoga, S. E. Barclay, B. C. Barish, D. Barker,
+K. Barkett, S. Barnum, F. Barone, B. Barr, L. Bar-
+sotti, M. Barsuglia, D. Barta, J. Bartlett, I. Bartos,
+R. Bassiri, A. Basti, J. C. Batch, M. Bawaj, J. C. Bay-
+ley, M. Bazzan, B. Bécsy, C. Beer, M. Bejger, I. Be-
+lahcene, A. S. Bell, D. Beniwal, M. Bensch, B. K. Berger,
+G. Bergmann, S. Bernuzzi, J. J. Bero, C. P. L. Berry,
+D. Bersanetti, A. Bertolini, J. Betzwieser, R. Bhan-
+dare, I. A. Bilenko, S. A. Bilgili, G. Billingsley, C. R.
+Billman, J. Birch, R. Birney, O. Birnholtz, S. Biscans,
+S. Biscoveanu, A. Bisht, M. Bitossi, M. A. Bizouard,
+J. K. Blackburn, J. Blackman, C. D. Blair, D. G. Blair,
+R. M. Blair, S. Bloemen, O. Bock, N. Bode, M. Boer,
+Y. Boetzel, G. Bogaert, A. Bohe, F. Bondu, E. Bonilla,
+R. Bonnand, P. Booker, B. A. Boom, C. D. Booth,
+R. Bork, V. Boschi, S. Bose, K. Bossie, V. Bossilkov,
+J. Bosveld, Y. Bouffanais, A. Bozzi, C. Bradaschia, P. R.
+Brady, A. Bramley, M. Branchesi, J. E. Brau, T. Bri-
+ant, F. Brighenti, A. Brillet, M. Brinkmann, V. Bris-
+son, P. Brockill, A. F. Brooks, D. D. Brown, S. Brunett,
+C. C. Buchanan, A. Buikema, T. Bulik, H. J. Bul-
+ten, A. Buonanno, D. Buskulic, C. Buy, R. L. Byer,
+M. Cabero, L. Cadonati, G. Cagnoli, C. Cahillane,
+J. Calderón Bustillo, T. A. Callister, E. Calloni, J. B.
+
+16
+Camp, M. Canepa, P. Canizares, K. C. Cannon, H. Cao,
+J. Cao, C. D. Capano, E. Capocasa, F. Carbognani,
+S. Caride, M. F. Carney, G. Carullo, J. Casanueva
+Diaz, C. Casentini, S. Caudill, M. Cavaglià, F. Cavalier,
+R. Cavalieri, G. Cella, C. B. Cepeda, P. Cerdá-Durán,
+G. Cerretani, E. Cesarini, O. Chaibi, S. J. Chamberlin,
+M. Chan, S. Chao, P. Charlton, E. Chase, E. Chassande-
+Mottin, D. Chatterjee, K. Chatziioannou, B. D. Cheese-
+boro, H. Y. Chen, X. Chen, Y. Chen, H.-P. Cheng,
+H. Y. Chia, and A. Chincarini. GW170817: Measure-
+ments of Neutron Star Radii and Equation of State.
+Phys. Rev. Lett., 121(16):161101, October 2018. doi:
+10.1103/PhysRevLett.121.161101.
+[43] B. P. Abbott, R. Abbott, T. D. Abbott, F. Acernese,
+K. Ackley, C. Adams, T. Adams, P. Addesso, R. X. Ad-
+hikari, V. B. Adya, C. Affeldt, B. Agarwal, M. Agathos,
+K. Agatsuma, N. Aggarwal, O. D. Aguiar, L. Aiello,
+A. Ain, P. Ajith, B. Allen, G. Allen, A. Allocca, M. A.
+Aloy, P. A. Altin, A. Amato, A. Ananyeva, S. B. Ander-
+son, W. G. Anderson, S. V. Angelova, S. Antier, S. Ap-
+pert, K. Arai, M. C. Araya, J. S. Areeda, M. Arène,
+N. Arnaud, K. G. Arun, S. Ascenzi, G. Ashton, M. Ast,
+S. M. Aston, P. Astone, D. V. Atallah, F. Aubin, P. Auf-
+muth, C. Aulbert, K. AultONeal, C. Austin, A. Avila-
+Alvarez, S. Babak, P. Bacon, F. Badaracco, M. K. M.
+Bader, S. Bae, P. T. Baker, F. Baldaccini, G. Bal-
+lardin, S. W. Ballmer, S. Banagiri, J. C. Barayoga, S. E.
+Barclay, B. C. Barish, D. Barker, K. Barkett, S. Bar-
+num, F. Barone, B. Barr, L. Barsotti, M. Barsuglia,
+D. Barta, J. Bartlett, I. Bartos, R. Bassiri, A. Basti, J. C.
+Batch, M. Bawaj, J. C. Bayley, M. Bazzan, B. Bécsy,
+C. Beer, M. Bejger, I. Belahcene, A. S. Bell, D. Beniwal,
+M. Bensch, B. K. Berger, G. Bergmann, S. Bernuzzi,
+J. J. Bero, C. P. L. Berry, D. Bersanetti, A. Bertolini,
+J. Betzwieser, R. Bhandare, I. A. Bilenko, S. A. Bil-
+gili, G. Billingsley, C. R. Billman, J. Birch, R. Bir-
+ney, O. Birnholtz, S. Biscans, S. Biscoveanu, A. Bisht,
+M. Bitossi, M. A. Bizouard, J. K. Blackburn, J. Black-
+man, C. D. Blair, D. G. Blair, R. M. Blair, S. Bloe-
+men, O. Bock, N. Bode, M. Boer, Y. Boetzel, G. Bo-
+gaert, A. Bohe, F. Bondu, E. Bonilla, R. Bonnand,
+P. Booker, B. A. Boom, C. D. Booth, R. Bork, V. Boschi,
+S. Bose, K. Bossie, V. Bossilkov, J. Bosveld, Y. Bouf-
+fanais, A. Bozzi, C. Bradaschia, P. R. Brady, A. Bram-
+ley, M. Branchesi, J. E. Brau, T. Briant, F. Brighenti,
+A. Brillet, M. Brinkmann, V. Brisson, P. Brockill, A. F.
+Brooks, D. D. Brown, S. Brunett, C. C. Buchanan,
+A. Buikema, T. Bulik, H. J. Bulten, A. Buonanno,
+D. Buskulic, C. Buy, R. L. Byer, M. Cabero, L. Cado-
+nati, G. Cagnoli, C. Cahillane, J. Calderón Bustillo,
+T. A. Callister, E. Calloni, J. B. Camp, M. Canepa,
+P. Canizares, K. C. Cannon, H. Cao, J. Cao, C. D. Ca-
+pano, E. Capocasa, F. Carbognani, S. Caride, M. F.
+Carney, G. Carullo, J. Casanueva Diaz, C. Casen-
+tini, S. Caudill, M. Cavaglià, F. Cavalier, R. Cavalieri,
+G. Cella, C. B. Cepeda, P. Cerdá-Durán, G. Cerretani,
+E. Cesarini, O. Chaibi, S. J. Chamberlin, M. Chan,
+S. Chao, P. Charlton, E. Chase, E. Chassande-Mottin,
+D. Chatterjee, K. Chatziioannou, B. D. Cheeseboro,
+H. Y. Chen, X. Chen, Y. Chen, H.-P. Cheng, H. Y. Chia,
+and A. Chincarini. Properties of the Binary Neutron Star
+Merger GW170817.Physical Review X, 9(1):011001, Jan-
+uary 2019. doi:10.1103/PhysRevX.9.011001.
+[44] Richard C. Tolman. Static solutions of einstein’s field
+equations for spheres of fluid.Phys. Rev., 55:364–373,
+Feb 1939. doi:10.1103/PhysRev.55.364. URLhttps:
+//link.aps.org/doi/10.1103/PhysRev.55.364.
+[45] J. R. Oppenheimer and G. M. Volkoff. On massive
+neutron cores.Phys. Rev., 55:374–381, Feb 1939. doi:
+10.1103/PhysRev.55.374. URLhttps://link.aps.org
+/doi/10.1103/PhysRev.55.374.
+[46] Linda R. Petzold. Automatic selection of methods for
+solving stiff and nonstiff systems of ordinary differential
+equations.SIAM Journal on Scientific and Statistical
+Computing, 4(1):136–148, 1983. doi:10.1137/0904010.
+[47] Diederik P. Kingma and Max Welling. An In-
+troduction to Variational Autoencoders.arXiv e-
+prints, art. arXiv:1906.02691, June 2019. doi:
+10.48550/arXiv.1906.02691.
+[48] Carl Doersch. Tutorial on Variational Autoencoders.
+arXiv e-prints, art. arXiv:1606.05908, June 2016. doi:
+10.48550/arXiv.1606.05908.
+[49] Dan Hendrycks and Kevin Gimpel. Gaussian error linear
+units (gelus).arXiv preprint arXiv:1606.08415, 2016.
+[50] J. M. Lattimer and M. Prakash. The Physics of Neu-
+tron Stars.Science, 304(5670):536–542, April 2004. doi:
+10.1126/science.1090720.
+[51] Tianqi Zhao, Fanglida Yan, and Alex Ross. Ssvae_eos:
+Semi-supervised variational autoencoder for neutron star
+equation of state generation, 2026. URLhttps://gith
+ub.com/sotzee/SSVAE_EOS. GitHub repository.
+[52] Zidu Lin and Andrew W Steiner. Indication of sharp and
+strong phase transitions from nicer observations.The
+Astrophysical Journal Letters, 974(1):L17, 2024.
+[53] Luiz L Lopes, Carline Biesdorf, and Débora P Menezes.
+Modified mit bag models—part i: Thermodynamic con-
+sistency, stability windows and symmetry group.Physica
+Scripta, 96(6):065303, March 2021. ISSN 1402-4896. doi:
+10.1088/1402-4896/abef34. URLhttp://dx.doi.org/1
+0.1088/1402-4896/abef34.
+[54] Sebastian Blacker, Andreas Bauswein, and Stefan Typel.
+Exploring thermal effects of the hadron-quark matter
+transition in neutron star mergers.Physical Review
+D, 108(6), September 2023. ISSN 2470-0029. doi:
+10.1103/physrevd.108.063032. URLhttp://dx.doi.o
+rg/10.1103/PhysRevD.108.063032.

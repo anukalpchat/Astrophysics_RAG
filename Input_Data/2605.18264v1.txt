@@ -1,0 +1,3169 @@
+Title: FastChem 4: New chemical elements and improved convergence behaviour
+Authors: Daniel Kitzmann, Joachim W. Stock, A. Beate C. Patzer
+Published: 2026-05-18
+Categories: astro-ph.EP, astro-ph.IM, astro-ph.SR
+
+Astronomy&Astrophysicsmanuscript no. fastchem4©ESO 2026
+May 19, 2026
+FastChem 4:
+New chemical elements and improved convergence behaviour
+D. Kitzmann1,2 , J. W. Stock, and A.B.C. Patzer3
+1 Space Research and Planetary Sciences, Physics Institute, University of Bern, Gesellschaftsstrasse 6, 3012 Bern, Switzerland
+e-mail:daniel.kitzmann@unibe.ch
+2 Center for Space and Habitability, University of Bern, Gesellschaftsstrasse. 6, 3012 Bern, Switzerland
+3 Institut für Physik und Astronomie (IfPA), Technische Universität Berlin (TUB), Hardenbergstr. 36, 10623 Berlin, Germany
+ABSTRACT
+Chemical equilibrium calculations are a key ingredient for modelling and interpreting spectroscopic observations of (exo)planets,
+brown dwarfs, cool stars, and protoplanetary disks. As these applications increasingly probe non-solar elemental abundances and pre-
+viously underrepresented elements, equilibrium chemistry solvers must be both numerically robust and capable of handling complex
+chemical systems. Here we present FastChem4, a major update to the open-source FastChemequilibrium chemistry code. We extend
+the gas-phase solver with a multidimensional Newton-method convergence accelerator that mitigates the slow convergence previously
+encountered for strongly non-solar elemental abundances. We further reformulate the gas-phase equations in logarithmic element
+densities, removing the dependence on quadruple-precision arithmetic and allowing FastChemto be applied at low temperatures on
+any platform supporting double precision. The condensate solver is upgraded with adaptive Levenberg–Marquardt regularisation, a
+perturbed-Hessian fallback for nearly singular Jacobians, and a combined gas–condensate Newton solver. These changes lead to a
+strong increase in computational performance and stability. The thermochemical data is expanded using thermochemical data from the
+NIST-JANAF tables and the Barin compilation, and now comprises 800 gas-phase molecules and ions and 511 condensates spanning
+44 elements, of which about 290 are newly added liquid and solid species. We apply the updated code to a wide pressure–temperature
+grid for both solar and carbon-rich (C/O=2) elemental compositions. The resulting grids reproduce the classical solar-composition
+condensation sequence and reveal the marked shifts that occur under carbon-rich conditions, including reduced condensates such
+as CaS, AlN, MgS, and graphite. We also find that silicon monoxide is stable as a condensate over a limited pressure–temperature
+range, consistent with recent JWST observations of brown dwarfs. FastChem4 is released under the GPLv3 licence, together with a
+pre-compiled Python package.
+Key words.astrochemistry – methods: numerical – planets and satellites: atmospheres – brown dwarfs – stars: atmospheres –
+protoplanetary disks
+1. Introduction
+The interpretation of spectroscopic observations and the mod-
+elling of planetary and stellar atmospheres rely critically on an
+accurate description of atmospheric chemistry. Assuming chem-
+ical equilibrium when computing gas-phase compositions and
+condensate formation significantly simplifies this problem. Al-
+though this assumption is not universally valid, it remains rea-
+sonable in a wide range of scenarios. In many other cases,
+however, chemical kinetics, including vertical and horizontal
+transport as well as photochemical processes, must be taken
+into account to obtain a more realistic estimate of the chem-
+ical composition (e.g., Venot et al. 2012; Moses et al. 2011;
+Rimmer & Helling 2016; Tsai et al. 2021).
+However, such non-equilibrium models require detailed
+knowledge of the full reaction network connecting all relevant
+chemical species. In practice, these networks are often incom-
+plete, and many reaction rate coefficients remain poorly con-
+strained. As a consequence, the number of chemical species that
+can be included in complex kinetic models is frequently limited
+by missing chemical pathways or unknown rates. Equilibrium
+chemistry models, in contrast, can readily handle hundreds or
+even thousands of species involving dozens of elements, as they
+do not depend on explicit reaction rates but only on equilibrium
+constants. Thus, despite its known limitations in certain environ-
+ments, chemical equilibrium calculations remain a crucial com-
+ponent of atmospheric modelling. Results of such calculations
+can also provide a fundamental benchmark that forms the ba-
+sis for extending models to include kinetic effects. For example,
+without a reference equilibrium state, it is not possible to deter-
+mine whether a system is in or out of equilibrium, nor to quantify
+the degree of deviation from equilibrium.
+FastChemis an open-source code 1 designed to compute
+chemical equilibrium abundances of gas-phase species and
+condensates in primarily astrophysical and planetary envi-
+ronments (Stock et al. 2018, 2022; Kitzmann et al. 2024).
+While several other equilibrium chemistry codes are avail-
+able in astrophysics, such as GGchem (Woitke et al. 2018),
+CONDOR (Lodders & Fegley 1993), TEA (Blecic et al.
+2016), or the NASA CEA code (Gordon & McBride 1994;
+McBride & Gordon 1996), FastChemis among the fastest
+open-source implementations. It is distributed as a pre-compiled
+Python package (pyfastchem 2), making it straightforward to
+deploy across different platforms.
+The FastChemcode has been successfully adopted for a
+wide range of astrophysical systems, including modelling the at-
+mospheres of brown dwarfs and exoplanets (e.g., Grasser et al.
+1 https://github.com/NewStrangeWorlds/FastChem
+2 https://pypi.org/project/pyfastchem
+Article number, page 1
+arXiv:2605.18264v1  [astro-ph.EP]  18 May 2026
+
+A&A proofs:manuscript no. fastchem4
+2025; Petz et al. 2025; Scott et al. 2025) and interpreting obser-
+vations of these objects using data from theJames WebbSpace
+Telescope (JWST) and ground-based facilities (Picos et al. 2025;
+Fisher et al. 2026; Verma et al. 2025; Bachmann et al. 2025;
+de Regt et al. 2025). It has also been applied to scenarios in-
+volving outgassing from magma oceans and the formation
+of secondary atmospheres (Ito et al. 2025; Hakim et al. 2026;
+Bower et al. 2025). Its applications even extend beyond astro-
+physics: FastChemhas been used to study combustion reaction
+networks in industrial contexts and has also been adapted into a
+smartphone application that enables chemical equilibrium calcu-
+lations on mobile devices.
+The first two versions of FastChem, presented by Stock et al.
+(2018) and Stock et al. (2022), were restricted to gas-phase
+chemistry. Kitzmann et al. (2024) introduced condensation in
+the third major version, FastChem3, also referred to as
+FastChemCond. As discussed by Kitzmann et al. (2024), the
+phase rule implies that not all potentially stable condensates can
+coexist simultaneously: the number of stable condensates is lim-
+ited to the number of elements minus one. In FastChemCond, we
+therefore adopted an approach based on the work of Leal et al.
+(2016), in which the set of stable condensates emerges naturally
+as a direct outcome of the algorithm, without the need for itera-
+tive addition or removal of condensates.
+In previous releases of FastChem, the thermochemical data
+and species selection were focused on elements more abundant
+than vanadium under solar elemental abundances. However, the
+recent detection of several rare-earth, transition, and heavy met-
+als, such as yttrium (Y), scandium (Sc), and barium (Ba), in the
+atmospheres of ultra-hot Jupiters (e.g., Hoeijmakers et al. 2019;
+Borsato et al. 2023; Prinoth et al. 2024a) has rendered this re-
+striction insufficient for accurately characterising the chemistry
+of these objects.
+Moreover, as FastChemhas increasingly been applied to
+arbitrary element selections and strongly non-solar elemental
+abundance distributions, convergence issues have occasionally
+emerged when using the numerical algorithms implemented in
+earlier versions. These issues arise from strong non-linear cou-
+pling between elements that simultaneously participate in the
+formation of the same molecules and have comparable abun-
+dances. Addressing these limitations is therefore a key motiva-
+tion of the present work.
+In this paper, we first improve the gas-phase chemistry solver
+by introducing a convergence accelerator based on the Newton
+method. We then expand the chemical database by adding addi-
+tional elements together with their associated gas-phase species
+and condensates. Finally, we use this extended database to inves-
+tigate chemical equilibrium sequences for all included elements
+over a wide range of temperatures and pressures.
+2. Improvements to the FastChem code
+When performing FastChemcalculations over a wide parame-
+ter range in temperature and pressure, the number of iterations
+required for convergence can become extremely large under cer-
+tain conditions. This increase is strongly influenced by the cho-
+sen elemental composition, particularly when competing key
+elements have similar abundances. This effect is illustrated in
+Fig. 1, which shows the number of iterations needed across the
+pressure-temperature (p-T) range used by Stock et al. (2018). In
+contrast to those calculations, we adopted solar elemental abun-
+dances but set the carbon-to-oxygen (C/O) ratio equal to one. To
+remain comparable with the earlier calculations, only gas-phase
+species were considered, thus neglecting condensation.
+Fig. 1.Number of iterations necessary for convergence using the previ-
+ous version of FastChem(Stock et al. 2022; Kitzmann et al. 2024). The
+pure gas-phase calculations were performed over a widep-Tplane us-
+ing solar elemental abundances but in particular with a C/O ratio of 1.
+FastChemtypically converges within tens to a few hundred
+iterations across most of thep-Trange (see Fig. 1). However,
+in specific regions, particularly at higher temperatures (∼1500
+K) and very low pressures (below 10 −7 bar), the number of
+required iterations increases significantly. In some cases, more
+than 100 000 iterations are needed to reach convergence. Similar
+convergence challenges occur for other specific elemental com-
+positions as well (not shown), although these issues are generally
+confined to smaller regions of the parameter range.
+Two additional numerical issues have emerged in some ap-
+plications of FastChem. First, at low temperatures the atomic
+number densities can become so small that they under-
+flow standard double-precision arithmetic. Previous versions of
+FastChemtherefore relied on quadruple precision, which is not
+natively supported on some computational platforms (for exam-
+ple, Apple ARM processors), leading to convergence problems
+below roughly 300 K. Second, for strongly non-solar elemen-
+tal abundances, FastChemmay experience convergence issues
+in the coupled gas–condensate system, particularly at low tem-
+peratures where most elements are condensed out.
+We address these issues in three ways. First, we introduce
+a multidimensional Newton method as a convergence accel-
+erator for the gas-phase solver (Sect. 2.1). Second, we refor-
+mulate the gas-phase equations in logarithmic element densi-
+ties, removing the dependence on quadruple-precision arithmetic
+(Sect. 2.2). Third, we upgrade the condensate solver with adap-
+tive Levenberg–Marquardt regularisation and add a combined
+gas–condensate Newton solver as a fallback (Sect. 2.3). A small
+number of additional code-level improvements are described in
+Sect. 2.4.
+2.1. Multidimensional Newton method for gas-phase
+calculations
+We followed the terminology and notation used by
+Kitzmann et al. (2024). FastChememploys the law of mass
+action together with the element conservation equations.
+The conservation equation can be written for each chemical
+elementj∈ Eas:
+N j =n j +
+X
+i∈S\E
+νi jni +
+X
+c∈C
+νc jnc .(1)
+Article number, page 2
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+The setSincludes all gas-phase species (atoms/ions/molecules),
+the setCall condensates, whileEcontains only the elements.
+Specifically,n j refers to the number density of elementjin its
+atomic form. The number densities of the condensatesnc are cal-
+culated separately (see Kitzmann et al. 2024) and are assumed
+to be known for the gas-phase calculations described below. The
+corresponding stoichiometric coefficients are given byν i j and
+νc j.
+The law of mass action yields the number density of any gas-
+phase speciesn i,i∈ S \ E, as a function of the temperature
+dependent equilibrium constantK i:
+ni =K i(T)
+Y
+l∈E
+nl
+νil ,i∈ S \ E.(2)
+By replacing the unknown number densitiesn i in the equa-
+tion (1) with the corresponding laws of mass action, we obtain a
+non-linear system of equations for the element densitiesn j only
+N j −
+X
+c∈C
+νc jnc =n j +
+X
+i∈S\E
+νi jKi(T)
+Y
+l∈E
+nl
+νil ,j∈ E.(3)
+In the original computational scheme of FastChem, this non-
+linear system is split into separate equations for each element,
+solving them iteratively (Stock et al. 2018, 2022). However, be-
+cause element densities are updated only after each iteration
+step, the algorithm cannot fully account for the competing in-
+terdependence of key chemical elements. Even if FastChemul-
+timately converges in all cases with this numerical scheme, the
+computational speed can become extremely slow when this ef-
+fect dominates the iteration behaviour.
+2.1.1. System of equations
+In the following, we briefly describe the implemented multidi-
+mensional Newton method based on the derivations outlined by
+Kitzmann et al. (2024). Specifically, calculations are performed
+for lnn j to prevent the number densitiesn j from becoming neg-
+ative or zero during the numerical procedure.
+For a Newton step (k) a first-order Taylor series expansion
+of Eq. (1) is done with respect to lnn j. Assuming thatn c are
+considered constant during the calculation of the gas phase, this
+yields
+b j =
+X
+l∈E
+n(k)
+j δ jl +
+X
+i∈S\E
+νi jνiln(k)
+i
+ ∆lnn l =
+X
+l∈E
+(J ) jl ∆lnn l ,(4)
+with the components of the Jacobian matrixJgiven by
+(J ) jl =n (k)
+j δ jl +
+X
+i∈S\E
+νi jνiln(k)
+i .(5)
+The final system of equations then has the general form
+b=J·∆lnn,(6)
+with the components of the vector on the left-hand side:
+b j :=N j −n (k)
+j −
+X
+i∈S\E
+νi jn(k)
+i −
+X
+c∈C
+νc jnc .(7)
+In contrast to the Jacobian matrix derived by Kitzmann et al.
+(2024) for the condensate system,Jhere is always well-
+conditioned and invertible. Consequently, we solve the system
+of equations using an LU decomposition with partial pivoting.
+2.1.2. Implementation in FastChem
+Since the standard FastChemiteration typically ensures rapid
+convergence to the solution of the system of equations
+(Stock et al. 2018, 2022), we chose not to implement the New-
+ton method as the default solver. Instead, the Newton method
+has been included as a convergence accelerator, used only if
+FastChemfails to converge within a user-specified number of
+iterations. By default, this limit is set to 400 iterations. If more
+iterations are needed, FastChemassembles the equation system
+(5) for all elements that have not converged so far which is typi-
+cally a small subset of all elements considered.
+This application of the Newton method is not used here as
+a replacement for the standard FastChemiteration. Instead, it
+is interleaved between iterations to improve convergence speed.
+Since the Newton method is only invoked after several FastChem
+iterations, the initial solution used in a Newton step is usually
+inside the convergence radius, allowing Newton corrections to
+significantly improve the number densitiesn j used in the next
+standard FastChemiteration step. The Newton method directly
+accounts for the non-linear coupling between elements through
+its Jacobian matrixJ, resulting typically in a substantial conver-
+gence acceleration. In practice, only a few calls of the Newton
+method are needed to achieve convergence.
+2.1.3. Improved convergence behaviour
+To evaluate the performance of the improved code, only gas-
+phase chemistry calculations were used. To do so, we computed
+the chemical gas-phase composition on the samep-Tgrid shown
+in Fig. 1. Using the same colour scale for direct comparison, the
+left panel of Fig. 2 shows the number of iterations required for
+FastChemto converge. The right panel of Fig. 2 displays the
+ratio of iterations between the revised and original numerical
+schemes. For this test, the Newton accelerator was activated after
+300 standard iterations.
+These results demonstrate a significant improvement by in-
+cluding the new solver. While the original FastChemapproach
+required over 100 000 iterations in certain regions of the param-
+eter space, the revised scheme requires just a few hundred it-
+erations. For the most problematic cases, the required number
+of iterations is reduced by a factor of almost 550. For instance,
+the most demanding case in Fig. 1 converged in nearly 168 000
+iterations, whereas the same calculation is completed in only
+309 steps applying the revised approach. Thereby, the Newton
+method was used just nine times.
+This clearly highlights the superior performance of including
+the Newton method in the standard FastChemscheme. However,
+the new approach is only necessary in a small regime of the pa-
+rameter space. In most cases, the standard FastChemiteration
+scheme performs well, as indicated by an iteration ratio between
+the two methods of approximately one.
+2.2. Introduction of log-based element densities
+As described by Stock et al. (2022), the element conservation
+equation used in the gas-phase calculations of FastChemtakes
+the form
+ˆϵj ng =n j +
+X
+i∈S\E
+νi j +ˆϵj σi
+ ni +¯nj +n j,min ,(8)
+whereσ i =1− P
+j νi j, ¯nj accounts for species containing ele-
+ments more abundant thanj, andn j,min accounts for species con-
+taining less abundant elements (Stock et al. (2022), Eqs. 19–20).
+Article number, page 3
+
+A&A proofs:manuscript no. fastchem4
+Fig. 2.Improved convergence behaviour as implemented in FastChem. The left panel depicts the number of iterations and employs the same colour
+scale as in Fig. 1 to allow for direct comparison. The right panel shows the ratio of iterations between the revised and original numerical schemes.
+In the former FastChemalgorithm, ¯n j andn j,min are treated as
+known quantities while solving forn j. The use of this formu-
+lation ensures that the abundances of all gas-phase species are
+consistent with the user-supplied gas pressure.
+Substituting the mass-action law (Eq. 2) for the molecular
+densitiesn i, Eq. 8 can be written as
+ˆϵj ng −¯nj −n j,min =n j +
+N jX
+k=1
+nk
+j
+X
+i∈S\E
+νi j=k
+ˆϵi=ˆϵj
+κi jKi
+Y
+l∈E
+l,j
+nνil
+l ,(9)
+withκ i j =ν i j +ˆϵj σi >0. As shown by Stock et al. (2022), this
+expression can be reduced to the polynomial equation
+P j(n j) :=
+N jX
+k=0
+A jknk
+j =0,(10)
+which is solved by FastChemindependently for each element.
+A key numerical issue arises at low temperatures, where the
+atomic number densitiesn j can become very small. This can lead
+to numerical underflow, effectively drivingnj to zero. Since in
+the FastChemformalism the atomic densitiesn j serve as the ba-
+sis for computing the molecular abundancesni through the law of
+mass action, a vanishingn j would violate element conservation
+by forcing all species containing elementjto have zero abun-
+dance. To avoid this behaviour, previous versions of FastChem
+internally used quadruple-precision variables with an extended
+numerical range.
+Although this approach mitigates underflow problems to
+some degree, it also introduces portability issues. For example,
+the current generation of Apple ARM processors does not pro-
+vide native hardware support for quadruple precision. On such
+platforms, FastChemeffectively runs in double precision, which
+can lead to convergence problems at temperatures below roughly
+300 K due to the aforementioned underflow issues.
+To overcome these limitations, we redesigned FastChemto
+operate with logarithmic element densities rather than linear
+ones. We therefore define the logarithmic element number den-
+sities
+y j :=lnn j,j∈ E,(11)
+which serve as the primary unknowns. In this formulation, the
+mass-action law becomes
+lnn i =lnK i +
+X
+j∈E
+νi j y j,(12)
+while the element conservation equation (Eq. 9) can be written
+as
+ˆϵj ng −¯nj −n j,min =e y j +
+X
+i
+κi j exp
+
+lnK i +
+X
+l,j
+νil yl +ν i j y j
+
+.(13)
+The right-hand side is thus expressed as a sum of exponen-
+tials of the formS= P
+k akexk. Such expressions can be evaluated
+numerically in a stable manner using the log-sum-exp identity
+lnS=x max +ln
+
+X
+k
+ak exk−xmax
+ ,x max =max
+k
+xk,(14)
+which prevents numerical overflow and underflow. The shifted
+exponentsx k −x max ≤0 ensure that e xk−xmax ∈(0,1], such that
+terms negligible relative to the dominant contribution naturally
+evaluate to zero without explicit underflow.
+2.2.1. Implementation
+Structurally, Eq. 14 can be cast into the same general form
+as Eq. 10, albeit with modified coefficients. We therefore re-
+formulated all internal gas-phase solver functions described by
+Stock et al. (2018) to operate on logarithmic element densities
+y j. The multidimensional Newton method introduced above, as
+well as the Newton method used for the condensate system
+(Kitzmann et al. 2024), already operated in log-space and there-
+fore required no modification.
+Using standard double-precision variables, the logarithmic
+element densities and mass-action constants now remain well
+within the floating-point range for any physically plausible sce-
+nario, effectively eliminating underflow and overflow issues.
+With the new logarithmic formulation, FastChemcan, without
+ions, therefore be applied at temperatures as low as 1 K with-
+out encountering numerical instabilities. Furthermore, since only
+double precision is required, the platform-specific limitations
+associated with quadruple precision have been removed. Sup-
+port for quadruple-precision calculations has therefore been dis-
+continued in this version of FastChem, simplifying the code
+base and resolving portability issues on platforms without native
+quadruple-precision support.
+2.3. Changes to the condensate system
+As described by Kitzmann et al. (2024), the Jacobian of the con-
+densate system can become ill-conditioned, posing a significant
+Article number, page 4
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+numerical challenge. Previous versions of FastChemtherefore
+employed strongly damped Newton steps to prevent divergence,
+together with a singular-value-decomposition fallback for nearly
+singular Jacobians.
+In the present version, more sophisticated strategies have
+been implemented to address these issues. The Newton method
+used for the condensate system has been upgraded with an
+adaptive Levenberg–Marquardt regularisation, which introduces
+adaptive damping into the Jacobian matrix in nearly singular
+cases. If convergence still fails, FastChemfalls back to a per-
+turbed Hessian approximation of the Jacobian, which helps re-
+move singularities.
+In addition, previous versions of FastChemoccasionally ex-
+perienced long convergence times for coupled gas-phase and
+condensate systems with strongly non-solar elemental compo-
+sitions, such as those representing an evaporating rocky plane-
+tary mantle (e.g. Ito et al. 2025). To address this issue, FastChem
+now includes a combined Newton solver that simultaneously
+treats both the gas-phase and condensed species. This joint New-
+ton method combines the multidimensional Newton method de-
+scribed in Sect. 2.1 with the condensate solver presented by
+Kitzmann et al. (2024). The combined solver is only used if
+FastChemfails to converge after 1000 iterations by default, as
+activating it too early can be detrimental when the system is still
+outside the convergence radius of the coupled solution.
+Together, these improvements significantly enhance the nu-
+merical robustness of FastChem. Moreover, the transition to
+double-precision variables and the improved convergence be-
+haviour of the coupled gas–condensate solver considerably in-
+crease computational performance. For example, the protoplan-
+etary disk calculation presented in Kitzmann et al. (2024) origi-
+nally required approximately 60 minutes of runtime on a 16-core
+processor, because of the very low temperatures (about 10 K) in
+the outer disk regions. With the new version of FastChem, the
+same calculation completes in only about 18 seconds.
+2.4. Further FastChem improvements and additions
+Several further improvements are included in this version
+of FastChem. Three new interface functions have been
+added to help users navigate and analyse the FastChem
+output. The first,convertToHillNotation(str formula),
+converts a given chemical formula into the Hill system
+(Hill 1900) used by the standard FastCheminput files for
+gas-phase species (see Table A.1). It automatically han-
+dles special cases such as isomers, returning, for exam-
+ple, the FastChemHill notation for both HCN and HNC.
+The other two functions,getGasSpeciesStoichiometry(int
+index)andgetCondSpeciesStoichiometry(int index),
+return the stoichiometric vector of a given gas-phase or con-
+densed species, respectively. They allow users to identify, for
+instance, all species containing exactly two carbon atoms.
+In addition, a release version of FastChemis now auto-
+matically compiled on GitHub for a wide range of platforms
+prior to being uploaded as a package to the Python Pack-
+age Index (PyPI). As a result, users no longer need to com-
+pile FastChemthemselves: on most platforms,pip install
+pyfastchemdownloads a pre-compiled version of FastChem,
+eliminating the need for any user-side compilation or compiler
+installation.
+A full description of all FastCheminterface functions can be
+found in the documentation hosted on GitHub3.
+3 https://newstrangeworlds.github.io/FastChem/
+Table 1.Adopted element abundances for the solar photosphere based
+on data from Asplund et al. (2021). Elements listed in bold are added to
+FastChemas part of this work.
+Elementx j Elementx j
+H Hydrogen 12.0 Zn Zinc 4.56
+He Helium 10.914 F Fluorine 4.40
+O Oxygen 8.69 Cu Copper 4.18
+C Carbon 8.46 V Vanadium 3.90
+Ne Neon 8.06 Ge Germanium 3.62
+N Nitrogen 7.83SeSelenium 3.34 a
+Mg Magnesium 7.55ScScandium 3.14
+Si Silicon 7.51KrKrypton 3.12
+Fe Iron 7.46GaGallium 3.02
+S Sulphur 7.12SrStrontium 2.83
+Al Aluminium 6.43BBoron 2.70
+Ar Argon 6.38ZrZirconium 2.59
+Ca Calcium 6.30BrBromine 2.54 a
+Na Sodium 6.22RbRubidium 2.32
+Ni Nickel 6.20AsArsenic 2.30 a
+Cr Chromium 5.62BaBarium 2.27
+Mn Manganese 5.42XeXenon 2.22
+P Phosphorus 5.41YYttrium 2.21
+Cl Chlorine 5.31TeTellurium 2.18 a
+K Potassium 5.07SnTin 2.02
+Ti Titanium 4.97PbLead 1.95
+Co Cobalt 4.94LiLithium 0.96
+Notes. (a) Based on meteoritic element abundances (see also
+Palme & Beer (2014)).
+3. Addition of new elements and thermochemistry
+data overview
+3.1. Additional chemical elements
+One of the aims of this study is to expand the set of elements in-
+cluded in FastChem. In previous FastChemreleases, we included
+gas-phase species and condensates for elements with solar abun-
+dances at least as high as that of germanium. For the studies
+by Hoeijmakers et al. (2019) and Kitzmann et al. (2023), which
+focussed on modelling ultra-hot Jupiters, the hottest known
+exoplanets, we limited the gas-phase chemistry calculations to
+atoms and ions, omitting molecular species, but expanded the
+selection of elements up to uranium. This input data is available
+as an alternative to the default choice in the FastChemrepository.
+It is important to note that there are two common ways to
+define the abundance of an elementj. These two forms, denoted
+asx j andϵ j, are related by the following expression:
+x j =logϵ j +12.(15)
+The quantityx j is widely used in the astronomical literature. In
+this notation, the abundance of hydrogen is defined asx H =12,
+so thatϵ H =1 by construction. To maintain consistency with
+astronomical notations, the user provides elemental abundances
+in thex j format in the corresponding input file.
+Figure 3 shows the abundances of various elements in the so-
+lar photosphere and in carbonaceous (CI) chondrites, based on
+the compilation by Asplund et al. (2021). Elements included in
+the original FastChemdataset are marked in blue. The remain-
+ing elements appear to form two distinct groups, separated by a
+gap nearx phot ≈2. For this study, we include the group marked
+in red, which contains elements such as bromine, arsenic, and
+Article number, page 5
+
+A&A proofs:manuscript no. fastchem4
+0 2 4 6 8 10 12
+xphot
+-2
+0
+2
+4
+6
+8
+10
+xCI
+H
+He
+C
+N
+O
+F
+Ne
+Na MgAl
+Si
+P
+SCl
+Ar
+K
+Ca
+Ti
+V
+Cr
+Mn
+Fe
+Co Ni
+CuZn
+GeLi
+GaAs
+Se
+Br
+Kr
+Rb Sr
+Y
+Zr
+SnTe
+Xe
+Ba
+Pb
+B
+ScLa
+Ce
+Pr
+Nd
+Sm
+Eu
+Gd
+Tb
+Be
+IW
+Th
+Fig. 3.Element abundances of various elements in the solar photosphere
+(xphot) and CI chondrites (xCI) from Asplund et al. (2021). The elements
+labelled in blue are part of the original FastChemrelease (Stock et al.
+2018, 2022). Elements that are added to FastChemas part of this study
+are coloured in red, while remaining elements are depicted in yellow.
+For elements where no photospheric abundance is available, such as Se,
+Br, and Te, we use their CI abundances instead forx phot.
+tellurium. We also added elements recently detected in the at-
+mospheres of ultra-hot Jupiters, such as scandium, yttrium, bar-
+ium, and strontium (e.g., Borsato et al. 2023; Hoeijmakers et al.
+2019).
+We additionally included lithium (Li) in the updated
+FastChemelement set. Although its solar photospheric abun-
+dance is lower than those of the other newly added elements,
+lithium is an important age indicator in young low-mass stars
+and is used to establish the substellar nature of brown dwarf can-
+didates. The adopted solar lithium abundance may not be ap-
+propriate in all contexts, though. In the Sun, lithium is heavily
+depleted by proton-capture reactions that destroy it once convec-
+tive mixing transports it to sufficiently hot layers near the base of
+the convection zone. When modelling cooler systems where this
+process does not occur, users may want to adjust the Li abun-
+dance to better reflect its primordial value, closer to that found
+in CI chondrites.
+Figure 4 summarises the original elements, the newly added
+elements, and those provided by Hoeijmakers et al. (2019) in
+the form of the periodic table. In previous FastChemre-
+leases, we used the elemental abundances from Asplund et al.
+(2009). For this update, we have adopted the revised values
+from Asplund et al. (2021), as shown in Table 1. Most values
+are based on solar photospheric measurements. Exceptions in-
+clude selenium (Se), bromine (Br), arsenic (As), and tellurium
+(Te), which are not detectable in high-resolution solar spectra.
+For these, we used meteoritic abundances from Asplund et al.
+(2021).
+3.2. Chemical elemental abundances
+In addition to the compilation by Asplund et al. (2021), another
+widely used source of elemental abundances is Lodders (2003),
+which has recently been updated by Lodders et al. (2025). Al-
+though FastChemuses the Asplund et al. (2021) abundances by
+default, the updated Lodders et al. (2025) dataset is also included
+in the FastChemrepository for users who prefer this reference.
+For completeness, FastChemalso retains the older abundance
+compilations of Lodders (2003) and Asplund et al. (2009).
+For each dataset, three different options are provided. The
+default input files include only the elements present in previous
+releases of FastChemand are intended for users who do not re-
+quire the elements added in this study. Using a reduced set of
+elements generally speeds up the chemistry calculations and is
+therefore advantageous if the additional elements are not needed.
+Theextendedinput files include both the original elements and
+the new elements introduced here. In addition, for each compi-
+lation we providefullinput files containing most elements up to
+uranium. These can be used in conjunction with the expanded
+set of ions and anions introduced by Hoeijmakers et al. (2019).
+As in previous versions of FastChem, users may also specify el-
+emental abundances manually if desired.
+3.3. Gas-phase species
+The introduction of more chemical elements to FastChemallows
+for the treatment of more molecules and ions (this subsection),
+as well as condensates (Sect. 3.4). Our selection of molecules
+and ions in the gas phase is essentially based on the NIST-
+JANAF Thermochemical Tables (Chase 1998), the work of
+Barklem & Collet (2016), and Hoeijmakers et al. (2019). To cal-
+culate the fit coefficients{a0,a 1,b 0,b 1,b 2}for the temperature-
+dependent mass action constants
+ln ¯K(T)= a0
+T +a 1 lnT+b 0 +b 1T+b 2T 2 (16)
+required by FastChem(see Stock et al. 2018), we mainly use the
+well-established data of Chase (1998). In some cases, when er-
+rors were reported or the data differed significantly from inde-
+pendent sources in the literature, we relied on the sources indi-
+cated in Table A.1, which lists all molecules and ions used in the
+present version of FastChem.
+3.3.1. Diatomic molecules of elements more abundant than
+vanadium
+Barklem & Collet (2016) provide equilibrium constants for di-
+atomic molecules in tabulated form, from which the fit coeffi-
+cients for equation (16) can be calculated4. Additional molecules
+not included in previous versions of FastChemare MnCl, NCl,
+ZnCl, CoH, CrS, MnF, NiF, ZnF, and ZnH. Furthermore, we re-
+vised the data for AlN, CCl, CP, MgO, MgS, MnO, TiN, and
+NiO using values from Barklem & Collet (2016), and updated
+the data for CaH using values from McBride et al. (2002).
+3.3.2. Molecules of elements less abundant than vanadium
+Data for molecules that include elements less abundant than
+vanadium were taken mainly from the NIST-JANAF Thermo-
+chemical Tables (Chase 1998). Other sources in the litera-
+ture we adopted include Tsuji (1973), McBride et al. (2002),
+Barklem & Collet (2016), and Goos et al. (2023) (see also
+Burcat & Ruscic 2005), as indicated in Table A.1.
+3.3.3. Ions
+For applications of FastChemto the atmospheres of ultra-hot
+Jupiters, Hoeijmakers et al. (2019) computed thermochemical
+data for ions of most elements up to uranium using the Saha
+4 This is, however, not possible for their ions, due to different defini-
+tions of the equilibrium constants in this case.
+Article number, page 6
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+1
+H
+3
+Li
+4
+Be
+12
+Mg
+11
+Na
+19
+K
+20
+Ca
+21
+Sc
+22
+Ti
+23
+V
+24
+Cr
+25
+Mn
+26
+Fe
+27
+Co
+28
+Ni
+29
+Cu
+30
+Zn
+31
+Ga
+13
+Al
+5
+B
+6
+C
+7
+N
+8
+O
+43
+Tc
+9
+F
+10
+Ne
+2
+He
+18
+Ar
+36
+Kr
+54
+Xe
+86
+Rn
+118
+Og
+35
+Br
+53
+I
+85
+At
+117
+Ts
+17
+Cl
+16
+S
+15
+P
+14
+Si
+33
+As
+52
+Te
+32
+Ge
+34
+Se
+84
+Po
+116
+Lv
+51
+Sb
+83
+Bi
+44
+Ru
+45
+Rh
+46
+Pd
+47
+Ag
+48
+Cd
+49
+In
+50
+Sn
+37
+Rb
+38
+Sr
+39
+Y
+40
+Zr
+41
+Nb
+42
+Mo
+55
+Cs
+87
+Fr
+56
+Ba
+57
+La
+72
+Hf
+73
+Ta
+74
+W
+75
+Re
+76
+Os
+77
+Ir
+78
+Pt
+79
+Au
+80
+Hg
+81
+Tl
+82
+Pb
+88
+Ra
+89
+Ac
+104
+Rf
+105
+Db
+106
+Sg
+107
+Bh
+108
+Hs
+109
+Mt
+110
+Ds
+111
+Rg
+112
+Cn
+113
+Nh
+114
+Fl
+115
+Mc
+58
+Ce
+59
+Pr
+60
+Nd
+62
+Sm
+61
+Pm
+63
+Eu
+64
+Gd
+65
+Tb
+66
+Dy
+67
+Ho
+68
+Er
+69
+Tm
+70
+Yb
+71
+Lu
+90
+Th
+91
+Pa
+92
+U
+93
+Np
+94
+Pu
+95
+Am
+96
+Cm
+97
+Bk
+98
+Cf
+99
+Es
+100
+Fm
+101
+Md
+102
+No
+103
+Lr
+*
+**
+*
+**
+Fig. 4.Overview of the elements included in FastChemin the form of the periodic table. Elements coloured in blue are part of the previous versions
+of FastChem(Stock et al. 2018, 2022; Kitzmann et al. 2024), while those in cyan are additionally available in the data set by Hoeijmakers et al.
+(2019) that contains only atoms as well as singly and doubly ionised gas-phase species. Elements for which new molecules and condensates are
+added within this study are marked in red.
+equation. At the extreme temperatures encountered in these at-
+mospheres, most elements exist in atomic or ionised form, while
+molecules and condensates are largely absent.
+This compilation of thermochemical data is available as an
+alternative dataset and is not used by default. However, data for
+selected species from Hoeijmakers et al. (2019) have now also
+been incorporated into the standard FastChemdataset.
+3.4. Condensates
+Following the same approach used for gas-phase species, the
+thermochemical data for condensates were taken primarily from
+the JANAF tables (Chase 1998), if available. For elements not
+covered by Chase (1998), we supplemented the dataset with val-
+ues from the compilation by Barin (1995). In some cases, addi-
+tional species from Barin (1995) were also included to extend the
+coverage for selected elements already included in the previous
+releases of FastChem.
+For example, the JANAF tables list only a single zinc-
+bearing condensate, zinc sulfate (ZnSO4(s)). Other zinc species,
+such as zinc sulfide (ZnS(s)), are, however, potentially impor-
+tant in astrophysical environments, particularly as dust-forming
+species in the atmospheres of substellar objects. To account for
+this limitation, we augmented the zinc condensate data with ad-
+ditional species from Barin (1995).
+Similar limitations exist for other elements, such as vana-
+dium and germanium, for which JANAF provides only sparse
+condensed-phase data. In these cases, relevant condensates were
+likewise added from the Barin database. A complete list of all
+condensates included in FastChemis provided in Table A.2.
+As described by Kitzmann et al. (2024), the mass action con-
+stants of each available phase were fitted independently using
+Eq. 16. In the standard input data of FastChem, multiple phases
+of a given condensate are combined, when present in the source
+data, into a single dataset, with phase transition temperatures
+taken from the corresponding databases. This approach is op-
+tional, and users may instead provide custom datasets in which
+each phase of a condensate is treated as a separate species.
+As also noted by Kitzmann et al. (2024), the evaluation of
+Eq. 16 for condensates is typically restricted to the temperature
+range covered by the original thermochemical data. Condensate
+properties are often tabulated over relatively narrow temperature
+intervals, and extrapolating the fitted expression beyond these
+ranges can lead to unphysical values of ln ¯K(T). Nevertheless,
+FastChemprovides a dedicated configuration option that allows
+the analytical fit to be evaluated outside the original tabulated
+temperature range. This option should be used with great cau-
+tion, as large extrapolations may yield physically unrealistic re-
+sults.
+3.4.1. Corrections for arsenic species in the Barin database
+Due to the lack of arsenic species in the JANAF tables, we used
+the Barin database as basis for As-bearing condensates. The data
+for the arsenic species As(s), As(g), As 2(g), As3(g), and As 4(g)
+in the Barin database were originally sourced from the compila-
+tion by Hultgren (1973). According to that dataset, solid arsenic
+would sublimate at 1407 K via the reaction:
+As(s) 1
+2 As2(g).(17)
+However, as noted by, for example, Dabbs & Lynch (1983),
+some of the arsenic data reported by Hultgren (1973) are likely
+incorrect. More recent studies (Pankratz 1984; Zhang et al.
+2011) indicate that the sublimation of As(s) occurs at a signifi-
+cantly lower temperature, approximately 887 K, via the reaction:
+As(s) 1
+4 As4(g).(18)
+To correct these discrepancies in the Barin database, we adopted
+the thermodynamic data for As(s), As(g), As 2(g), As 3(g), and
+As4(g) compiled by Gokcen (1989).
+Barin (1995) used As(s) and As 2(g) as reference species for
+calculating the enthalpy of formation (∆f H
+) and Gibbs free en-
+ergy of formation (∆fG
+) for all arsenic-bearing species. Using
+Article number, page 7
+
+A&A proofs:manuscript no. fastchem4
+the updated data from Gokcen (1989), we redefined the refer-
+ence state of arsenic to include As(g) and As4(g) with the correct
+sublimation temperature of 887 K, and updated the thermody-
+namic properties of all arsenic-containing species in the original
+Barin database accordingly.
+3.5. Available input data files
+As with the elemental abundances, we provide several thermo-
+chemical data compilations of varying complexity. The standard
+input files contain data for the original set of elements and are
+intended for users who do not require the newly added elements.
+These files nevertheless include updated thermochemical data
+and additional species that were not part of earlier FastChemver-
+sions (see Tables A.1 and A.2).
+In addition, we provideextendedinput files that include all
+species associated with both the original and newly added ele-
+ments. Finally, as noted above, we also supply an input file based
+on the compilation by Hoeijmakers et al. (2019), which includes
+thermochemical data for ions and anions of elements up to ura-
+nium.
+The extended dataset introduced in this publication com-
+prises a total of 800 gas-phase molecules and ions, as well as
+511 condensates, spanning 44 elements. As described above, the
+FastCheminput data combine solid and liquid phases of a con-
+densate into a single data entry. If these phases were treated as
+independent species, the total number of included condensates
+would increase to 740.
+For user convenience, the input directory of the FastChem
+repository now also contains a dedicated Python script,
+create_custom_compilation.py, which allows users to gen-
+erate custom input files for a selected subset of elements. This
+enables, for example, the rapid creation of much smaller sets of
+chemical species for commonly used elements such as H, He, C,
+O, and N, or the construction of tailored datasets for non-solar
+elemental compositions.
+4. Chemical sequences of the elements
+4.1. Grid calculations
+In this section, we use the updated version of FastChem, together
+with the newly added elements and chemical species, to compute
+the chemical equilibrium composition, including condensation,
+over a wide pressure–temperature (p–T) range. Specifically, we
+performed FastChemcalculations on a grid spanning tempera-
+tures from 100 to 6000 K and pressures from 10 −12 to 100 bar
+in accordance with Stock et al. (2018). This temperature range
+was chosen to match the domain over which most thermochem-
+ical data remain within their tabulated limits; for example, the
+JANAF thermochemical tables (Chase 1998) are generally pro-
+vided for temperatures between 100 and 6000 K.
+The calculations were carried out for two sets of ele-
+mental abundances. The first adopts solar abundances from
+Asplund et al. (2021) (see Table 1), while the second assumes
+a carbon-to-oxygen ratio of C/O=2 to represent a carbon-rich
+environment. In the latter case, the elemental oxygen abundance
+was fixed to its solar value, and the carbon abundance was ad-
+justed accordingly to achieve the enhanced C/O ratio.
+Each grid comprises 250 000 individual FastChemmodel
+evaluations, resulting in 500 000 FastChemcalculations in to-
+tal. All FastChemoptions were left at their default settings. The
+number of chemistry iterations required for convergence was
+generally fewer than 400 at the lowest temperatures and fewer
+than 20 at higher temperatures. At low temperatures, determin-
+ing the set of thermodynamically stable condensates required
+fewer than 500 additional iterations, owing to the large number
+of potential condensate species (see Table A.2) and the increased
+number of elements included.
+4.2. Results
+Given the large number of gas-phase species and condensates in-
+cluded in FastChem, it is not feasible to present the full, highly
+detailed output of the chemistry calculations. Instead, we show
+the most abundant species containing each element as a function
+of pressure and temperature. For the gas phase, this representa-
+tion is necessarily limited, as an element is typically distributed
+among dozens of molecular species. For condensates, however,
+many elements are incorporated into only a small number of
+species owing to the phase rule (see Gibbs 1876, 1878); see also
+Kitzmann et al. (2024) for further details. The results presented
+below therefore effectively illustrate the condensation sequences
+of the elements (see, e.g., Grossman 1972; Lewis 1972; Lodders
+2003).
+Figure 5 shows representative results for oxygen (O), carbon
+(C), calcium (Ca), and boron (B). All other elements included
+in FastChem, excluding hydrogen and the noble gases, are pre-
+sented in Appendix B. Within the selectedp–Trange of our
+computational grid, the noble gases are present only in atomic
+or ionised form.
+4.2.1. Solar C/O ratio
+For solar elemental abundances, carbon and oxygen follow the
+expected chemical sequence (see, e.g., Burrows & Sharp 1999;
+Lodders & Fegley 2002; Visscher et al. 2006). At high temper-
+atures, both elements are initially present in ionised and atomic
+forms before combining to form carbon monoxide (CO), which
+is the most thermodynamically stable molecule over a wide
+range of pressure–temperature (p–T) conditions. As a result, CO
+sequesters most of the available carbon and oxygen. At lower
+temperatures, methane (CH 4) becomes the dominant carbon-
+bearing gas-phase species, while water vapour (H 2O) becomes
+the primary oxygen-bearing molecule. Eventually, water vapour
+condenses into liquid or solid phases. Although a large frac-
+tion of oxygen condenses into water, a significant amount is
+also incorporated into oxygen-bearing minerals such as diop-
+side (CaMgSi 2O6(s); see the left panel of Fig. 5), as well as
+forsterite (Mg 2SiO4) and pyroxmangite (MnSiO 3(s); see Ap-
+pendix B). Consequently, oxygen condensation begins at rela-
+tively high temperatures and can exceed 10% even before water
+condensation occurs. At solar metallicity, up to 20% of oxygen
+is typically bound in high-temperature condensates (see, e.g.,
+Woitke et al. 2018; Sharp & Huebner 1990).
+In contrast, carbon condenses into graphite (C(s,l)) only
+within a narrow region of thep–Tplane and otherwise remains
+predominantly in the gas phase. Graphite formation requires a
+sufficient abundance of free carbon in the gas phase. As long as
+carbon is largely locked in CO, the saturation ratio of graphite re-
+mains well below one. Only when the dominant oxygen carrier
+transitions from CO to H 2O does enough free carbon become
+available to allow graphite formation, and even then only over
+a restricted range of temperatures and pressures. At still lower
+temperatures, carbon may condense into solid or liquid methane
+(CH4(s,l); see, e.g., Kitzmann et al. 2024).
+Article number, page 8
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+O, oxygen
+C/O = 0.59
+O
+CO
+CO2
+H2O
+O+
+H2O(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+O, oxygen
+C/O = 2
+O
+CO
+CO2
+H2O
+O+
+H2O(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+C, carbon
+C/O = 0.59
+C
+CH4
+CO
+C+
+C(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+C, carbon
+C/O = 2
+C
+CH4
+CO
+C+
+C(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ca, calcium
+C/O = 0.59
+Ca
+Ca+
+CaSiO3(s)
+Ca2SiO4(s)
+CaMgSi2O6(s)
+Ca2Al2SiO7(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ca, calcium
+C/O = 2
+Ca
+Ca+
+CaS(s)
+CaSiO3(s)
+Ca2SiO4(s)
+CaMgSi2O6(s)
+Ca2Al2SiO7(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+B, boron
+C/O = 0.59
+B
+HBO
+HBO2
+BH3O3
+NaBO2
+BO
+B+
+K2B4O7(s, l)
+Na2B4O7(s, l)
+NaBO2(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+B, boron
+C/O = 2
+B
+BF
+HBO
+HBO2
+HBS
+BH2
+BH3
+BH3O3
+NaBO2
+B+
+Co2B(s)
+K2B4O7(s, l)
+Na2B4O7(s, l)
+NaBO2(s, l)
+Ni4B3(s)
+NiB(s)
+ZrB2(s, l)
+Fig. 5.Results of the FastChemcalculations across a widep-Trange. The panels on the left show results for solar elemental abundances, while
+those on the right correspond to a carbon-rich composition with a C/O ratio of 2. For each element, the plots display the dominant gas-phase and
+condensate species, that is, the species containing the largest fraction of the element, as a function of pressure and temperature. The white lines
+indicate the degree of condensation of the element: solid lines correspond to 10% condensation, dashed lines to 50%, and dash-dotted lines to
+90%.
+Many elements exhibit a relatively simple sequence of dom-
+inant gas-phase species. As shown in Fig. 5, oxygen is predom-
+inantly found in atomic form or bound in CO, CO 2, or H 2O.
+Similarly, carbon is divided mainly between CO and CH4. Other
+elements, however, display much more complex behaviour. For
+example, the dominant boron-bearing species follow a relatively
+complicated sequence that depends strongly on both temperature
+and pressure, as illustrated in the lower panel of Fig. 5.
+While elements such as carbon and oxygen condense only
+partially over a widep–Trange, other elements condense very
+rapidly once a critical temperature is reached. This behaviour is
+evident, for example, for calcium in Fig. 5, where the temper-
+atures corresponding to 10% and 90% condensation are nearly
+identical. Similar behaviour is observed for many other elements
+shown in Appendix B, including bromine (Br), copper (Cu), iron
+(Fe), manganese (Mn), and zinc (Zn).
+Some elements follow relatively simple condensate se-
+quences. Calcium, for instance, transitions from CaSiO 3(s) to
+Ca2SiO4(s), then to Ca2Al2SiO7(s), and finally to CaMgSi2O6(s)
+at lower temperatures, in line with the classical solar-
+composition condensation sequence (Grossman 1972; Lodders
+2003). Other elements form only a very limited number of con-
+Article number, page 9
+
+A&A proofs:manuscript no. fastchem4
+densates. Cobalt (Co), for example, condenses solely as ele-
+mental cobalt (Co(s,l)), while scandium (Sc) appears only as
+Sc2O3(s,l), and zinc primarily as ZnS(s,l).
+By contrast, several elements display much more com-
+plex condensation behaviour. Titanium, for example, forms a
+wide variety of condensates, including MgTi 2O5(s,l), TiN(s,l),
+TiO(s,l), TiO 2(s,l), Ti 3O5(s,l), Ti 4O7(s,l), and CaTiO 3(s) (see
+Fig. B.1 and Lodders 2002). Other elements with similarly com-
+plex condensation sequences include vanadium (V), magnesium
+(Mg), and zirconium (Zr).
+An interesting silicon-bearing condensate that is often ne-
+glected in equilibrium chemistry models is silicon monoxide
+(SiO(s)). Most thermochemical databases lack data for this
+species and instead assume quartz (SiO 2) to be the more sta-
+ble species. Experimental data for SiO(s) are available from
+laboratory measurements by Gail et al. (2013), which are in-
+cluded in the FastChemdata compilation as well as inGGChem
+(Woitke et al. 2018). As shown in Fig. B.1, SiO(s) does indeed
+form, albeit only over a limited range of temperatures and pres-
+sures: around 1000 K and at pressures above approximately
+0.1 bar. Notably, recentJames WebbSpace Telescope (JWST)
+observations suggest that SiO(s) may be present in the atmo-
+spheres of brown dwarfs within the temperature and pressure
+regime predicted by our calculations (Mollière et al. 2025).
+4.2.2. Carbon-rich case
+In the carbon-rich case (C/O=2), a broadly similar chemi-
+cal sequence is observed, but with notable shifts in condensation
+behaviour (see the right panels of Figs. 5 and B.1); see, e.g.,
+Larimer & Bartholomay (1979), Lodders & Fegley (1997), and
+Lodders & Fegley (1999) for analyses of the corresponding con-
+densation sequences. Most notably, oxygen begins to condense
+only at lower temperatures than in the solar-composition case.
+This shift arises from the large chemical binding energy of CO:
+when the C/O ratio is larger than one, nearly all of the available
+oxygen is locked in CO, leaving no free oxygen to form oxygen-
+bearing condensates. Only at lower temperatures, where a frac-
+tion of the carbon condenses into graphite, does oxygen become
+available again, allowing other oxygen-bearing condensates to
+form.
+Several elements exhibit markedly altered condensation se-
+quences under carbon-rich conditions. As Fig. 5 suggests, in-
+stead of initially forming Ca 2Al2SiO7(s) as in the solar C/O
+case, calcium now first condenses into calcium sulfide (CaS(s))
+over a largep-Trange before finally forming the usual diopside
+(CaMgSi2O6(s)) at lower temperatures. A similar example is alu-
+minium, which in the carbon-rich case initially condenses into
+aluminium nitride (AlN(s)) owing to the lack of available oxy-
+gen. Only once oxygen becomes available again does it form the
+usual oxygen-bearing condensates, such as corundum (Al 2O3)
+and spinel (MgAl 2O4). Boron also shows a strongly modified
+condensation sequence (see Fig. 5). In the solar C/O case, boron
+condenses into oxygen-bearing species such as NaBO 2(s,l) and
+K2B4O7(s,l). Although these species also form in the C/O=2
+case over a similar temperature range, boron begins to con-
+dense at significantly higher temperatures into species such as
+NiB(s) and ZrB(s,l). Sulphur likewise exhibits substantially al-
+tered behaviour. For solar C/O, sulphur condenses only into
+troilite (FeS), whereas for C/O=2 it condenses much earlier
+into MgS(s). This species cannot form in the solar case because
+magnesium is already sequestered in oxygen-bearing conden-
+sates such as enstatite and forsterite. In the carbon-rich case,
+however, the lack of freely available oxygen prevents the forma-
+tion of these magnesium silicates, leaving magnesium available
+to form other magnesium-bearing condensates.
+As expected for C/O>1, carbon increasingly condenses into
+graphite. Nevertheless, even under carbon-rich conditions, solid
+carbon formation is confined to a relatively narrow region of the
+p–Tplane. This highlights a key challenge for the formation of
+graphite dust in environments such as the outer atmospheres of
+asymptotic giant branch (AGB) stars: the atmosphericp–Tpro-
+file must pass through this restricted region, the “dust-forming
+window”, for graphite (C(s)) to form and enable dust-driven
+winds (see, e.g., Gail & Sedlmayr 2013).
+Naively, one might expect carbides to be the dominant con-
+densates over a widep–Trange in a C/O=2 environment.
+However, although carbon-bearing condensates such as zirco-
+nium carbide (ZrC), titanium carbide (TiC), vanadium carbide
+(V2C), and silicon carbide (SiC) do form, they are stable only
+over very limited regions of the temperature–pressure plane.
+This is again a consequence of the strong chemical stability of
+gaseous CO, which sequesters most of the carbon. Furthermore,
+once graphite forms, most carbon is removed from the gas phase
+into C(s). Even after graphite disappears at lower temperatures
+and carbon returns to the gas phase, it is predominantly bound in
+methane (CH4) and is therefore not available for carbide forma-
+tion.
+Some elements do not change their condensation sequences
+in the carbon-rich case. This is generally true for elements that
+do not form stable oxygen- or carbon-bearing condensates, such
+as cobalt, copper, nickel, and zinc. The chemistries of zinc and
+rubidium, for example, are essentially unaffected by the C/O ra-
+tio (see Fig. B.1).
+As in the solar C/O case, silicon also condenses into SiO(s).
+In contrast to the solar-abundance case, however, SiO(s) now
+forms over a much wider temperature–pressure range, supersed-
+ing silicon carbide as the dominant silicon-bearing condensate
+at temperatures below about 900 K. This behaviour results from
+the lack of free oxygen to form quartz. These results suggest that
+SiO(s) should be explicitly considered in thermochemical equi-
+librium calculations, particularly for carbon-rich environments
+in which the availability of free oxygen is limited.
+In general, most elements condense below a characteristic
+temperature and remain locked in condensed form thereafter.
+One exception to this general trend is carbon. In both cases, it
+condenses into graphite at some temperature but returns to the
+gas phase as methane at lower temperatures. Another example
+is boron in the C/O=2 case. Here, boron shows a complex
+behaviour in the gas and the condensed phase as a function of
+temperature and pressure. It first condenses into Co2B(s), briefly
+returns to the gas phase as NaBO 2, and finally condenses again
+as Na2B4O7(s,l).
+5. Summary
+In this work, we presented a major update to the chemical equi-
+librium code FastChem, aimed at improving its numerical ro-
+bustness, expanding its chemical data, and extending its appli-
+cability to a wider range of astrophysical and planetary environ-
+ments.
+We introduced a convergence accelerator based on a mul-
+tidimensional Newton method that significantly improves the
+stability and performance of the gas-phase chemistry solver,
+particularly for strong deviations from solar elemental abun-
+dances. This addresses convergence issues that previously arose
+when elements with comparable abundances were tightly cou-
+pled through shared molecular species. We also reformulated the
+Article number, page 10
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+gas-phase equations in logarithmic element densities, removing
+the dependence on quadruple-precision arithmetic and allowing
+FastChemto be applied at temperatures as low as 1 K on any
+platform that supports double precision. Additional improve-
+ments to the condensate solver, including adaptive Levenberg–
+Marquardt regularisation and a combined gas–condensate New-
+ton method, further enhance robustness for strongly non-solar
+elemental compositions. Together, these changes also yield sub-
+stantial speed gains: a representative protoplanetary-disk calcu-
+lation that previously required approximately 60 minutes on a
+16-core processor now completes in about 18 seconds.
+In addition, we substantially expanded the chemical database
+by adding numerous new elements together with their asso-
+ciated gas-phase species and condensates. This extension en-
+ables FastChemto model the chemistry of environments that
+include rare-earth, transition, and heavy metals, including ele-
+ments that have recently been detected in the atmospheres of
+ultra-hot Jupiters. Multiple elemental abundance compilations
+and datasets of varying complexity are now supported, allow-
+ing users to tailor the selection of chemical data to their specific
+application while maintaining computational efficiency.
+Using the updated FastChemversion, we computed com-
+prehensive chemical equilibrium grids, including condensation,
+over a wide range of pressures and temperatures for both solar
+and carbon-rich (C/O=2) elemental compositions. These cal-
+culations demonstrate the resulting condensation sequences for
+all included elements and highlight the diversity and complexity
+of chemical behaviour across different thermodynamic regimes.
+In particular, we showed how condensate sequences can change
+substantially with elemental composition, especially for carbon-
+rich environments where the formation of CO sequesters most of
+the oxygen.
+Overall, the improvements presented here make FastChema
+more robust and flexible tool for equilibrium chemistry calcu-
+lations. The updated code is well suited for applications rang-
+ing from atmospheric retrievals and global circulation models
+to large parameter-space studies, as well as the interpretation
+of JWST observations and high-resolution spectra from ground-
+based telescopes (e.g., Prinoth et al. 2024b). By providing effi-
+cient and extensible equilibrium calculations, this work also lays
+the groundwork for more advanced modelling efforts that incor-
+porate kinetic, transport, and photochemical processes.
+Acknowledgements.D.K. acknowledges the support from the Swiss National
+Science Foundation under the grant 200021-231596. This work has been car-
+ried out within the framework of the National Centre of Competence in Re-
+search PlanetS supported by the Swiss National Science Foundation under grants
+51NF40_182901 and 51NF40_205606. D.K. acknowledges the financial support
+of the SNSF.
+References
+Asplund, M., Amarsi, A. M., & Grevesse, N. 2021, A&A, 653, A141
+Asplund, M., Grevesse, N., Sauval, A. J., & Scott, P. 2009, ARA&A, 47, 481
+Bachmann, N., Kreidberg, L., Mollière, P., Deming, D., & Tsai, S.-M. 2025,
+A&A, 700, A105
+Barin, I. 1995, Thermochemical Data of Pure Substances (VCH Weinheim)
+Barklem, P. S. & Collet, R. 2016, A&A, 588, A96
+Blecic, J., Harrington, J., & Bowman, M. O. 2016, ApJS, 225, 4
+Borsato, N. W., Hoeijmakers, H. J., Prinoth, B., et al. 2023, A&A, 673, A158
+Bower, D. J., Thompson, M. A., Hakim, K., Tian, M., & Sossi, P. A. 2025, ApJ,
+995, 59
+Burcat, A. & Ruscic, B. 2005, Third Millennium Ideal Gas and Condensed Phase
+Thermochemical Database for Combustion with updates from Active Ther-
+mochemical Tables (Argonne National Laboratory)
+Burrows, A., Dulick, M., Bauschlicher, C. W., J., et al. 2005, ApJ, 624, 988
+Burrows, A. & Sharp, C. M. 1999, ApJ, 512, 843
+Chase, M. 1998, NIST-JANAF Thermochemical Tables (American Institute of
+Physics)
+Dabbs, D. & Lynch, D. 1983, Metallurgical Transactions B, 14, 502
+de Regt, S., Snellen, I. A. G., Allard, N. F., et al. 2025, A&A, 696, A225
+Dorofeeva, O. V ., Iorish, V . S., Novikov, V . P., & Neumann, D. B. 2003, Journal
+of Physical and Chemical Reference Data, 32, 879
+Dorofeeva, O. V ., Novikov, V . P., & Neumann, D. B. 2001, Journal of Physical
+and Chemical Reference Data, 30, 475
+Dykyj, J., Svoboda, J., Wilhoit, R. C., Frenkel, M., & Hall, K. R. 2001, 2 Or-
+ganic Compounds, C0 to C84: Datasheet from Landolt-Börnstein - Group
+IV Physical Chemistry · V olume 20C: “Vapor Pressure and Antoine Con-
+stants for Nitrogen Containing Organic Compounds” in SpringerMaterials
+(https://doi.org/10.1007/10688591_3) (Springer-Verlag Berlin Heidelberg),
+part of SpringerMaterials
+Fisher, C. E., Hooton, M. J., Gressier, A., et al. 2026, MNRAS, 545, staf2187
+Gail, H.-P. & Sedlmayr, E. 2013, Cambridge Astrophysics Series, V ol. 52,
+Physics and Chemistry of Circumstellar Dust Shells (Cambridge, UK: Cam-
+bridge University Press)
+Gail, H. P., Wetzel, S., Pucci, A., & Tamanai, A. 2013, A&A, 555, A119
+Gibbs, J. W. 1876, Transactions of the Connecticut Academy of Arts and Sci-
+ences, 3, 108
+Gibbs, J. W. 1878, Transactions of the Connecticut Academy of Arts and Sci-
+ences, 3, 343–524
+Gokcen, N. A. 1989, Bulletin of Alloy Phase Diagrams, 10, 11
+Goodwin, R. D. 1985, Journal of Physical and Chemical Reference Data, 14, 849
+Goos, E., Burcat, A., & Ruscic, B. 2023, Technion-IIT FTP Server
+Gordon, S. & McBride, B. 1994, Computer program for calculation of complex
+chemical equilibrium compositions and applications, NASA RP-1311
+Grasser, N., Snellen, I. A. G., de Regt, S., et al. 2025, A&A, 698, A252
+Grossman, L. 1972, Geochimica et Cosmochimica Acta, 36, 597
+Haar, L. & Gallagher, J. S. 1978, Journal of Physical and Chemical Reference
+Data, 7, 635
+Hakim, K., Bower, D. J., Seidler, F. L., & Sossi, P. A. 2026, MNRAS, 546,
+stag133
+Hill, E. A. 1900, Journal of the American Chemical Society, 22, 478
+Hoeijmakers, H. J., Ehrenreich, D., Kitzmann, D., et al. 2019, A&A, 627, A165
+Hultgren, R. 1973, Selected values of the thermodynamic properties of the ele-
+ments. (Metals Park, Ohio: American Society for Metals)
+Ito, Y ., Kimura, T., Ohno, K., Fujii, Y ., & Ikoma, M. 2025, ApJ, 987, 174
+Kitzmann, D., Hoeijmakers, H. J., Grimm, S. L., et al. 2023, A&A, 669, A113
+Kitzmann, D., Stock, J. W., & Patzer, A. B. C. 2024, MNRAS, 527, 7263
+Larimer, J. W. & Bartholomay, M. 1979, Geochimica et Cosmochimica Acta,
+43, 1455
+Leal, A. M. M., Kulik, D. A., Kosakowski, G., & Saar, M. O. 2016, Advances in
+Water Resources, 96, 405
+Lewis, J. S. 1969, Icarus, 10, 365
+Lewis, J. S. 1972, Icarus, 16, 241
+Lide, D. 2009, CRC Handbook of Chemistry and Physics, 90th Edition (Taylor
+& Francis)
+Lodders, K. 1999, Journal of Physical and Chemical Reference Data, 28, 1705
+Lodders, K. 2002, ApJ, 577, 974
+Lodders, K. 2003, ApJ, 591, 1220
+Lodders, K. 2004, Journal of Physical and Chemical Reference Data, 33, 357
+Lodders, K., Bergemann, M., & Palme, H. 2025, Space Sci. Rev., 221, 23
+Lodders, K. & Fegley, B. 1993, Earth and Planetary Science Letters, 117, 125
+Lodders, K. & Fegley, B. 2002, Icarus, 155, 393
+Lodders, K. & Fegley, B., J. 1997, The Astrophysical Journal Letters, 484, L71
+Lodders, K. & Fegley, B., J. 1999, in IAU Symposium, V ol. 191, Asymptotic
+Giant Branch Stars, ed. T. Le Bertre, A. Lèbre, & C. Waelkens (Astronomical
+Society of the Pacific), 279–290
+McBride, B., Zehe, M., & Gordon, S. 2002, NASA Glenn coefficients for cal-
+culating thermodynamic properties of individual species, NASA TP-2002-
+211556
+McBride, B. J. & Gordon, S. 1996, Computer Program for Calculation of Com-
+plex Chemical Equilibrium Compositions and Applications II. Users Manual
+and Program Description., Tech. rep., Glenn Research Center - NASA
+Mollière, P., Kühnle, H., Matthews, E. C., et al. 2025, A&A, 703, A79
+Moses, J. I., Allen, M., & Yung, Y . L. 1992, Icarus, 99, 318
+Moses, J. I., Visscher, C., Fortney, J. J., et al. 2011, ApJ, 737, 15
+Murphy, D. M. & Koop, T. 2005, Quarterly Journal of the Royal Meteorological
+Society, 131, 1539
+Palme, H. & Beer, H. 2014, in Treatise on Geochemistry (Second Edition) (El-
+sevier), 15–36
+Pankratz, L. B. 1984, Thermodynamic data for mineral technology, Bulletin
+(United States. Bureau of Mines) ; 677 (Washington, D.C.]: U.S. Dept. of
+the Interior, Bureau of Mines : For sale by the Supt. of Docs., U.S. G.P.O.)
+Petz, S., Johnson, M. C., Asnodkar, A. P., et al. 2025, AJ, 169, 267
+Picos, D. G., de Regt, S., Gandhi, S., Grasser, N., & Snellen, I. A. G. 2025, A&A,
+703, A65
+Prinoth, B., Hoeijmakers, H. J., Morris, B. M., et al. 2024a, A&A, 685, A60
+Article number, page 11
+
+A&A proofs:manuscript no. fastchem4
+Prinoth, B., Sedaghati, E., Seidel, J. V ., et al. 2024b, AJ, 168, 133
+Prydz, R. & Goodwin, R. D. 1972, J. Chem. Thermodyn., 4, 127
+Rimmer, P. B. & Helling, C. 2016, ApJS, 224, 9
+Rossini, F. D., Wagman, D. D., Evans, W. H., Levine, S., & Jaffe, I. 1952, Se-
+lected values of chemical thermodynamic properties, Tech. Rep. Circular 500,
+National Bureau of Standards, Washington, DC
+Scott, M. G., Triaud, A. H. M. J., Barkaoui, K., et al. 2025, MNRAS, 540, 1909
+Sharp, C. M. & Huebner, W. F. 1990, ApJS, 72, 417
+Shenyavskaya, E. A. & Yungman, V . S. 2004, Journal of Physical and Chemical
+Reference Data, 33, 923
+Stephenson, C. C. & Giauque, W. F. 1937, J. Chem. Phys., 5, 149
+Stephenson, C. C. & Zettlemoyer, A. C. 1944, Journal of the American Chemical
+Society, 66, 1405
+Stock, J. W., Kitzmann, D., & Patzer, A. B. C. 2022, MNRAS, 517, 4070
+Stock, J. W., Kitzmann, D., Patzer, A. B. C., & Sedlmayr, E. 2018, MNRAS,
+479, 865
+Stull, D. R. 1947, Industrial & Engineering Chemistry, 39, 517
+Tsai, S.-M., Malik, M., Kitzmann, D., et al. 2021, ApJ, 923, 264
+Tsuji, T. 1973, A&A, 23, 411
+Venot, O., Hébrard, E., Agúndez, M., et al. 2012, A&A, 546, A43
+Verma, A., Goyal, J., Avarsekar, S., & Shukla, G. 2025, AJ, 170, 69
+Visscher, C., Lodders, K., & Fegley, B., J. 2006, The Astrophysical Journal, 648,
+1181
+Wagner, W. & Kretzschmar, H.-J. 2008, International Steam Tables: Proper-
+ties of Water and Steam Based on the Industrial Formulation IAPWS-IF97
+(Springer-Verlag Berlin Heidelberg)
+Woitke, P., Helling, C., Hunter, G. H., et al. 2018, A&A, 614, A1
+Yaws, C. 1999, Chemical Properties Handbook: Physical, Thermodynamics, En-
+vironmental Transport, Safety & Health Related Properties for Organic &,
+Chemical engineering books (McGraw-Hill Education)
+Zhang, Y ., Evans, J. R. G., & Yang, S. 2011, Journal of Chemical & Engineering
+Data, 56, 328
+Article number, page 12
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+Appendix A: Overview of gas-phase and condensate species included in FastChem
+Table A.1.List of all gas-phase species included in the present version of FastChem. Newly added species are highlighted in bold fond. Species
+with revised thermochemical data since the release ofFastChem Condare underlined. For convenience Hill-notation is used for species names
+except in case of isomers. Unless stated otherwise, thermochemical data from Chase (1998) were used to fit ln ¯Ki.
+Element Molecules, Ions
+H H –, H+, H2, H –
+2 , H +
+2
+He He +
+O HO, HO –, HO+, HO2, H2O, H2O2e, H3O+, O–, O+, O2, O –
+2 , O +
+2 , O3
+C C –, C+, CH, CH–, CH+, CHO, CHO+, CH2, CH2O, CH3, CH4, CH4O2c, CO, CO2, CO –
+2 , C2, C –
+2 , C2H, C2H2, C2H2O2c, C2H2O4c, C2H4, C2H4O, C2H4O3c, C2H6O2c, C2O,
+C3, C3H, C3O2, C4, C4H6O4c, C5
+Ne Ne +
+N HCN, HNC k, CHNO, CN, CN–, CN+, CNO, CNN, NCN C2N, C2NOc, C2N2, C3N2Oc, C4N2, HNk, HNO,cis-HNO 2,trans-HNO 2, HNO3e, H2N, H2N2, H3N, H4N2, N–,
+N+, NO, NO+, NO2, NO –
+2 , NO3, N2, N –
+2 , N +
+2 , N2O, N2O+, N2O3, N2O4, N2O5, N3
+Mg HMg k, HMgO, HMgO+, H2MgO2, Mg+, MgN, MgOi, Mg2
+Si CSi, CSi 2, C2Si, C2Si2, C4H2Si, HSi, HSi+, H2Si, H3Si, H4Si, NSi, NSi2, OSi, O2Si, Si–, Si+, Si2, Si3
+Fe C 5FeO5, Fe–, Fe+, FeHk, FeH2O2, FeO
+S COS, CS, CS 2, FeS, HS f , HS–, H2O4Se, H2S, MgSi, NS f , OS, OS2 f , O2S, O3S, S–, S+, SSi, S2, S3, S4, S5, S6, S7, S8
+Al Al –, Al+, AlH, OAlH, AlOH AlHO–, AlHO+, AlHO2, AlNi, AlO, AlO–, AlO+, AlO2, AlO –
+2 , AlS, Al2, Al2O, Al2O+, Al2O2, Al2O +
+2 , CAl
+Ar Ar +
+Ca Ca – j, Ca+, CaHd, CaHO, CaHO+, CaH2O2, CaO, CaS, Ca2
+Na CNNa, C 2N2Na2, HNak, HNaO, HNaO+, H2Na2O2, Na–, Na+, NaO, NaO–, Na2, Na2O4S
+Ni C 4NiO4, HNik, Ni–, Ni+, NiOi, NiS
+Cr C 2Cr, Cr–, Cr+, CrHk, CrN, CrO, CrO2, CrO3,CrS i
+Mn HMn k, Mn+, MnOi, MnS
+P CHP, CP i, HPb, H2P, H3Pb, NPb, OPk, O2P, O6P4, O10P4, P–, P+, PS f , P2, P4, P4S3
+Cl AlCl, AlCl +, AlClO, AlCl2, AlCl –
+2 , AlCl +
+2 , AlCl3, Al2Cl6, CCli, CClN, CClO, CCl2, CCl2O, CCl3, CCl4, CHCl, CHCl3, CH2Cl2, CH3Cl, CH3Cl3Si, C2Cl2, C2Cl4, C2Cl6,
+C2HCl, C2H3ClO2c, CaCl, CaCl2, Cl–, Cl+, ClFe, ClHg, ClHO, ClH3Si, ClMg, ClMg+,ClMn i,ClN i, ClNO, ClNO2, ClNa, ClNi, ClO, ClO2, ClO3, ClP, ClS, ClS+, ClS2,
+ClSi, Cl2, Cl2Fe, Cl2H2Si, Cl2Mg, Cl2Na2, Cl2Ni, ClOCl, ClClO ClO2Cl, ClOClO Cl2O2S, Cl2S, Cl2S+, Cl2S2, Cl2Si, Cl3Fe, Cl3HSi, Cl3OP, Cl3P, Cl3PS, Cl3Si, Cl4Fe2,
+Cl4Mg2, Cl4Si, Cl5P, Cl6Fe2
+K CKN, C 2K2N2, ClK, Cl2K2, HK, HKO, HKO+, H2K2O2, K–, K+, KO, KO–, K2, K2O4S
+Ti C 2Ti, C4Ti, ClOTi, ClTi, Cl2OTi, Cl2Ti, Cl3Ti, Cl4Ti, HTih, NTii, OTi, O2Ti, STia, Ti–, Ti+
+Co ClCo, Cl 2Co, Cl3Co, Cl4Co2, Co–, Co+,CoH i
+ZnClZn i,HZn i, Zn–, Zn+
+F AlClF, AlClF +, AlClF2, AlCl2F, AlF, AlF +, AlFO, AlF 2, AlF –
+2 , AlF +
+2 , AlF2O, AlF2O–, AlF3, AlF –
+4 , AlF4Na, Al2F6, CClFO, CClF 3, CCl2F2, CCl3F, CF, CF +, CFN,
+CFO, CF2, CF +
+2 , CF2O, CF3, CF +
+3 , CF4, CF4O, CF8S, CHClF2, CHCl2F, CHF, CHFO, CHF3, CH2ClF, CH2F2, CH3F, CH3F3Si, C2F2, C2F3N, C2F4, C2F6, C2HF, CaF,
+CaF2, ClF, ClFMg, ClFO2S, ClFO3, ClF2OP, ClF3, ClF3Si, ClF5, ClF5S, Cl2FOP, Cl3FSi, CoF2, F–, F+, F0S2, FFe, FHg, FHO, FHO3S, FH3Si, FK, FMg, FMg+,FMn i,
+FN, FNO, FNO2, FNO3, FNa,FNi i, FO, FOTi, OFO, FOO FP, FP –, FP+, FPS, FS, FS –, FS+, FSi, FTi,FZn i, F2, F2Fe, F2H2, F2H2Si, F2K–, F2K2, F2Mg, F2Mg+, F2N,
+cis-F2N2,trans-F 2N2 F2Na–, F2Na2, F2O, F2OS, F2OSi, F2OTi, F2O2, F2O2S, F2P, F2P–, F2P+, F2S, F2S–, F2S+, FS2F, SSF2 F2Si, F2Ti, F3Fe, F3HSi, F3H3, F3N, F3NO,
+F3OP, F3P, F3PS, F3S, F3S–, F3S+, F3Si, F3Ti, F4H4, F4Mg2, F4N2, F4S, F4S–, F4S+, F4Si, F4Ti, F5H5, F5P, F5S, F5S–, F5S+, F6H6, F6S, F6S–, F7H7
+Cu ClCu, Cl 3Cu3, Cu–, Cu+, CuF, CuF2, CuHk, CuO, CuSa, Cu2
+V C 2V, C4V, NV, OV, O2V, V–, V+
+GeClGe i,FGe i,Ge – j,Ge + j,GeH i,GeO i,GeS i
+Se AlSe i,CSe i,ClSe i,FSe i,GeSe i,HSe i,NSe i,OSe i,SSe i,Se – j,Se + j,Se 2i
+Sc ClSc i,FSc i,OSc i,O 2Sca,SSc i,Sc – j,Sc + j
+Kr Kr +
+Ga ClGa i,FGa i,Ga – j,Ga +,GaH i,GaO i
+Sr ClSr,Cl 2Sr,FSr,FSr +,F 2Sr,HOSr,HOSr +,HSr i,H 2O2Sr,OSr i,SSr d,Sr – j,Sr +
+B AlBO 2,B –,B +,BCl i,BCl +k,BClF d,BClF 2,BClO,BCl 2d,BCl –
+2 ,BCl +
+2 ,BCl 2F,BCl 2H,BCl 3,BF,BFO,BF 2,BF –
+2 ,BF +
+2 ,BF 2H,BF 2HO,BF 2O,BF 3,BF 4K,BH i,
+BHO,BHO –,BHO +,BHO 2,BHS,BHS +,BH 2d,BH 2O2,BH 3,BH 3O3,BKO 2,BN d,BNaO 2,BO,BO 2k,BO –
+2 k,BS d,B 2,B 2Cl4,B 2F4,B 2F4O,B 2H4O4,B 2H6,B 2Od,
+B2O2,B 2O3,B 3Cl3O3,B 3FH2O3,B 3F2HO3,B 3F3O3,B 3H3O3,B 3H3O6,B 3H6N3,B 5H9,B 10H4,CB
+Zr C 2Zra,C 4Zra,ClZr,Cl 2Zr,Cl 3Zr,Cl 4Zr,FZr,F 2Zr,F 3Zr,F 4Zr,HZr,NZr i,OZr i,O 2Zr,SZr a,Zr –,Zr + j
+Br AlBr,AlBr 3,Al 2Br6,BBr,BBrCl,BBrCl 2,BBrF,BBrF 2,BBrO,BBr 2k,BBr 2Cl,BBr 2F,BBr 2H,BBr 3,Br –,Br +,BrCa,BrCl,BrF,BrF 3,BrF 5,BrF 5S,BrH,
+BrH3Si,BrK,BrMg,BrN,BrNO,BrNa,BrO,OBrO,BrOO BrO 3,BrP,BrSi,BrSr,BrTi,BrZr,Br 2,Br 2Ca,Br 2Fe,Br 2H2Si,Br 2K2,Br 2Mg,Br 2Mg+,Br 2Na2,
+BrOBr,BrBrO Br 2Si,Br 2Sr,Br 2Ti,Br 2Zr,Br 3HSi,Br 3OP,Br 3P,Br 3PS,Br 3Si,Br 3Ti,Br 3Zr,Br 4Fe2,Br 4Mg2,Br 4Si,Br 4Ti,Br 4Zr,CBr,CBrF 3,CBrN,CBr 4
+Rb BrRb a,ClRb i,FRb i,HRb i,ORb i,Rb –,Rb +,Rb 2
+As As – j,As + j,AsCl i,AsF i,AsH i,AsN i,AsO i,AsP i,AsS i,As 2i
+Ba Ba – j,Ba +,BaBr,BaBr 2,BaCl,BaCl 2,BaF,BaF +,BaF 2,BaH i,BaHO,BaHO +,BaH 2O2,BaO,BaS
+Xe Xe +
+Y C 2Ya,C 4Ya,ClY i,FY i,OY i,O 2Ya,SY i,Y – j,Y + j
+Te GeTe i,HTe i,OTe i,STe i,SiTe i,Te – j,Te + j,Te 2i
+Sn ClSn,FSn,HSn,OSn,SSn,Sn – j,Sn + j
+Pb BrPb,Br 2Pb,Br 4Pbk,ClPb k,ClPb +,Cl 2Pb,Cl 2Pb+,Cl 4Pbk,FPb,F 2Pb,F 4Pbk,HPb,OPb,Pb – j,Pb + j,PbS,Pb 2
+Li AlF 4Li,BLiO 2,BrLi,Br 2Li2,ClFLi 2,ClLi,ClLiO,Cl 2Li2,Cl 3Li3,FLi,FLiO,F 2Li–,F 2Li2,F 3Li3,HLi,HLiO,HLiO +,H 2Li2O2,Li –,Li +,LiN,LiNO,LiNa i,
+LiNaO,LiO i,LiO –,Li 2,Li 2O,Li 2O2,Li 2O4S
+References.(a) Tsuji (1973); (b) Lodders (1999); (c) Dorofeeva et al. (2001); (d) McBride et al. (2002); (e) Dorofeeva et al. (2003); (f) Lodders
+(2004); (g) Shenyavskaya & Yungman (2004); (h) Burrows et al. (2005); (i) Barklem & Collet (2016); (j) Hoeijmakers et al. (2019); (k) Goos et al.
+(2023).
+Article number, page 13
+
+A&A proofs:manuscript no. fastchem4
+Table A.2.List of all condensed-phase species included in the present version of FastChem. Newly added species are highlighted in bold fond.
+Unless stated otherwise, thermochemical data from Chase (1998) were used to fit ln ¯Ki.
+Element Condensates
+O H 2O(s,l)e
+C C(s), CH 4(s,l)a, CO2(s,l)b, CO(l)c
+N N 2H4(l), N2O4(s,l), N2(s,l) f , NH3(s,l)g
+Mg MgCO 3(s), MgC2(s), Mg2C3(s), MgH2(s), Mg(OH)2(s), Mg(s,l), MgO(s,l), Mg3N2(s)
+Si SiC(s), MgSiO 3(s,l), Mg2SiO4(s,l), Mg2Si(s,l), Si3N4(s), SiO2(s,l)i, Si(s,l), SiO(s)h
+Fe Fe(CO) 5(l), Fe(s,l), Fe(OH)2(s), Fe(OH)3(s), FeO(s,l), Fe2O3(s), Fe3O4(s), Fe2SiO4(s)d
+S FeSO 4(s), FeS(s,l), FeS 2(s), Fe 2(SO4)3(s), O 2S(OH)2(s,l),H 2S(s,l) j, H 2SO4 · H2O(s,l), H 2SO4 · 2H2O(s,l), H 2SO4 · 3H2O(s,l), H 2SO4 · 4H2O(s,l), MgSO 4(s,l), MgS(s),
+NH4SH(s)k, S(s,l), SiS2(s,l)
+Al Al(s), AlN(s), MgAl 2O4(s,l), Al2O3(s,l), Al2SiO5(s), Al2S3(s), Al6Si2O13(s), Al4C3(s)
+Ca Ca(s,l), Ca(OH) 2(s), CaO(s,l), CaS(s), CaSiO3(s)d, Ca2SiO4(s)d, CaMgSi2O6(s)d, Ca2Al2SiO7(s)d, CaAl2Si2O8(s)d
+Na NaAlO 2(s), NaCN(s,l), NaCO 3(s,l), NaH(s), NaOH(s,l), Na(s,l), NaO 2(s), Na 2O(s,l), Na 2O2(s), Na 2SiO3(s,l), Na 2SO4(s,l), Na 2Si2O5(s,l), Na 2S(s,l), Na 2S2(s,l),
+NaAlSi3O8(s)d
+Ni Ni(CO) 4(l), Ni(s,l), NiS(s,l), NiS2(s,l), Ni3S2(s,l), Ni3S4(s)
+Cr Cr 3C2(s), Cr7C3(s), Cr23C6(s), Cr(s,l), CrN(s), Cr2N(s), Cr2O3(s,l)
+Cl AlClO(s), AlCl 3(s,l), NaAlCl4(s), Na3AlCl6(s), CaCl2(s,l), NH4Cl(s), NH4ClO4(s), NaCl(s,l), NaClO4(s), FeCl2(s,l), MgCl2(s,l), NiCl2(s,l), SCl2(l), ClSSCl(l), FeCl3(s,l)
+Mn Mn(s,l), MnS(s) d, MnSiO3(s)d
+P H 3PO4(s,l), Mg3P2O8(s,l),NH 4H2PO4(s)m,PH 3(s,l)l, P3N5(s), (P2O5)2(s), P(s,l), P4S3(s,l)
+K KAlCl 4(s), K 3AlCl6(s), K 3Al2Cl9(s), KCN(s,l), K 2CO3(s,l), KCl(s,l), KClO 4(s), KH(s), KOH(s,l), K(s,l), KO 2(s), K 2O(s), K 2O2(s), K 2SiO3(s,l), K 2SO4(s,l), K 2S(s,l),
+KAlSi3O8(s)d
+Co CoCl 2(s,l), Co(s,l), CoO(s), CoSO4(s), Co3O4(s)
+Ti TiC(s,l), TiCl 2(s), TiCl3(s), TiCl4(s,l), TiH2(s), MgTiO3(s,l), MgTi2O5(s,l), Mg2TiO4(s,l), TiN(s,l), TiO(s,l), TiO2(s,l), Ti2O3(s,l), Ti3O5(s,l), Ti4O7(s,l), Ti(s,l), CaTiO3(s)d
+F AlF 3(s,l), K3AlF6(s), Na3AlF6(s,l), Na5Al3F14(s,l), CaF2(s,l), CoF2(s,l), CoF3(s), KF(s,l), NaF(s,l), FeF2(s,l), K(HF2)(s,l), MgF2(s,l), FeF3(s), TiF3(s), TiF4(s),ZnF 2(s,l)i
+ZnCaZn(s) i,CaZn 2(s)i,Fe 2ZnO4(s)i,Zn 2SiO4(s,l)i,Zn 2TiO4(s)i,Zn 3(PO4)2(s)i,Zn 3N2(s)i,Zn 3P2(s,l)i,ZnCO 3(s)i,ZnCl 2(s,l)i,ZnO(s,l) i,ZnP 2(s,l)i,ZnS(s,l) i,Zn-
+SiO3(s)i, ZnSO4(s), Zn(s,l)i
+Cu CuCN(s), CuCl(s,l), CuCl 2(s), Cu(s,l), CuF(s), CuF2(s,l), Cu(OH)2(s), CuO(s), CuSO4(s), Cu2O(s,l)
+V VN(s), VO(s,l), V 2O3(s,l), V2O4(s,l), V2O5(s,l), V(s,l),Ca(VO 3)2(s)i,Ca 2V2O7(s)i,Ca 3(VO4)2(s)i,Fe(VO 3)2(s)i,FeV 2O4(s)i,V 2C(s)i
+GeGe(s,l) i,GeMg 2(s)i,GeNi 2(s)i,GeO 2(s,l)i,GeP(s) i,GeS(s,l) i,GeS 2(s,l)i
+Se Al 2Se3(s)i,CaSe(s) i,CoSeO 3(s,l)i,Cu 2Se(s)i,CuSe(s) i,CuSeO 3(s)i,GeSe(s,l) i,GeSe 2(s)i,MgSe(s) i,MgSeO 3(s)i,MnSe(s) i,NiSe2(s)i,NiSeO 3(s)i,Se(s,l) i,Se 2Cl2(l)i,
+SeCl4(s)i,SeO 2(s)i,ZnSe(s) i,ZnSeO 3(s,l)i
+Sc Sc(s,l) i,Sc 2O3(s,l)i,ScCl 3(s,l)i,ScF 3(s,l)i,ScN(s) i
+Ga Ga(s,l),Ga 2O3(s,l)i,Ga 2S3(s)i,Ga 2Se3(s)i,GaCl 3(s,l)i,GaF 3(s)i,GaN(s) i,GaP(s) i,GaS(s) i,GaSe(s) i
+Sr Sr(OH) 2(s,l),Sr(s,l),Sr 2SiO4(s)i,Sr 2TiO4(s)i,Sr 3N2(s)i,SrAl 2O4(s)i,SrC 2(s)i,SrCO 3(s)i,SrCl 2(s,l),SrF 2(s,l),SrH 2(s)i,SrO(s,l),SrS(s),SrSO 4(s,l)i,SrSiO 3(s)i,
+SrTiO3(s)i
+B (B(OH) 2)2(s),B(s,l),B 2O3(s,l),B 3H3O3(s),B 3O3F3(s),B 4C(s,l),B 5H9(l),BN(s),Ca 2B2O5(s,l)i,Ca 3B2O6(s,l)i,CaB 2O4(s,l)i,CaB 4O7(s,l)i,Co 2B(s)i,CoB(s) i,CrB(s) i,
+CrB2(s)i,Fe 2B(s)i,FeB(s) i,H 3BO3(s),HBO 2(s),K 2B4O7(s,l),KBF 4(s,l),KBH 4(s),KBO 2(s,l),MgB 2(s),MgB 4(s),MnB(s) i,MnB 2(s)i,Na 2B4O7(s,l),NaBH 4(s),
+NaBO2(s,l),Ni 4B3(s)i,NiB(s) i,TiB(s),TiB 2(s,l)
+Zr CaZrO 3(s)i,SrZrO 3(s)i,Zr(s,l),ZrB 2(s,l),ZrC(s,l),ZrCl 2(s,l),ZrCl 3(s),ZrCl 4(s),ZrF 2(s,l),ZrF 3(s),ZrF 4(s),ZrN(s,l),ZrO 2(s,l),ZrS 2(s)i,ZrSiO 4(s)
+Br AlBr 3(s,l),BBr 3(l),Br 2(s,l),CaBr 2(s,l),CoBr 2(s)i,CrBr 2(s),CrBr 3(s)i,CuBr(s,l) i,CuBr 2(s)i,FeBr 2(s,l),GaBr 3(s,l)i,KBr(s,l),MgBr 2(s,l),MnBr 2(s,l)i,NH 4Br(s),
+NaBr(s,l),NiBr 2(s)i,ScBr 3(s)i,SiBr 4(l),SrBr 2(s,l),TiBr 2(s),TiBr 3(s),TiBr 4(s,l),ZnBr 2(s,l)i,ZrBr 2(s,l),ZrBr 3(s),ZrBr 4(s)
+Rb Rb(s,l),Rb 2CO3(s,l)i,Rb 2O(s,l)i,Rb 2SO4(s,l)i,Rb 2Si2O5(s,l)i,Rb 2Si4O9(s,l)i,Rb 2SiO3(s,l)i,RbBr(s,l) i,RbCl(s,l) i,RbF(s,l) i,RbO 2(s,l)i
+As AlAs(s) i,AlAsO 4(s)i,As 2O3(s,l)i,As 2O5(s)i,As 2S2(s,l)i,As 2S3(s,l)i,As 2Se3(s,l)i,As 4S4(s,l)i,As(s) i,Ca 3(AsO4)2(s)i,Co 3(AsO4)2(s)i,Cr 3(AsO4)2(s)i,CrAsO 4(s)i,
+Cu3(AsO4)2(s)i,Cu 3As(s)i,Cu 3AsO4(s)i,Fe 3(AsO4)2(s)i,FeAsO 4(s)i,GaAs(s,l) i,GaAsO 4(s)i,K 3AsO4(s)i,Mg 3(AsO4)2(s)i,Mn 3(AsO4)2(s)i,MnAs(s) i,Na 3As(s)i,
+Na3AsO4(s)i,Ni 3(AsO4)2(s)i,Ni 5As2(s)i,NiAs(s) i,Rb 3AsO4(s)i,ScAsO 4(s)i,Sr 3(AsO4)2(s)i,Ti 3(AsO4)2(s)i,Zn 3(AsO4)2(s)i,Zn 3As2(s,l)i
+Ba Ba(OH) 2(s,l),Ba(s,l),Ba 2SiO4(s)i,Ba 2TiO4(s)i,Ba 3(AsO4)2(s)i,Ba 3Al2O6(s)i,BaAl 2O4(s)i,BaBr 2(s,l),BaC 2(s)i,BaCO 3(s)i,BaCl 2(s,l),BaF 2(s,l),BaH 2(s,l)i,
+BaO(s,l),BaS(s),BaSO 4(s)i,BaSiO 3(s)i,BaTiO 3(s)i,BaZrO 3(s)i
+Y Y(s,l) i,Y 2O3(s)i,Y 2Zr2O7(s)i,Y AsO4(s)i,YCl 3(s,l)i,YF 3(s,l)i,YN(s) i
+Te Al 2Te3(s)i,As 2Te3(s,l),BaTe(s) i,CaTe(s) i,Cu 2Te(s)i,CuTe(s) i,FeTe 2(s)i,Ga 2Te3(s)i,GaTe(s) i,GeTe(s) i,MgTe(s) i,MnTe(s) i,MnTe 2(s)i,Na 2Te(s,l)i,NaTe(s) i,
+NaTe3(s,l)i,Te(s,l) i,TeBr 4(s)i,TeCl 4(s,l)i,TeO 2(s,l)i,ZnTe(s) i
+Sn Ba 2Sn(s)i,Ca 2Sn(s)i,CaSn(s) i,CoSn(s) i,MnSn 2(s)i,Ni 3Sn(s)i,Ni 3Sn2(s)i,Sn(SO 4)2(s)i,Sn(s,l) i,Sn 2S3(s)i,Sn 3(AsO4)2(s)i,Sn 3S4(s)i,SnBr 2(s,l)i,SnBr 4(s,l)i,
+SnCl2(s,l)i,SnCl 4(l)i,SnF 2(s,l)i,SnO(s) i,SnO 2(s)i,SnS(s,l) i,SnS 2(s)i,SnSO 4(s)i,SnSe(s) i,SnSe 2(s)i,SnTe(s,l) i
+Pb Ca 2Pb(s)i,CaPb(s) i,Mg 2Pb(s)i,Pb(s,l),Pb 2SiO4(s),Pb 3(AsO4)2(s)i,Pb 3O4(s),PbB 2O4(s),PbB 4O7(s),PbBr 2(s,l),PbCO 3(s)i,PbCl 2(s,l),PbF 2(s,l),PbO(s,l),
+PbO2(s),PbS(s,l),PbSO 4(s,l)i,PbSe(s,l) i,PbSeO 3(s)i,PbSeO 4(s)i,PbSiO 3(s),PbTe(s,l) i,PbTiO 3(s)i
+Li AlLi(s) i,Li(s,l),Li 2B4O7(s,l),Li 2C2(s),Li 2CO3(s,l),Li 2O(s,l),Li 2O2(s),Li 2SO4(s,l),Li 2Se(s)i,Li 2Si2O5(s,l),Li 2SiO3(s,l),Li 2Te(s)i,Li 2TiO3(s,l),Li 3AlF6(s,l),
+Li3AsO4(s)i,Li 3N(s),LiAlH 4(s),LiAlO 2(s,l),LiBH 4(s),LiBO 2(s,l),LiBr(s,l),LiCl(s,l),LiClO 4(s,l),LiF(s,l),LiH(s,l),LiOH(s,l)
+References.(a) Moses et al. (1992), Prydz & Goodwin (1972), NIST Chemistry Webbook; (b) Yaws (1999), NIST Chemistry Webbook;
+(c) Goodwin (1985); (d) Sharp & Huebner (1990); (e) Murphy & Koop (2005), Wagner & Kretzschmar (2008); (f) Dykyj et al. (2001); (g) Lide
+(2009), Haar & Gallagher (1978); (h) Gail et al. (2013); (i) Barin (1995); (j) Stull (1947); (k) Lewis (1969); (l) Stephenson & Giauque (1937);
+(m) Rossini et al. (1952), Stephenson & Zettlemoyer (1944).
+Article number, page 14
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+Appendix B: Chemistry plots
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Al, aluminium
+C/O = 0.59
+Al
+AlH
+AlOH
+Al+
+MgAl2O4(s, l)
+Al2O3(s, l)
+Ca2Al2SiO7(s)
+NaAlSi3O8(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Al, aluminium
+C/O = 2
+Al
+AlH
+Al+
+AlN(s)
+MgAl2O4(s, l)
+Al2O3(s, l)
+Ca2Al2SiO7(s)
+NaAlSi3O8(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+As, arsenic
+C/O = 0.59
+As
+AsH
+AsP
+AsS
+As+
+Ni5As2(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+As, arsenic
+C/O = 2
+As
+AsH
+AsP
+As+
+Ni5As2(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ba, barium
+C/O = 0.59
+Ba
+BaOH
+Ba(OH)2
+BaO
+BaS
+Ba+
+BaSiO3(s)
+BaTiO3(s)
+BaZrO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ba, barium
+C/O = 2
+Ba
+BaCl2
+BaOH
+Ba(OH)2
+Ba+
+BaS(s)
+BaSiO3(s)
+BaTiO3(s)
+BaZrO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Br, bromine
+C/O = 0.59
+Br
+HBr
+KBr
+NaBr
+RbBr
+Br+
+KBr(s, l)
+NaBr(s, l)
+RbBr(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Br, bromine
+C/O = 2
+Br
+AlBr
+HBr
+KBr
+NaBr
+RbBr
+Br+
+KBr(s, l)
+NaBr(s, l)
+RbBr(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cl, chlorine
+C/O = 0.59
+Cl
+HCl
+NaCl
+Cl+
+KCl(s, l)
+NaCl(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cl, chlorine
+C/O = 2
+Cl
+AlCl
+HCl
+NaCl
+Cl+
+KCl(s, l)
+NaCl(s, l)
+Fig. B.1.Same as Fig. 5 for all remaining elements from Table 1. The elements are listed in alphabetic order.
+Article number, page 15
+
+A&A proofs:manuscript no. fastchem4
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Co, cobalt
+C/O = 0.59
+Co
+Co+
+Co(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Co, cobalt
+C/O = 2
+Co
+Co+
+Co(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cr, chromium
+C/O = 0.59
+Cr
+Cr+
+Cr7C3(s)
+Cr23C6(s)
+Cr(s, l)
+Cr2O3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cr, chromium
+C/O = 2
+Cr
+Cr+
+Cr3C2(s)
+Cr7C3(s)
+Cr2O3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cu, copper
+C/O = 0.59
+Cu
+CuH
+Cu+
+Cu(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Cu, copper
+C/O = 2
+Cu
+CuH
+Cu+
+Cu(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+F, ﬂuorine
+C/O = 0.59
+F
+HF
+F+
+Na3AlF6(s, l)
+NaF(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+F, ﬂuorine
+C/O = 2
+F
+AlF
+HF
+F+
+Na3AlF6(s, l)
+NaF(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Fe, iron
+C/O = 0.59
+Fe
+Fe+
+Fe(s, l)
+FeS(s, l)
+Fe3O4(s)
+Fe2SiO4(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Fe, iron
+C/O = 2
+Fe
+Fe+
+Fe(s, l)
+FeS(s, l)
+Fe3O4(s)
+Fe2SiO4(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ga, gallium
+C/O = 0.59
+Ga
+GaCl
+GaF
+GaH
+Ga+
+Ga2O3(s, l)
+GaS(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ga, gallium
+C/O = 2
+Ga
+GaCl
+GaF
+GaH
+Ga+
+Ga2O3(s, l)
+GaS(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ge, germanium
+C/O = 0.59
+Ge
+GeH
+GeO
+GeS
+Ge+
+GeNi2(s)
+GeO2(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ge, germanium
+C/O = 2
+Ge
+GeH
+GeS
+GeSe
+Ge+
+GeNi2(s)
+GeO2(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+K, potassium
+C/O = 0.59
+K
+KCl
+K+
+KCl(s, l)
+KAlSi3O8(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+K, potassium
+C/O = 2
+K
+KCl
+K+
+KCl(s, l)
+KAlSi3O8(s)
+Fig. B.1.continued.
+Article number, page 16
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Li, lithium
+C/O = 0.59
+Li
+LiCl
+LiOH
+Li+
+Li2B4O7(s, l)
+Li2SiO3(s, l)
+LiF(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Li, lithium
+C/O = 2
+Li
+LiCl
+LiF
+Li+
+Li2B4O7(s, l)
+Li2SiO3(s, l)
+LiF(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Mg, magnesium
+C/O = 0.59
+Mg
+Mg+
+MgSiO3(s, l)
+Mg2SiO4(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Mg, magnesium
+C/O = 2
+Mg
+Mg+
+MgO(s, l)
+MgSiO3(s, l)
+Mg2SiO4(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Mn, manganese
+C/O = 0.59
+Mn
+MnH
+Mn+
+MnS(s)
+MnSiO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Mn, manganese
+C/O = 2
+Mn
+MnH
+Mn+
+MnS(s)
+MnSiO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+N, nitrogen
+C/O = 0.59
+N
+NH3
+N2
+N+
+NH3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+N, nitrogen
+C/O = 2
+N
+HCN
+NH3
+N2
+N+
+NH3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Na, sodium
+C/O = 0.59
+Na
+Na+
+Na2SiO3(s, l)
+NaAlSi3O8(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Na, sodium
+C/O = 2
+Na
+Na+
+Na2SiO3(s, l)
+NaAlSi3O8(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ni, nickel
+C/O = 0.59
+Ni
+Ni+
+Ni(s, l)
+Ni3S2(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ni, nickel
+C/O = 2
+Ni
+Ni+
+Ni(s, l)
+Ni3S2(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+P, phosphorus
+C/O = 0.59
+P
+PH
+PH2
+PH3
+PO
+PS
+P2
+P+
+Mg3P2O8(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+P, phosphorus
+C/O = 2
+P
+CHP
+PH2
+PH3
+P2
+P+
+Mg3P2O8(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Pb, lead
+C/O = 0.59
+Pb
+Pb+
+PbS(s, l)
+PbSe(s, l)
+PbTe(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Pb, lead
+C/O = 2
+Pb
+Pb+
+PbS(s, l)
+PbSe(s, l)
+PbTe(s, l)
+Fig. B.1.continued.
+Article number, page 17
+
+A&A proofs:manuscript no. fastchem4
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Rb, rubidium
+C/O = 0.59
+Rb
+RbBr
+RbCl
+Rb+
+RbBr(s, l)
+RbCl(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Rb, rubidium
+C/O = 2
+Rb
+RbBr
+RbCl
+Rb+
+RbBr(s, l)
+RbCl(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+S, sulphur
+C/O = 0.59
+S
+HS
+H2S
+S2
+S+
+FeS(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+S, sulphur
+C/O = 2
+S
+CS
+HS
+H2S
+SiS
+S+
+FeS(s, l)
+MgS(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sc, scandium
+C/O = 0.59
+Sc
+ScO2
+Sc+
+Sc2O3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sc, scandium
+C/O = 2
+Sc
+ScO2
+Sc+
+Sc2O3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Se, selenium
+C/O = 0.59
+Se
+GeSe
+HSe
+SeS
+Se2
+Se+
+Cu2Se(s)
+MnSe(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Se, selenium
+C/O = 2
+Se
+GeSe
+HSe
+Se2
+Se+
+Cu2Se(s)
+MnSe(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Si, silicon
+C/O = 0.59
+Si
+SiO
+Si+
+MgSiO3(s, l)
+Mg2SiO4(s, l)
+SiO(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Si, silicon
+C/O = 2
+Si
+SiH
+SiO
+SiS
+Si+
+SiC(s)
+MgSiO3(s, l)
+Mg2SiO4(s, l)
+SiO(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sn, tin
+C/O = 0.59
+Sn
+SnH
+SnS
+Sn+
+Ni3Sn(s)
+Ni3Sn2(s)
+SnO2(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sn, tin
+C/O = 2
+Sn
+SnH
+SnS
+Sn+
+Ni3Sn(s)
+Ni3Sn2(s)
+SnO2(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sr, strontium
+C/O = 0.59
+Sr
+Sr+
+SrTiO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Sr, strontium
+C/O = 2
+Sr
+Sr+
+SrS(s)
+SrSiO3(s)
+SrTiO3(s)
+SrZrO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Te, tellurium
+C/O = 0.59
+Te
+TeH
+Te2
+Te+
+Cu2Te(s)
+PbTe(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Te, tellurium
+C/O = 2
+Te
+TeH
+Te2
+Te+
+Cu2Te(s)
+PbTe(s, l)
+Fig. B.1.continued.
+Article number, page 18
+
+D. Kitzmann , J. W. Stock, and A.B.C. Patzer: FastChem 4: New chemical elements and improved convergence behaviour
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ti, titanium
+C/O = 0.59
+Ti
+TiO
+TiO2
+Ti+
+MgTi2O5(s, l)
+TiN(s, l)
+TiO(s, l)
+TiO2(s, l)
+Ti3O5(s, l)
+Ti4O7(s, l)
+CaTiO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Ti, titanium
+C/O = 2
+Ti
+Ti+
+TiC(s, l)
+TiN(s, l)
+TiO2(s, l)
+Ti2O3(s, l)
+Ti3O5(s, l)
+Ti4O7(s, l)
+CaTiO3(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+V, vanadium
+C/O = 0.59
+V
+VO
+VO2
+V+
+VN(s)
+VO(s, l)
+V2O3(s, l)
+FeV2O4(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+V, vanadium
+C/O = 2
+V
+V+
+VN(s)
+V2O3(s, l)
+FeV2O4(s)
+V2C(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Y, yttrium
+C/O = 0.59
+Y
+YO
+YO2
+Y+
+Y2O3(s)
+Y2Zr2O7(s)
+YF3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Y, yttrium
+C/O = 2
+Y
+YO
+YO2
+YS
+Y+
+Y2O3(s)
+Y2Zr2O7(s)
+YF3(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Zn, zinc
+C/O = 0.59
+Zn
+Zn+
+ZnS(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Zn, zinc
+C/O = 2
+Zn
+Zn+
+ZnS(s, l)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Zr, zirconium
+C/O = 0.59
+Zr
+ZrO
+ZrO2
+Zr+
+BaZrO3(s)
+CaZrO3(s)
+Y2Zr2O7(s)
+ZrO2(s, l)
+ZrSiO4(s)
+2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75
+log T (K)
+□12
+□10
+□8
+□6
+□4
+□2
+0
+2
+log p (bar)
+Zr, zirconium
+C/O = 2
+Zr
+ZrH
+ZrO
+Zr+
+BaZrO3(s)
+CaZrO3(s)
+SrZrO3(s)
+Y2Zr2O7(s)
+ZrB2(s, l)
+ZrC(s, l)
+ZrO2(s, l)
+ZrS2(s)
+ZrSiO4(s)
+Fig. B.1.continued.
+Article number, page 19

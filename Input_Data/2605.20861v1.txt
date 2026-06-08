@@ -1,0 +1,1121 @@
+Title: Adaptive multi-line fitting for stable line-core intensity and Doppler velocity
+Authors: Shahin Jafarzadeh, David B. Jess, Marco Stangalini, Peter H. Keys, Glen Chambers, Samuel D. T. Grant, Michele Berretti, Timothy J. Duckenfield
+Published: 2026-05-20
+Categories: astro-ph.SR, astro-ph.IM
+
+Adaptive multi-line fitting for stable line-core
+intensity and Doppler velocity
+Shahin Jafarzadeh 1,∗, David B. Jess 1,2, Marco Stangalini 3, Peter H. Keys 1,
+Glen Chambers 1, Samuel D. T. Grant1, Michele Berretti 4,5, and
+Timothy J. Duckenfield 1
+1Astrophysics Research Centre, School of Mathematics and Physics, Queen’s
+University Belfast, Belfast, BT7 1NN, Northern Ireland, UK
+2Department of Physics and Astronomy, California State University Northridge,
+Northridge, CA 91330, USA
+3ASI Italian Space Agency, Via del Politecnico snc, 00133 Rome, Italy
+4University of Trento, Via Calepina 14, 38122 Trento, Italy
+5University of Rome Tor Vergata, Department of Physics, Via della Ricerca
+Scientifica 3, 00133 Rome, Italy
+Correspondence*:
+Shahin Jafarzadeh
+shahin.jafarzadeh@qub.ac.uk
+ABSTRACT
+Next-generation solar spectrographs increasingly record dense wavelength windows in which
+tens to hundreds of spectral lines are sampled at each spatial location and time step. This expands
+the scope for multi-line, multi-height diagnostics of magnetohydrodynamic (MHD) motions, but
+also raises a practical challenge: deriving stable line-core intensity and line-of-sight (LOS) velocity
+time series when profiles evolve rapidly, become asymmetric, blend, or develop multi-lobed
+cores. Common fast estimators (e.g. parabolic minima, centre-of-gravity measures, Fourier-phase
+proxies, and fixed-window symmetric fits) can perform well for simple, isolated absorption lines,
+yet can intermittently misidentify the core in crowded or morphologically complex cases. Even
+infrequent mis-tracking can leave step-like artefacts that redistribute power and bias spectral,
+phase, and coherence measures used in wave and dynamics analyses. We introduce LineFit,
+a fully reproducible adaptive multi-line fitting approach tailored to dense-window spectroscopy
+from facilities such as DKIST,SUNRISE III, and integral-field instruments. LineFit models
+each line locally with bounded non-linear least-squares fits to a Voigt-family profile, including an
+asymmetric-Voigt option to accommodate unequal wing broadening, and incorporates close-pair
+ownership control together with conservative, per-line window adaptation and split-core-aware
+handling. Using a synthetic near-UV time series with unambiguous ground truth, we benchmark
+LineFit against four widely used fast baselines and assess both instantaneous centre errors
+and downstream time-series diagnostics. Several fast methods remain competitive for many lines,
+whereas LineFit is most robust in key stress cases involving intermittently split-core profiles and
+correspondingly yields power spectra that agree most closely with the truth. We also demonstrate
+a proof-of-principle that benchmarks hybrid acceleration of the LineFit software via supervised
+emulation, offering at least three orders-of-magnitude improvement in processing time, with 87%
+of validation samples agreeing withLineFit to within 0.1 pm in recovered line-centre position. All
+code and notebooks required to reproduce the testbed, figures, and results are publicly available,
+1
+arXiv:2605.20861v1  [astro-ph.SR]  20 May 2026
+
+Jafarzadeh et al.Adaptive multi-line fitting
+providing a portable benchmark and a practical basis for stable multi-line time-series extraction,
+with a clear route towards hybrid acceleration via supervised emulation.
+Keywords: The Sun, MHD, Waves, Oscillations, Spectroscopy, Methods
+1 INTRODUCTION
+New flagship facilities and modern spectroscopic designs are shifting the practical limiting factor in wave
+and dynamics studies of the solar atmosphere (Jess et al., 2023b). Instruments now routinely provide
+high spatial resolution, high cadence, and dense spectral sampling, increasingly in configurations that
+deliver many spectra per exposure (e.g. integral-field units (IFUs) and multiplexed/slit-based spectrographs;
+Iglesias and Feller, 2019; Katsukawa et al., 2020; Rast et al., 2021; Feller et al., 2025; Solanki et al., 2026).
+In this regime, dense spectral windows containing tens to hundreds of lines can be recorded for every
+spatial sample and time step, enabling multi-line constraints on magnetohydrodynamic (MHD) motions
+across atmospheric layers. At the same time, they can create an underappreciated bottleneck: converting
+raw spectra into science-grade, stable line-core intensity and line-of-sight (LOS) velocity time series at
+scale. This bottleneck is particularly relevant for next-generation datasets in which the information content
+is high but profile morphology is not static in the highly dynamic solar atmosphere, and where accurate
+time-series extraction must remain reliable both for well-behaved profiles and during episodes of strong
+profile distortion.
+The scientific motivation for reliable line-core time series is broad. Doppler shifts and line-core intensity
+variations are key observables in studies of MHD waves and oscillations, shocks, flows, and small-scale
+transients, and they underpin frequency-phase-coherence analyses, wave-mode identification, and multi-
+height coupling inferences (e.g. Tziotziou et al., 2007; De Moortel and Nakariakov, 2012; Jess et al.,
+2015; Stangalini et al., 2021, 2022; Grant et al., 2022; Calchetti et al., 2023; Bate et al., 2024; Berretti
+et al., 2025; Duckenfield et al., 2025). In dense-window spectroscopy, their value can increase because
+multiple diagnostics can be extracted simultaneously from different lines sampling different formation
+regimes. However, the same dense windows may also intensify algorithmic challenges, particularly if
+blends become common, line widths vary strongly across the field of view and in time, asymmetries appear
+and disappear, or some lines develop multi-lobed cores or self-reversals. In such conditions, even occasional
+misidentification of the line core can be scientifically consequential because it can introduce discontinuities
+that inject broadband artefacts, bias power spectra, and degrade phase and coherence measurements.
+A wide range of techniques are used in practice to infer LOS velocities and related atmospheric
+parameters. At one end, fast proxies estimate a representative line position from the observed intensity
+profile within a fixed or semi-fixed window: e.g. parabolic interpolation around the minimum, centre-
+of-gravity (COG) estimators of the absorption depression, bisectors, Fourier/phase-based centroids
+(Fourier-tachometer style proxies), polynomial core fits (including weighted variants), or symmetric
+parametric fits (Gaussian/Lorentzian) in a prescribed window (e.g. Uitenbroek, 2003; Couvidat et al., 2012;
+Beckers and Brown, 2013; Gilchrist-Millar et al., 2021). These approaches can be accurate and efficient for
+isolated, near-symmetric profiles with stable continua, and they often remain the only feasible option when
+computational cost limits what can be processed. Their limitations are also well known: if neighbouring
+features or blends fall within the chosen wavelength window, they can bias methods that compute the
+centre from the full windowed profile (e.g. COG or Fourier-phase centroids); asymmetric or evolving
+wings can systematically shift COG-like measures; and multi-lobed cores can cause the inferred “centre”
+2
+
+Jafarzadeh et al.Adaptive multi-line fitting
+to hop between competing minima or lobes, producing discontinuities in time series that are difficult to
+identify and correct in subsequent analysis (Bouchy et al., 2001; Figueira et al., 2013; Figueira, 2018).
+At the other end, spectropolarimetric inversions infer atmospheric parameters by fitting Stokes
+profiles under radiative-transfer constraints (Ruiz Cobo and del Toro Iniesta, 1992). Inversions (and
+related forward-modelling frameworks) provide a physically interpretable route to LOS velocities (and
+magnetic/thermodynamic structure) and can be essential when magnetic diagnostics are measured. They
+also come with substantial computational cost, model assumptions, and practical sensitivity to initialisation,
+parameterisation, and data quality. Inversion families span Milne–Eddington (e.g. Lagg et al., 2004; Lites
+et al., 2007; Borrero et al., 2011) and depth-dependent approaches (e.g. Frutiger et al., 2000; Socas-Navarro
+et al., 2015; Mili ´c and van Noort, 2018), LTE 1 and non-LTE formalisms, and increasingly multi-line
+strategies that exploit complementary constraints from multiple transitions (e.g. de la Cruz Rodr´ıguez et al.,
+2019; Riethm¨uller and Solanki, 2019; Ruiz Cobo et al., 2022; H¨olken et al., 2026). In practice, the choice
+of inversion method and configuration depends on the scientific objective, the line(s) observed, and the
+cadence/volume constraints, and it is often not feasible to run full inversions for every pixel and time step
+in very large field-of-view and high-cadence datasets. As a result, many workflows still rely on line-core
+time-series extraction as an intermediate, scalable product even when inversions are applied to subsets or
+representative regions.
+Between these extremes, machine-learning (ML) approaches and emulators are increasingly used to
+accelerate profile interpretation and/or produce robust proxies. Examples include supervised tools designed
+to fit or classify chromospheric line profiles in an automated manner (e.g. the MCALF framework;
+MacBride et al. 2021), as well as broader efforts to emulate expensive inversions or to enable robust, scalable
+classification of spectropolarimetric profile morphologies for large surveys and statistical comparisons
+(Asensio Ramos and D´ıaz Baso, 2019; Jarolim et al., 2025; Campbell et al., 2025). While ML strategies can
+deliver dramatic speed-ups, their reliability depends on training coverage, careful validation, and explicit
+handling of out-of-distribution profiles – challenges that become important precisely in the highly dynamic
+regimes, such as those for wave and transient studies. Irrespective of whether future workflows rely on
+parametric fitting, ML, or hybrids, well-characterised reference extractions provide a necessary anchor for
+validation, uncertainty assessment, and quality control in these dynamic regimes.
+In this paper we focus on a complementary but widely needed product: robust, automated extraction
+of line-core intensity and LOS velocity time series across many lines in dense windows, suitable for
+subsequent wave and dynamics analysis. Our goal is not to replace inversions, but to provide an adaptive,
+reproducible approach that reduces failure modes of common fast estimators in crowded and evolving
+spectra, and that scales to multi-line use cases. As such, this method-focused contribution is intended to be
+immediately usable by observers working with, e.g., Daniel K. Inouye Solar Telescope (DKIST; Tritschler
+et al. 2016) and SUNRISE IIIballoon-borne solar observatory (Korpi-Lagg et al., 2025) spectroscopy, and
+Fibre Resolved OpticAl and Near-Ultraviolet Czerny-Turner Imaging Spectropolarimeter (FRANCIS;
+Jess et al. 2023a), and it is readily transferable to other slit and IFU spectrographs that deliver (or will
+deliver) time-dependent line profiles (e.g., the Interface Region Imaging Spectrograph (IRIS), the Multi-slit
+Solar Explorer (MUSE), and Solar-C; De Pontieu et al., 2014, 2020; Shimizu et al., 2021), while also
+remaining applicable to single-line time-series studies. We present LineFit, an adaptive multi-line fitting
+methodology built around four design principles: (i) line-guided seeding near expected centres (with
+explicit handling of close blended pairs), (ii) conservative per-line adaptive windowing with hard safety
+bounds, (iii) iterative centre refinement for stability under profile evolution, and (iv) optional wing-weighted
+1 Local Thermodynamic Equilibrium
+3
+
+Jafarzadeh et al.Adaptive multi-line fitting
+or wing-masked fitting to suppress lobe-hopping when the core becomes complex. We benchmark the
+method using a realistic synthetic near-UV testbed with unambiguous ground truth, compare against a
+number of widely used fast baselines, and quantify not only per-time-step centre errors but also the impact
+on standard time-series wave products. Finally, we briefly note how such a robust fitting baseline could
+support scalable processing strategies, including hybrid acceleration via supervised emulation.
+2 MATERIALS AND METHODS
+This section describes the validation dataset and the comparison baselines used throughout the paper. We
+adopt a synthetic, dense-window spectral time series because it provides unambiguous ground truth for the
+line-centre evolution and enables controlled stress tests (blends, asymmetries, close pairs, and split/reversal
+morphologies) that are difficult to isolate and quantify in real observations. The goal is not to replace
+real-data demonstrations, but to establish a reproducible performance benchmark where centre errors and
+time-series artefacts can be measured directly. All routines used to generate the synthetic dataset, run the
+estimators, and reproduce all figures presented in this work are publicly available in a GitHub repository
+described in Section 2.3.
+2.1 Synthetic multi-line testbed
+We validate and benchmark the proposed adaptive multi-line fitting methodology using a realistic
+synthetic near-UV spectral time series designed to mimic modern dense-window spectroscopy, where
+tens of absorption lines coexist within a narrow wavelength interval, and line profiles evolve significantly
+in time. The testbed consists of Nlines = 10 diagnostic lines sampled on a common wavelength grid
+λ∈[λ min, λmax], spanning a total window width ∆λ≡λ max −λ min ≈0.36 nm around a central
+wavelength of approximately 299.90 nm, with Nλ = 2400 spectral samples (uniform spacing dλ=
+(λmax −λ min)/(Nλ −1)≈1.5×10 −4 nm). The cadence is ∆t= 10 s and the duration is Nt = 300 time
+steps (T= 3000 s). Each time step contains a full spectrum I(λ, t) in which (i) line depths and widths vary
+smoothly in time, (ii) asymmetric profiles exhibit time-dependent core skewness, (iii) a close blended pair
+has controlled separation, and (iv) one line intermittently develops a split (two absorption lobes) with a
+central emission-reversal component. In addition, weak blending contaminants are injected near selected
+lines to mimic crowding in dense windows.
+All line profiles are synthesised from V oigt-based primitives. For a nominal rest wavelengthλ0,i, the
+time-dependent Doppler-shifted line-centre wavelength is,
+λi(t) =λ 0,i
+
+1 + vi(t)
+c
+
+,(1)
+where λi(t) is the ground-truth line-centre wavelength of line i at time t, vi(t) is the imposed LOS velocity
+driver and c is the speed of light. The absorption component of each line is represented by a normalised
+V oigt shape with time-dependent depth and widths. Asymmetric profiles are produced by a controlled,
+time-dependent core skewness (i.e. the deepest point is displaced relative to the nominal Doppler-shifted
+centre), so that local-minimum based estimators face a realistic ambiguity in “what constitutes the core”.
+The split+reversal morphology is produced by transitioning between a single absorption core and a two-lobe
+split profile with time-dependent separation ∆λsplit(t), and by adding a Gaussian emission component
+localised near the nominal line centre. Importantly, the central emission feature is not required to exceed
+4
+
+Jafarzadeh et al.Adaptive multi-line fitting
+the continuum; throughout this work, “emission reversal” refers to a local core brightening relative to the
+surrounding absorption depression, i.e. a split/multi-lobed structure in the core region.
+2.1.1 Time-dependent evolution and truth products
+Temporal evolution is imposed through stochastic-but-smooth processes that approximate non-stationary
+solar dynamics. For each line, the LOS velocity vi(t) is generated as a multi-frequency signal composed of
+three to five sinusoidal components with random phases, time-varying amplitudes, small time-dependent
+frequency drift, low-frequency jitter, and intermittent smoothed impulses. Component frequencies are
+drawn within 2–9 mHz. To avoid artificial discontinuities, no hard clipping is applied tovi(t); instead, each
+vi(t) is smoothly rescaled by a single multiplicative factor so that max|v i(t)| does not exceed a prescribed
+per-line cap. In the configuration used here, caps span 1.2–3.5 km s−1 across the ten lines. Line depth and
+width parameters evolve via first-order autoregressive [AR(1)] drivers, and the split+reversal line includes
+additional stochastic modulation of the splitting strength and core emission amplitude.
+The synthetic FITS product stores, in addition to the spectrum cube I(λ, t), the rest wavelengths λ0,i,
+the ground-truth time-dependent line-centre wavelengths λi(t), and the truth velocities vi(t). These truth
+products enable direct, per-time-step centre residuals for any estimator, defined as
+∆λi(t) = ˆλi(t)−λ i(t),(2)
+where ˆλi(t)is the estimated line-centre wavelength returned by the method.
+2.1.2 Noise and instrumental effects
+To approximate realistic measurement conditions, the synthetic spectra include (i) a weak continuum
+gradient across the window, implemented in continuum-normalised (dimensionless) intensity units as
+Icont(λ) = 1 +s λ−λ mid
+∆λ ,(3)
+where Icont(λ) is the continuum level as a function of wavelength,s is the dimensionless gradient amplitude,
+λmid ≡(λ min +λ max)/2 is the midpoint of the simulated wavelength window, and ∆λ≡λ max −λ min
+is the full window width. In the benchmark presented here we use s= 0.02 , (ii) a low-amplitude quasi-
+periodic ripple to mimic residual fringing/throughput structure (amplitude 1.5×10 −3 and wavelength
+period of 0.035 nm), and (iii) additive Gaussian noise whose amplitude increases in deep absorption
+cores (“core-boosted” noise). In the configuration used here, the continuum noise standard deviation is
+σcont = 2.1×10 −3 (relative intensity units) and the noise is increased in deep cores by a scaling boost
+factor of 2.0.
+Optionally, a spectral point-spread function (PSF) convolution can be applied along the wavelength
+axis; however, we do not include PSF convolution in the benchmark presented here in order to isolate
+algorithmic centre-tracking behaviour from instrument-dependent spectral broadening and to keep the
+ground-truth morphology and blend structure as directly comparable as possible across methods (the PSF
+option remains available for sensitivity tests and instrument-specific tuning).
+Other observational effects, such as scattered light, residual flat-field errors, spatially correlated noise, or
+imperfect wavelength calibration, are not explicitly included in the baseline benchmark presented here.
+These could modify the apparent core depth, local contrast, or wing shape, and therefore affect the absolute
+performance of any centre-tracking method. In general, methods that use constrained local fitting and
+5
+
+Jafarzadeh et al.Adaptive multi-line fitting
+conservative window selection are expected to be less sensitive to such complications than unconstrained
+fast estimators, although quantifying this in detail is beyond the scope of the present benchmark. In
+the case of LineFit (described in Section 2.2), the bounded fitting, conservative window adaptation,
+and morphology-aware handling are specifically intended to reduce sensitivity to such complications by
+preventing large excursions toward unrelated structures or unstable competing minima.
+These perturbations are also visible in Figure 1 as (i) a slight large-scale tilt of the local continuum across
+the full spectral window, produced by the weak continuum gradient, (ii) low-amplitude quasi-periodic
+waviness between and around lines, produced by the ripple term, and (iii) small local intensity irregularities
+that become more noticeable in deeper cores, produced by the core-boosted Gaussian noise.
+2.2 Adaptive multi-line profile fitting:LineFit
+The proposed method (LineFit) is designed for dense spectral windows with many lines and evolving
+morphologies, where a single fixed fitting configuration is insufficient. In the implementation used here,
+each spectrum is first sanitised for non-finite samples (interpolated along wavelength index where needed),
+then robustly normalised to the local min–max range, lightly smoothed (optional), and intensity-inverted so
+that absorption cores become peaks 2. LineFit then enforces stable centre tracking via three coupled
+stages:
+(i) Coarse seeding near expected centres (including close-pair ownership control).Initial seeds are
+generated in the intensity-inverted spectrum by searching locally around each expected rest wavelength.
+Candidate peaks are identified via peak finding and scored using a (dominant) distance-to-prior term
+(preference for proximity to the expected centre) together with a (minor) peak-height term (a small
+preference for deeper, better-defined absorption cores, i.e. stronger peaks in the intensity-inverted
+spectrum). This means that shallow secondary valleys or unrelated nearby structures are not usually
+selected unless they remain sufficiently close to the expected centre, and for declared close pairs the
+explicit valley-based ownership split further prevents neighbouring lines from capturing each other’s
+minima. Seeds are further guarded by a maximum allowed centre offset from the expected wavelength,
+preventing spurious matches to unrelated structures in crowded windows. For declared close pairs,
+“ownership” is enforced by splitting the shared search region at the inter-line valley, i.e. assigning each
+member of the pair its own side of the valley, so that the two members cannot swap under moderate
+profile evolution.
+(ii) Per-line adaptive windowing with hard safety bounds and morphology gating.Each line i starts from a
+per-line baseline half-window (or a global default), but the effective half-window is constrained by
+user-provided per-line minimum and maximum half-windows. Window adaptation is conservative: it
+expands only when justified by local measurements of profile width and complexity, and it can contract
+to protect the core when the measured depression width indicates that a smaller window is adequate
+(limited by the per-line minimum half-window). Two morphology-specific gates, i.e. decision rules
+that activate specialised handling only when a given profile morphology is detected, are applied in this
+paper: (a) for lines declared as potential self-reversal candidates, a split-core detector is evaluated time-
+step by time-step in the intensity-inverted profile; specifically, the detector searches for two sufficiently
+prominent local peaks separated by an inter-peak valley that drops below a prescribed fraction of
+the weaker peak, thereby distinguishing a genuine split-core structure from small fluctuations or
+noise. If such a morphology is detected, reversal handling is activated only for that time step, forcing
+2 Here “inverted” refers only to an intensity transformation (absorption minima mapped to peaks). It does not refer to Stokes inversions or atmospheric
+inversions.
+6
+
+Jafarzadeh et al.Adaptive multi-line fitting
+the fit window to the permitted maximum so both lobes are contained. Operationally, this detector
+identifies a two-lobed core structure with a sufficiently deep inter-lobe valley in the intensity-inverted
+profile, so that the fit can be stabilised around the overall split-core morphology rather than jumping to
+one of the competing lobes; (b) for non-reversal lines, optional emission-bump and secondary-peak
+guards are used to avoid unsafe window growth in the presence of nearby competing structures (e.g.
+blends), thereby reducing the risk of window leakage. In practice, conservative thresholds are preferred:
+false positives mainly reduce computational efficiency by triggering safer handling more often than
+necessary, whereas false negatives are more consequential because they allow a genuinely complex
+profile to be treated too simply.
+(iii) Iterative refinement of centres with asymmetric handling.Given the current window, a parameterised
+V oigt-family line model (V oigt or asymmetric V oigt) is fitted via bounded non-linear least squares
+optimisation in intensity-inverted space, with the fitted parameters defining the local core shape, width,
+amplitude, and centre. We adopt a V oigt-family model because it provides a flexible yet compact
+description that can accommodate Gaussian-like broadening (e.g. thermal/instrumental) together with
+Lorentzian-like wings (e.g. damping/pressure broadening), while remaining stable under bounded
+fitting. Purely Gaussian or purely Lorentzian fits can systematically misrepresent either the core or
+the wings for many photospheric/chromospheric lines. Our aim here is not to claim that the V oigt
+family provides a unique physical description of every observed profile, but rather to adopt a compact
+and sufficiently flexible parametric form that yields stable centre tracking across a wide range of
+morphologies. In this context, the centre position is the primary product of interest, and modest
+mismatch in the detailed wing shape is generally less important than avoiding unstable centre shifts
+between competing minima or lobes. The choice of a V oigt-family model should therefore be viewed
+as a pragmatic compromise between flexibility, stability, and computational cost, rather than as a full
+radiative-transfer description of the line formation process. The fitted centre is used to recentre the
+window and the fit is iterated for a fixed number of iterations or until convergence. Wing asymmetry is
+handled explicitly through an asymmetric V oigt parameterisation, allowing the fit to accommodate
+unequal wing broadening while maintaining bounded parameters. The parameter bounds are imposed
+as practical local constraints to keep the solution within a plausible regime for the current line and
+fitting window, rather than being derived from an external library of fixed V oigt parameters for each
+transition. In the present implementation, the choice between a V oigt and an asymmetric-V oigt profile
+is set by the fitting configuration, i.e. the algorithm does not automatically try both models and select
+between them at each time step. The refinement therefore contains two conceptually distinct levels: an
+outer loop in which the fitted centre is used to recentre the window and repeat the fit if needed, and
+an inner bounded non-linear least-squares optimisation that solves for the profile parameters within a
+given window. To further suppress discontinuities associated with lobe-hopping or unstable asymmetry
+solutions, the implementation includes (for asymmetric-V oigt fits) a guarded fall-back refit in which
+the asymmetry-parameter bounds are tightened when the initial solution lies close to parameter bounds
+or window edges. This fall-back is disabled for time steps where a split-core morphology has been
+detected, so that genuine multi-lobed behaviour is not artificially suppressed.
+7
+
+Jafarzadeh et al.Adaptive multi-line fitting
+299.77 299.81 299.85 299.89 299.93 299.97 300.01 300.05
+Wavelength (nm)
+0.0
+0.5
+1.0Normalised Intensity
+1 2 3 4 5 6 7 8 9 10
+Figure 1.Example synthetic spectrum and line-centre recovery. The blue curve shows the normalised
+spectrum; red dashed segments indicate the fitted model within each adaptive window. Vertical markers
+show the recovered centres (green dashed) and the truth centres (black dotted). Numbered circles label the
+ten diagnostic lines used throughout the testbed.
+A schematic summary of this workflow is provided in Figure 2. The primary outputs are the fitted
+line-centre wavelengths ˆλi(t), line-core intensity samples I(ˆλi, t) evaluated at the fitted centre, and LOS
+velocities ˆvi(t) =c( ˆλi −λ 0,i)/λ0,i computed relative to the rest wavelengths. For transparency and
+optional regression testing, the implementation can optionally print diagnostic information, including the
+half-window used for each line and time step (and, when enabled, fitted parameter values).
+Figure 2.Schematic overview of the LineFit workflow. The method proceeds through three coupled
+stages: (i) coarse seeding, including local search near the expected wavelength together with offset guarding
+and close-pair ownership control; (ii) adaptive windowing, in which per-line windows are conservatively
+adjusted within prescribed bounds and morphology checks activate safer handling when needed; and (iii)
+iterative bounded fitting, in which V oigt-family models are fitted, recentered, and iterated to convergence,
+yielding the recovered line centre, LOS velocity, and line-core intensity.
+Figure 1 illustrates a representative spectrum from the synthetic time series together with the fitted model
+segments and the recovered line centres. The ground-truth centres for the selected time step are overplotted,
+enabling direct visual verification of centre recovery across the spectral window. The corresponding per-line
+residuals at that time step demonstrate sub-picometre accuracy for the adaptive fitting approach under
+these controlled conditions, with absolute centre residuals of (1) 0.01 pm (0.007 km s −1), (2) 0.10 pm
+(0.103 km s−1), (3) 0.05 pm (0.049 km s −1), (4) 0.01 pm (0.008 km s −1), (5) 0.03 pm (0.033 km s −1),
+8
+
+Jafarzadeh et al.Adaptive multi-line fitting
+(6) 0.03 pm (0.029 km s −1), (7) 0.01 pm (0.005 km s −1), (8) 0.02 pm (0.018 km s −1), (9) 0.01 pm
+(0.009 km s−1), and (10) 0.02 pm (0.019 km s−1).
+In practical use, the most dataset-dependent settings are the expected rest wavelengths and the per-line
+minimum/maximum half-window bounds, which should reflect the spectral sampling, typical line widths,
+and the degree of crowding in the observed window. By contrast, the overall logic of the method – line-
+guided seeding, close-pair ownership control, bounded fitting, iterative recentering, and morphology-aware
+handling – is portable and does not require substantial redesign between datasets. In this sense, LineFit
+is intended to be tuned mainly at the level of conservative per-line bounds, rather than through highly
+case-specific heuristics.
+2.3 Reproducibility and code availability
+The line-fitting implementation (LineFit) is distributed as part of the workflow repositoryWaLSAlib3,
+which collects practical routines that connect calibrated data to analysis-ready time series for wave and
+dynamics studies. All Python scripts and notebooks required to reproduce the synthetic testbed, all figures
+in this paper, and the method comparisons are provided under examples/LineFit Frontiers in
+the same repository.
+2.4 Other line-centre estimators
+We compare the proposed adaptive fitting approach against four commonly used fast estimators. All
+baseline methods are applied independently per line, using a per-line half-window in index space: we use
+the same nominal per-line half-window settings as for LineFit across all baselines for a fair comparison;
+LineFit may adapt within its prescribed bounds, while the baselines keep the window fixed. For each
+method, the output is a line-centre estimate ˆλi(t) and residuals are evaluated relative to the ground-truth
+line-centre wavelengthλ i(t).
+2.4.1 Parabolic minimum (quadratic interpolation)
+The parabolic-minimum estimator identifies the local intensity minimum within a prescribed search
+window and fits a quadratic polynomial through the three samples surrounding that minimum. The vertex
+of the quadratic provides a sub-sample line-centre estimate. This method is computationally inexpensive
+and often robust for isolated, near-symmetric lines, but it can be biased or destabilised when the profile
+becomes asymmetric, multi-lobed, or strongly blended.
+2.4.2 Centre-of-gravity (COG) of the absorption depression
+The COG estimator is computed from the absorption depression,
+D(λ, t) = 1− I(λ, t)
+Icont,i(t) ,(4)
+where Icont,i(t) is a local continuum estimate for line i at time t, obtained robustly from the top fraction of
+samples within the fitting window (here the top 20% in each window). The centre is then,
+ˆλCOG(t) =
+P
+λ λ D(λ, t)P
+λ D(λ, t) ,(5)
+3 https://GitHub.com/WaLSAteam/WaLSAlib
+9
+
+Jafarzadeh et al.Adaptive multi-line fitting
+where the sums are taken over the wavelength samples within the fitting window, andD≥0 enforced by
+clipping. COG is inexpensive and often stable for moderately deformed profiles, but it can be sensitive to
+blends, window definition (i.e. window “leakage”), and changes in wing asymmetry because it integrates
+over the full window.
+2.4.3 Fourier-phase centroid (k= 1phase)
+The Fourier-phase estimator computes a reference-free centroid from the phase of the first Fourier
+component (k= 1 ) of an apodised (Hanning) depression profile within the fitting window. Conceptually
+related to Fourier-tachometer style Doppler proxies, this estimator can be efficient and less sensitive to
+pixel-scale noise, but can fail or become biased when the profile contains multiple competing structures
+within the window (e.g. split cores or strong blends).
+2.4.4 Weighted polynomial core fit (Poly6w)
+The weighted polynomial method fits a high-order polynomial (here order 6) to a narrow core region
+around the local minimum, using weights that emphasise samples closest to the core (inverse-distance
+weighting). The centre is obtained by locating the minimum of the fitted polynomial within the fit interval
+(e.g. via stationary points of the derivative, with interval-endpoint checks). This can outperform simple
+parabolic interpolation for smooth symmetric cores, but remains vulnerable to multi-lobed cores and to
+mis-centring in crowded windows.
+3 ANALYSIS AND RESULTS
+We quantify estimator performance in two complementary ways. First, we evaluate instantaneous line-
+centre errors at a representative time step (Figure 3), where the truth centres are known exactly. Second,
+we assess time-series fidelity over the full 50 min sequence (300 time steps) by comparing recovered
+LOS-velocity time series against the truth vi(t) in Figure 4, then by propagating the resulting time series
+into standard wave diagnostics (Figure 5).
+3.1 Single-time-step centre accuracy in the spectral window
+Figure 3 compares five line-centre estimators for one time step (at t= 0 s) within a window containing
+ten lines, including a close blended pair (lines 4–5) and a split-core/emission-reversal candidate (line 6).
+The lower panel shows the spectrum and the recovered centres overplotted alongside the truth centres,
+while the upper panel summarises the absolute residuals |∆λi|=| ˆλi −λ i| for each line, normalised by the
+maximum |∆λi| across methods for that line to highlight relative method performance line-by-line. The
+label above each line group gives the absolute maximum |∆λi| in picometers across methods for that line.
+For this example time step, LineFit achieves sub-picometre centre recovery for all ten lines, with a
+maximum absolute residual of0.103pm across the set. The fast baseline estimators show small errors for
+many isolated lines, but exhibit substantially larger excursions for the split-core line (line 6), reaching
+picometre-level offsets (|∆λi| ≈1.0 –2.2 pm depending on method; |∆λi|= 0.03 pm for LineFit). This
+behaviour is consistent with the known failure modes of minimum- and core-centroid proxies under multi-
+lobed cores: the inferred “centre” can shift towards one lobe or towards a blended feature when the core
+morphology becomes non-single-valued within the window. By contrast, in LineFit the morphology-
+aware handling of the split-core case is intended precisely to avoid such lobe-hopping, so that the recovered
+centre remains tied to the overall core structure rather than to one of the instantaneous lobes.
+10
+
+Jafarzadeh et al.Adaptive multi-line fitting
+0.5
+1.0| |/max| |
+0.05 pm 0.16 pm 0.36 pm 0.21 pm 0.30 pm 2.24 pm 0.12 pm 0.22 pm 0.23 pm 0.24 pm
+299.77 299.81 299.85 299.89 299.93 299.97 300.01 300.05
+Wavelength (nm)
+0.6
+0.8
+1.0Normalised Intensity
+LineFit
+Parabola
+CoG
+FFT-phase
+Poly6w
+Truth
+1 2 3 4 5 6 7 8 9 10
+Figure 3.Instantaneous centre accuracy comparison for a representative synthetic time step ( t= 0 s).
+Lower panel: spectrum with recovered centres fromLineFit and four fast baselines overplotted, alongside
+the truth centres. Upper panel: normalised absolute centre residuals (|∆λi|/max|∆λ i|) across methods for
+each line; text annotations show the corresponding absolute maximum|∆λ i|per line (pm).
+3.2 Time-series fidelity: velocity residuals over 50 min
+Instantaneous accuracy does not guarantee time-series stability: rare centre jumps can inject broadband
+power and bias wave diagnostics. We therefore compute, for each line and each method, the LOS velocity
+time series following,
+ˆvi(t) =c
+ˆλi(t)−λ 0,i
+λ0,i
+,(6)
+and evaluate the residuals against the truth vi(t) over all 300 time steps. As a summary metric we use the
+per-line Root Mean Square Error (RMSE),
+RMSEi =
+q
+⟨(ˆvi(t)−v i(t))2⟩t ,(7)
+where ⟨·⟩t denotes averaging over time samples; in practice, the RMSE is computed over time samples
+where both truth and estimate are finite.
+Figure 4(a–c) shows representative velocity time-series comparisons for three lines spanning increasing
+profile complexity: an isolated symmetric line (line 1), an asymmetric/blended line (line 2), and the
+split-core/emission-reversal line (line 6). For the isolated case, all methods track the truth reasonably well,
+typically showing the closest agreement and the smallest residual structure. For the asymmetric/blended
+case, the dispersion between methods increases, consistent with sensitivity to evolving asymmetry and to
+blends or window leakage (when a fixed window includes neighbouring structure);LineFit and COG
+broadly capture the dominant variation, whereas FFT-phase and, more prominently, the parabolic minimum
+and Poly6w exhibit larger deviations at several intervals.
+The most pronounced differences occur for the split-core/emission-reversal line (line 6). Here LineFit
+remains stable and closely follows the truth throughout the sequence, while all four fast estimators exhibit
+substantially larger mismatches, including episodes of divergence associated with time steps where the core
+11
+
+Jafarzadeh et al.Adaptive multi-line fitting
+0.0
+2.5 Truth + LineFit Truth + Parabola Truth + CoG
+0 1000 2000 3000
+t (s)
+0.0
+2.5
+vLOS (km/s) Truth + FFT-phase
+0 1000 2000 3000
+t (s)
+Truth + Poly6w
+0 1000 2000 3000
+t (s)
+Truth only
+0.0
+2.5 Truth + LineFit Truth + Parabola Truth + CoG
+0 1000 2000 3000
+t (s)
+0.0
+2.5
+vLOS (km/s) Truth + FFT-phase
+0 1000 2000 3000
+t (s)
+Truth + Poly6w
+0 1000 2000 3000
+t (s)
+Truth only
+2.5
+0.0
+2.5 Truth + LineFit Truth + Parabola Truth + CoG
+0 1000 2000 3000
+t (s)
+2.5
+0.0
+2.5
+vLOS (km/s) Truth + FFT-phase
+0 1000 2000 3000
+t (s)
+Truth + Poly6w
+0 1000 2000 3000
+t (s)
+Truth only
+1 2 3 4 5 6 7 8 9 10
+Line number
+0.0
+0.5
+1.0RMSE (km/s)
+(d) Per-line RMSE vs truth (all 10 lines)
+LineFit
+Parabola
+CoG
+FFT-phase
+Poly6w
+(a) v(t)  isolated symmetric line  (line number 1)
+(b) v(t)  blended/asymmetric line  (line number 2)
+(c) v(t)  multi-lobed/emission line  (line number 6)
+Figure 4.Velocity time-series fidelity over the full synthetic sequence. Rows (a–c): examples for an
+isolated symmetric line (line 1), an asymmetric/blended line (line 2), and a split-core/emission-reversal
+line (line 6). Each row shows truth and one recovered method per sub-panel to aid visual comparison.
+Residual-versus-truth time-series plots for the same representative lines are provided in Supplementary
+Figure S1.
+Panel (d): per-line RMSE ofˆv(t)against the truth for all ten lines and all methods.
+12
+
+Jafarzadeh et al.Adaptive multi-line fitting
+morphology becomes strongly multi-lobed (see the spectrum evolution in the online movie4, which can be
+regenerated from the public repository). This behaviour is reflected directly in the per-line RMSE summary
+(Figure 4d): for line 6, LineFit yields RMSE = 0.067 km s−1, whereas the fast methods range from
+RMSE≈0.58 km s−1 (COG) to ≈1.09 km s−1 (parabolic minimum), i.e. nearly an order-of-magnitude
+degradation in time-series fidelity for this complex-core case.
+Across all ten lines, LineFit provides the best overall performance in this testbed (mean RMSE
+0.094 km s−1; median 0.083 km s−1), with COG second-best (mean RMSE 0.121 km s−1). The parabolic
+minimum, FFT-phase, and Poly6w methods show larger mean RMSE values (0.30, 0.21, and 0.26 km s−1,
+respectively), driven primarily by their failures on the split-core line and, to a lesser extent, by sensitivity
+to evolving asymmetry and blends. We emphasise that these baseline implementations are intentionally
+kept simple and uniform across lines to provide a controlled comparison; more aggressive method-specific
+tuning and case-dependent heuristics may improve performance on some profiles, at the expense of
+additional parameter complexity and reduced portability.
+Whether a given centre error is scientifically acceptable depends primarily on how it propagates into the
+derived LOS-velocity time series and wave diagnostics. In this benchmark, the simpler estimators are often
+adequate for well-behaved lines, but become problematic in the morphologically complex stress cases that
+motivateLineFit.
+3.3 Impact on wave diagnostics: refined global wavelet spectra
+To quantify how centre-extraction differences propagate into wave inference, we compute Refined Global
+Wavelet Spectra (RGWS) from each recovered velocity time series using the WaLSAtools5 (Jafarzadeh
+et al., 2025b,a) implementation. Briefly, RGWS is the time-integrated Morlet wavelet power refined by
+retaining only statistically significant power (95% confidence) and excluding regions within the cone of
+influence (subject to edge effects). All velocity signals are linearly detrended and apodised using a Tukey
+window (α= 0.1) prior to the wavelet analysis.
+Figure 5 compares RGWS for two representative lines: a blended line that is one component of the close
+pair and exhibits relatively strong depth variability (line 4) and the split-core/emission-reversal line (line 6).
+For line 4 (which has the second-largest RMSE across the five methods, though still modest), all methods
+recover consistent peak locations and broadly similar spectral structure, indicating that for moderately
+complex but single-core profiles the baseline estimators can preserve the dominant oscillation content.
+However, even in this regime LineFit and COG provide the closest match to the truth spectrum in both
+peak power and overall spectral shape, while FFT-phase and Poly6w show slightly larger deviations and
+the parabolic method performs worst in this example.
+For line 6, the differences become qualitatively important. LineFit reproduces both the locations
+and amplitudes of the truth RGWS peaks, with only minor residual mismatch at the highest-frequency
+components. In contrast, the four fast estimators miss or distort key spectral content: while some peak
+locations are recovered, their associated power is often biased, and the power enhancement near ∼3.2 mHz
+is not reproduced. At higher frequencies (e.g. near ∼10 mHz) the spectra show shifted peaks and additional
+power bias. This outcome is consistent with the time-domain behaviour in Figure4 and demonstrates that
+centre instabilities in complex-core time steps can translate directly into missing or mislocated oscillation
+4 https://WaLSA.team/LineFit/synthetic_spectrum_timeseries
+5 https://GitHub.com/WaLSAteam/WaLSAtools
+13
+
+Jafarzadeh et al.Adaptive multi-line fitting
+0
+5000
+10000 Truth + LineFit Truth + Parabola Truth + CoG
+2 3 4 5 6
+Frequency (mHz)
+0
+5000
+10000Power (arb. units)
+Truth + FFT-phase
+2 3 4 5 6
+Frequency (mHz)
+Truth + Poly6w
+2 3 4 5 6
+Frequency (mHz)
+Truth only
+0
+1000
+2000 Truth + LineFit Truth + Parabola Truth + CoG
+2 4 6 8 10 12 14
+Frequency (mHz)
+0
+1000
+2000Power (arb. units)
+Truth + FFT-phase
+2 4 6 8 10 12 14
+Frequency (mHz)
+Truth + Poly6w
+2 4 6 8 10 12 14
+Frequency (mHz)
+Truth only
+(a) Velocity Refined Global Wavelet Spectrum (line number 4)
+(b) Velocity Refined Global Wavelet Spectrum (line number 6)
+Figure 5.Propagation of centre-extraction errors into wave diagnostics. Refined Global Wavelet Spectra
+(RGWS) computed from velocity time series recovered by each method, compared against the truth RGWS.
+(a) Example blended line (line 4): all methods recover the main peak structure, withLineFitand COG
+closest to the truth in peak power. (b) Split-core/emission-reversal line (line 6): only LineFit reproduces
+the full truth peak structure; fast baselines miss or shift spectral components (notably near ∼3.2 mHz) and
+show power bias at higher frequencies.
+power, thereby biasing subsequent wave analyses, including phase/coherence and mode-identification
+diagnostics.
+4 DISCUSSION AND CONCLUSIONS
+We have presented an adaptive multi-line fitting methodology ( LineFit) aimed at producing stable
+line-core intensity and LOS-velocity time series from dense spectral windows in which line profiles evolve
+rapidly and nonlinearly. The motivation is practical but scientifically consequential: discontinuities and
+occasional misidentification of the line core can inject artefacts into time-series diagnostics, bias dominant-
+frequency estimates, and possibly degrade phase/coherence measurements that underpin MHD-wave
+inferences. This challenge is becoming increasingly prominent as modern solar spectrographs and IFUs
+14
+
+Jafarzadeh et al.Adaptive multi-line fitting
+(e.g. DKIST/DL-NIRSP and ViSP, SUNRISE III/SUSI and SCIP, and FRANCIS) routinely deliver crowded
+windows containing many lines per spatial sample and per time step.
+To isolate performance in a controlled and fully reproducible way, we benchmarked LineFit using
+a realistic synthetic near-UV time series with unambiguous ground truth for the time-dependent line
+centres. The synthetic testbed was constructed to explicitly stress the main failure modes encountered
+in practice: evolving asymmetries, close blends, and intermittent split-core (reversal) morphologies in
+which a core brightening appears relative to the surrounding absorption depression. Against four widely
+used fast estimators (parabolic minimum, COG of absorption depression, Fourier-phase centroid, and a
+weighted polynomial core fit), LineFit consistently recovered accurate centres in representative time
+steps (Figure 3), while also producing the most robust LOS-velocity time series in the presence of multi-
+lobed cores (Figure 4). Across the full time series, several of the fast methods performed competitively for
+many isolated or moderately deformed lines, and in our testbed the COG estimator in particular was often
+among the best-performing baselines for simple absorption profiles. However, in the key stress case (an
+intermittently split-core line with strong core-structure variability) LineFit was the only method that
+consistently maintained agreement with the truth time series and avoided large excursions in the recovered
+velocity.
+A central point of this work is that centre-tracking stability should be assessed not only by per-time-step
+residuals but also by the downstream wave products used in MHD studies. When the derived velocity
+contains sporadic mis-tracking events, the resulting time series can acquire artificial power and distort
+spectral diagnostics. This is clearly demonstrated by the RGWS: for a representative blended but single-core
+line all methods broadly reproduce the main power enhancements, whereas for the split-core case the
+fast estimators systematically miss or misplace key spectral peaks and misestimate power compared with
+the truth, while LineFit preserves both the peak structure and the power distribution, with only minor
+differences at a few frequencies (Figure 5). These differences are precisely the kinds of discrepancies that
+matter for multi-height wave and dynamics studies across the solar atmosphere.
+The synthetic benchmark provides the key advantage that the true line centres and velocities are known
+exactly, allowing direct measurement of centre residuals, velocity residuals, and propagated wave-diagnostic
+errors. In real observations, such absolute residuals are generally not accessible, and performance must
+instead be assessed through internal consistency, temporal stability, resistance to centre-hopping, and
+the plausibility and continuity of downstream products such as velocity spectra and wavelet diagnostics.
+We therefore view the synthetic tests as a controlled validation benchmark, while the practical value of
+LineFit in real data is demonstrated primarily by its stable behaviour in dense-window applications
+where complex and evolving profiles are present. Additional real-data effects such as scattered light,
+residual flat-field structure, correlated noise, and wavelength-calibration uncertainties may modify the
+absolute error scale, but they do not change the core motivation of the method, namely to reduce unstable
+centre tracking in precisely those cases where such instabilities would most strongly bias time-series
+diagnostics.
+While the paper focuses on a synthetic benchmark, LineFit has already been applied to dense-spectral-
+window observations in real-data studies and contexts: it has been used in the analysis of SUNRISE III/SUSI
+near-UV spectra containing more than 100 spectral lines for active-region wave diagnostics (Jafarzadeh
+et al., 2026b,a), and it has been used to extract line-core parameters in a FRANCIS integral-field analysis
+(Chambers et al., 2026). In such real-data applications, the most relevant indicators are not absolute residuals
+to a known truth, but whether the extracted line-core products remain temporally stable, physically plausible,
+and sufficiently robust for downstream wave and dynamics analysis. These applications demonstrate that
+15
+
+Jafarzadeh et al.Adaptive multi-line fitting
+the method is practical for novel, information-rich datasets and that it integrates naturally into wave-analysis
+workflows. We note, however, that the occurrence frequency of multi-lobed or reversal-like profiles in real
+data is strongly dataset-, line-, and target-dependent; such morphologies occur often enough in dynamic
+solar spectroscopy to warrant explicit handling when stable time-series extraction is required. At the same
+time, we emphasise that fast estimators remain valuable: for large-volume datasets and for lines that remain
+single-lobed and isolated, methods such as COG or Fourier-phase proxies can be attractive due to their
+computational efficiency, and they are used in contemporary analyses where their assumptions are well
+matched to the data (e.g. Poly6w in Lagg et al. 2026; FFT-phase approaches in Grant et al. 2026). Our
+results therefore support a pragmatic view: robust adaptive fitting is most critical for the subset of lines,
+locations, and times where the profiles become complex – often the same regimes that carry the strongest
+dynamical signatures – while fast estimators can provide efficient performance elsewhere, provided their
+limitations are recognised and quality control is applied.
+All code required to reproduce the synthetic testbed and figures (including theLineFit implementation)
+is available via the WaLSAlib repository (see Section 2.3). The current implementation is intentionally
+modular and can be extended to include additional profile families, morphology-specific quality flags, and
+instrument- or line-dependent constraints as required by particular datasets. A natural next step is to export
+additional shape diagnostics (e.g. proxy widths, asymmetry measures, and core-structure metrics); although
+width estimation is non-trivial for deep lines whose wings do not return to the local continuum, it can be
+handled using robust, locally normalised definitions and reported with quality flags.
+Looking forward, the increasing scale of next-generation, high-cadence slit-based spectroscopic and
+IFU datasets makes acceleration strategies increasingly important. As a proof-of-principle, we trained a
+lightweight supervised convolutional neural network (CNN; Lecun et al. 1998; Goodfellow et al. 2016)
+emulator on the synthetic testbed, using LineFit outputs as training labels (ground truth was withheld
+from training and used only for verification). The emulator predicts the residual line-centre shift relative to
+a robust coarse centre computed from each spectrum, reducing the dynamic range the network must learn
+and decoupling coarse localisation from fine-structure refinement. A hybrid inference mode routes only
+morphologically complex profiles – identified by a split-core/multi-peak morphology flag and a Monte
+Carlo dropout uncertainty estimate – to LineFit as a fallback, while the emulator handles the remainder.
+On the reserved validation set (i.e. the final 20% of the time series, strictly withheld from training), the
+emulator achieves a median absolute centre error of 0.049 pm and a 95th-percentile error of 0.245 pm
+relative to the ground truth, with 87% of validation samples agreeing with LineFit to within 0.1 pm.
+The hybrid fallback rate is 2.1% of all samples (applied only to the stress-case line), and wave diagnostics
+computed from the emulator and hybrid outputs are well preserved relative to the LineFit reference.
+The hybrid speed-up relative to runningLineFitacross the full sequence is approximately three orders
+of magnitude on the hardware used here, with the emulator component alone approaching five orders
+of magnitude; the operationally relevant hybrid figure accounts for the LineFit fallback cost on the
+small flagged fraction (specific numbers and timing methodology are given in Supplementary Section S2).
+Such a hybrid strategy can preserve the physical transparency and traceability of parametric fitting while
+achieving the throughput required for very large field-of-view and high-cadence time-series datasets. This
+proof-of-principle is intentionally limited in scope, and full development – including larger training sets,
+cross-validation, and instrument-specific tuning – is left for future work. More broadly, we expect that
+robust, adaptive extraction of line-core products will remain a critical enabling step for wave and dynamics
+studies using dense-window spectroscopy, particularly when multi-line diagnostics are used to infer energy
+transport and mode coupling across atmospheric layers.
+16
+
+Jafarzadeh et al.Adaptive multi-line fitting
+CONFLICT OF INTEREST STATEMENT
+The authors declare that the research was conducted in the absence of any commercial or financial
+relationships that could be construed as a potential conflict of interest.
+AUTHOR CONTRIBUTIONS
+SJ, DBJ, MS, PHK, and GC contributed to the conceptualisation of the study and the design of the validation
+strategy. SJ led the software development, implemented the core LineFit methodology and synthetic
+testbed, performed the formal analysis, and produced the figures and benchmark products. DBJ, MS, PHK,
+GC, SDTG, MB, and TJD contributed to software development, validation, and testing, with DBJ, PHK,
+GC, and SDTG also supporting the visualisation and interpretation of results. All authors contributed to
+manuscript writing and reviewed the final text.
+FUNDING
+UK Science and Technology Facilities Council (STFC) consolidated grants ST/T00021X/1 and
+ST/X000923/1. UK STFC PATT Travel Grant UKRI372. Leverhulme Trust Research Project Grant
+RPG-2019-371. UK Space Agency National Space Technology Programme grant SSc-009. Research
+Council of Norway project no. 262622. The Royal Society award no. Hooke18b/SCTM. NASA grants
+19-HSODS-004 and 21-SMDSS21-0047. International Space Science Institute (ISSI) Team 502.
+ACKNOWLEDGMENTS
+SJ, DBJ, and GC wish to thank the UK Science and Technology Facilities Council (STFC) for the
+consolidated grants ST/T00021X/1 and ST/X000923/1, alongside the PATT Travel Grant UKRI372. DBJ
+acknowledges support from the Leverhulme Trust via the Research Project Grant RPG-2019-371. DBJ
+and SDTG also acknowledge funding from the UK Space Agency via the National Space Technology
+Programme (grant SSc-009). SJ acknowledges support from the Rosseland Centre for Solar Physics,
+University of Oslo, Norway and the Max Planck Institute for Solar System Research, Germany. MB
+acknowledges that this publication was produced while attending the PhD programme in PhD in Space
+Science and Technology at the University of Trento, Cycle XXXIX, with the support of a scholarship
+financed by the Ministerial Decree no. 118 of 2nd March 2023, based on the NRRP - funded by the
+European Union - NextGenerationEU - Mission 4 “Education and Research”, Component 1 “Enhancement
+of the offer of educational services: from nurseries to universities” - Investment 4.1 “Extension of the
+number of research doctorates and innovative doctorates for public administration and cultural heritage” -
+CUP E66E23000110001. We wish to acknowledge scientific discussions with the Waves in the Lower Solar
+Atmosphere (WaLSA; www.WaLSA.team) team, which has been supported by the Research Council of
+Norway (project no. 262622), The Royal Society (award no. Hooke18b/SCTM; Jess et al., 2021), and the
+International Space Science Institute (ISSI) in Bern through ISSI International Team project 502 “WaLSA:
+Waves in the Lower Solar Atmosphere at High Resolution”.
+DATA AVAILABILITY STATEMENT
+All datasets analysed in this study are synthetic and were generated using a publicly available code.
+The synthetic testbed generator, the LineFit implementation, and all scripts/notebooks required to
+reproduce the figures and results are available in theWaLSAlibrepository (https://GitHub.com/
+17
+
+Jafarzadeh et al.Adaptive multi-line fitting
+WaLSAteam/WaLSAlib), under examples/LineFit Frontiers, where the synthetic data cube
+is also provided as FITS format.
+REFERENCES
+Asensio Ramos, A. and D´ıaz Baso, C. J. (2019). Stokes inversion based on convolutional neural networks.
+Astron. Astrophys.626, A102. doi:10.1051/0004-6361/201935628
+Bate, W., Jess, D. B., Grant, S. D. T., Hillier, A., Skirvin, S. J., Van Doorsselaere, T., et al. (2024).
+Unveiling the True Nature of Plasma Dynamics from the Reference Frame of a Superpenumbral Fibril.
+Astrophys. J.970, 66. doi:10.3847/1538-4357/ad4d97
+Beckers, J. M. and Brown, T. M. (2013). The History of the Fourier Tachometer. InFifty Years of
+Seismology of the Sun and Stars, eds. K. Jain, S. C. Tripathy, F. Hill, J. W. Leibacher, and A. A. Pevtsov.
+vol. 478 ofAstronomical Society of the Pacific Conference Series, 93
+Berretti, M., Stangalini, M., Verth, G., Fedun, V ., Jafarzadeh, S., Jess, D. B., et al. (2025). Umbral
+oscillations in the photosphere: A comprehensive statistical study.Astron. Astrophys.697, A156.
+doi:10.1051/0004-6361/202453176
+Borrero, J. M., Tomczyk, S., Kubo, M., Socas-Navarro, H., Schou, J., Couvidat, S., et al. (2011). VFISV:
+Very Fast Inversion of the Stokes Vector for the Helioseismic and Magnetic Imager.Sol. Phys.273,
+267–293. doi:10.1007/s11207-010-9515-6
+Bouchy, F., Pepe, F., and Queloz, D. (2001). Fundamental photon noise limit to radial velocity
+measurements.Astron. Astrophys.374, 733–739. doi:10.1051/0004-6361:20010730
+Calchetti, D., Stangalini, M., Jafarzadeh, S., Valori, G., Albert, K., Albelo Jorge, N., et al. (2023).
+Spectropolarimetric investigation of magnetohydrodynamic wave modes in the photosphere: First results
+from PHI on board Solar Orbiter.Astron. Astrophys.674, A109. doi:10.1051/0004-6361/202245826
+Campbell, R. J., Mathioudakis, M., Quintero Noda, C., Keys, P. H., and Orozco Su ´arez, D. (2025).
+Application of Deep Learning to the Classification of Stokes Profiles: From the Quiet Sun to Sunspots.
+Astrophys. J.988, 9. doi:10.3847/1538-4357/addb49
+Chambers, G., Jess, D. B., Jafarzadeh, S., Berretti, M., Grant, S. D. T., Stangalini, M., et al. (2026).
+Standing oscillations in a resonant sunspot atmosphere captured by integral field spectroscopy.Frontiers
+in Astronomy and Space Sciencesin prep. Submitted to Frontiers in Astronomy and Space Sciences
+Couvidat, S., Rajaguru, S. P., Wachter, R., Sankarasubramanian, K., Schou, J., and Scherrer, P. H. (2012).
+Line-of-Sight Observables Algorithms for the Helioseismic and Magnetic Imager (HMI) Instrument
+Tested with Interferometric Bidimensional Spectrometer (IBIS) Observations.Sol. Phys.278, 217–240.
+doi:10.1007/s11207-011-9927-y
+de la Cruz Rodr´ıguez, J., Leenaarts, J., Danilovic, S., and Uitenbroek, H. (2019). STiC: A multiatom
+non-LTE PRD inversion code for full-Stokes solar observations.Astron. Astrophys.623, A74. doi:10.
+1051/0004-6361/201834464
+De Moortel, I. and Nakariakov, V . M. (2012). Magnetohydrodynamic waves and coronal seismology: an
+overview of recent results.Philosophical Transactions of the Royal Society of London Series A370,
+3193–3216. doi:10.1098/rsta.2011.0640
+De Pontieu, B., Mart´ınez-Sykora, J., Testa, P., Winebarger, A. R., Daw, A., Hansteen, V ., et al. (2020). The
+Multi-slit Approach to Coronal Spectroscopy with the Multi-slit Solar Explorer (MUSE).Astrophys. J.
+888, 3. doi:10.3847/1538-4357/ab5b03
+De Pontieu, B., Title, A. M., Lemen, J. R., Kushner, G. D., Akin, D. J., Allard, B., et al. (2014).
+The Interface Region Imaging Spectrograph (IRIS).Sol. Phys.289, 2733–2779. doi:10.1007/
+s11207-014-0485-y
+18
+
+Jafarzadeh et al.Adaptive multi-line fitting
+Duckenfield, T. J., Jess, D. B., Morton, R. J., and Jafarzadeh, S. (2025). Determining the Polarization of a
+Coronal Standing Kink Oscillation Using Spectral Imaging Techniques with CoMP.Astrophys. J.982,
+202. doi:10.3847/1538-4357/adb8d6
+Feller, A., Gandorfer, A., Grauf, B., H¨olken, J., Iglesias, F. A., Korpi-Lagg, A., et al. (2025). The Sunrise
+Ultraviolet Spectropolarimeter and Imager: Instrument Description.Sol. Phys.300, 65. doi:10.1007/
+s11207-025-02471-7
+Figueira, P. (2018). Deriving High-Precision Radial Velocities. InAsteroseismology and Exoplanets:
+Listening to the Stars and Searching for New Worlds, eds. T. L. Campante, N. C. Santos, and M. J. P. F. G.
+Monteiro. vol. 49 ofAstrophysics and Space Science Proceedings, 181. doi:10.1007/978-3-319-59315-9
+10
+Figueira, P., Santos, N. C., Pepe, F., Lovis, C., and Nardetto, N. (2013). Line-profile variations in
+radial-velocity measurements. Two alternative indicators for planetary searches.Astron. Astrophys.557,
+A93. doi:10.1051/0004-6361/201220779
+Frutiger, C., Solanki, S. K., Fligge, M., and Bruls, J. H. M. J. (2000). Properties of the solar granulation
+obtained from the inversion of low spatial resolution spectra.Astron. Astrophys.358, 1109–1121
+Gilchrist-Millar, C. A., Jess, D. B., Grant, S. D. T., Keys, P. H., Beck, C., Jafarzadeh, S., et al. (2021).
+Magnetoacoustic wave energy dissipation in the atmosphere of solar pores.Philosophical Transactions
+of the Royal Society of London Series A379, 20200172. doi:10.1098/rsta.2020.0172
+Goodfellow, I., Bengio, Y ., and Courville, A. (2016).Deep Learning(MIT Press). http://www.
+deeplearningbook.org
+Grant, S. D. T., Berretti, M., Chambers, G., Jess, D. B., Stangalini, M., Jafarzadeh, S., et al. (2026). Probing
+oscillations in the lower solar atmosphere with the francis integral field unit.Frontiers in Astronomy and
+Space Sciencesin prep. Submitted to Frontiers in Astronomy and Space Sciences
+Grant, S. D. T., Jess, D. B., Stangalini, M., Jafarzadeh, S., Fedun, V ., Verth, G., et al. (2022). The
+Propagation of Coherent Waves Across Multiple Solar Magnetic Pores.Astrophys. J.938, 143. doi:10.
+3847/1538-4357/ac91ca
+H¨olken, J., van Noort, M., Solanki, S. K., Feller, A., Doerr, H.-P., Cao, W., et al. (2026). Toward
+solar many-line inversions of high-resolution spectropolarimetric data.Astron. Astrophys.705, A220.
+doi:10.1051/0004-6361/202556890
+Iglesias, F. A. and Feller, A. (2019). Instrumentation for solar spectropolarimetry: state of the art and
+prospects.Optical Engineering58, 082417. doi:10.1117/1.OE.58.8.082417
+[Dataset] Jafarzadeh, S., Jess, D. B., Stangalini, M., Grant, S. D. T., Higham, J. E., Pessah, M. E., et al.
+(2025a). Walsatools - wave analysis tools. doi:10.5281/zenodo.17569951
+Jafarzadeh, S., Jess, D. B., Stangalini, M., Grant, S. D. T., Higham, J. E., Pessah, M. E., et al. (2025b).
+Wave analysis tools.Nature Reviews Methods Primers5, 21. doi:10.1038/s43586-025-00392-0
+Jafarzadeh, S., Jess, D. B., Stangalini, M., Keys, P. H., Grant, S. D. T., Duckenfield, T. J., et al. (2026a).
+Magnetically Structured Oscillatory Power Along an Active-Region Transect in Near-UV SUNRISE
+III/SUSI Spectroscopy.Astrophys. J. Lett.in prep. (Focus Issue on Early Science Results from SUNRISE
+III)
+Jafarzadeh, S., Jess, D. B., Stangalini, M., Morton, R. J., Felipe, T., Berretti, M., et al. (2026b). Multi-line
+Wave Signatures in a Sunspot from Near-UV SUNRISE III/SUSI Observations.Astrophys. J. Lett.in
+prep. (Focus Issue on Early Science Results from SUNRISE III)
+Jarolim, R., Molnar, M. E., Tremblay, B., Centeno, R., and Rempel, M. (2025). PINN ME: A Physics-
+informed Neural Network Framework for Accurate Milne-Eddington Inversions of Solar Magnetic
+Fields.Astrophys. J. Lett.985, L7. doi:10.48550/arXiv.2502.13924
+19
+
+Jafarzadeh et al.Adaptive multi-line fitting
+Jess, D. B., Grant, S. D. T., Bate, W., Liu, J., Jafarzadeh, S., Keys, P. H., et al. (2023a). The Fibre Resolved
+OpticAl and Near-Ultraviolet Czerny-Turner Imaging Spectropolarimeter (FRANCIS).Sol. Phys.298,
+146. doi:10.1007/s11207-023-02237-z
+Jess, D. B., Jafarzadeh, S., Keys, P. H., Stangalini, M., Verth, G., and Grant, S. D. T. (2023b). Waves in the
+lower solar atmosphere: the dawn of next-generation solar telescopes.Living Reviews in Solar Physics
+20, 1. doi:10.1007/s41116-022-00035-6
+Jess, D. B., Keys, P. H., Stangalini, M., and Jafarzadeh, S. (2021). High-resolution wave dynamics in
+the lower solar atmosphere.Philosophical Transactions of the Royal Society of London Series A379,
+20200169. doi:10.1098/rsta.2020.0169
+Jess, D. B., Morton, R. J., Verth, G., Fedun, V ., Grant, S. D. T., and Giagkiozis, I. (2015). Multiwavelength
+Studies of MHD Waves in the Solar Chromosphere. An Overview of Recent Results.Space Sci. Rev.
+190, 103–161. doi:10.1007/s11214-015-0141-3
+Katsukawa, Y ., del Toro Iniesta, J. C., Solanki, S. K., Kubo, M., Hara, H., Shimizu, T., et al. (2020).
+Sunrise Chromospheric Infrared SpectroPolarimeter (SCIP) for sunrise III: system design and capability.
+InGround-based and Airborne Instrumentation for Astronomy VIII, eds. C. J. Evans, J. J. Bryant, and
+K. Motohara. vol. 11447 ofSociety of Photo-Optical Instrumentation Engineers (SPIE) Conference
+Series, 114470Y . doi:10.1117/12.2561223
+Korpi-Lagg, A., Gandorfer, A., Solanki, S. K., del Toro Iniesta, J. C., Katsukawa, Y ., Bernasconi,
+P., et al. (2025). SUNRISE III: Overview of Observatory and Instruments.Sol. Phys.300, 75.
+doi:10.1007/s11207-025-02485-1
+Lagg, A., Smitha, H. N., Solanki, S. K., and et al. (2026). Direct Measurement of the Height Dependence
+of p-mode Propagation in the Lower Solar Atmosphere with SUNRISE III.Astrophys. J. Lett.in prep.
+(Focus Issue on Early Science Results from SUNRISE III)
+Lagg, A., Woch, J., Krupp, N., and Solanki, S. K. (2004). Retrieval of the full magnetic vector with
+the He I multiplet at 1083 nm. Maps of an emerging flux region.Astron. Astrophys.414, 1109–1120.
+doi:10.1051/0004-6361:20031643
+Lecun, Y ., Bottou, L., Bengio, Y ., and Haffner, P. (1998). Gradient-based learning applied to document
+recognition.IEEE Proceedings86, 2278–2324. doi:10.1109/5.726791
+Lites, B., Casini, R., Garcia, J., and Socas-Navarro, H. (2007). A suite of community tools for spectro-
+polarimetric analysis .Mem. Soc. Astron. Italiana78, 148
+MacBride, C. D., Jess, D. B., Grant, S. D. T., Khomenko, E., Keys, P. H., and Stangalini, M. (2021).
+Accurately constraining velocity information from spectral imaging observations using machine learning
+techniques.Philosophical Transactions of the Royal Society of London Series A379, 20200171.
+doi:10.1098/rsta.2020.0171
+Mili´c, I. and van Noort, M. (2018). Spectropolarimetric NLTE inversion code SNAPI.Astron. Astrophys.
+617, A24. doi:10.1051/0004-6361/201833382
+Rast, M. P., Bello Gonz´alez, N., Bellot Rubio, L., Cao, W., Cauzzi, G., Deluca, E., et al. (2021). Critical
+Science Plan for the Daniel K. Inouye Solar Telescope (DKIST).Sol. Phys.296, 70. doi:10.1007/
+s11207-021-01789-2
+Riethm¨uller, T. L. and Solanki, S. K. (2019). The potential of many-line inversions of photospheric
+spectropolarimetric data in the visible and near UV.Astron. Astrophys.622, A36. doi:10.1051/
+0004-6361/201833379
+Ruiz Cobo, B. and del Toro Iniesta, J. C. (1992). Inversion of Stokes Profiles.Astrophys. J.398, 375.
+doi:10.1086/171862
+20
+
+Jafarzadeh et al.Adaptive multi-line fitting
+Ruiz Cobo, B., Quintero Noda, C., Gafeira, R., Uitenbroek, H., Orozco Su ´arez, D., and P ´aez Ma˜n´a, E.
+(2022). DeSIRe: Departure coefficient aided Stokes Inversion based on Response functions.Astron.
+Astrophys.660, A37. doi:10.1051/0004-6361/202140877
+Shimizu, T., Imada, S., Kawate, T., Suematsu, Y ., Hara, H., Tsuzuki, T., et al. (2021). The Solar-C
+(EUVST) mission: the latest status. InSociety of Photo-Optical Instrumentation Engineers (SPIE)
+Conference Series, eds. J.-W. A. den Herder, S. Nikzad, and K. Nakazawa. vol. 11444 ofSociety of
+Photo-Optical Instrumentation Engineers (SPIE) Conference Series, 114440N. doi:10.1117/12.2560887
+Socas-Navarro, H., de la Cruz Rodr´ıguez, J., Asensio Ramos, A., Trujillo Bueno, J., and Ruiz Cobo, B.
+(2015). An open-source, massively parallel code for non-LTE synthesis and inversion of spectral lines
+and Zeeman-induced Stokes profiles.Astron. Astrophys.577, A7. doi:10.1051/0004-6361/201424860
+Solanki, S. K., Smitha, H. N., Lagg, A., and et al. (2026). SUNRISE III: Instrument, mission, data, and first
+results.Astrophys. J. Lett.in prep. (Focus Issue on Early Science Results from SUNRISE III)
+Stangalini, M., Jess, D. B., Verth, G., Fedun, V ., Fleck, B., Jafarzadeh, S., et al. (2021). A novel approach
+to identify resonant MHD wave modes in solar pores and sunspot umbrae: B −ω analysis.Astron.
+Astrophys.649, A169. doi:10.1051/0004-6361/202140429
+Stangalini, M., Verth, G., Fedun, V ., Aldhafeeri, A. A., Jess, D. B., Jafarzadeh, S., et al. (2022). Large
+scale coherent magnetohydrodynamic oscillations in a sunspot.Nature Communications13, 479.
+doi:10.1038/s41467-022-28136-8
+Tritschler, A., Rimmele, T. R., Berukoff, S., Casini, R., Kuhn, J. R., Lin, H., et al. (2016). Daniel K. Inouye
+Solar Telescope: High-resolution observing of the dynamic Sun.Astronomische Nachrichten337, 1064.
+doi:10.1002/asna.201612434
+Tziotziou, K., Tsiropoula, G., Mein, N., and Mein, P. (2007). Dual-line spectral and phase analysis of
+sunspot oscillations.Astron. Astrophys.463, 1153–1163. doi:10.1051/0004-6361:20066412
+Uitenbroek, H. (2003). The Accuracy of the Center-of-Gravity Method for Measuring Velocity and
+Magnetic Field Strength in the Solar Photosphere.Astrophys. J.592, 1225–1233. doi:10.1086/375736
+21
+
+Supplementary Material
+S1 RESIDUAL TIME-SERIES COMPARISON
+To complement Figure 4 of the main text, we show in Supplementary Figure S1 the residual LOS-
+velocity time series, ˆv(t)−vtruth(t), for the same three representative lines: an isolated symmetric line, a
+blended/asymmetric line, and the split-core/emission-reversal stress-case line. Presenting the results as
+residuals relative to the truth makes the time-dependent deviations of each method easier to compare directly
+than in the overplotted velocity time series of the main text. This residual representation therefore illustrates
+directly why the error metrics and downstream wave diagnostics favour LineFit in the challenging cases
+that motivate the method.
+S2 PROOF-OF-PRINCIPLE HYBRID ACCELERATION VIA SUPERVISED
+EMULATION
+To illustrate a practical route towards scalable processing while retaining the robustness of parametric
+fitting, we implemented a proof-of-principle (PoP) hybrid acceleration scheme using a small supervised
+convolutional neural network (CNN) emulator. The intent is to demonstrate feasibility on the same synthetic
+testbed used throughout the paper; full development is deferred to future work.
+S2.1 Setup and training
+The emulator takes, for each (time step, line) pair, a normalised intensity-inverted local spectral window
+centred on a robust coarse centre – plus a binary validity mask distinguishing true spectral samples from
+edge-replicated padding used near the spectral-window boundaries – and predicts the residual line-centre
+shift relative to that coarse centre. LineFit outputs serve as training labels; ground truth from the
+synthetic generator is used only for evaluation (not for training, calibration, or threshold selection). A
+per-line embedding allows a single network to serve all ten lines. Training uses a strictly time-ordered
+split to prevent temporal leakage: the first 80% of the time series (240/300 steps) is used for training and
+calibration, with the last 10% of that training window reserved for calibration (24 steps) and the remaining
+216 steps used for gradient updates; the final 20% (60 steps) is reserved for validation. Training stopped
+automatically after 42 epochs using early stopping: the validation loss did not improve for 16 consecutive
+epochs (the patience setting), so optimisation was halted to avoid overfitting. This behaviour is expected
+and indicates that additional epochs would not have improved generalisation for this configuration. All
+fixed hyperparameters are available in the public repository (under examples/LineFit Frontiers)
+alongside the emulator script.
+Hybrid inference is applied only to the stress-case line (line 6). A morphology flag is raised on split-core-
+like or multi-peak profiles; for flagged samples, 30 Monte Carlo dropout passes provide an uncertainty
+estimate. A threshold calibrated on morphology-flagged calibration samples (the 95th percentile of the
+dropout standard deviation, 0.143 pm) determines which flagged samples are routed toLineFit. In this
+PoP the fallback uses pre-computed LineFit outputs; in production, only the flagged time steps would
+invokeLineFitlive.
+The morphology criteria are intentionally conservative. In borderline cases, a false-positive classification
+mainly increases the fallback rate and therefore reduces the speed-up, but does not compromise the fitted
+result because the sample is simply routed toLineFit. By contrast, a false negative would leave a difficult
+profile to the emulator; in the present hybrid scheme this risk is reduced by the additional Monte Carlo
+1
+
+0.00
+0.25 LineFit - Truth Parabola - Truth
+0 1000 2000 3000
+t (s)
+CoG - Truth
+0 1000 2000 3000
+t (s)
+0.00
+0.25v(t) vtruth(t) (km/s)
+FFT-phase - Truth
+0 1000 2000 3000
+t (s)
+Poly6w - Truth
+0.5
+0.0
+0.5
+LineFit - Truth Parabola - Truth
+0 1000 2000 3000
+t (s)
+CoG - Truth
+0 1000 2000 3000
+t (s)
+0.5
+0.0
+0.5
+v(t) vtruth(t) (km/s)
+FFT-phase - Truth
+0 1000 2000 3000
+t (s)
+Poly6w - Truth
+2.5
+0.0
+2.5 LineFit - Truth Parabola - Truth
+0 1000 2000 3000
+t (s)
+CoG - Truth
+0 1000 2000 3000
+t (s)
+2.5
+0.0
+2.5
+v(t) vtruth(t) (km/s)
+FFT-phase - Truth
+0 1000 2000 3000
+t (s)
+Poly6w - Truth
+(a) Residuals  isolated symmetric line  (line number 1)
+(b) Residuals  blended/asymmetric line  (line number 2)
+(c) Residuals  multi-lobed/emission line  (line number 6)
+Figure S1.Residual LOS-velocity time series, ˆv(t)−vtruth(t), for the same three representative lines
+shown in Figure 4 of the main text: (a) an isolated symmetric line, (b) a blended/asymmetric line, and (c) a
+multi-lobed/emission-reversal line. Each mini-panel shows one method relative to the truth with the same
+y-scale to allow direct visual comparison of the time-dependent deviations.
+dropout uncertainty gate, so that morphology and uncertainty act as complementary safeguards rather than
+as a single hard classifier.
+S2.2 Accuracy
+On the validation set the emulator achieves a mean absolute error (MAE) of 0.080 pm, RMSE = 0.118 pm,
+and a 95th-percentile absolute centre error of 0.245 pm relative to the ground truth (MAE = 0.055 pm and
+P95 = 0.211 pm relative toLineFit), with 87% of samples agreeing with LineFit to within 0.1 pm.
+2
+
+Calibration-set accuracy is nearly identical (P95 = 0.228 pm), suggesting no strong overfitting to the training
+window. The hybrid fallback fraction is 2.1%. Because fallback is applied only to the stress-case line, a
+2.1% fallback rate corresponds to 62 of 3000 (time step, line) samples. Figure S2 shows the validation error
+distributions as histograms and cumulative distributions (CDFs); the emulator and hybrid curves are nearly
+coincident at this fallback rate, and the emulator-vs-LineFit distribution is slightly narrower because it
+captures only the label-to-emulator discrepancy without the residualLineFit-to-truth mismatch.
+0.0 0.1 0.2 0.3 0.4
+Absolute error (pm)
+0
+25
+50
+75
+100
+125Count
+|Emul  Truth|
+|Hybrid  Truth|
+|Emul  LineFit|
+0.0 0.1 0.2 0.3 0.4
+Absolute error (pm)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0CDF |Emul  Truth|
+|Hybrid  Truth|
+|Emul  LineFit|
+0.1 pm
+Figure S2.Validation-set absolute centre error distributions for the CNN emulator and hybrid scheme
+(both vs ground truth) and for the emulator vsLineFit. Left: histograms; right: CDFs. The CDFs directly
+show that 87% of validation samples agree withLineFitto within 0.1 pm.
+S2.3 Wave-diagnostic preservation
+Figure S3 shows the RGWS of the velocity time series for the stress-case line from each method,
+compared with the truth. LineFit and the hybrid follow the truth most closely across the full frequency
+range, with some amplitude deviations in the higher frequency regime ( ≳6 mHz). The CNN emulator
+agrees well at frequency peaks but with mild deviations at various locations, consistent with its larger
+per-step errors at the most extreme morphological episodes. The hybrid, which substitutes LineFit
+values for 2.1% of stress-line samples, matches the truth spectral structure more closely than the emulator
+alone, confirming that the gating logic is effectively targeting the time steps where the emulator diverges
+most.
+S2.4 Computational cost
+Both timing estimates follow the same approach: a representative subset of time steps is timed and
+the result scaled to the full sequence. The LineFit reference runtime ( ≈53000 s, or approximately
+∼15 hours, for 300 time steps and 10 lines) was estimated by timing 10 uniformly sampled steps. The
+hybrid fallback cost was estimated by timing 10 uniformly sampled fallback steps for the stress-case
+line only, yielding a per-step cost of ≈0.68 s per fallback time step (stress line only) and an extrapolated
+fallback total of ≈42 s for the 62 flagged steps. The emulator inference over all 3000 samples takes≈0.55 s,
+giving a hybrid total of ≈43 s and a speed-up of approximately three orders of magnitude relative to
+the full LineFit run. The emulator-only speed-up approaches five orders of magnitude. All runtime
+estimates are hardware-dependent (measured on a MacBook Pro with Apple M1 Pro, 8-core CPU, and 16
+GB RAM; macOS 26.4) and should be taken as indicative of the scale of the potential acceleration rather
+than as absolute benchmarks. Nevertheless, with the MAE of 0.080 pm corresponding to a mean absolute
+3
+
+2 4 6 8 10 12 14
+Frequency (mHz)
+0
+500
+1000
+1500Power (arb. units)
+Truth
+LineFit
+CNN emulator
+Hybrid
+Figure S3.RGWS of the LOS velocity time series for the stress-case line (line 6) from LineFit, the
+CNN emulator, and hybrid approach, compared with the truth.
+Doppler velocity uncertainty of ≈80 m s−1, combined with a performance improvement of at least three
+orders of magnitude (i.e. on the order of 15 hours → 43 seconds), the hybrid emulation of the LineFit
+software offers a strong platform for future development and wave studies, especially considering the
+RGWS spectrum accurately reflects the ground truth wave amplitudes within the commonly observed
+frequency range of∼3−5mHz.
+We did not carry out a systematic CPU benchmark of the four fast baseline estimators in the present study,
+but these simple window-based methods are expected to remain substantially cheaper than LineFit. The
+practical point of the PoP emulator/hybrid experiment is therefore not to compete with the absolute speed
+of the simplest baselines, but to show that a workflow anchored to LineFit-quality labels can move
+much closer to fast-estimator throughput while retaining a robust fallback for difficult profiles.
+4

@@ -1,0 +1,1369 @@
+Title: Boris and Exponential Integrators in the Theory of Particles Interacting with Magnetic Turbulence
+Authors: Andreas Shalchi
+Published: 2026-05-13
+Categories: physics.plasm-ph, astro-ph.SR
+
+Version May 15, 2026
+Preprint typeset using LATEX style openjournal v. 09/06/15
+BORIS AND EXPONENTIAL INTEGRATORS IN THE THEORY OF PARTICLES INTERACTING WITH
+MAGNETIC TURBULENCE
+A. Shalchi
+Department of Physics and Astronomy, University of Manitoba, Winnipeg, Manitoba R3T 2N2, Canada
+Version May 15, 2026
+ABSTRACT
+The interaction of electrically charged particles with magnetic fields is a fundamental problem in
+several areas of physics. An example is the motion of energetic particles through a magnetized plasma.
+The most accurate and reliable way to explore theoretically the interactions between particles and
+fields is via test-particle simulations. In such simulations one creates the turbulent magnetic field and
+solves the Newton-Lorentz equation numerically by employing an integration scheme. In the current
+article we discuss exponential integrators and derive systematically from this the Rodrigues scheme
+as well as the famous Boris integrator. For an approach where one creates the magnetic field anew
+at each time step, both integrators are overall comparable. In theory the Rodrigues approach should
+be more accurate due to the fact that the occurring matrix exponential is evaluated without further
+approximations. Practically, both methods provide very similar results. It is argued in the current
+article that a Rodrigues based integrator is a very strong alternative because for the specific problem
+discussed here, it does not require longer computing times.
+Subject headings:diffusion – magnetic fields – turbulence
+1.INTRODUCTION
+The motion of electrically charged energetic particles in a plasma is difficult to describe analytically due to compli-
+cated interactions between the particles and turbulent magnetic fields. However, this problem is fundamental and the
+knowledge of particle diffusion coefficients is important in several areas of research. The most prominent examples are
+studies of solar modulation and diffusive shock acceleration (see, e.g., Zank et al. (2000), Li et al. (2003), Li et al.
+(2005), Zank et al. (2006), Dosch & Shalchi (2010), Li et al. (2012), Ferrand et al. (2014), Hu et al. (2017), Qin et al.
+(2018), Shen & Qin (2018), Moloto & Engelbrecht (2020), Engelbrecht & Wolmarans (2020), Engelbrecht & Moloto
+(2021), Shen et al. (2021), and Ngobeni et al. (2022)).
+Ideally, one describes the motion of energetic particles through a plasma by using analytical theory. However, this
+task is difficult due to the nonlinearity of the problem (see Shalchi (2009), Shalchi (2020), and Effenberger et al. (2025)
+for reviews). Especially in analytical treatments of the transport, one has to distinguish between transport along and
+across the mean magnetic field. Parallel diffusion is controlled by pitch-angle scattering and, associated with this, a
+pitch-angle isotropization process. Perpendicular transport, on the other hand, depends on the structure of magnetic
+field lines because initially particles follow individual lines. As soon as the transverse complexity of the turbulence
+becomes manifested, particles leave their original field lines and the transport become diffusive. In the past it was
+often assumed that perpendicular transport is more difficult to describe analytically, but significant progress has been
+achieved during the past two decades (see, e.g., Matthaeus et al. (2003), Shalchi (2010), and Shalchi (2021)).
+An alternative to analytical theories is to perform test-particle simulations. In such simulations the turbulence is
+created artificially by using a certain spectrum in combination with random numbers. For a given turbulence model,
+particle orbits can then be obtained by solving the Newton-Lorentz equation numerically. Considering and averaging
+thousands of particle trajectories allows one to determine the diffusion coefficients in the different directions of space.
+The advantage of simulations compared to analytical theories is obvious: while theories require to make several
+assumptions which are often difficult to justify, the simulations are based on an exact (besides numerical inaccuracies)
+particle orbits. A disadvantage of the simulations is, of course, that they cannot be implemented in applications such
+as diffusive shock acceleration.
+In the past, test-particle simulations have been performed by numerous authors in the context of space physics
+and astrophysics (see, e.g., Qin et al. (2002a), Qin et al. (2002b), Qin et al. (2006), Zimbardo et al. (2006), Perri
+& Zimbardo (2007), Pommois et al. (2007), Perri & Zimbardo (2009a), Perri & Zimbardo (2009b), Tautz (2010),
+Zimbardo et al. (2012), Hussein et al. (2015), Hussein & Shalchi (2016), Heusen & Shalchi (2016), Ivascenko et
+al. (2016), Reichherzer et al. (2022), Snodin et al. (2022), and Els & Engelbrecht (2024)). In the aforementioned
+simulations different methods have been applied. For instance, there are grid-based simulations in which the turbulent
+andreasm4@yahoo.com
+arXiv:2605.14065v1  [physics.plasm-ph]  13 May 2026
+
+2
+magnetic field is computed over a whole grid and thereafter the particle orbits are determined. In other simulation codes
+the magnetic field is only computed at the current particle position. Both methods have advantages and disadvantages
+is terms of memory needs and run times. In either case, one has to solve the Newton-Lorentz equation numerically.
+It became clear over years that one of the best possible integration schemes to solve the equations of motion is the
+so-calledBoris integrator(see Boris (1970)). In the current article we review this type of integration scheme and
+derive it systematically from exponential integrators. As alternative we explore the combination of such exponential
+integrators with the so-calledRodrigues formula(see Rodrigues (1840)). We compare both integration schemes with
+the aim to see which one is better suited for test-particle simulations. By doing this we focus on the very specific case
+of a purely magnetic scenario where particles interact with a constant mean magnetic field and a turbulent component.
+Furthermore, we consider simulations in which the magnetic field is computed anew at each particle position. We shall
+demonstrate that, for this special case, both integrator schemes, Boris as well as Rodrigues, are strong tools with a
+slight advantage of the latter approach due to more accuracy in the phase. A comprehensive comparison of relativistic
+particle integrators can be found in Ripperda et al. (2018). However, in the current article we focus on the very specific
+problem of particles interacting with a purely magnetic field which consists of a constant mean field and a turbulence
+component. Furthermore, the turbulent component is created in specific way as described later in this article.
+2.EQUATIONS OF MOTION
+The fundamental equation describing the motion of an electrically charged particle in a purely magnetic system is
+theNewton-Lorentz equation
+d⃗ p
+dt = q
+c ⃗ v×⃗B(⃗ x) (1)
+where we have used the relativistic momentum⃗ p=mγ⃗ v. In the latter relation, as well as in Eq. (1), we have used
+the particle chargeq, the vacuum speed of lightc, the particle velocity⃗ v, the particle’s rest massm, and the Lorentz
+factorγ. Furthermore, we assume that the total magnetic field is given by ⃗B(⃗ x) =δ⃗B(⃗ x) +B0ˆzwhereδ ⃗B(⃗ x) describes
+the magnetic fluctuations (the turbulence) andB 0 is the constant mean field pointing in thez-direction. Note, here
+we have usedcgs unitsrather thanSI units. The three components of Eq. (1) can easily be determined and one gets
+˙vx = Ωvy + Ω
+
+vy
+δBz
+B0
+−v z
+δBy
+B0
+
+,
+˙vy =−Ωv x + Ω
+
+vz
+δBx
+B0
+−v x
+δBz
+B0
+
+,
+˙vz = Ω
+
+vx
+δBy
+B0
+−v y
+δBx
+B0
+
+.(2)
+In the latter equations of motion we have used the gyro-frequency
+Ω = qB0
+mcγ (3)
+which is the angular velocity of the rotation if there was only a mean magnetic fieldB 0 and no turbulence. Therefore,
+we also call Ω theunperturbed gyro-frequency. Note, for negativeqthe gyro-frequency defined here becomes negative.
+This simply means that the particle reverses its direction of rotation. The three components listed via Eq. (2) can be
+written in the form
+d
+dt⃗ v=M⃗ v(4)
+where we have used the 3×3 matrix
+M= Ω
+B0
+
+
+0B z −By
+−Bz 0B x
+By −Bx 0
+
+ (5)
+where, in our case,B x =δB x,B y =δB y, andB z =B 0 +δB z. Eq. (4) can formally be solved via
+⃗ v(t) =e
+R t
+t0
+dτM(τ) ⃗ v(t0).(6)
+Problematic here is that the matrixMdoes depend on time and, therefore, the matrix exponential is not trivial.
+According to Eq. (5), the entries of the matrixMare the components of the magnetic field. In general we have
+⃗B= ⃗B[⃗ x(t), t] because we trace energetic particles. Therefore, the magnetic field has to be evaluated along the
+particle trajectory⃗ x(t). Furthermore, the magnetic field can depend on time. In the current article, however, we only
+consider a static scenario meaning that ⃗B= ⃗B[⃗ x(t)]. Test-particle simulations have been performed for dynamical
+turbulence in Hussein & Shalchi (2016) as well as in Heusen & Shalchi (2016).
+In the following we discuss two different numerical/computational schemes based on Eq. (6).
+
+3
+3.MATRIX EXPONENTIALS AND THE RODRIGUES FORMULA
+Eq. (6) would allow us to determine the particle velocity⃗ vat timet. However, this equation contains an exponential
+where the argument is a time-integral over the matrixM. Alternatively, we can write Eq. (6) as
+⃗ v(t+ ∆t) =e
+R t+∆t
+t dτM(τ) ⃗ v(t) (7)
+where ∆tcorresponds to the performed time step. As an approximation we assume thatM(τ) remains constant
+during the time-intervalt≤τ≤t+ ∆tso that
+⃗ v(t+ ∆t)≈e M∆t⃗ v(t).(8)
+In numerical schemes this becomes
+⃗ vn+1 ≈e M∆t⃗ vn (9)
+where ∆tis the (constant) time step size. Approximating the matrix in the exponential by a constant is called the
+frozen field approximation. Within this approach, the matrixMhas to be evaluated at some time betweentand
+t+ ∆t. One option is to use
+M=M
+
+⃗ xn + 1
+2⃗ vn∆t
+
+(10)
+meaning that we evaluate the magnetic field at thepredicted midpoint
+⃗ x=⃗ xn + 1
+2⃗ vn∆t.(11)
+The approach described here is based onmidpoint rule. It is well-known that employing this rule leads to a result
+which is correct up to second order in the step size ∆t(see Burden & Faires (2011)).
+However, Eq. (9) still contains a matrix exponential but the matrixMis now a constant. A powerful tool to
+evaluate this is provided byRodrigues’ rotation formulawhich is derived in the following. To use this formula, it is
+convenient to define
+ω:= Ω | ⃗B|
+B0
+= q
+mcγ | ⃗B|(12)
+which can be understood as instantaneous gyro-frequency in the perturbed field. Furthermore, we need to discuss the
+properties of the matrixMdefined via Eq. (5). For the square of this matrix, for instance, one can easily derive
+M 2 = Ω2
+B2
+0
+
+
+−B2
+y −B 2
+z BxBy BxBz
+BxBy −B2
+x −B 2
+z ByBz
+BxBz ByBz −B2
+x −B 2
+y
+
+ .(13)
+This can be written in the more compact form
+M 2 = Ω2
+B2
+0
+h
+⃗B⊗ ⃗B− ⃗B2I
+i
+≡ω 2
+h
+ˆB⊗ ˆB−I
+i
+(14)
+where we have used the unit vector
+ˆB= 1q
+B2x +B 2y +B 2z
+
+
+Bx
+By
+Bz
+
+ (15)
+and thetensor product⊗which is also known asdyadicorouter product. Furthermore, we have used the unit matrix
+I. One can show via direct calculation that the matrixMsatisfies the following relations
+M 3 =−ω 2M,
+M 4 =−ω 2M 2,
+M 5 =ω 4M,
+M 6 =ω 4M 2.(16)
+We can generalize this so that for integernwe have
+M 2n =−(−1) n ω2n−2M 2 forn= 1,2,3, . . .(17)
+and
+M 2n+1 = (−1)n ω2nMforn= 0,1,2, . . . .(18)
+
+4
+We conclude that any power ofMcan be expressed by eitherMorM 2. For the matrix exponential needed in Eq.
+(9) we can employ the Talyor-expansion
+eM∆t =
+∞X
+n=0
+1
+n! (M∆t) n .(19)
+The sum can be split into odd and even terms so that one gets
+eM∆t =I+
+∞X
+n=0
+1
+(2n+ 1)! M 2n+1 (∆t)2n+1 +
+∞X
+n=1
+1
+(2n)! M 2n (∆t)2n .(20)
+Therein we can now employ Eqs. (17) and (18) yielding
+eM∆t =I+
+∞X
+n=0
+1
+(2n+ 1)! (−1)n ω2n (∆t)2n+1 M−
+∞X
+n=1
+1
+(2n)! (−1)n ω2n−2 (∆t)2n M 2.(21)
+We can further rewrite this via
+eM∆t =I+ 1
+ω
+∞X
+n=0
+1
+(2n+ 1)! (−1)n (ω∆t)2n+1 M+ 1
+ω2 M 2 − 1
+ω2
+∞X
+n=0
+1
+(2n)! (−1)n (ω∆t)2n M 2.(22)
+Therein we can now see the occurrence of Taylor expansions of trigonometric functions. Thus, we can write
+eM∆t =I+ sin (ω∆t)
+ω M+ 1−cos (ω∆t)
+ω2 M 2 (23)
+which is known as theRodrigues rotation formula(see Rodrigues (1840)). The latter formula is well-known and often
+used in physics (see, e.g., Marsden & Ratiu (1999)) and numerical integration methods (see Hairer et al. (2006)).
+Magnetic fluctuations in interplanetary and interstellar spaces can be measuredin situvia magnetometers aboard
+space probes such asVoyager 1. Zank et al. (2019) have shown based on such measurements that the solar wind and
+the very local interstellar medium are often nearly incompressible meaning thatδB z ≈0. Therefore, we now consider
+the nearly incompressible case for which our matrix (5) simplifies to
+M= Ω
+
+
+0 1−δB y/B0
+−1 0δB x/B0
+δBy/B0 −δBx/B0 0
+
+ .(24)
+Using Eq. (23) in Eq. (9) gives us for the components of the updated velocity
+vx,n+1 =v x,n + sin (ω∆t)
+ω/Ω
+
+vy,n − δBy
+B0
+vz,n
+
++ 1−cos (ω∆t)
+ω2/Ω2
+"
+−
+ 
+1 + δB2
+y
+B2
+0
+!
+vx,n + δBx
+B0
+δBy
+B0
+vy,n + δBx
+B0
+vz,n
+#
+,
+vy,n+1 =v y,n + sin (ω∆t)
+ω/Ω
+
+−vx,n + δBx
+B0
+vz,n
+
++ 1−cos (ω∆t)
+ω2/Ω2
+ δBx
+B0
+δBy
+B0
+vx,n −
+
+1 + δB2
+x
+B2
+0
+
+vy,n + δBy
+B0
+vz,n
+
+,
+vz,n+1 =v z,n + sin (ω∆t)
+ω/Ω
+ δBy
+B0
+vx,n − δBx
+B0
+vy,n
+
++ 1−cos (ω∆t)
+ω2/Ω2
+"
+δBx
+B0
+vx,n + δBy
+B0
+vy,n −
+ 
+δB2
+x
+B2
+0
++ δB2
+y
+B2
+0
+!
+vz,n
+#
+(25)
+where we have also used Eqs. (13) and (24) to replace the matricesMandM 2, respectively. It needs to be emphasized
+that the magnetic field components in Eq. (25) have to be evaluated at the predicted midpoint given by Eq. (11).
+Note, sometimes one uses the notation
+⃗Bn+1/2 ≡ ⃗B
+
+⃗ xn + 1
+2⃗ vn∆t
+
+(26)
+to make clear that the magnetic field is evaluated after half a step.
+
+5
+The set of equations listed above allows us to compute the new particle velocity. Note, in the simulations we usually
+work with thedimensionless rigidity vector
+⃗R:= 1
+Ωℓ∥
+⃗ v(27)
+instead of actual velocities. In the latter formula we have used the parameterℓ ∥ which is a characteristic scale of the
+turbulence called thebendover scale. It denotes the scale at which we find the turnover from the energy to the inertial
+range of the spectrum. Furthermore, in the simulations positions are measured with respect to this scale.
+So far we have discussed how the updated velocity can be obtained by employing the Rodrigues formula. However,
+we also need to know the updated position. In principle this position is obtained via
+⃗ xn+1 =⃗ xn +
+Z tn+∆t
+tn
+dt ⃗ v(t).(28)
+The velocity vector needed therein is given by
+⃗ v(t) =e
+R t
+tn dτM(τ) ⃗ vn.(29)
+Combining both relation yields
+⃗ xn+1 =⃗ xn +
+Z tn+∆t
+tn
+dt e
+R t
+tn dτM(τ) ⃗ vn.(30)
+Therein the matrixMhas to be evaluated at the timeτwhich is restricted byt n ≤τ≤t n + ∆t. As in Eq. (10)
+we used midpoint rule and replace the matrixMby a constant corresponding to the frozen field approximation. The
+τ-integral is now straightforward giving us for the position update
+⃗ xn+1 =⃗ xn +
+Z tn+∆t
+tn
+dt e(t−tn)M⃗ vn (31)
+where the matrixMis given by Eq. (10). Using the substitutionτ=t−t n allows us to write
+⃗ xn+1 =⃗ xn +
+Z ∆t
+0
+dτ e Mτ ⃗ vn.(32)
+Theτ-integral therein can be solved exactly by using again the Rodrigues formula or by using the approach presented
+in Appendix A. To be consistent, however, we simply employ midpoint rule again to approximate Eq. (32) via
+⃗ xn+1 =⃗ xn + ∆teM∆t/2⃗ vn.(33)
+Alternatively, we can write
+⃗ xn+1 =⃗ xn + ∆t⃗ vn+1/2 (34)
+where we have used
+⃗ vn+1/2 =e M∆t/2⃗ vn.(35)
+To evaluate the exponential therein we can use again Eq. (23) but replace ∆t→∆t/2. Alternatively, one could just
+use midpoint rule directly in Eq. (28) also leading to Eq. (34).
+Eqs. (25) and (34) can easily be implemented in numerical codes for particle transport. The strength of this type of
+approach is that we only made one approximation and that is the one given by Eq. (10) corresponding to the frozen
+field approximation combined with midpoint rule. Due to the latter approximation, the Rodrigues scheme described
+above is only correct up to second order. However, for a constant magnetic field this approximation is not necessary
+and our computation of the particle orbit is exact. In Fig. 1 we have plotted as an example the ratio of the phase
+obtained by the Rodrigues scheme and the exact analytical value. This phase is defined and obtained via
+ϕ:= arctan (v y/vx).(36)
+As demonstrated, the Rodrigues integrator provides the exact result for the phase. However, the often mentioned
+downside of the scheme described above is that one needs to evaluate the trigonometric functions in the Rodrigues
+formula at each time step.
+4.THE BORIS INTEGRATOR
+To avoid the occurrence of trigonometric functions in velocity and position updates, a powerful alternative was
+proposed by Boris (1970). This integration scheme is widely used in plasma physics and related topics. In fact it is
+considered to be thede factostandard for particles interacting with electromagnetic fields (see, e.g., Qin et al. (2013)).
+As starting point we can employmidpoint ruleto approximate
+Z t+∆t
+t
+dτM(τ)≈∆tM
+
+t+ 1
+2∆t
+
+(37)
+
+6
+Time0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000
+Phase	Ratio
+0.99
+0.992
+0.994
+0.996
+0.998
+1
+1.002
+1.004
+1.006
+1.008
+1.01
+Fig. 1.—The phase defined via Eq. (36) for the case of a particle interacting with a constant magnetic field pointing in thez-direction.
+Shown is the ratio of the numerically obtained phase for a step size of ∆t= 0.1 and the exact analytical result for a Rodrigues-based
+integrator (blue line) and the Boris scheme (red line).
+as it was done above (see Eqs. (7)-(10)). As in Sect. 3 we, therefore, have employed the frozen field approximation.
+To update the velocity, we need to evaluate the matrix exponential in Eq. (9). The first three terms in the Taylor
+expansion of this exponential are given by
+eM∆t ≈I+M∆t+ 1
+2 M 2 (∆t)2 (38)
+which would be correct up to second order in ∆t. However, in the following we use the approximation
+eM∆t ≈
+
+I− ∆t
+2 M
+−1
+I+ ∆t
+2 M
+
+(39)
+where we have used the inverse matrix ofI−M∆t/2. This type of approximation is known asCayley approximation
+(see Cayley (1846)), but it is also a special case of aPad´ e approximation(see Pad´ e (1892)). To demonstrate that
+Eq. (39) is correct up to second order, we can employ a Taylor expansion by using aNeumann series(see Neumann
+(1877))
+(I−T) −1 =
+∞X
+n=0
+T n (40)
+to get
+
+I− ∆t
+2 M
+−1
+I+ ∆t
+2 M
+
+≈
+
+I+ 1
+2 M∆t+ 1
+4 M 2 (∆t)2
+
+I+ 1
+2 M∆t
+
+≈I+M∆t+ 1
+2 M 2 (∆t)2 (41)
+in perfect agreement with Eq. (38). We conclude that up to second order, the Cayley approximation is correct. In
+Sect. 5 we shall demonstrate that Eq. (39) conserves energy whereas Eq. (38) does not. Within the Boris scheme, we
+therefore determine the updated velocity via
+⃗ v(t+ ∆t)≈
+
+I− ∆t
+2 M
+−1
+I+ ∆t
+2 M
+
+⃗ v(t).(42)
+One way of evaluating Eq. (42) is to determine the inverse matrix ofI−M∆t/2. This is done step-by-step in
+Appendix B. Alternatively, we can work with cross products. This approach is outlined in the following. First, we
+write Eq. (42) as 
+I− ∆t
+2 M
+
+⃗ v(t+ ∆t)≈
+
+I+ ∆t
+2 M
+
+⃗ v(t).(43)
+It is convenient to define
+⃗ v′ :=
+
+I+ ∆t
+2 M
+
+⃗ v(t).(44)
+It follows from the way how we introduced the matrixM(see Eqs. (1)-(5)) that
+⃗ v′ =⃗ v(t) +Ω∆t
+2B0
+⃗ v(t)× ⃗B.(45)
+
+7
+Analogously, we can use this to rewrite the left-hand side of Eq. (43) giving us
+⃗ v(t+ ∆t)− Ω∆t
+2B0
+h
+⃗ v(t+ ∆t)× ⃗B
+i
+=⃗ v′.(46)
+This corresponds to a vector equation for⃗ v(t+ ∆t) that we need to solve. First we multiply Eq. (46) by the magnetic
+field vector ⃗Bvia a cross product to get
+⃗ v(t+ ∆t)× ⃗B− Ω∆t
+2B0
+h
+⃗ v(t+ ∆t)× ⃗B
+i
+× ⃗B=⃗ v ′ × ⃗B.(47)
+By employing theGrassmann identity
+⃗ a×
+
+⃗b×⃗ c
+
+= (⃗ a·⃗ c)⃗b−
+
+⃗ a·⃗b
+
+⃗ c(48)
+we can write this as
+⃗ v(t+ ∆t)× ⃗B+ Ω∆t
+2B0
+⃗B2⃗ v(t+ ∆t)− Ω∆t
+2B0
+h
+⃗ v(t+ ∆t)· ⃗B
+i
+⃗B=⃗ v ′ × ⃗B.(49)
+The velocity component parallel with respect to the magnetic field vector does not change and, thus, we have
+⃗ v(t+ ∆t)· ⃗B=⃗ v(t)· ⃗B.(50)
+Using this in Eq. (49) yields
+⃗ v(t+ ∆t)× ⃗B+ Ω∆t
+2B0
+⃗B2⃗ v(t+ ∆t)− Ω∆t
+2B0
+h
+⃗ v(t)· ⃗B
+i
+⃗B=⃗ v ′ × ⃗B.(51)
+The latter relation can now be used to replace the second term in Eq. (46). We derive after some rearranging
+⃗ v(t+ ∆t)
+
+1 + Ω2∆t2
+4B2
+0
+⃗B2
+
+=⃗ v′ + Ω2∆t2
+4B2
+0
+h
+⃗ v(t)· ⃗B
+i
+⃗B+ Ω∆t
+2B0
+⃗ v′ × ⃗B.(52)
+We can rewrite this further. To do this we multiply Eq. (45) by the magnetic field to get the relation
+⃗ v′ × ⃗B=⃗ v(t)× ⃗B+ Ω∆t
+2B0
+h
+⃗ v(t)× ⃗B
+i
+× ⃗B.(53)
+Using Eq. (48) once more allows us to write
+Ω∆t
+2B0
+h
+⃗ v(t)· ⃗B
+i
+⃗B=
+h
+⃗ v′ × ⃗B−⃗ v(t)× ⃗B
+i
++ Ω∆t
+2B0
+⃗B2⃗ v(t).(54)
+This can now be used in Eq. (52) to obtain
+⃗ v(t+ ∆t)
+
+1 + Ω2∆t2
+4B2
+0
+⃗B2
+
+=⃗ v′ + Ω∆t
+2B0
+h
+⃗ v′ × ⃗B−⃗ v(t)× ⃗B
+i
++ Ω2∆t2
+4B2
+0
+⃗B2⃗ v(t) +Ω∆t
+2B0
+⃗ v′ × ⃗B.(55)
+Combining the first term on the right-hand side and the second cross product gives us the velocity vector⃗ v(t) which
+follows from Eq. (45). The first and the third cross products are identical and can, therefore, be combined giving us
+⃗ v(t+ ∆t)
+
+1 + Ω2∆t2
+4B2
+0
+⃗B2
+
+=⃗ v(t)
+
+1 + Ω2∆t2
+4B2
+0
+⃗B2
+
++ Ω∆t
+B0
+⃗ v′ × ⃗B.(56)
+We finally derive for the updated velocity
+⃗ v(t+ ∆t) =⃗ v(t) + Ω∆t/B0
+1 +ω 2∆t2/4⃗ v′ × ⃗B(57)
+where we have used Eq. (12) also. Or, we can write the updated velocity via
+⃗ v(t+ ∆t) =⃗ v(t) + ∆t
+1 +ω 2∆t2/4
+
+M+ ∆t
+2 M 2
+
+⃗ v(t) (58)
+as demonstrated in Appendix B. However, we need to keep in mind that the magnetic field has to be evaluated after
+half a step (see Eq. (37)). Therefore, for the use in codes, we write
+⃗ vn+1/2 =⃗ vn−1/2 + Ω∆t/B0
+1 +ω 2∆t2/4⃗ v′ × ⃗Bn (59)
+
+8
+with
+⃗ v′ =⃗ vn−1/2 + Ω∆t
+2B0
+⃗ vn−1/2 × ⃗Bn (60)
+where we have used the notation
+⃗Bn = ⃗Bn [⃗ xn] = ⃗Bn [⃗ x(tn)].(61)
+The updated position is found via
+⃗ x(t+ ∆t) =⃗ x(t) +
+Z t+∆t
+t
+dτ ⃗ v(τ).(62)
+Using againmidpoint ruleallows us to approximate
+Z t+∆t
+t
+dτ ⃗ v(τ)≈∆t⃗ v
+
+t+ 1
+2∆t
+
+(63)
+so that
+⃗ x(t+ ∆t) =⃗ x(t) + ∆t⃗ v
+
+t+ 1
+2∆t
+
+.(64)
+Alternatively, this can be written as
+⃗ xn+1 =⃗ xn + ∆t⃗ vn+1/2 (65)
+where⃗ vn+1/2 is the updated velocity as provided by Eq. (59).
+Compared to the Rodrigues integrator we do not need to evaluate trigonometric functions. However, a Boris
+integrator does not provide the exact result for the phase as the Rodrigues scheme does. In Fig. 1 we have compared
+the phases obtained by the two discussed integration methods to demonstrate this.
+Over years several modifications of the Boris scheme have been proposed. There is, for instance, a fourth-order
+Boris scheme which requires to make three Boris steps (see Yoshida (1990)). It seems, however, that for the problem
+described in the current article and for the typically step sizes used (∆t≈0.01) higher-order methods do not provide
+an improvement for a given run time of the computer. Other possible improvements of the Boris scheme focus on the
+inclusion of electric fields (see, for instance, Vay (2008)). However, in the current article we only explore how energetic
+particles interact with a purely magnetic system and such possible improvements are not relevant. In cases where one
+studies stochastic acceleration due to electric fields (see, e.g., Tautz et al. (2013)) such improvements could become
+important.
+5.ENERGY CONSERVATION
+A crucial problem in the simulations described in the current paper is that one needs to consider very long integration
+times. Therefore, it is important that our integrators conserve energy. In the following we demonstrate step-by-step
+that both considered integration methods conserve energy perfectly well. Both integrators update the velocity via
+⃗ v(t+ ∆t) =R⃗ v(t) (66)
+where the form of the matrixRdepends on the used method. To conserve kinetic energy we need|⃗ v(t+ ∆t)|2 =|⃗ v(t)|2.
+By using Eq. (66) we can write the left-hand side as
+|⃗ v(t+ ∆t)|2 =⃗ vT (t+ ∆t)⃗ v(t+ ∆t) =⃗ vT (t)R TR⃗ v(t).(67)
+Therefore, energy is conserved whenR TR=Imeaning that the matrixRhas to be orthogonal. To explore whether
+this relation is true for the different approaches discussed in the current article, we need the transpose of the matrix
+M. It follows directly from Eq. (5) that
+M T =−M(68)
+meaning the matrixMisskew-symmetric. For the case where the original matrix exponential is used (see, e.g., Eq.
+(9)) we haveR= exp (M∆t). One can easily show with the help of Eq. (68) that
+RTR=e M T∆teM∆t =e (M T+M)∆t =I.(69)
+Since the Rodrigues formula is an exact representation of the matrix exponential, a Rodrigues integrator conserves
+energy perfectly well.
+For a Boris integrator, which corresponds to rotations, we expect the same. In the following we present a step-by-step
+proof. It follows from Eq. (58) that
+R=I+ ∆t
+1 +ω 2∆t2/4
+
+M+ ∆t
+2 M 2
+
+.(70)
+Using Eq. (68) yields
+RT =I+ ∆t
+1 +ω 2∆t2/4
+
+−M+ ∆t
+2 M 2
+
+.(71)
+
+9
+From this we can derive
+RTR=I+ ∆t2
+1 +ω 2∆t2/4 M 2 − ∆t2
+(1 +ω 2∆t2/4)2
+
+M 2 + 1
+4∆t2M 4
+
+.(72)
+Employing the second line of Eq. (16) and performing some straightforward algebra yields indeedRTR=I. Therefore,
+the Boris integrator, although based on an approximation of the matrix exponential, conserves energy perfectly well.
+Note, if we would use the Taylor expansion given by Eq. (38) instead of Eq. (39), energy would not be conserved.
+This is the reason why we have employed the Cayley approximation. It conserves energy exactly, but is still correct
+up to second order. This is an important feature of the Boris scheme.
+6.PERFORMING THE SIMULATIONS
+To compare the performance of the different integrators (Rodrigues versus Boris), we consider energetic particle
+transport in slab turbulence. In this case the magnetic field has the form
+⃗B=δB x (z) ˆx+δBy (z) ˆy+B0ˆz(73)
+whereB 0 is the mean magnetic field pointing in thez-direction. The turbulent magnetic field in slab turbulence
+depends only on the coordinate along the mean field and is perfectly transverse due to the solenoidal constraint. The
+slab model used here as an example is supported by solar wind data indicating that solar wind turbulence consists of
+slab modes and so-called two-dimensional modes (see Matthaeus et al. (1990)).
+In the simulations one needs to create the magnetic field. There are two ways of doing this:
+1. In grid-based methods magnetic field vectors are created everywhere in space based on a superposition of modes.
+In the equation of motion, ones uses interpolation to determine the magnetic field at the particle position. Such
+grid-based methods have been widely used in the past to explore how energetic particles interact with magnetic
+turbulence (see, e.g., Qin et al. (2002a), Qin et al. (2002b), and Pommois et al. (2007)).
+2. One computes the magnetic field only at the position where the particle currently resides. However, in this case
+the magnetic field has to be computed anew at each time step. This method is, for instance, described in detail
+in Tautz (2010).
+Both methods have advantages and disadvantages (see Heusen (2017) for some discussions). In the current article we
+employ the second method which is sometimes calledcontinuous approach(see again Heusen (2017)).
+For the slab model one creates the magnetic field via the formula
+δ ⃗B(z) =
+√
+2δB
+N−1X
+n=0
+A(k n) ˆξn cos (knz+β n).(74)
+Therein we have used the total turbulent magnetic fieldδBas well as the functionA(k n) which is described below.
+Furthermore, we have used the polarization vector ˆξn = (−sinϕ n,cosϕ n,0) where the set of anglesϕ n is created via
+random numbers. Eq. (74) also contains the phasesβ n which are created via random numbers as well. The modesk n
+are obtained via
+kn =k min
+ kmax
+kmin
+n/(N−1)
+withn= 0,1, . . . , N−1 (75)
+corresponding to a logarithmic spacing. The latter formula contains the smallest and largest modesk min andk max,
+respectively. The parameterNdenotes the number of modes used in the simulations.
+In Eq. (74) we have used the functionA(k n) which is defined via
+A2 
+kn
+
+=G
+ 
+kn
+
+∆kn
+ N−1X
+m=0
+G
+ 
+km
+
+∆km
+!−1
+.(76)
+The latter function satisfies
+N−1X
+n=0
+A2 
+kn
+
+= 1 (77)
+corresponding to normalization. For the spectrum of the slab modes we employ the form
+G(k n) =
+ 
+1 +k 2
+n
+−s/2
+.(78)
+This spectrum describes a smooth turnover from the energy range, where the spectrum is assumed to be constant, to
+the inertial range. In the latter part of the spectrum we have∝k −s
+n wheresis the inertial range spectral index. The
+spectrum used here was originally proposed by Bieber et al. (1994). The formulas listed above allow us to create the
+turbulent magnetic field at an arbitrary position in spacez.
+
+10
+To run the simulations we have considered 10 5 particles, 256 wave modes, and two values of the magnetic rigidity,
+namelyR= 0.1 andR= 10. The smallest mode considered isk min = 0.001 and the largest mode isk max = 1000.
+This choice guarantees that our spectrum has proper energy and inertial ranges. For the inertial range spectral index
+we have useds= 5/3 as originally proposed by Kolmogorov (1941). For the total turbulent magnetic field we have
+setδB 2 = 0.20B2
+0 as suggested by Bieber et al. (1994) and Bieber et al. (1996).
+The magnetic field, created as described above, can now be used in the numerical integrators discussed in the previous
+sections. After obtaining the particle position at a given time, we can determine the running diffusion coefficients in
+the two directions of space. Usually a diffusion coefficient is defined as time-derivative of the mean square displacement
+of the orbits. However, this would lead to very noisy data and, thus, we compute
+d∥ (t) = 1
+2t ⟨(∆z)2 andd ⊥ (t) = 1
+2t ⟨(∆x)2 (79)
+instead.
+To determine the accuracy of the two integration schemes, we performed the simulations by considering different
+sizes of the time steps ∆t. Of course, the result is more accurate for smaller values of ∆t. In Figs. 2-6 we have
+shown parallel and perpendicular diffusion coefficients obtained by employing the Rodrigues integrator. Simulations
+in pure slab turbulence have been performed before and the results for the diffusion coefficients are well-known (see
+Qin et al. (2002a)). For parallel transport we find normal diffusion after the initial ballistic regime. Perpendicular
+transport is initially ballistic as well but after overcoming this regime perpendicular transport becomes sub-diffusive
+with⟨(∆x) 2⟩ ∝t 1/2 as described very well by a process calledcompound sub-diffusion(see, e.g., Webb et al. (2006)
+and Shalchi (2019)). The purpose of the plots shown here is to explore the efficiency of the used numerical integration
+scheme. One can clearly see that the result converges quickly for a step size much smaller than one. A Rodrigues
+integrator with ∆t= 0.1 should provide a very accurate result as long as the rigidityRis smaller than one. However,
+for the high-rigidity case, whereR= 10, obtaining an accurate result requires a smaller step size (e.g., ∆t= 0.01).
+Fig. 7 shows the time evolution of the rigidity of individual particles having different initial rigidities, namelyR= 0.1,
+R= 1, andR= 10. As demonstrated, energy is conserved perfectly well as predicted in Sect. 5.
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+0.05
+0.1
+0.15
+0.2
+0.25
+0.3
+Fig. 2.—The parallel diffusion coefficient obtained from the simulations by employing the Rodrigues integrator. We have performed the
+simulations for different values of the step size, namely ∆t= 1 (green line), ∆t= 0.1 (blue line), and ∆t= 0.01 (red line). Here we have
+considered the case of small rigiditiesR= 0.1.
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 50000
+0.5
+1
+1.5
+2
+2.5
+3Diffusion	Coefficient
+#10-3
+Fig. 3.—Caption is as in Fig. 8 but we have considered perpendicular diffusion. Note, all three curves are in coincidence.
+
+11
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+200
+400
+600
+800
+1000
+1200
+1400
+1600
+1800
+2000
+Fig. 4.—The parallel diffusion coefficient obtained from the simulations by employing the Rodrigues integrator. We have performed the
+simulations for different values of the step size, namely ∆t= 1 (green line), ∆t= 0.1 (blue line), ∆t= 0.01 (red line), and ∆t= 0.001
+(black line). Here we have considered the case of large rigiditiesR= 10.
+Time500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+1.4
+1.6
+Fig. 5.—Caption is as in Fig. 10 but we have considered perpendicular diffusion. Note, red and black lines are in coincidence.
+101 102 103
+Time
+10-2
+10-1
+100
+101
+Diffusion	Coefficient
+Fig. 6.—Caption is as in Fig. 5 but results are shown as double-logarithmic plot.
+Figs. 8-12 show parallel and perpendicular diffusion coefficients for the same parameter values, but we have now
+used a Boris integrator. Fig. 13 demonstrates energy conservation for the Boris integration scheme. The conclusions
+we can draw from those plots are similar compared to the one for a Rodrigues integrator. For all considered cases both
+schemes provide similar results, converge to the final result with a similar pace, and conserve energy perfectly well. In
+theory the Rodrigues scheme should be more accurate because the matrix exponential is evaluated by using the exact
+Rodrigues formula instead of the Cayley approximation. The run times of both schemes are also very similar. The
+fact that the Rodrigues formula contains trigonometric functions has no noticeable impact on run times.
+7.SUMMARY AND CONCLUSION
+The current article compares two integration schemes one can use to solve the Newton-Lorentz equation for a particle
+interacting with magnetic turbulence numerically. Both integrators can be derived by rewriting the Newton-Lorentz
+equation as matrix equation (see Eq. (4)) which allows one to express the solution for the new particle velocity by
+a matrix exponential (see Eq. (6)). However, the matrix in the exponential is a time-integrated matrix containing
+
+12
+0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000Time
+10-2
+10-1
+100
+101
+102
+Rigidity
+Fig. 7.—Rigidity conservation for a Rodrigues integrator.
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+0.05
+0.1
+0.15
+0.2
+0.25
+0.3
+Fig. 8.—The parallel diffusion coefficient obtained from the simulations by employing the Boris integrator. We have performed the
+simulations for different values of the step size, namely ∆t= 1 (green line), ∆t= 0.1 (blue line), and ∆t= 0.01 (red line). Here we have
+considered the case of small rigiditiesR= 0.1. Note, red and blue lines are in perfect coincidence.
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 50000
+0.5
+1
+1.5
+2
+2.5
+3Diffusion	Coefficient
+#10-3
+Fig. 9.—Caption is as in Fig. 8 but we have considered perpendicular diffusion. Note, green, red, and blue lines are in perfect coincidence.
+the magnetic field components. This cannot be evaluated exactly for a time-dependent field and one has to rely on
+approximations. First we have employed the frozen field approximation meaning that the magnetic field is assumed
+to be constant while we perform a single time step. This is done by employing midpoint rule (see Eqs. (10) and (37))
+leading to second-order accuracy of the schemes. However, even if the frozen field approximation is used, one still has
+to deal with a matrix exponential. In the current paper we have discussed two options to deal with this problem:
+1. We can employ the Rodrigues formula (23) which is an exact relation. The disadvantage of this approach is
+that this formula contains trigonometric functions which have to be evaluated numerically during each time step.
+This can be numerically expensive in certain scenarios.
+2. We can use the Cayley approximation (39) which is not exact but leads to a formula for the updated velocity
+which does not contain any trigonometric function. The corresponding integration scheme is known as Boris
+integrator. Although it is based on an additional approximation, it conserves energy perfectly well.
+
+13
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+200
+400
+600
+800
+1000
+1200
+1400
+1600
+1800
+2000
+Fig. 10.—The parallel diffusion coefficient obtained from the simulations by employing the Boris integrator. We have performed the
+simulations for different values of the step size, namely ∆t= 1 (green line), ∆t= 0.1 (blue line), ∆t= 0.01 (red line), and ∆t= 0.001
+(black line). Here we have considered the case of large rigiditiesR= 10.
+Time0 500 1000 1500 2000 2500 3000 3500 4000 4500 5000
+Diffusion	Coefficient
+0
+0.2
+0.4
+0.6
+0.8
+1
+1.2
+1.4
+1.6
+1.8
+Fig. 11.—Caption is as in Fig. 10 but we have considered perpendicular diffusion.
+101 102 103
+Time
+10-2
+10-1
+100
+101
+Diffusion	Coefficient
+Fig. 12.—Caption is as in Fig. 11 but results are shown as double-logarithmic plot.
+It is usually thought that the second method is much more efficient because, while the first method is in theory more
+accurate, the Boris scheme is much faster. However, if one explores a particle interacting with a turbulent field which
+is purely magnetic, this statement is no longer true. The reason is that at every step one computes the magnetic
+field via Eq. (74). This evaluation of the magnetic field is computationally much more expensive than computing two
+trigonometric functions. Therefore, in theory, a Rodrigues integrator should be slightly better compared to a Boris
+integrator. For the instance, the former scheme provides an exact result for the phase in the case where the particle
+interacts with a constant magnetic field (see Fig. 1 of the current article).
+Of course one has to keep in mind that this superiority of the Rodrigues scheme emerges if one uses the continues
+approach to create the turbulent magnetic field. In grid-based methods, for instance, the fact that the Rodrigues
+integrator contains trigonometric functions could nullify this advantage. Overall both approaches, the integration
+scheme based on the Rodrigues formula and Boris’ method, are very efficient if one desires to describe energetic
+
+14
+0 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000Time
+10-2
+10-1
+100
+101
+102
+Rigidity
+Fig. 13.—Rigidity conservation for a Boris integrator.
+particles interacting with magnetic turbulence numerically.
+Support by the Natural Sciences and Engineering Research Council (NSERC) of Canada is acknowledged.
+APPENDIX
+THE MOORE-PENROSE INVERSE
+For the Rodrigues approach the updated position can also be obtained by using
+Z ∆t
+0
+dτ e Mτ =M + 
+eM∆t −I
+
++ ∆tP0 (A1)
+where we have used theMoore-Penrose pseudoinverse(see Moore (1920) and Penrose (1955)) which satisfies
+M + =− B2
+0
+Ω2 
+B2x +B 2y +B 2z
+ M≡ − 1
+ω2 M.(A2)
+Note, this pseudoinverse is defined so that
+M M+ =I− ˆB⊗ ˆB.(A3)
+Furthermore, we have
+M M+ =M +M=− 1
+ω2 M 2 (A4)
+which follows directly from Eq. (A2). By combining Eqs. (16) and (A2) we can easily derive
+M +M 2 =− 1
+ω2 M 3 =M.(A5)
+To determine the matrixP 0 in Eq. (A1), we consider the derivative
+d
+d∆t
+
+M + 
+eM∆t −I
+
++ ∆tP0
+
+=M +Me M∆t +P 0.(A6)
+Therein we can use Eq. (A4) and the Rodrigues formula (23) to get
+d
+d∆t
+
+M + 
+eM∆t −I
+
++ ∆tP0
+
+=− 1
+ω2 M 2
+
+I+ sin (ω∆t)
+ω M+ 1−cos (ω∆t)
+ω2 M 2
+
++P 0.(A7)
+Employing Eq. (16) yields
+d
+d∆t
+
+M + 
+eM∆t −I
+
++ ∆tP0
+
+=− 1
+ω2 M 2 + sin (ω∆t)
+ω M+ 1−cos (ω∆t)
+ω2 M 2 +P 0.(A8)
+Using the Rodrigues formula once more allows us to write
+d
+d∆t
+
+M + 
+eM∆t −I
+
++ ∆tP0
+
+=e M∆t −I− 1
+ω2 M 2 +P 0.(A9)
+Because this has to be equal to the exponential, we can read off
+P 0 =I+ 1
+ω2 M 2.(A10)
+
+15
+The matrixP 0 is called theprojector onto the null spaceofM(see again Penrose (1955)). We can finally write
+Z ∆t
+0
+dτ e Mτ =M + 
+eM∆t −I
+
++ ∆t
+
+I+ 1
+ω2 M 2
+
+.(A11)
+This formula allows one to compute a time-integral over an exponential containing the product of time and a constant
+matrixM.
+ALTERNATIVE DERIV ATION OF THE BORIS VELOCITY UPDATE
+According to Eq. (42) we have
+⃗ v(t+ ∆t)≈
+
+I− 1
+2∆tM
+−1
+I+ 1
+2∆tM
+
+⃗ v(t).(B1)
+The complication therein is that one needs to know the inverse matrix ofI−M∆t/2 whereMis given by Eq. (5).
+First, we need to determine the determinant of this matrix which is found to be
+det
+
+I− 1
+2∆tM
+
+= 1 +ω 2∆t2/4 (B2)
+whereωis given by Eq. (12).
+To determine the inverse, we also need to compute the correspondingadjunct matrix. However, the result should be
+some function of the matrixM. Due to Eq. (16) we can make theansatz
+
+I− 1
+2∆tM
+−1
+= 1
+1 +ω 2∆t2/4
+
+αI+βM+γM 2
+.(B3)
+To determine the three coefficientsα,β, andγtherein, we use Eq. (B3) in
+
+I− ∆t
+2 M
+
+I− ∆t
+2 M
+−1
+=I.(B4)
+After some straightforward algebra we getα= 1 +ω 2∆t2/4,β= ∆t/2, andγ= ∆t 2/4. Therewith, we find for the
+inverse 
+I− ∆t
+2 M
+−1
+=I+ 1
+1 +ω 2∆t2/4
+∆t
+2 M+ 1
+1 +ω 2∆t2/4
+∆t2
+4 M 2.(B5)
+With the derived relation we can now determine the needed matrix product
+
+I− ∆t
+2 M
+−1
+I+ ∆t
+2 M
+
+=
+
+I+ 1
+1 +ω 2∆t2/4
+∆t
+2 M+ 1
+1 +ω 2∆t2/4
+∆t2
+4 M 2
+
+I+ ∆t
+2 M
+
+.(B6)
+Again we can employ the first line of Eq. (16) to work this out. We derive
+
+I− ∆t
+2 M
+−1
+I+ ∆t
+2 M
+
+=I+ ∆t
+1 +ω 2∆t2/4 M+ ∆t2/2
+1 +ω 2∆t2/4 M 2.(B7)
+Therewith the updated velocity can be written as
+⃗ v(t+ ∆t) =⃗ v(t) + ∆t
+1 +ω 2∆t2/4 M
+
+I+ ∆t
+2 M
+
+⃗ v(t).(B8)
+Comparing this with Eq. (44) allows us to write
+⃗ v(t+ ∆t) =⃗ v(t) + ∆t
+1 +ω 2∆t2/4 M⃗ v′.(B9)
+When the matrixMacts on a vector, it generates a cross product and a factor Ω. Therefore, we find
+⃗ v(t+ ∆t) =⃗ v(t) + Ω∆t
+1 +ω 2∆t2/4⃗ v′ × ⃗B(B10)
+in perfect agreement with Eq. (57).
+REFERENCES
+Bieber, J.W., Matthaeus, W.H., Smith, C.W., Wanner, W.,
+Kallenrode, M.-B., Wibberenz, G.: Astrophys. J.420, 294
+(1994)
+Bieber, J.W., Wanner, W., Matthaeus, W.H.: J. Geophys. Res.
+101, 2511 (1996)
+
+16
+Boris, J.: Relativistic plasma simulation-optimization of a hybrid
+code, Proceedings of the Fourth Conference on Numerical
+Simulation of Plasmas. Naval Research Laboratory,
+Washington, D.C., 3-67 (1970)
+Burden, R.L., Faires, J.D.: Numerical Analysis, 9th ed.,
+Brooks/Cole, Cengage Learning, Boston (2011)
+Cayley, A.: Journal f¨ ur die reine und angewandte Mathematik32
+119 (1846)
+Dosch, A., Shalchi A.: Adv. Space Res.461208 (2010)
+Effenberger, F., Walter, D., Fichtner, H., et al.: Space Sci. Rev.
+221, 75 (2025)
+Els, P., Engelbrecht, N.E.: Astrophys. J.969, 1 (2024)
+Engelbrecht, E.N., Wolmarans, C.P.: Adv. Space Res.66, 2722
+(2020)
+Engelbrecht, E.N., Moloto, K.D.: Astrophys. J.908, 167 (2021)
+Ferrand, G., Danos, R., Shalchi, A., Safi-Harb, S., Mendygral, P.:
+Astrophys. J.792, 133 (2014)
+Hairer, E., Lubich, C., Wanner, G.: Geometric numerical
+integration: Structure-preserving algorithms for ordinary
+differential equations (2nd ed.), Springer (2006)
+Heusen, M., Shalchi, A.: Astrophys. Space Sci.361, 308 (2016)
+Heusen, M.H.: Analytical and numerical investigation of energetic
+particles interacting with turbulent magnetic fields, PhD
+Thesis, University of Manitoba (2017)
+Hu, J., Li, G., Ao, X., Zank, G.P., Verkhoglyadova, O.: J.
+Geophys. Res.122, 938 (2017)
+Hussein, M., Tautz, R.C., Shalchi, A.: J. Geophys. Res.120, 4095
+(2015)
+Hussein, M., Shalchi, A.: Astrophys. J.817, 136 (2016)
+Ivascenko, A., Lange, S., Spanier, F., Vainio, R.: Astrophys. J.
+833, 223 (2016)
+Kolmogorov, A.N.: Dokl. Akad. Nauk. SSSR30, 301 (1941)
+Li, G., Zank, G.P., Rice, W.K.M.: J. Geophys. Res.108, 1082
+(2003)
+Li, G., Zank, G.P., Rice, W.K.M.: J. Geophys. Res.110, A06104
+(2005)
+Li, G., Shalchi, A., Ao, X., Zank, G.P., Verkhoglyadova, O.P.:
+Adv. Space Res.49, 1067 (2012)
+Marsden, J.E., Ratiu, T.S.: Introduction to Mechanics and
+Symmetry. A Basic Exposition of Classical Mechanical
+Systems, Second edition, Texts in Applied Mathematics 17,
+Springer-Verlag, New York, (1999)
+Matthaeus, W.H., Goldstein, M.L., Aaron, R.D.: J. Geophys. Res.
+95, 20673 (1990)
+Matthaeus, W.H., Qin, G., Bieber, J.W., Zank, G.P.: Astrophys.
+J.590, L53 (2003)
+Moloto, K.D., Engelbrecht, N.E.: Astrophys. J.894, 121 (2020)
+Moore, E.H.: Bulletin of the American Mathematical Society26,
+394 (1920)
+Neumann, C.: Untersuchungen ¨ uber das logarithmische und
+Newton’sche Potential, Teubner, Leipzig (1877)
+Ngobeni, M.D., Potgieter, M.S., Aslam, O.P.M., Bisschoff, D.,
+Ramokgaba, I.I., Ndiitwani, D.C.: Adv. Space Res.69, 2330
+(2022)
+Pad´ e, H.: Sur la r´ epresentation approch´ ee d’une fonction par des
+fractions rationelles (Thesis), Ann. ´Ecole Nor. 3, 3-93 (1892)
+Penrose, R.: A generalized inverse for matrices, Proceedings of
+the Cambridge Philosophical Society, 51, 406 (1955)
+Perri, S., Zimbardo, G.: Astrophys. J.671, L177 (2007)
+Perri, S., Zimbardo, G.: Astrophys. J.693, L118 (2009a)
+Perri, S., Zimbardo G.: Adv. Space Res.44, 465 (2009b)
+Pommois, P., Zimbardo, G., Veltri, P.: Phys. Plasma14, 012311
+(2007)
+Qin, G., Matthaeus, W.H., Bieber, J.W.: Geophys. Res. Lett.29,
+1048 (2002a)
+Qin, G., Matthaeus, W.H., Bieber, J.W.: Astrophys. J.578, L117
+(2002b)
+Qin, G., Matthaeus, W.H., Bieber, J.W.: Astrophys. J.640, L103
+(2006)
+Qin, G., Kong, F.-J., Zhang, L.-H.: Astrophys. J.860, 3 (2018)
+Qin, H., Zhang, S., Xiao, J., Liu, J., Sun, Y., Tang, W.M.: Phys.
+Plasmas20, 084503 (2013)
+Reichherzer, P., Becker Tjus, J., Zweibel, E. G., et al.: Mon. Not.
+R. Astron. Soc.514, 2658 (2022)
+Ripperda, B., Bacchini, F., Teunissen, J., Xia, C., Porth, O.,
+Sironi, L., Lapenta, G., Keppens, R.: Astrophys. J.235, 21
+(2018)
+Rodrigues, O.: Journal de Math´ ematiques Pures et Appliqu´ ees5,
+380 (1840)
+Shen, Z.-N., Qin, G.: Astrophys. J.854, 137 (2018)
+Shen, Z., Qin, G., Zuo, P., Wei, F., Xu, X.: Astrophys. J.256, 18
+(2021)
+Shalchi, A.: Nonlinear Cosmic Ray Diffusion Theories,
+Astrophysics and Space Science Library, vol. 362, Springer,
+Berlin (2009)
+Shalchi, A.: Astrophys. J.720, L127 (2010)
+Shalchi, A.: Astrophys. J.881, L27 (2019)
+Shalchi, A.: Space Sci. Rev.216, 23 (2020)
+Shalchi, A.: Astrophys. J.923, 209 (2021)
+Snodin, A.P., Jitsuk, T., Ruffolo, D., Matthaeus, W.H.:
+Astrophys. J.932, 127 (2022)
+Tautz, R.C.: Comput. Phys. Commun.181, 71 (2010)
+Tautz, R.C., Lerche, I., Kruse, F.: Astron. Astrophys.555, A101
+(2013)
+Vay, J.-L.: Phys. Plasmas15, 056701 (2008)
+Webb, G.M., Zank, G.P., Kaghashvili, E.Kh., le Roux, J.A.:
+Astrophys. J.651, 211 (2006)
+Yoshida, H.: Phys. Lett. A150, 262 (1990)
+Zank, G.P., Rice, W.K.M., Wu, C.C.: J. Geophys. Res.105,
+25079 (2000)
+Zank, G.P., Li, G., Florinski, V., Hu, Q., Lario, D., Smith, C.W.:
+J. Geophys. Res.111, A06108 (2006)
+Zank G.P., Nakanotani M., Webb, G.M.: Astrophys. J.88, L116
+(2019)
+Zimbardo, G., Pommois, P., Veltri, P.: Astrophys. J.639, L91
+(2006)
+Zimbardo, G., Perri, S., Pommois, P., Veltri, P.: Adv. Space Res.
+49, 1633 (2012)
+This paper was built using the Open Journal of Astrophysics LATEX template. The OJA is a journal which provides
+fast and easy peer review for new papers in theastro-phsection of the arXiv, making the reviewing process simpler
+for authors and referees alike. Learn more at http://astro.theoj.org.

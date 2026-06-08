@@ -1,0 +1,2032 @@
+Title: Systematic Comparison between Constrained Transport and Mixed Divergence Cleaning Methods for Astrophysical Magnetohydrodynamic Simulations
+Authors: Kengo Tomida, Kenji Eric Sadanari, Shinsuke Takasao, Kazunari Iwasaki
+Published: 2026-05-08
+Categories: astro-ph.IM, astro-ph.GA, astro-ph.SR, physics.comp-ph
+
+Draft version May 11, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX7.0.1
+Systematic Comparison between Constrained T ransport and Mixed Divergence Cleaning Methods for
+Astrophysical Magnetohydrodynamic Simulations
+Kengo Tomida
+ ,1 Kenji Eric Sadanari
+ ,2 Shinsuke Takasao
+ ,3 and Kazunari Iwasaki
+ 4
+1Astronomical Institute, Tohoku University, Sendai, Miyagi 980-8578, Japan
+2 ´Ecole Normale Sup´ erieure de Lyon, Centre de Recherche Astrophysique de Lyon, UMR5574, 69007 Lyon, France
+3Humanities and Sciences/Museum Careers, Musashino Art University, Kodaira, Tokyo 187-8505, Japan
+4Center for Computational Astrophysics, National Astronomical Observatory of Japan, Mitaka, Tokyo 181-8588, Japan
+ABSTRACT
+Magnetohydrodynamic (MHD) simulations are indispensable research infrastructure in astrophysics
+today. In order to satisfy the solenoidal constraint of the MHD equations on discretized grids, modern
+simulation codes often employ either constrained transport (CT) with a staggered grid or divergence
+cleaning using an additional variable. We compare CT and Dedner’s mixed divergence cleaning schemes
+systematically, and find that the divergence cleaning scheme can produce substantial artifacts in certain
+situations. Through numerical experiments including both idealized tests and practical applications,
+we show that the original implementation of Dedner’s scheme becomes inaccurate when magnetic fields
+are strongly localized or when the timestep suddenly changes. We find that some previous results, such
+as the extremely rapid growth of magnetic fields during star formation in the early Universe, may be
+affected by the spurious behavior of the divergence cleaning scheme. We propose a few modifications to
+improve the robustness of the divergence cleaning method. Nevertheless, we find that the CT scheme
+is more accurate and reliable in many situations.
+Keywords:Astrophysical fluid dynamics (101) — Computational astronomy (293) — Magnetic fields
+(994) — Magnetohydrodynamics (1964) — Magnetohydrodynamical simulations (1966)
+1.INTRODUCTION
+Magnetohydrodynamic (MHD) simulations are used
+to study various astrophysical applications such as black
+hole accretion disks, galactic interstellar media, star for-
+mation, protoplanetary disks, and so on. A variety
+of MHD simulation codes are now publicly available,
+including grid-based codes such as Athena++ (J. M.
+Stone et al. 2020), AstroBEAR (A. J. Cunningham
+et al. 2009), CANS+ (Y. Matsumoto et al. 2019), Enzo
+(G. L. Bryan et al. 2014), FLASH (B. Fryxell et al.
+2000), MPI-AMRVAC (R. Keppens et al. 2023), PLUTO
+(A. Mignone et al. 2012) and RAMSES (S. Fromang
+et al. 2006), and particle-based (including smoothed-
+particle hydrodynamics (SPH), moving-mesh and mesh-
+less methods) codes such as AREPO (R. Pakmor et al.
+2011; P. Mocz et al. 2016), Gadget (U. P. Steinwandel
+& D. J. Price 2025), GIZMO (P. F. Hopkins & M. J.
+Raives 2016) and Phantom (D. J. Price et al. 2018) (see
+also K. Iwasaki & S.-I. Inutsuka 2013).
+Email: tomida@astr.tohoku.ac.jp
+In the MHD equations, the solenoidal constraint (∇ ·
+B= 0) is automatically satisfied if the initial condition
+satisfies it. However, it is not trivially satisfied in the
+discretized MHD equations, and it can produce numeri-
+cal artifacts and even cause simulations to crash if∇ ·B
+becomes unphysically large. For stable MHD simula-
+tions, some techniques are necessary to maintain∇ ·B
+sufficiently small and suppress artificial forces associated
+with∇ ·B. There are roughly three kinds of such tech-
+niques: projection, divergence cleaning, and constrained
+transport (CT).
+In the projection method (J. U. Brackbill & D. C.
+Barnes (1980), see also D. S. Balsara & J. Kim (2004)),
+we use the “potential”ϕto cancel out the divergence
+as:
+∇2ϕ=∇ ·B,(1)
+B′ =B− ∇ϕ.(2)
+This requires solving the Poisson equation. While it can
+be solved using established methods such as Fast Fourier
+Transform (on uniform grids) (D. S. Balsara & J. Kim
+2004) and Multigrid (suitable for mesh refinement) (J.
+arXiv:2605.07928v1  [astro-ph.IM]  8 May 2026
+
+2
+Teunissen & R. Keppens 2019), it is computationally ex-
+pensive because it requires a global solution. Therefore,
+this method is not commonly supported by public MHD
+codes.
+Most modern MHD simulation codes support either
+the divergence cleaning or CT scheme. The diver-
+gence cleaning methods are popular because they are
+easy to implement, compatible with higher-order meth-
+ods and mesh refinement, computationally efficient, and
+(sometimes excessively) robust. There are a few differ-
+ent methods in this category including Powell’s 8-wave
+method (K. G. Powell 1994; K. G. Powell et al. 1999,
+see Appendix A), and among them, the mixed-cleaning
+using the generalized Lagrange multiplier (GLM) pro-
+posed by A. Dedner et al. (2002) is arguably the most
+popular. In this scheme, the additional variableψas-
+sociated with∇ ·Bis introduced, and the divergence
+error is transported while being damped. This method
+is adopted by many public simulation codes, and is the
+primary choice for particle-based codes because the CT
+scheme is not trivial for irregular particle distributions
+(but see e.g. P. Mocz et al. 2016).
+The CT scheme (C. R. Evans & J. F. Hawley 1988), on
+the other hand, utilizes staggered grids and defines the
+magnetic fields on the surfaces of each cell. The mag-
+netic fields are updated with the electromotive forces
+(EMFs) calculated on the cell edges using the Stokes’
+theorem. While this scheme is often less diffusive and
+more accurate compared to the divergence cleaning, it
+tends to be more expensive than the divergence clean-
+ing as it requires additional calculations for the mag-
+netic fields. The staggered grid is more complicated to
+implement, and its implementation with mesh refine-
+ment requires considerable care. Moreover, it can be
+less robust in the low plasma-beta (strong magnetiza-
+tion) limit, because the scheme cannot guarantee the gas
+pressure to be positive because the magnetic fields and
+the gas energy reside at different positions. Usually the
+cell-centered fields are calculated by averaging the face-
+centered fields with some weights, while divergence-free
+reconstruction (D. S. Balsara 2004) can improve the sta-
+bility. It is also known to be unstable particularly when
+numerical reconnection occurs in a strongly magnetized
+region (J. F. Hawley & J. M. Stone 1995). Moreover,
+because it is not a scheme to enforce∇ ·B= 0 but to
+conserve∇ ·B, the magnetic fields must be carefully
+initialized. To satisfy∇ ·B= 0 in the initial condition,
+one must initialize the fields using circular integration
+of the vector potential on cell edges. This makes it diffi-
+cult to start simulations with non-trivial magnetic field
+configurations with the CT scheme. Nevertheless, this
+scheme has a fundamental advantage; it is the natural
+discretization of the integral form of the induction equa-
+tion, and it can conserve∇ ·Bto machine precision.
+Both schemes have been extensively tested and
+demonstrated to work well in simple idealized test prob-
+lems (G. T´ oth 2000; D. S. Balsara & J. Kim 2004;
+Vides, J. et al. 2013; M. Zhang & X. Feng 2016) as
+well as some practical astrophysical applications such
+as star formation, interstellar media, solar atmosphere,
+accretion disks, and so on. In general, the divergence
+cleaning tends to be more diffusive compared to the CT
+scheme (e.g. Vides, J. et al. 2013), but both schemes
+yield reasonably consistent results. However, it is not
+clear whether the divergence cleaning schemes remain
+accurate in numerically difficult situations. For exam-
+ple, S. Hirano & M. N. Machida (2022) (see also M. N.
+Machida et al. 2025) reported that magnetic fields are
+exponentially amplified from tiny seed fields by orders of
+magnitude within a few orbital time scales in the con-
+text of primordial star formation. In contrast, K. E.
+Sadanari et al. (2021, 2023, 2024) did not find such a
+rapid amplification of magnetic fields in a similar con-
+text, although the details of the simulation setups are
+different. The fact that all of these works used the mixed
+divergence cleaning scheme motivates us to investigate
+the behavior of the divergence cleaning in challenging
+situations in comparison with the CT scheme.
+In this paper, we compare the mixed divergence clean-
+ing and CT schemes systematically. For this purpose, we
+implement the mixed divergence cleaning scheme on the
+Athena++ code in addition to the existing CT solver.
+This enables a fair and consistent comparison between
+the two schemes. Using the code, we identify certain
+situations where the divergence cleaning scheme gives
+inaccurate solutions, and also propose some improve-
+ments to it. The rest of the paper is organized as follows.
+We review the divergence cleaning and CT schemes in
+Section 2. We also point out possible issues with the
+original implementation of the mixed divergence clean-
+ing and propose a few improvements. In Section 3, we
+present the results of the comparison to demonstrate
+certain situations where the divergence cleaning method
+fails. Section 4 is devoted to discussions, and Section 5
+summarizes our findings.
+
+3
+2.METHODS
+2.1.Basic Equations
+Throughout this paper, we use the ideal MHD equa-
+tions with the magnetic permeabilityµ= 1.
+∂ρ
+∂t +∇·(ρv) = 0,(3)
+∂ρv
+∂t +∇·(ρvv−BB+P ∗I) = 0,(4)
+∂B
+∂t − ∇ ×(v×B) = 0,(5)
+∇ ·B= 0,(6)
+∂E
+∂t +∇ ·
+
+(E+P ∗)v−B(B·v)
+
+= 0,(7)
+whereP ∗ =p+ B2
+2 is the total pressure withpbeing the
+gas pressure,E=e+ 1
+2 ρv2 + B2
+2 is the total energy den-
+sity withebeing the gas thermal energy, andIis the unit
+tensor. We use the ideal equation of statep= (γ−1)e
+with the constant adiabatic indexγ, or the barotropic
+(including isothermal) equation of state instead of the
+energy equation (7) depending on the problem.
+All the simulations are performed using the
+Athena++ code (J. M. Stone et al. 2020). Here we re-
+strict our discussion to Cartesian coordinates for sim-
+plicity.
+2.2.Constrained Transport
+We briefly introduce the concept of the CT scheme
+here. While there are a few variants of the CT schemes,
+we use the method of J. M. Stone & T. Gardiner (2009)
+implemented in Athena++ in this work. In this scheme,
+the magnetic fieldsBare defined at cell surfaces as area-
+averaged quantities, and the other physical variables
+such asρ,v, Eare defined at cell centers as volume-
+averaged quantities. The EMFs are calculated on cell
+edges using an appropriate combination of the EMFs at
+cell centers and fluxes estimated at cell surfaces from the
+Riemann solver. The magnetic fields at cell surfaces are
+updated by circular integration of the EMFs. Because
+the EMFs on each edge cancel out in this procedure,
+∇ ·Bof each cell is conserved. To calculate the ther-
+mal energy and gas pressure from the total energy, the
+magnetic fields at cell centers are necessary. They are
+calculated by a simple average of the surface fields.
+2.3.Mixed Divergence Cleaning
+2.3.1.Formulation
+Here we review the mixed divergence cleaning method
+of A. Dedner et al. (2002). A. Dedner et al. (2002)
+propose a few alternative formulae (Equations 24 and 38
+in their paper). We focus on the basic GLM formula in
+the main part of this work because it is most commonly
+used in the public codes. We compare the GLM and
+Extended GLM (EGLM) formulae in Appendix B.
+Because it is important for understanding the behav-
+ior of the scheme, let us start from the foundation of
+the scheme. In this scheme, we introduce a new vari-
+ableψassociated with∇ ·B, and modify the induction
+equation (5) and solenoidal constraint (6) like:
+∂B
+∂t − ∇ ×(v×B) +∇ψ= 0,(8)
+D(ψ) +∇ ·B= 0,(9)
+whereDis a linear differential operator. From these
+equations, one can show thatψand∇ ·Bsatisfy the
+same equation regardless of the choice ofD:
+∂∇ ·B
+∂t +∇ 2ψ= 0,
+∂D(∇ ·B)
+∂t +∇ 2D(ψ) = 0,
+∂D(ψ)
+∂t + ∂(∇ ·B)
+∂t = 0,
+∇2D(ψ) +∇ 2(∇ ·B) = 0,
+∂D(∇ ·B)
+∂t − ∇2(∇ ·B) = 0,
+∂D(ψ)
+∂t − ∇2ψ= 0.
+Therefore,ψcan be used to cancel out∇·B. However, it
+is important to clarify the underlying assumptions here.
+First, the variables must be sufficiently smooth (differ-
+entiable). Second, the linear operatorDmust commute
+with the temporal and spatial derivative operators. As
+we will see later, the second assumption is not satisfied
+in the conventional implementation.
+In the mixed divergence cleaning scheme, we adopt
+D(ψ) = 1
+c2
+h
+∂
+∂t ψ+ 1
+c2p
+ψ.(10)
+Then,ψfollows the telegraph equation, which is a mix-
+ture of the advection and diffusion equations:
+∂2ψ
+∂t2 + c2
+h
+c2p
+∂ψ
+∂t −c 2
+h∇2ψ= 0,(11)
+and the solenoidal constraint (6) becomes:
+∂ψ
+∂t +c 2
+h∇ ·B=− c2
+h
+c2p
+ψ.(12)
+These equations mean thatψ(hence the divergence er-
+ror) is advected and diffuses out isotropically, wherec h
+is the transport speed andc 2
+p is the diffusion coefficient.
+Alternatively,c 2
+h/c2
+p can be interpreted as the damping
+rate at whichψdeclines. Then, the∇ψterm in eq.(8)
+is supposed to cancel out the divergence error in the
+magnetic fields.
+
+4
+2.3.2.The Conventional Implementation
+In this scheme, all the variables including the magnetic
+fields are defined as cell-centered variables. In many
+modern MHD codes, the system is solved using approxi-
+mate Riemann solvers. We solve the hyperbolic part and
+source term on the right-hand side in eq.(12) separately
+using the operator splitting technique. The subsystem
+of the normal component of the magnetic field (e.g.B x)
+andψare decoupled from the other MHD equations,
+and can be solved using the numerical flux presented in
+A. Dedner et al. (2002). In thex-direction, for example,
+Bx andψat the interface between thei-th andi+ 1-th
+cells are calculated as
+Bx,i+1/2,j,k = 1
+2 (Bx,l +B x,r)− 1
+2ch
+(ψr −ψ l),(13)
+ψi+1/2,j,k = 1
+2 (ψl +ψ r)− ch
+2 (Bx,r −B x,l),(14)
+where the values with subscriptlandrare the values on
+the left and right sides of the interface calculated by a
+reconstruction method. Then the cell-centered variables
+are updated using the fluxes calculated as follows.
+FBx,i+1/2,j,k =ψ i+1/2,j,k,(15)
+Fψ,i+1/2,j,k =c 2
+hBx,i+1/2,j,k.(16)
+The source term,
+∂ψ
+∂t =− c2
+h
+c2p
+ψ,(17)
+is solved separately using the operator-splitting tech-
+nique, which allows us to solve it exactly if c2
+h
+c2p
+remains
+constant:
+ψn+1 = exp
+
+− c2
+h
+c2p
+∆t
+
+ψ∗,(18)
+where ∆tn is the timestep at then-th step andψ ∗ is the
+intermediate value after applying the hyperbolic part.
+2.3.3.Transport Speed and Diffusion Coefficient
+The scheme contains two arbitrary parameters: the
+transport speedc h and the diffusion coefficientc2
+p. These
+parameters must be chosen carefully so that the scheme
+remains stable, accurate, and computationally efficient.
+In the conventional implementation, we use the largest
+possiblec h which does not introduce any additional
+timestep constraint:
+ch = ηCFLhmin
+∆tn
+(19)
+whereη CFL is the Courant-Friedrichs-Levy (CFL) num-
+ber in use for the MHD part to control the timestep,
+andh min is the minimum cell spacing among all the
+cells and directions. If the timestep ∆t n is deter-
+mined by the fastest signal speed in the systemc max,
+or ∆tn = ηCFLhmin
+cmax
+, it simply meansc h =c max.
+The choice ofc p is more arbitrary. A. Dedner et al.
+(2002) suggest using the ratio between the hyperbolic
+and parabolic coefficients as the parameter5:c r ≡c 2
+p/ch.
+They claim that the scheme’s behavior is not very sensi-
+tive to it (Figure 2 of A. Dedner et al. (2002)), and they
+recommendc r = 0.18.
+There are a few issues in their formulation. First,
+cr is not dimensionless, and therefore depends on units
+(D. J. Price & J. J. Monaghan 2005). In order to clarify
+its meaning, we should redefine it as the ratio between
+the advection and diffusion timescales at the scale ofL:
+Cr ≡ tadv
+tdiff
+= L/ch
+L2/c2p
+= c2
+p
+chL ,(20)
+whereC r is dimensionless. Using this, the source term
+(17) can be rewritten as:
+∂ψ
+∂t =− ch
+CrL ψ=− 1
+Crtadv
+ψ.
+The original formula corresponds to settingL= 1,
+but the choice of the scale is arbitrary 6. Some simu-
+lation codes such as PLUTO (A. Mignone et al. 2012;
+A. Mignone & P. Tzeferacos 2010) for example adopt
+L=h min. With adaptive mesh refinement (AMR), the
+diffusion (or damping) timescale may change in such an
+implementation. As it is not clear how the choice of this
+parameter affects solutions, we compare them in Sec-
+tion 3. It should be noted thatτ d ≡C rtadv is the damp-
+ing timescale, andC r is the ratio between the damping
+timescale and crossing timescalet adv7. In other words,
+during the damping timescale, the divergence cleaning
+variableψpropagates over the distance ofC rL, indicat-
+ing that the divergence error is processed more locally
+with smallerL.
+5 As an alternative, they also suggest to fix the damping factor
+in eq.(18) :c d ≡exp
+
+− c2
+h
+c2p
+∆t
+
+.
+6 ChangingLis essentially equivalent to changingC r. However,
+because almost all the implementations useC r = 0.18 as sug-
+gested in the original paper, we fix it and changeLinstead in
+this work.
+7 It should be also noted that the ratio between the damping time
+and the timestep is independent of ∆t n; τd
+∆tn
+= Cr
+ηCFL
+L
+hmin
+.
+Therefore, while the damping time is well resolved ifL≫h min,
+it is poorly resolved ifL∼h min. In the latter case, an im-
+plicit or exact time integrator like eq.(18) is necessary. We also
+tested the first-order backward Euler integrator, but the re-
+sults remain qualitatively similar although the backward Euler
+integrator gives weaker (slower) damping.
+
+5
+Second, eq.(19) means that the transport speed is uni-
+form in space but not constant in time 8 because it de-
+pends on the timestep ∆t n. Because the timestep is
+usually set from the MHD part (and other additional
+physical processes if necessary), this means that it vio-
+lates the second assumption discussed in Section 2.3.1;
+the differential operatorDdoes not commute with the
+time derivative9. As demonstrated later, this causes an
+unphysical behavior when the timestep changes drasti-
+cally.
+In order to mitigate the issue, a fixed value ofc h
+should be used instead of changing it depending on the
+timestep (R. Pakmor et al. 2011). In order for the
+scheme to be stable,c h must be carefully selected so
+that it is larger than a certain characteristic speed in the
+system. Then, the timestep must be adjusted to satisfy
+the CFL condition due to this transport speed. While
+this implementation can suppress the unphysical behav-
+ior caused by a sudden change in the timestep, there
+are, however, several practical difficulties with this im-
+plementation. It is not trivial to estimate the maximum
+speed before actually running a simulation. Moreover,
+the additional computational cost due to the smaller
+timestep can be enormous, particularly when the fluid
+and Alfv´ en speed changes drastically during a simula-
+tion. Star formation in a collapsing cloud and galactic
+dynamo are notable examples of such a system where
+the magnetic fields are amplified by gravitational col-
+lapse and differential rotation.
+3.TEST CALCULATIONS
+We compare the CT scheme and divergence cleaning
+scheme through a few test problems in this section. We
+label our models as in Table 1. We adopt the same
+simulation configurations for everything else; we adopt
+the second-order van-Leer time integrator, second-order
+piecewise linear method (PLM) using primitive vari-
+ables for spatial reconstruction, and the Harten-Lax-
+8 While most codes adopt the spatially-uniform transport speed,
+T. S. Tricco et al. (2016) and P. F. Hopkins & M. J. Raives
+(2016) use the fastest local characteristic speed asc h which can
+be spatially non-uniform. Also, grid based codes with mesh
+refinement and individual timestepping may use spatially non-
+uniformc h if it is calculated according to the local timestep.
+In such implementations, the differential operatorDdoes not
+commute with the spatial derivative, which may produce arti-
+ficial structures wherec h changes sharply.
+9 It should be noted that changingc p during a simulation is
+also inconsistent with the derivation. For example, use of the
+constant damping factorc d and/orL=h min with adaptive
+mesh refinement can violate the assumption. However, it seems
+less problematic than changingc h, possibly becausec p appears
+only in the damping term and does not directly affect the fluxes
+nor energies.
+T able 1.
+Model SolverL c h
+CT Constrained Transport — —
+D1v Mixed∇ ·BCleaningL=hvariable (19)
+Dhv Mixed∇ ·BCleaningL=hvariable (19)
+D1c Mixed∇ ·BCleaningL= 1 constant
+Dhc Mixed∇ ·BCleaningL=hconstant
+Note—The third column indicates the scaleLused in
+eq.(20), withhbeing the finest resolution. The fourth
+column is the transport speedc h, and the adopted con-
+stant values are specified in each test problem.
+van Leer Discontinuities (HLLD) approximate Riemann
+solver (T. Miyoshi & K. Kusano 2005).
+First, we compare the schemes using a series of Kelvin-
+Helmholtz instability (KHI) simulations in two dimen-
+sions. These test calculations are intended to clarify how
+the schemes behave in simple setups and provide guid-
+ance for the choice of the parameters in the divergence
+cleaning method. Then we present comparisons based
+on more practical applications of collapsing clouds and
+atmospheric convection.
+3.1.KHI with a Uniform Magnetic Field
+We first perform a KHI test with a uniform mag-
+netic field in two dimensions. The computational do-
+main spans [-0.5:0.5]×[-1.0:1.0]. To investigate the
+convergence behaviors, we run the simulations with
+∆x= ∆y=h= 1/128 and 1/256. We initialize
+the problem with a uniform densityρ= 1, pressure
+p= 10 and magnetic fieldB= (0.01,0,0), and the adi-
+abatic indexγ= 5/3. The corresponding plasma beta
+isβ= 2×10 5, meaning that the initial magnetic fields
+are weak and dynamically unimportant. For the models
+with divergence cleaning, we also setψ= 0 uniformly.
+The velocity is initialized as
+vx =v 0 tanh
+ y
+a
+
+,
+vy =Asin (2πx) exp
+
+− y2
+σ2
+
+,
+vz = 0,
+wherev 0 = 1.0 is the shearing velocity,a= 0.05 the
+thickness of the layer,A= 0.01 the amplitude of the
+initial perturbation, andσ= 0.2 the thickness of the
+perturbation, respectively. We use the CFL number
+ηCFL = 0.4 in this test. This subsonic shearing layer
+is well resolved, and there is a single mode in thex-
+direction. The boundary conditions are periodic in
+
+6
+Figure 1.Distributions of the magnetic field strength with magnetic field directions (orange color maps with cyan arrows)
+and the divergence cleaning variable (shown in the lower halves of panels (b), (c), (e) and (f)) in the KHI test with uniform
+magnetic fields att= 3. Panels (a) and (d) correspond to CT, (b) and (e) to D1v, and (c) and (f) to Dhv. The top and bottom
+rows show the low- (h= 1/128) and high-resolution (h= 1/256) models, respectively.
+
+7
+Figure 2.Profiles of the magnetic field strength atx= 0 in the KHI test with uniform magnetic fields att= 3. The top,
+middle, and bottom rows show CT, D1v and Dhv models, and the left and right columns show the low- and high-resolution
+models, respectively. The labels (a) – (f) correspond to those in Figure 1.
+thex-direction and zero gradient (outflow) in they-
+direction. The magnetic fields are initially weak and
+evolve passively, but are amplified by the vortex motion
+as the instability develops. We compare the results at
+t= 3.0 in order to focus on well-resolved solutions. Be-
+yond this point, significant resolution dependence arises
+because of numerical reconnections and nonlinear be-
+haviors of the system.
+3.1.1.CT vs Conventional Divergence Cleaning
+We present the results in Figures 1 and 2. We first
+compare CT and the conventional implementation of the
+divergence cleaning with the variable transport speedc h
+in eq.(19), based on the low resolution models in panels
+(a)–(c). Overall, the solutions in CT (a) and D1v (b)
+are qualitatively consistent, although the amplitude of
+the magnetic fields is higher in CT, indicating that CT
+is less diffusive. In contrast, the solution of Dhv (c) is
+qualitatively different. The vortex is significantly more
+expanded vertically, and magnetic field bumps emerge
+above and below the vortex aroundy∼ ±0.3. These
+structures do not appear in the other models and seem
+to be artifacts due to the solver. Although the magnetic
+field amplitude is higher in Dhv, the solution of D1v is
+more consistent with CT.
+The same trends hold in the high resolution models
+in panels (d)–(f). The solutions obtained with CT (a)
+and (d) are almost converged with the stronger magnetic
+fields. In the divergence cleaning schemes, the distribu-
+tions ofψin (e) and (f) are more localized with reduced
+amplitude in the higher resolution models. Compar-
+ing D1v and Dhv, D1v behaves more consistently with
+the higher maximum field strength (e). On the other
+hand, Dhv exhibits more significant resolution depen-
+dency (f). While the field amplitude slightly increases
+as expected, the vortex is less expanded vertically and
+the magnetic bumps aroundy∼ ±0.3 persist in the high
+resolution case. The divergence cleaning variableψbe-
+comes smaller and more localized, indicating that the
+higher resolution models produce less divergence errors,
+as expected.
+These results indicate that CT tends to be less dissi-
+pative than the divergence cleaning schemes, and the
+choice of the parameters for the divergence cleaning
+methods has a significant impact on solutions.
+3.1.2.Divergence Cleaning with Constant Transport Speed
+Next, we compare the behaviors of the divergence
+cleaning schemes with constant transport speeds in Fig-
+ure 3. As we already know that the scheme withL=h
+
+8
+Figure 3.Comparison between the D1c models with differentc h. From left to right,c h = 1.0,2.0,4.0,8.0. The top and bottom
+rows show the low- (h= 1/128) and high-resolution (h= 1/256) models, respectively.
+performs somewhat inconsistently, here we focus on the
+models withL= 1 (D1c). First, we find that the sys-
+tem is numerically unstable for a small transport speed
+(ch ≲1.0) 10. Beyond that, the solutions become more
+10 Numerical instabilities develop rapidly withc h = 0.8 or lower
+in the low resolution models withh= 1/128. The system seems
+to be on the verge of stability atc h = 0.9, as it remains quali-
+tatively stable up tot= 50 but ripples with small amplitudes
+are visible occasionally. A similar trend is observed in the high
+resolution models withh= 1/256, indicating that this stability
+threshold is not sensitive to the resolution.
+diffusive with higher transport speeds; the magnetic field
+layer gets thicker and the field amplitude decreases. This
+is expected because the divergence error propagates fur-
+ther with the larger transport speed. The difference
+due to the different transport speeds becomes less pro-
+nounced in the higher resolution models. Note that the
+models discussed in Section 3.1.1 correspond toc h ∼4,
+although it gradually increases as the system evolves.
+3.2.KHI with a Localized Magnetic Field
+In the mixed divergence cleaning scheme, the di-
+vergence error is transported isotropically while being
+
+9
+Figure 4.Same as Figure 1 but for the KHI test with localized magnetic fields. Note that the color bar ranges are different.
+The color range for the divergence cleaning variable is set intentionally narrow to show the structure in the weakly-magnetized
+region.
+damped. This means that the divergence error is not locally processed at the generation point. This raises
+
+10
+Figure 5.Same as Figure 2 but for the KHI test with localized magnetic fields. Note that the vertical axes are logarithmic.
+a concern that, when magnetic fields are strongly local-
+ized, the divergence error produced in the strongly mag-
+netized region can propagate to the weakly magnetized
+region and strongly perturb the magnetic field there.
+In order to investigate the behavior of the schemes in
+such a situation, we perform another set of KHI simu-
+lations with localized magnetic fields. We initialize the
+magnetic field with a Gaussian distribution around the
+shearing layer:
+Bx =B 0 exp
+
+− y2
+σ2
+2
+
++B min,(21)
+whereB 0 = 0.01 is the maximum magnetic field strength
+andσ 2 = 0.1 the thickness of the magnetized region,
+respectively. The minimum magnetic field ofB min =
+10−30 is added in order to give a well-defined direction
+to the magnetic field even in the very weakly magnetized
+region, but this is just for plotting and is dynamically
+unimportant. The other variables remain the same as
+in the previous test.
+The results are shown in Figures 4 and 5. The evo-
+lution of the vortex remains qualitatively the same as
+in the previous test, because the magnetic fields are ini-
+tially weak and evolve passively. In the weakly mag-
+netized region outside the vortex, significant differences
+arise between the schemes. CT can maintain the mag-
+netic fields localized, and the weakly magnetized region
+remains almost unaffected. However, the divergence
+cleaning schemes, both withL= 1 andL=h, cannot
+maintain the magnetic fields confined. Just outside the
+vortex (y∼0.3), the amplitudes of the leaked magnetic
+fields reach|B| ∼10 −4 in D1v and|B| ∼10 −2 in Dhv,
+although it remains more localized in the latter. This is
+expected because the divergence error is processed more
+locally with smallerL, as discussed in Section 2.3.3. The
+geometries of the leaked fields are different from the ini-
+tial field, and not physical. In D1v, the leaked fields
+exhibit arch-like shapes (panels (b) and (e)). In Dhv,
+the field vectors are pointing more or less to thexdirec-
+tion in the top-right part, but they are pointing opposite
+in the top-left part. These leaked fields do not satisfy
+the solenoidal constraint in some regions, because they
+are produced by the gradient ofψ. The trend remains
+similar even in the high resolution models, as well as in
+models with constant transport velocities. It should be
+noted that the field geometries in the weakly magnetized
+regions are different between the models with different
+resolutions, indicating that these artificially produced
+fields do not behave consistently even with higher reso-
+lutions.
+3.3.KHI with a Sudden Timestep Change
+We also point out in Section 2.3.3 that the divergence
+scheme is inconsistent with its derivation if the timestep
+
+11
+Figure 6.Time evolution of the magnetic field strength with magnetic field directions (orange color maps with cyan arrows)
+and the divergence cleaning variable (bottom half) in the D1v (top) and Dhv (bottom) models before and after the sudden
+change in the timestep.
+
+12
+Figure 7.Time evolution of the maximum divergence clean-
+ing variable.
+is not constant. However, in the conventional imple-
+mentation suggested in the original paper (A. Dedner
+et al. 2002), the transport speed in eq.(19) changes ac-
+cording to the timestep. In practical applications, the
+timestep can change as the system evolves. Usually,
+the timestep changes gradually as long as the system
+evolves continuously. However, certain situations like
+numerical glitches or additional physics such as fast ra-
+diation cooling can cause abrupt and drastic timestep
+changes in practical applications. Here we demonstrate
+that the conventional divergence cleaning method does
+not behave consistently in such a situation.
+We use the same test problem as in the previous sec-
+tion. We use the fixed timestep of ∆t= 4.0×10 −4
+instead of using a constant CFL number untilt= 3.0.
+We then decrease it to ∆t= 1.0×10 −5 for 100 steps,
+and calculate untilt= 3.2 with ∆t= 4.0×10 −4 again11.
+The results with the conventional divergence cleaning
+are presented in Figure 6. We also show the evolution
+of the maximum divergence cleaning variableψin Fig-
+ure 7. Before the timestep changes (panels (a1) and (b1)
+in Figure 6), the maximum divergence cleaning variable
+remains more or less constant, indicating that genera-
+tion of the divergence error is balanced with the clean-
+ing. When the short timestep is specified att= 3.0,
+ψgets amplified drastically, both in D1v and Dhv. It
+quickly reaches a maximum value at∼40 times larger
+11 Athena++ gradually increases ∆teven when a large timestep
+is allowed, while it immediately decreases it when a small
+timestep is required. Although we do not have to use this
+feature in this test, we keep this as it reflects practical use
+cases.
+than the value before the timestep change12 in less than
+10 timesteps indicating that the system quickly settles
+down to a new balanced state (panels (a2) and (b2)). In
+the next 100 steps with ∆t= 1.0×10 −5, ripple-like pat-
+terns are generated in the vortex and propagate to the
+outer region, and produce some visible (but not drastic)
+perturbation in the magnetic fields in D1v (a3). Because
+these ripples propagate at a speed ofc h which is largely
+enhanced by the short timestep, they propagate rapidly
+and affect a large area. Once the timestep returns to
+the original value, whileψdeclines back to an ampli-
+tude similar to that before the timestep change, promi-
+nent ripples appear in the magnetic fields (a4). The
+weakly-magnetized region is completely dominated by
+this spurious field produced by this effect, which propa-
+gates again at the speed ofc h. Because these fields are
+produced numerically by the∇ψterm in the modified
+induction equation (9), they carry a high level of the
+divergence error. The vortex continues to generate the
+ripples (a5), and the system does not recover its orig-
+inal state even after∼500 steps (a6). On the other
+hand, Dhv seems to be less susceptible to this effect.
+Even thoughψis amplified, it quickly goes back to the
+original level once the long timestep is recovered (b3 –
+b6).
+The timestep change does not affect CT and the di-
+vergence cleaning with a constant transport speed (D1c)
+as shown in Figure 8. For these schemes, the timestep
+change only affects the truncation error in the time inte-
+grator, which is usually minor in an explicit scheme with
+an integrator of second order or higher. These results
+clearly indicate that we should use an appropriate con-
+stant transport speedc h. It should be noted, however,
+that the strongly localized magnetic fields still leak into
+the weakly magnetized region even with the constant
+transport speed.
+3.4.Magnetic Field Amplification in a Collapsing
+Cloud
+In order to compare the behaviors of the schemes in
+a practical application, we perform ideal MHD simu-
+lations of gravitational collapse of rotating clouds with
+very weak initial magnetic fields. This is motivated by
+S. Hirano & M. N. Machida (2022) and M. N. Machida
+et al. (2025) who studied rapid magnetic field amplifi-
+cation in the context of the Pop-III star formation.
+12 From additional calculations, we find that the amplitude of the
+jump in the divergence is almost proportional to the ratio of
+the timestep change.
+
+13
+Figure 8.Same as Figure 6 but for CT and D1c.
+
+14
+3.4.1.Model Setup
+Similar to K. Tomida & J. M. Stone (2023), we set
+up a critical Bonnor-Ebert like sphere (W. B. Bonnor
+1956; R. Ebert 1955) with temperatureT= 200 K and
+make it unstable by multiplying a density enhancement
+off= 6.1. The resulting mass, central density and
+radius of the cloud areM= 4,830M ⊙,ρ 0 = 6.13×
+10−20 g cm−3 andR= 3.99×10 5 au, respectively. The
+cloud has a solid-body rotation of Ω = 1.18×10 −14 s−1,
+corresponding to Ωt ff = 0.1 wheret ff is the initial free
+fall time at the center. To model the magnetic field
+amplification from a very weak seed field, we introduce
+a uniform magnetic field aligned to the rotation axis
+Bz = 10−20 Gauss.
+The simulation domain is [−7.43×10 5 au : 7.43×
+105 au]3, and the root grid is resolved with 128 3 cells.
+We use AMR withMeshBlocksconsisting of 16 3 cells to
+resolve the local Jeans length at least with 32 cells. The
+boundary conditions are set to model an isolated cloud
+confined by the ambient gas, and are the same as in K.
+Tomida & J. M. Stone (2023).
+We assume the ideal equation of state of gas with a
+constant mean molecular weight of 2.3 for simplicity.
+While S. Hirano & M. N. Machida (2022) used a realistic
+table to model the thermal evolution of the gas, we adopt
+the barotropic approximation for simplicity connecting
+three regimes: (1) initial temperature ofT= 200 K,
+(2) runaway collapse with the adiabatic index Γ l = 1.1,
+and (3) quasi-hydrostatic core formation13 with the adi-
+abatic index Γ h = 2.0.
+p=
+
+
+
+ρc2
+s,0 (T≤200 K)
+ρc2
+s,0
+
+ρ
+ρ0
+2(Γl−1)
++
+
+ρ
+ρcrit
+2(Γh−1)
+(T >200 K) ,
+(22)
+wherec s,0 = 0.85 km s−1 is the sound speed atT=
+200 K, andρ crit = 3.8×10 −8 g cm−3 is the critical den-
+sity where the gas becomes stiff. These models are sim-
+ilar to but not exactly the same as those in S. Hirano
+& M. N. Machida (2022), because we design our models
+for demonstrating the behaviors of the different schemes
+in a simplified configuration.
+In the D1v and D1c models,L= 1 in our unit system
+corresponds to 6.18×10 4 au in physical units. This is
+comparable to a fraction of the initial core radius, and
+is much larger than cores and disks which form as out-
+comes of the collapse. On the other hand, the Dhv and
+13 Such core formation should occur at a higher density in the
+actual Pop-III star formation. This is introduced to prevent
+further collapse in order to continue calculations at reasonable
+costs.
+Dhc models useL=h min, which changes in time de-
+pending on the finest AMR level. We adopt a constant
+transport speed ofc h = 50cs,0 = 42.5 km s−1 in D1c and
+Dhc, which is chosen to be larger than the largest signal
+speed in the system for the most of the time (but not
+always; see discussion below) based on the results of CT.
+3.4.2.Results
+We present the results att=t e which is about 13
+years after the formation of the quasi-hydrostatic core
+in Figure 9. At this epoch, the maximum density reaches
+ρ≃7.3×10 −6 g cm−3. Two dense cores with circum-
+stellar disks are already formed, and two more fragments
+are forming. All the models exhibit consistent dynam-
+ical evolutions because magnetic fields are still weak
+and dynamically insignificant. However, the magnetic
+field distributions are substantially different between the
+models.
+Overall, CT (b) and D1c (d) are largely consistent.
+The magnetic fields are not drastically amplified in these
+models. The magnetic field distributions correlate with
+the gas density, indicating that the fields are mainly
+amplified by the contraction, although additional am-
+plification by the differential rotation plays a significant
+role as well (see below). The maximum field strength is
+slightly smaller in D1c, indicating that the divergence
+cleaning scheme is more diffusive compared to CT. On
+the other hand, there are noticeable differences on small
+scales (Figure 10). In particular, the magnetic fields
+around the circumstellar disks are stronger and point-
+ing in the opposite direction in D1c compared to CT.
+We attribute this difference to the “leakage” effect of
+the localized magnetic fields in the divergence cleaning
+method as discussed in Section 3.2.
+In contrast, the magnetic fields in D1v (c) are com-
+pletely different. The maximum field strength is five
+orders of magnitude larger than in CT and D1c, and
+the ripple-like patterns are generated on the disk scale
+and propagate toward the outer envelope. The ripples
+become wider as they propagate outward, which is corre-
+lated with the resolution. The behavior of these ripples
+is similar to those in the KHI simulations in Section 3.3.
+The difference between the Dhv (e) and Dhc (f) mod-
+els is not as drastic as that between the models with
+L= 1. However, the fields in both of these models are
+significantly more amplified by 3–4 orders of magnitude
+compared to CT and D1c. While the magnetic fields are
+still relatively localized within the disk structures, some
+weak “leakage” fields are visible outside.
+Let us estimate the magnetic field amplification solely
+by gravitational collapse. Assuming quasi-spherical col-
+lapse of a uniform cloud, and withrbeing the cloud ra-
+
+15
+Figure 9.Results of the simulations of the collapsing clouds in the early Universe. (a) Density cross section with MeshBlock
+boundaries of CT, (b)–(f) Magnetic field strength of CT, D1v, D1c withc h = 50, Dhv, Dhc withc h = 50, respectively. The
+maximum magnetic field strength is shown on each panel. The different sizes of the MeshBlocks in (a) correspond to different
+AMR refinement levels.
+
+16
+Figure 10.Zoom-in views of the collapsing clouds in the early Universe. Panels (a) and (b) show density cross sections with
+gas velocity directions for CT and D1c withc h = 50, respectively, while panels (c) and (d) show magnetic field strength with
+magnetic field directions for the same models.
+dius, the density increases asρ∝r −3 but the magnetic
+field scales asB∝r −2. Therefore, a power-law scaling
+ofB∝ρ 2/3 is expected. In the present situation, as the
+maximum gas density increased by more than 14 orders
+of magnitude, the magnetic fields should be amplified by
+a few×10 9 solely by gravitational collapse. The mag-
+netic fields in the CT and D1c models are almost two
+orders of magnitude larger than this estimate, indicating
+that the magnetic fields are also amplified by the differ-
+ential rotation in the small-scale disks. The correlation
+between the amplified magnetic fields and the rotating
+disk structure also supports this picture. However, the
+magnetic fields do not exhibit any steep amplification
+nor propagation toward the outer envelope shown in S.
+Hirano & M. N. Machida (2022).
+3.4.3.Timestep Evolution
+As seen in Section 3.3, the timestep change affects the
+behavior of the divergence cleaning with variable trans-
+port speed. We plot the evolution of the timesteps ac-
+tually used in the simulations in Figure 11. In the early
+phase, the timestep decreases gradually as the gravi-
+tational collapse proceeds. When new AMR levels are
+generated, the timestep decreases by a factor of 2. Af-
+ter the formation of the quasi-hydrostatic cores, no more
+AMR levels are created and the timesteps remain more
+
+17
+Figure 11.Time evolution of the timesteps as a function of
+the time tot e (or the lookback time). The lines are plotted
+with offsets.
+or less constant. In all the models, the timesteps oc-
+casionally get short for an instance (seen as downward
+spikes). In the present simulations, these are caused
+by transient numerical errors. For example, numerical
+fluxes near a strong discontinuity can be inaccurate and
+produce a cell with very low (or even negative) density
+or pressure. This kind of numerical error is often ob-
+served in simulations of practical applications. Usually
+such errors are transient and local, and can disappear af-
+ter a short time (or are treated by some ad hoc methods
+like density/pressure floors). While gradual timestep
+changes are less problematic, these abrupt and drastic
+timestep changes produce artificial magnetic fields in the
+divergence cleaning methods with the variable transport
+speed. In practical applications, additional physical pro-
+cesses such as radiation cooling and non-ideal MHD ef-
+fects may cause similar timestep changes.
+The divergence cleaning methods with constant trans-
+port speed (D1c and Dhc) do not suffer from this issue.
+However, these models are more expensive because of
+the shorter timesteps. In addition, it should be noted
+that these models still experience short timesteps in
+spite of the large transport speed, which means that
+the maximum signal speed exceeds the transport speed
+for short intervals. We do not find any significant de-
+velopment of numerical instability due to the insuffi-
+cient transport speed, probably because they are only
+for short duration and localized, but theoretically, we
+should use even larger transport speed so that the trans-
+port speed remains always the fastest in the system for
+stability.
+3.5.Present-Day Star and Disk Formation
+We present another set of test calculations of collaps-
+ing clouds in the context of the present-day star for-
+mation. This problem has been extensively studied by
+various groups using different methods, including CT,
+Dedner’s cleaning and the Powell method (e.g. K. To-
+mida et al. 2013, 2015; Y. Tsukamoto et al. 2015; J.
+Masson et al. 2016; J. Wurster et al. 2016; N. Vaytet
+et al. 2018; K. H. Lam et al. 2019; W. Xu & M. W.
+Kunz 2021; Y. Tu et al. 2024; J. Mauxion et al. 2024;
+A. C. Mayer et al. 2025), and most of them agree at
+least qualitatively.
+3.5.1.Model Setup
+We perform the test calculation presented in K. To-
+mida & J. M. Stone (2023). This is similar to the previ-
+ous test, but for a low-mass cloud with a stronger mag-
+netic field. Here we summarize the key model setups,
+and we refer readers to K. Tomida & J. M. Stone (2023)
+for details. The initial condition is a 1M⊙ Bonnor-Ebert
+like sphere (W. B. Bonnor 1956; R. Ebert 1955) with
+T= 10 K. Solid-body rotation with Ω = 5.55×10 −14 s−1
+and uniform magnetic fieldB z = 27.4µG both aligned
+to thez−axis are imposed. We adopt the barotropic
+relation of
+P=ρc 2
+s
+"
+1 +
+ ρ
+ρcrit
+2(Γ−1)#1/2
+,(23)
+withc s = 0.19 km s−1,ρ crit = 10 −13 g cm−3, and Γ =
+5/3. We use AMR to resolve the local Jeans length at
+least with 32 cells. We compare CT, D1v and Dhv, with
+L= 1302.7 au for D1v.
+We use the ideal MHD approximation, although non-
+ideal MHD effects play significant roles in actual star
+forming clouds. It should be noted that we perform
+these calculations purely for demonstrative purposes. In
+these calculations, very thin current sheets form on the
+mid-plane as a consequence of the gravitational collapse.
+These current sheets are so thin that they are practi-
+cally magnetic discontinuities at the given resolution,
+even with AMR. In such a situation, numerical solutions
+are sensitive to the details of the solvers, and do not
+consistently converge. In other words, this means that
+the differences between the schemes can appear promi-
+nently. Being aware of this limitation, we limit ourselves
+to qualitative comparison in this work. We emphasize
+that we need to consider physical resistivities due to the
+non-ideal MHD effects and resolve the current sheets in
+order to obtain consistent and well-converged solutions
+for scientific studies.
+
+18
+Figure 12.Results of the simulations of the collapsing clouds in the present-day environment. From left to right: CT, D1v, and
+Dhv. From top to bottom: the gas density, plasma beta with magnetic field directions, and radial velocity with flow directions.
+3.5.2.Results
+Figure 12 shows the vertical cross sections of the gas
+density, plasma beta with magnetic field directions, and
+radial velocity with flow directions when the central tem-
+perature reachesT c ∼1,000 K. Adiabatic cores formed
+(the first Larson cores R. B. Larson 1969) at the cen-
+ter of the clouds, which are almost spherical as a result
+of efficient angular momentum transport by magnetic
+fields. Pseudo-disks (disk-like structures but not sup-
+ported by rotation) form around the first cores, and the
+inner pseudo-disks are strongly perturbed by the mag-
+netic interchange instability (H. C. Spruit et al. 1995).
+From the pseudo-disks, slow bipolar outflows with wide
+opening angles are launched. The properties of the first
+cores such as the radius and mass are consistent among
+the three models. On the other hand, the structures in
+the pseudo-disk and outflows exhibit some differences as
+expected.
+First, let us compare CT (left) and D1v (middle). The
+outflow in CT is faster (v r ∼0.9 km s −1 vs 0.6 km s−1)
+and propagates further (z∼180 au vs 130 au) than in
+D1v. Also, while the outflow in CT maintains more lam-
+inar conical shapes, D1v produces more complex mor-
+phology inside the outflow. Inside the outflows, a larger
+
+19
+volume is more strongly magnetized (lower plasma beta)
+in CT compared to D1v, which can be the origin of the
+difference in the outflow velocities. Despite detailed dif-
+ferences arising from grid-scale behavior of the schemes,
+these schemes produce qualitatively similar results.
+On the other hand, we find a more significant differ-
+ence in the outflow scale between CT (or D1v) and Dhv.
+The outflow in Dhv is smaller (z∼85 au) because its
+velocity is slower (vr ∼0.3 km s−1), and its morphology
+is more constricted near the midplane. It is also notice-
+able that low-density and fast-infalling cavities with low
+plasma beta are opened up along the polar directions in
+Dhv.
+This test illustrates that the difference between the
+schemes is less prominent compared to the test in Sec-
+tion 3.4, which is likely because the magnetic fields are
+stronger and less localized. Although it is still possible
+to say that these models are qualitatively similar, we
+should be aware that different numerical schemes can
+produce quantitative or even visibly noticeable differ-
+ences as demonstrated here.
+3.6.Convective Dynamo in Stratified Atmosphere
+Dynamo in stratified convective plasmas is a key pro-
+cess in magnetic field amplification in various astrophys-
+ical systems. As we have seen in the KHI problems, mag-
+netic fields in vortices produce divergence errors, sug-
+gesting that the divergence cleaning method is less op-
+timal for dynamo simulations. Here, we present results
+of simulations of a magnetized, gravitationally stratified
+convective atmosphere.
+3.6.1.Model Setup
+Our model is a two-dimensional atmosphere which
+consists of a lower convective layer and an upper convec-
+tively stable layer, imitating a stellar surface region of
+solar-type stars. The horizontal and vertical coordinates
+are denoted byxandy, respectively, where 0≤x≤3
+and 0≤y≤1.5. The computational domain is resolved
+with 512×256 cells. The equation of state for ideal gas
+with adiabatic indexγ= 5/3 is used. The gas is sub-
+ject to a uniform downward gravitational acceleration
+gy =−1.4. We impose periodic boundary conditions in
+the horizontal direction. At the lower boundary we use a
+stress-free, hydrostatically extrapolated boundary with
+reflected vertical velocity. The lower boundary acts as a
+perfectly conducting boundary for magnetic fields. On
+the other hand, the upper boundary is a diode bound-
+ary: the flows outflowing from the numerical domain is
+allowed, while the incoming flow is prohibited. The den-
+sity and pressure in the ghost cells are computed by hy-
+drostatic extrapolation. The other hydrodynamic quan-
+tities and magnetic field components are copied from the
+last active cells in the calculation domain.
+The initial atmosphere is hydrostatic. The prescribed
+temperature profile,T 0(y), connects an adiabatic lower
+layer to an isothermal upper layer through a smooth
+transition,
+T0(y) = [1−f int(y)]T ad(y) +f int(y)Tiso,(24)
+where
+fint(y) = 1
+2
+
+1 + tanh
+ y−y int
+wint
+
+,(25)
+Tad(y) =Tbot − |gy|(γ−1)
+γ (y−y bot).(26)
+We useT bot = 1,p bot = 1,y bot = 0,y int = 1.0,
+wint = 0.03, andT iso = 0.56. The pressure is obtained
+from hydrostatic balance. The minimum and maximum
+densities in the numerical domain are approximately
+0.067 and 1.0, respectively. At the beginning of the
+simulations, we introduce weak random vertical velocity
+perturbations to the convective layer.
+Thermal convection is driven by localized heating near
+the bottom and Newtonian cooling near the top. We add
+the volumetric thermal source term to the total energy
+equation as
+Q(y, ρ, T) = Fheat
+Hheat
+exp
+
+− y−y bot
+Hheat
+
+− ρ(T−T cool)
+(γ−1)t cool
+fcool(y),
+(27)
+with
+fcool(y) = 1
+2
+
+1 + tanh
+ y−y cool
+wcool
+
+,(28)
+whereF heat denotes the heat flux,H heat indicates a spa-
+tial scale for the heating,t cool is the relaxation timescale
+for the cooling term, andy bot, ycool andw cool are spa-
+tial scales to control the spatial distributions of the
+heating and cooling terms. The adopted parameters
+areF heat = 2×10 −4,H heat = 0.04,t cool = 0.05,
+Tcool = 0.56,y cool =y int = 1.0, andw cool = 0.01.
+The magnetic field is initially zero. After the convec-
+tion has developed, att mag = 80, we insert a horizontal
+magnetic sheet centered aty mag = 0.20 with full thick-
+nessw mag = 0.10. Its profile is
+Bx(y) =
+
+
+
+B0 1
+2
+h
+1 + cos
+
+2π(y−y mag)
+wmag
+i
+,|y−y mag|< w mag/2,
+0,otherwise,
+(29)
+whereB 0 is chosen fromβ mag = 2p0(ymag)/B2
+0 = 1000.
+For this test problem, we adopt the third-order
+Runge-Kutta time integrator and third-order piecewise
+parabolic method (PPM) using primitive variables for
+
+20
+Figure 13.From top left to bottom right:v y/cs, ψ,p mag for Dedner’s method andp mag for the CT method. The data are
+taken att= 509 in the numerical unit.
+Figure 14.Evolution of the energy fluxes measured at the
+height ofy= 1.1. Top: the absolute values of the vertical
+component of the Poynting flux (blue) and theψ-related flux
+(gold). Bottom: the ratio of the two.
+spatial reconstruction to better resolve turbulent flows.
+For the calculation with Dedner’s method, we use the
+D1v method with variablec h andL= 1.
+3.6.2.Results
+Figure 13 presents an overview of the simulated at-
+mosphere. The top left panel (Mach number) demon-
+strates that convection mainly occurs belowy= 1. The
+top right panel (ψ) indicates that divergence errors are
+widely generated in the convective layer, as expected. It
+should be noted that the divergence error produced in
+the convective layer is propagating toward the upper,
+convectively stable layer. The panel shows examples
+of propagating wave fronts around (x, y) = (1.2,1.2).
+Therefore, this calculation indicates that the magnetic
+fields are artificially produced in the convectively stable
+layer due to the divergence error propagation.
+To quantitatively evaluate the impact of the diver-
+gence error propagation, we measure the energy fluxes
+associated with magnetic fields at the height ofy= 1.1.
+The top panel of Figure 14 compares the Poynting flux
+and theψ-related energy flux (see Appendix B), and the
+bottom panel displays the ratio of the two. It is shown
+that the contribution of the divergence error does not
+diminish and remains on the order ofO(0.01−1), which
+indicates that the divergence error generated in the con-
+vective layer has significant impact on the magnetic field
+evolution in the upper, convectively stable layer.
+
+21
+Figure 15.Temporal evolution of the magnetic energies.
+The top and bottom panels show the magnetic energies in-
+tegrated iny≥1.1 andy <1.1, respectively. The blue and
+orange lines denote the results for Dedner’s method and CT
+method, respectively.
+The bottom panels of Figure 13 compare the mag-
+netic pressure of the divergence cleaning and CT meth-
+ods. The magnetic pressure in the divergence cleaning
+model is more diffusive than that in the CT model. The
+magnetic fields spread out smoothly in the upper layer
+in the divergence cleaning, while the magnetic fields are
+more localized in CT. In the convective layer, Dedner’s
+method produces more strongly magnetized flows on av-
+erage than the CT method. Figure 15 highlights the dif-
+ference between the results of the two schemes. We in-
+tegrate the magnetic energy in both the upper (y≥1.1)
+and lower (y <1.1) atmospheres. In the upper layer, the
+result of the CT method shows a larger magnetic energy,
+even though the magnetic fields spread out more widely
+in Dedner’s method. In the lower convective layer, on
+the other hand, the divergence cleaning method yields a
+larger magnetic energy.
+We interpret the difference between the two schemes
+as follows. In the upper layer, the CT method pro-
+duces multiple distinct magnetic islands, while Dedner’s
+method only displays a few diffusive ones. This result
+indicates that CT is less diffusive. We also note that
+while very weakly magnetized regions are formed in the
+CT method, such regions are not present in Dedner’s
+method partly because the divergence error from the
+lower atmosphere propagates everywhere in the upper
+layer and produces magnetic fields there. Regarding the
+behavior in the lower convective layer, we argue that the
+non-local properties of the divergence cleaning method
+are crucial. The convective layer is full of vortices, and
+the divergence error generated in a vortex propagates
+to other vortices and unphysically generates magnetic
+fields there. As a result, the unphysically produced mag-
+netic fields are further amplified by vortical motions (dy-
+namo), leading to the unphysical formation of a strongly
+magnetized convective layer.
+4.DISCUSSIONS
+4.1.Parameters of the Divergence Cleaning Scheme
+We find that the quality of solutions largely depends
+on the choice of the parametersL(orC r) andc h in the
+divergence cleaning methods, and therefore these values
+must be selected carefully.
+4.1.1.Characteristic ScaleL
+From the numerical experiments above, we find that
+solutions with largeLtend to be more consistent with
+CT, while the use of small (grid scale)Lproduces un-
+physical structures. Therefore, we recommend choosing
+Lto be larger than the scale of interest. In addition, for
+consistency with the derivation, we recommend using
+constantLboth in time and space.
+4.1.2.Transport Speedc h
+Our results clearly indicate that we should use a con-
+stant transport speedc h. The fact that the system re-
+mains stable even withc h ∼1 is interesting and deserves
+discussion. We compare the transport speeds with char-
+acteristic speeds in the system. Because this is a sub-
+sonic problem, the sound speed remains almost constant
+cs =
+p
+γp/ρ∼4.08. The maximum fluid speed at
+t= 3.0 isv max ∼1.38, and the maximum Alfv´ en speed
+isv a,max ∼0.36 in the high resolution CT model. While
+R. Pakmor et al. (2011) argued thatc h should be larger
+than the fastest signal speed in the system and proposed
+to use the largest speed of fast magnetoacoustic waves,
+our results imply that we can use a smaller value forc h.
+In order to investigate the stability criterion, we have
+performed additional numerical experiments with in-
+creased Alfv´ en speed and increased flow velocity for a
+
+22
+longer period. Interestingly, the system remains stable
+even when the Alfv´ en speed exceedsc h. However, the
+system gets unstable with the flow velocity exceedingch.
+Thus, our experiments suggest that the transport speed
+ch should be larger than the maximum flow speed, but it
+is not directly relevant to the other speeds like the sound
+speed or Alfv´ en speed. However, we still recommend
+conservatively choosingc h larger than the maximum sig-
+nal (total) speed, i.e.,c h = max
+q
+v2 +c 2
+f
+
+because the
+thermal and/or magnetic energy can be converted into
+the kinetic energy and the flow can be accelerated to a
+comparable speed in actual simulations 14.
+Use of such a large transport speed is computation-
+ally expensive because it requires significantly smaller
+timesteps. Also, it is not trivial to predict the fastest
+speed throughout a simulation without knowing the sys-
+tem’s behavior in advance. Our results imply that grad-
+ual change in the timestep can be acceptable if it is
+sufficiently slow (i.e., the non-commutative effect is neg-
+ligible or processed quickly by the damping term), but
+it is not always possible because a short timestep can be
+suddenly required by numerical glitches or other phys-
+ical processes 15. If it is really necessary to change the
+transport speed (or any other parameter) during a sim-
+ulation, we propose the following “refresh” procedure:
+apply the projection method (J. U. Brackbill & D. C.
+Barnes 1980) to eliminate the divergence error and reset
+ψto 0 everywhere in the computational domain before
+changing the transport speed. This should work because
+the transport speed can be changed without any prob-
+lem if there is no divergence error in the system, and the
+additional cost should be acceptable if it is applied only
+occasionally.
+4.2.Origin of the Spurious Behaviors
+4.2.1.Leakage of Localized Magnetic Fields
+Through the numerical experiments, we have demon-
+strated that the divergence cleaning scheme tends to
+be diffusive and can cause visibly noticeable errors. In
+particular, we have shown that strongly localized fields
+still leak into weakly magnetized regions even with the
+optimal choices of these parameters. This is a natu-
+ral consequence of the scheme that the divergence er-
+14 Note that this can depend on the base schemes. For example,
+R. Pakmor et al. (2011) usesc h = max(cf ) in AREPO, which
+is a Lagrangian moving mesh code. Also, the behavior may
+change if we use the Galilean-invariant version of the mixed
+cleaning scheme (eq.38 of A. Dedner et al. 2002)
+15 Similarly, spatially non-uniform transport speed may work if
+there is no steep gradient. However, it is difficult to control
+because discontinuities commonly appear in astrophysical sim-
+ulations.
+ror is isotropically transported while being damped. As
+demonstrated above, use of the stronger damping factor
+(smallerL) can reduce the affected region, but artificial
+structures can appear if the damping is too strong 16.
+Therefore, while there is room for optimizing the pa-
+rameters, it is not a fundamental solution to this issue.
+4.2.2.Spurious Field Generation with Timestep Change
+Mathematically, the spurious behavior related to the
+sudden timestep change is caused by the use of the vari-
+able transport speedc h because it is inconsistent with
+the derivation. Whenc h changes drastically, the di-
+vergence cleaning variableψdoes not follow the same
+equation as∇ ·Banymore, and non-commutative terms
+produce the artificial fields.
+Let us discuss this behavior more intuitively here.
+First, we explain the behavior of theL= 1 model in
+the KHI test with localized magnetic fields (D1v, Panels
+(a1) – (a6) in Figure 6). The divergence cleaning scheme
+works reasonably well while the timestep changes only
+slowly. The amplitude of the divergence cleaning vari-
+able is more or less balanced in this situation and be-
+haves roughlyψ∝c hB∝B∆t −1 (Figure 6 (a1) and
+7, see also Figure 3). When the timestep suddenly de-
+creases, the transport speed increases in response, and
+ψis quickly amplified until it reaches the new balanced
+state because the fluxF ψ (eqs.(13) and (16)) is enhanced
+(a2). With relatively largeL, the damping by the source
+term is slow and the amplifiedψpropagates isotropically
+at the fast transport speedc h (a3). When the timestep
+is suddenly recovered, the amplifiedψis quickly trans-
+formed to the magnetic field by the fluxF Bx (eqs.(14)
+and (15)) (a4). Then, the artificially produced mag-
+netic fields propagate and disrupt the field structures
+(a5 – a6). The same mechanism produces the spurious
+magnetic fields in the collapse simulation in Section 3.4
+(Panel (c) in Figure 9).
+On the other hand, the model withL=h min (Dhv,
+Panels (b1) – (b6) in Figure 6) exhibits the same am-
+plification ofψwith the sudden timestep change but
+it does not produce significant artificial ripple patterns
+(b2). This is because the strong damping suppresses
+ψand the system reaches a new balanced state quickly,
+preventing the amplifiedψfrom propagating further (b3
+– b4).
+This spurious behavior does not appear with the con-
+stant transport speedc h because the linear operatorD
+is commutative with the spatial and temporal deriva-
+16 In the limit ofL→0,ψremains almost zero as it is imme-
+diately damped, and the scheme cannot clean the divergence
+error effectively because the∇ϕterm in eq.(8) vanishes.
+
+23
+tive operators. In this case, the balance betweenψand
+Bis maintained even when the timestep changes dras-
+tically, and the amplification mechanism through the
+fluxes does not work.
+In addition, by comparing the first and second terms
+on the right-hand side in equations (13) and (14), this
+amplification is more severe when the magnetic fields are
+weak. The error produced by the divergence cleaning al-
+gorithm is less pronounced as long as|B| ≫ ψ
+ch
+, although
+quantitatively we need to compare the force by the ar-
+tificially produced magnetic fields and the other forces.
+This explains the difference between the test cases in
+Sections 3.4 and 3.5. This also implies that the larger
+transport speed is more robust, although it is computa-
+tionally more expensive.
+4.3.Implications on Past Works
+Our results indicate that some previous works using
+the divergence cleaning methods should be carefully re-
+examined and verified. To be specific, we identify that
+the divergence cleaning scheme can fail and produce ar-
+tificial magnetic fields when magnetic fields are strongly
+localized or the timestep changes suddenly and drasti-
+cally.
+Star and disk formation in collapsing clouds is a no-
+table example of such a situation. As we show in Sec-
+tions 3.4 and 3.5, while the divergence cleaning and CT
+produce similar results in the present-day star forma-
+tion, the divergence cleaning schemes with the variable
+transport speed produce clearly artificial magnetic fields
+in the early Universe case, particularly withL= 1. Our
+results suggest that the extremely rapid amplification of
+magnetic fields in collapsing clouds reported in S. Hirano
+& M. N. Machida (2022); M. N. Machida et al. (2025) are
+likely artifacts due to the divergence cleaning scheme.
+The ripple-like patterns in Figure 2 of S. Hirano & M. N.
+Machida (2022) resemble those in our Figure 9, which
+also support our argument. Similar rapid amplification
+of magnetic fields is also reported in M. A. Latif et al.
+(2014) (see also M. A. Latif et al. 2023), who use the
+Enzo code with Dedner’s divergence cleaning method
+(G. L. Bryan et al. 2014; P. Wang & T. Abel 2009) 17.
+In their results, no prominent ripple-like pattern is vis-
+ible (Figure 1 of M. A. Latif et al. 2014), possibly be-
+cause such features are smeared out by turbulence or by
+the diffusive nature of the HLL solver. Although they
+attribute the amplification to strong accretion shocks,
+17 Although the values of the divergence cleaning parameters are
+not shown in their papers, the public version of the Enzo code
+(version 2.6) adopts the variable transport speed withL= 1
+by default.
+we note that, from the MHD Rankine-Hugoniot rela-
+tion, even a strong shock can only amplify the tangen-
+tial component of the magnetic field by at most the
+density compression ratio. Therefore, presence of the
+strong shock alone is insufficient to explain the ampli-
+fication. In addition, the magnetic fields are amplified
+also inside the core in their simulation where no shock
+exists. If the fields inside the core are transported from
+the shock rather than amplified locally, it requires un-
+physically fast transport speed greater than 100 km s−1.
+Furthermore, the amplified magnetic fields in their sim-
+ulations appear to leak into the upstream of the shock
+(Figure 3 of M. A. Latif et al. 2014). These behaviors
+raise the possibility that the results are affected by nu-
+merical artifacts due to the divergence cleaning method,
+at least in part. While there still should be significant
+amplification by rotating disks in addition to gravita-
+tional contraction, the actual amplification should be
+much more modest compared to these works. Further
+studies are needed in order to quantify the amplifica-
+tion of magnetic fields and their significance in the early
+Universe. A similar situation can occur in many astro-
+physical systems where initially weak magnetic fields are
+strongly amplified in rotating accretion flows, including
+magnetic field amplification in galaxy formation in cos-
+mological contexts, tidal disruption events, mergers of
+compact objects, among others.
+Another example that requires particular attention is
+models of magnetized, stratified convective layers. As
+we have demonstrated in Section 3.6, the non-local prop-
+erties of Dedner’s method significantly affect the mag-
+netic field evolution. The divergence error generated
+in the convective layer propagates through all regions,
+producing unphysical magnetic fields even in the upper,
+non-convective layer. Additionally, we show that the
+error propagation in the turbulent convective layer can
+result in the formation of unphysically strong magneti-
+zation in the convective flows. These results have impli-
+cations for modeling of solar/stellar atmospheres, for ex-
+ample. The unphysical energy transport and magnetic
+field generation in the chromosphere and corona, as well
+as artificial magnetic dissipation arising from divergence
+errors, may cause misleading interpretation of the heat-
+ing mechanisms. Dynamo calculations using Dedner’s
+method can produce unphysically strong magnetization
+in convective layers, which may lead to an overestima-
+tion of the Maxwell stress that controls the angular mo-
+mentum transport in rotating systems. We are unsure
+if such unphysical behaviors diminish when we increase
+the numerical resolution, as the non-local properties of
+the scheme remain regardless of the resolution.
+
+24
+To draw more reliable conclusions, we should carefully
+reexamine and verify these results, preferably by testing
+them against independent methods such as CT.
+5.SUMMARY
+We have implemented Dedner’s divergence clean-
+ing method in Athena++ and compared it with CT.
+Through numerical experiments, we have investigated
+the optimal choice of the parameters in the divergence
+cleaning scheme, and have identified certain situations
+in which the divergence cleaning methods can fail. We
+propose a few improvements to the scheme to increase
+its robustness and consistency, but these are not suffi-
+cient to completely suppress the spurious behaviors. We
+summarize our findings as follows:
+•The parameters must be carefully chosen for the
+divergence cleaning scheme. Both the characteris-
+tic scaleLand transport speedc h should be tem-
+porally constant and spatially uniform. We rec-
+ommend using a characteristic scaleLlarger than
+scale of interest, andc h larger than the maximum
+signal speed that can occur during the whole simu-
+lation, although they require knowledge about the
+system in advance and can be computationally ex-
+pensive. The conventional implementation with
+variable transport speed is strongly discouraged.
+•The solutions with CT and the divergence cleaning
+method with largeLandc h can be consistent if the
+magnetization is not strongly localized, with CT
+being slightly less diffusive for the same resolution
+and same spatial reconstruction.
+•With variable transport speed, artificial mag-
+netic fields are produced when the timestep
+changes drastically. Such fields do not satisfy the
+divergence-free constraint, and exhibit character-
+istic ripple-like patterns. While we do not rec-
+ommend it, one should carefully watch for such
+structures if the divergence cleaning method with
+variablec h has to be used.
+•With strongly localized magnetic fields, the diver-
+gence error produced in the strongly magnetized
+region leaks into the weakly magnetized region
+and produces artificial structures in the divergence
+cleaning scheme even with a constant transport
+speed and optimal parameters. This issue persists
+even with higher resolution. In such a situation,
+the divergence cleaning scheme must be used with
+extreme caution.
+•Some results showing strong magnetic field ampli-
+fication using Dedner’s scheme in previous works
+must be carefully reviewed and reexamined. Fur-
+ther studies with robust numerical methods are
+needed.
+In conclusion, CT is less arbitrary, more robust and
+less prone to spurious behaviors in general. While we do
+not argue that divergence cleaning methods should be
+completely abandoned, they should be used with cau-
+tion. We recommend fixing all the parametersL, c p, ch
+throughout a simulation, withLlarger than the scale
+of interest andc h faster than the fastest possible speed
+in the system. In addition, we recommend including
+the EGLM source term in the energy equation to con-
+sistently calculate the contribution from the divergence
+cleaning variable (see Appendix B). However, we would
+like to emphasize that the divergence cleaning methods
+can fail even with the optimal parameters, and simula-
+tion results obtained with the divergence cleaning meth-
+ods must be carefully verified based on both physics and
+numerics.
+ACKNOWLEDGMENTS
+We thank Tomoaki Matsumoto, Masahiro N. Machida
+and Yuki Kudoh for fruitful discussions. We also thank
+Daniel Price for providing a note on the derivation of the
+energy equation including the divergence cleaning vari-
+able. KT acknowledges the visiting professor program of
+´Ecole Normale Sup´ erieure de Lyon, where most of this
+paper was written. This work is supported by Japan
+Society for the Promotion of Science (JSPS) KAKENHI
+Grant Numbers JP21H04487, JP22KK0043 (KT, KI,
+ST), JP26K00769 (ST), and KES is supported by JSPS
+Overseas Research Fellowship. This work is also sup-
+ported by the Ministry of Education, Culture, Sports,
+Science and Technology (MEXT) of Japan as “Program
+for Promoting Researches on the Supercomputer Fu-
+gaku” (Structure and Evolution of the Universe Unrav-
+eled by Fusion of Simulation and AI; Grant Number
+JPMXP1020230406). Numerical computations were in
+part carried out on HPE Cray XD2000 supercomputer
+at Center for Computational Astrophysics, National As-
+tronomical Observatory of Japan. The original title of
+this paper was “Dr. Staggeredgrid, Or: How I Learned
+to Stop Worrying and Love the Constrained Transport.”
+Software:Athena++ ( Athena++ development
+team 2021)
+
+25
+APPENDIX
+A.POWELL’S 8-WAVE METHOD
+Powell’s 8-wave method (K. G. Powell 1994; K. G.
+Powell et al. 1999) is an alternative method to deal
+with∇ ·B, and is supported in some public codes
+(e.g. R. Weinberger et al. 2020). In this scheme, ad-
+ditional source terms proportional to∇ ·Bare added
+on the right-hand side of the MHD equations. While
+this scheme is often referred to as Powell’s cleaning, it
+is actually not “cleaning” as it does not explicitly elim-
+inate or damp the divergence error. It tends to be more
+robust than doing nothing, but it is not sufficient to
+stabilize the system in some applications. See P. Mocz
+et al. (2014, 2016); P. F. Hopkins & M. J. Raives (2016)
+for example.
+To show the behavior of this scheme, we implement
+it in Athena++. All the source terms are discretized
+using cell-centered differences and integrated explicitly.
+Figure 16 shows the result of the KHI test with localized
+magnetic fields presented in Section 3.2. The amplitude
+of the divergence error increases with time as expected,
+but the scheme does not crash (i.e., does not cause
+a catastrophic explosion or negative density/pressure)
+even with the substantial divergence error. The mag-
+netic fields show scaly patterns which are clearly artifi-
+cial. While the artificially produced magnetic fields do
+not propagate further like in Dedner’s method, the fields
+produced in the vortex still diffuse out to the weakly
+magnetized region. Thus, this method is also subopti-
+mal compared to CT.
+B.GLM VS EGLM
+In the original paper of A. Dedner et al. (2002), they
+propose an alternative formula called Extended GLM
+(EGLM). While some comparisons are presented, the
+advantage of the scheme is not very clear in the original
+paper. Here we briefly describe the EGLM method and
+discuss its implications.
+B.1.EGLM equations
+In EGLM, additional source terms are added in the
+momentum equation and energy equation.
+∂ρv
+∂t +∇·(ρvv−BB+P ∗I) =−(∇ ·B)B,(B1)
+∂E
+∂t +∇ ·
+
+(E+P ∗)v−B(B·v)
+
+=−B· ∇ψ,(B2)
+These source terms violate the conservation of the mo-
+mentumρvand total energyE.
+Figure 16.Magnetic field strength (upper half) and∇ ·B
+att= 3.0 in the KHI test with localized magnetic fields with
+Powell’s method. Magnetic field directions are overplotted
+with cyan arrows in the top half.
+The source term in eq.(B1) is introduced by retain-
+ing the term which is usually omitted as it should be
+identically zero if the solenoidal constraint is perfectly
+satisfied. Conceptually, this is analogous to the Powell’s
+method18.
+On the other hand, the source term in eq.(B2) has
+more “physical” implication. In A. Dedner et al. (2002),
+this term is introduced by considering the contribution
+ofψto the magnetic energy. T. S. Tricco & D. J. Price
+(2012) present its meaning more intuitively and imple-
+mented it in their SPH code. Becauseψtransports the
+magnetic fields,ψmust carry its own energy as well. To
+clarify this effect, we transform the right-hand side of
+the energy equation (B2) using eq.(12) as follows.
+−B· ∇ψ=−∇ ·(ψB) +ψ∇ ·B,
+=−∇ ·(ψB)− ψ
+c2
+h
+ ∂ψ
+∂t + c2
+h
+c2p
+ψ
+
+.
+By defining the total energy including the energy ofψ
+asE ′ =e+ 1
+2 ρv2 + B2
+2 + ψ2
+2c2
+h
+, we obtain the new total
+18 It is not clear why they consider only the momentum equation
+and do not introduce all the relevant source terms as in the
+Powell method.
+
+26
+energy equation:
+∂E ′
+∂t +∇ ·
+
+(E+P ∗)v−B(B·v) +ψB
+
+=− ψ2
+c2p
+.(B3)
+This means that the energy density ofψise ψ ≡ ψ2
+2c2
+h
+.
+If there is no source term on the right-hand side corre-
+sponding to the damping term, this new total energyE ′
+is conserved. It should be noted that this equation does
+not hold ifc h is not constant.
+This consequence has a significant impact on the be-
+havior of the scheme. While the EGLM energy equation
+(B2) is equivalent to considering the total energy con-
+servation includinge ψ (B3), the original GLM equation
+misses this contribution and cannot capture the energy
+transport byψ. Because the thermal energy is calcu-
+lated by subtracting the kinetic and magnetic energies
+from the total energy, this error appears in the thermal
+energy. Therefore, although the total energy (without
+eψ) is conserved in the GLM formula, it is not fully con-
+sistent with the actual energy transport and can lead to
+unphysical behaviors. We present a direct comparison
+of these schemes in Section B.3.
+A. Dedner et al. (2002) also proposed Galilean invari-
+ant versions (eqs.(38) in their paper). All the source
+terms same as the Powell’s method are introduced on
+the right-hand side of the MHD equations for these vari-
+ants, which can improve the robustness of the scheme.
+Because the transport speed of the divergence error is
+not isotropic, these schemes may behave differently from
+the original versions. However, testing these schemes is
+beyond the scope of this paper.
+B.2.Implementations
+We implement two different approaches of EGLM.
+The first approach (EGLM-S) is a direct discretization
+of the source terms in equations (B1) and (B2).
+[−(∇ ·B)B] i,j,k =− Bi,j,k
+∆Vi,j,k
+×[(B x,i+1/2,j,k∆Sx,i+1/2,j,k −B x,i−1/2,j,k∆Sx,i−1/2,j,k)
++ (By,i,j+1/2,k∆Sy,i,j+1/2,k −B y,i,j−1/2,k∆Sy,i,j−1/2,k)
++ (Bz,i,j,k+1/2∆Sz,i,j,k+1/2 −B z,i,j,k−1/2∆Sz,i,j,k−1/2)],(B4)
+[−B· ∇ψ] i,j,k =−B x,i,j,k
+ψi+1/2,j,k −ψ i−1/2,j,k
+∆x
+−B y,i,j,k
+ψi,j+1/2,k −ψ i,j−1/2,k
+∆y
+−B z,i,j,k
+ψi,j,k+1/2 −ψ i,j,k−1/2
+∆z ,(B5)
+where ∆Sis the surface area of the cell in each direction and
+∆Vis the cell volume. We evaluate magnetic fields andψat
+the cell surfaces using equations (13) and (14). These source
+terms are explicitly integrated as part of the main integrator
+of Athena++ as they should not be very large as long as the
+scheme is working well. The rest remains exactly the same
+as in the GLM scheme described in Section 2.3.2.
+The second approach (EGLM-C) is based on the conser-
+vative form of the total energy equation (B3) including the
+contribution from the divergence cleaning variable. In this
+implementation, we replace the total energyEwithE ′, and
+modify the primitive-conservative conversion subroutines in
+Athena++. In order to minimize the change to the existing
+code, we estimate the new total energy flux as a sum of the
+total energy flux obtained from the normal HLLD Riemann
+solver and theψ-energy flux:
+FE′ =F E +F eψ ,
+Feψ ≡ψB,
+and discretize it as
+Feψ ,x,i+1/2,j,k =ψ i+1/2,j,kBx,i+1/2,j,k,
+where againB x andψat the cell surfaces are calculated
+using eqs.(13) and (14). The source term on the right-hand
+side in the total energy equation (B3) is corresponding to
+the energy loss by the damping ofψ. As the damping term
+is updated exactly using the operator splitting as in eq.(18),
+we calculate this source term consistently with the damping
+as follows, instead of directly discretizing it.
+
+−∆t ψ2
+c2p
+
+i,j,k
+=e n+1
+ψ,i,j,k −e ∗
+ψ,i,j,k =
+(ψn+1
+i,j,k)2 −(ψ ∗
+i,j,k)2
+2c2
+h
+.
+We use the same discretization for the source term in the
+momentum equation (B1). The other equations remain the
+same as in the GLM scheme.
+B.3.Proof of Concept Calculations
+In this section, we demonstrate the difference between the
+CT, GLM and EGLM schemes. From the discussion above,
+it is expected that the difference should appear in the ther-
+mal energy. We use the circularly polarized Alfv´ en wave in
+two dimensions as the test problem (G. T´ oth 2000). This
+problem has an analytic solution, and because the Alfv´ en
+wave is incompressible, the thermal energy should remain
+unchanged. However, in practice, the thermal energy should
+gradually increase because non-zero numerical diffusion dis-
+sipates the kinetic and magnetic energies.
+We adopt the setup of T. A. Gardiner & J. M. Stone
+(2005), in which the Alfv´ en wave travels at an angle ofθ=
+tan−1(2) with respect to thex-axis and has a wavelength of
+λ= 1. The computational domain spans [0 :
+√
+5]×[0 :
+√
+5/2]
+and is resolved with 256×128 cells. The initial density and
+pressure are uniform, andρ 0 = 1 andp 0 = 10 −4. To ini-
+tialize the velocity and magnetic fields, we use a rotated co-
+ordinate system aligned with the traveling direction of the
+Alfv´ en wave:
+x1 =xcosθ+ysinθ,
+x2 =−xsinθ+ycosθ,
+x3 =z,
+
+27
+Figure 17.Distributions of the thermal energy error with magnetic field directions in the circularly polarized Alfv´ en wave test
+att= 5.0.
+Figure 18.The time evolution of the maximum (solid) and
+minimum (dashed) thermal energy errors in the circularly
+polarized Alfv´ en wave test.
+and in this coordinate system,vandBare initialized as
+v1 = 0,
+v2 =v ⊥ sin(2πx1),
+v3 =v ⊥ cos(2πx1),
+B1 =B 0,
+B2 =B ⊥ sin(2πx1),
+B3 =B ⊥ cos(2πx1),
+wherev ⊥ = 0.1 andB ⊥ = 0.1 set the amplitude of the
+wave. We adoptB 0 = 1, corresponding to the Alfv´ en speed
+ofv a = 1 and the plasma beta ofβ= 1.98×10 −4. We
+adopt such a low plasma-beta configuration intentionally in
+order to elucidate the difference between the schemes in a
+stringent condition. The boundary conditions are periodic
+in all the directions, and the adiabatic index isγ= 5/3. For
+GLM and EGLM, we useL= 1 and variable transport speed
+(corresponding to D1v).
+We measure the fractional error of the thermal energy
+δei,j ≡ ei,j −e 0
+e0
+,
+wheree 0 is the initial thermal energy. We present the dis-
+tributions ofδeatt= 5.0 (corresponding to 5 periods) in
+Figure 17 and the time evolution of the maximum and min-
+imum values in Figure 18. As discussed above,δeshould
+remain zero in the exact solution. CT and GLM produce
+considerable error in the thermal energy with stripe pat-
+terns, both positive and negative, and its amplitude reaches
+∼30% att= 5.0. In contrast, EGLM-S and EGLM-C be-
+have similarly; the thermal energy gradually increases, and
+its distribution is almost uniform. These behaviors of the
+EGLM schemes are healthy and robust, as the numerically
+dissipated kinetic and magnetic energies are converted into
+the thermal energy. On the other hand, CT and GLM can
+easily produce negative pressure if the plasma beta is even
+lower. While the stripe patterns look similar between CT and
+GLM, their detailed evolutions are different, inferring that
+the main origins of the error are different in CT and GLM.
+The major part of the error in GLM arises from the ignored
+energy of the divergence cleaning variableψ. In CT, on the
+other hand, the cell-centered magnetic fields are calculated
+by linear interpolation of the face-centered fields, whose error
+becomes prominent in low-beta regions. This illustrates the
+weak point of the CT scheme discussed in the Introduction.
+
+28
+Thus, we recommend including the EGLM source term
+in the energy equation or using the conservative formula in-
+cluding the energy ofψexplicitly, particularly for simulations
+including low-beta regions. On the other hand, compared to
+the energy equation, we believe that the additional EGLM
+source term in the momentum equation (B1) is of less impor-
+tance and optional, because this term should remain small
+as long as the scheme is working well. Moreover, this term
+violates conservation of the linear momentum as discussed
+in A. Dedner et al. (2002).
+REFERENCES
+Athena++ development team. 2021,
+PrincetonUniversity/athena: Athena++ v21.0, 21.0
+Zenodo, doi: 10.5281/zenodo.4455880
+Balsara, D. S. 2004, ApJS, 151, 149, doi: 10.1086/381377
+Balsara, D. S., & Kim, J. 2004, ApJ, 602, 1079,
+doi: 10.1086/381051
+Bonnor, W. B. 1956, MNRAS, 116, 351
+Brackbill, J. U., & Barnes, D. C. 1980, Journal of
+Computational Physics, 35, 426,
+doi: 10.1016/0021-9991(80)90079-0
+Bryan, G. L., Norman, M. L., O’Shea, B. W., et al. 2014,
+ApJS, 211, 19, doi: 10.1088/0067-0049/211/2/19
+Cunningham, A. J., Frank, A., Varni` ere, P., Mitran, S., &
+Jones, T. W. 2009, ApJS, 182, 519,
+doi: 10.1088/0067-0049/182/2/519
+Dedner, A., Kemm, F., Kr¨ oner, D., et al. 2002, Journal of
+Computational Physics, 175, 645,
+doi: 10.1006/jcph.2001.6961
+Ebert, R. 1955, Zeitschrift fur Astrophysik, 36, 222
+Evans, C. R., & Hawley, J. F. 1988, ApJ, 332, 659,
+doi: 10.1086/166684
+Fromang, S., Hennebelle, P., & Teyssier, R. 2006, A&A,
+457, 371, doi: 10.1051/0004-6361:20065371
+Fryxell, B., Olson, K., Ricker, P., et al. 2000, ApJS, 131,
+273, doi: 10.1086/317361
+Gardiner, T. A., & Stone, J. M. 2005, Journal of
+Computational Physics, 205, 509,
+doi: 10.1016/j.jcp.2004.11.016
+Hawley, J. F., & Stone, J. M. 1995, Computer Physics
+Communications, 89, 127,
+doi: 10.1016/0010-4655(95)00190-Q
+Hirano, S., & Machida, M. N. 2022, ApJL, 935, L16,
+doi: 10.3847/2041-8213/ac85e0
+Hopkins, P. F., & Raives, M. J. 2016, MNRAS, 455, 51,
+doi: 10.1093/mnras/stv2180
+Iwasaki, K., & Inutsuka, S.-I. 2013, in Astronomical Society
+of the Pacific Conference Series, Vol. 474, Numerical
+Modeling of Space Plasma Flows (ASTRONUM2012),
+ed. N. V. Pogorelov, E. Audit, & G. P. Zank, 239
+Keppens, R., Popescu Braileanu, B., Zhou, Y., et al. 2023,
+A&A, 673, A66, doi: 10.1051/0004-6361/202245359
+Lam, K. H., Li, Z.-Y., Chen, C.-Y., Tomida, K., & Zhao, B.
+2019, MNRAS, 489, 5326, doi: 10.1093/mnras/stz2436
+Larson, R. B. 1969, MNRAS, 145, 271,
+doi: 10.1093/mnras/145.3.271
+Latif, M. A., Schleicher, D. R. G., & Khochfar, S. 2023,
+ApJ, 945, 137, doi: 10.3847/1538-4357/acbcc2
+Latif, M. A., Schleicher, D. R. G., & Schmidt, W. 2014,
+MNRAS, 440, 1551, doi: 10.1093/mnras/stu357
+Machida, M. N., Hirano, S., & Basu, S. 2025, ApJ, 988, 6,
+doi: 10.3847/1538-4357/addc56
+Masson, J., Chabrier, G., Hennebelle, P., Vaytet, N., &
+Commer¸ con, B. 2016, A&A, 587, A32,
+doi: 10.1051/0004-6361/201526371
+Matsumoto, Y., Asahina, Y., Kudoh, Y., et al. 2019, PASJ,
+71, 83, doi: 10.1093/pasj/psz064
+Mauxion, J., Lesur, G., & Maret, S. 2024, A&A, 686, A253,
+doi: 10.1051/0004-6361/202348405
+Mayer, A. C., Zier, O., Naab, T., et al. 2025, MNRAS, 537,
+379, doi: 10.1093/mnras/staf027
+Mignone, A., & Tzeferacos, P. 2010, Journal of
+Computational Physics, 229, 2117,
+doi: 10.1016/j.jcp.2009.11.026
+Mignone, A., Zanni, C., Tzeferacos, P., et al. 2012, ApJS,
+198, 7, doi: 10.1088/0067-0049/198/1/7
+Miyoshi, T., & Kusano, K. 2005, Journal of Computational
+Physics, 208, 315, doi: 10.1016/j.jcp.2005.02.017
+Mocz, P., Pakmor, R., Springel, V., et al. 2016, MNRAS,
+463, 477, doi: 10.1093/mnras/stw2004
+Mocz, P., Vogelsberger, M., & Hernquist, L. 2014, MNRAS,
+442, 43, doi: 10.1093/mnras/stu865
+Pakmor, R., Bauer, A., & Springel, V. 2011, MNRAS, 418,
+1392, doi: 10.1111/j.1365-2966.2011.19591.x
+Powell, K. G. 1994, An approximate Riemann solver for
+magnetohydrodynamics (that works more than one
+dimension), Tech. rep.
+Powell, K. G., Roe, P. L., Linde, T. J., Gombosi, T. I., &
+De Zeeuw, D. L. 1999, Journal of Computational Physics,
+154, 284, doi: 10.1006/jcph.1999.6299
+Price, D. J., & Monaghan, J. J. 2005, MNRAS, 364, 384,
+doi: 10.1111/j.1365-2966.2005.09576.x
+Price, D. J., Wurster, J., Tricco, T. S., et al. 2018, PASA,
+35, e031, doi: 10.1017/pasa.2018.25
+Sadanari, K. E., Omukai, K., Sugimura, K., Matsumoto,
+T., & Tomida, K. 2021, MNRAS, 505, 4197,
+doi: 10.1093/mnras/stab1330
+
+29
+Sadanari, K. E., Omukai, K., Sugimura, K., Matsumoto,
+T., & Tomida, K. 2023, MNRAS, 519, 3076,
+doi: 10.1093/mnras/stac3724
+Sadanari, K. E., Omukai, K., Sugimura, K., Matsumoto,
+T., & Tomida, K. 2024, PASJ, 76, 823,
+doi: 10.1093/pasj/psae051
+Spruit, H. C., Stehle, R., & Papaloizou, J. C. B. 1995,
+MNRAS, 275, 1223
+Steinwandel, U. P., & Price, D. J. 2025, arXiv e-prints,
+arXiv:2511.19615, doi: 10.48550/arXiv.2511.19615
+Stone, J. M., & Gardiner, T. 2009, NewA, 14, 139,
+doi: 10.1016/j.newast.2008.06.003
+Stone, J. M., Tomida, K., White, C. J., & Felker, K. G.
+2020, ApJS, 249, 4, doi: 10.3847/1538-4365/ab929b
+Teunissen, J., & Keppens, R. 2019, Computer Physics
+Communications, 245, 106866,
+doi: https://doi.org/10.1016/j.cpc.2019.106866
+Tomida, K., Okuzumi, S., & Machida, M. N. 2015, ApJ,
+801, 117, doi: 10.1088/0004-637X/801/2/117
+Tomida, K., & Stone, J. M. 2023, ApJS, 266, 7,
+doi: 10.3847/1538-4365/acc2c0
+Tomida, K., Tomisaka, K., Matsumoto, T., et al. 2013,
+ApJ, 763, 6, doi: 10.1088/0004-637X/763/1/6
+Tricco, T. S., & Price, D. J. 2012, Journal of Computational
+Physics, 231, 7214, doi: 10.1016/j.jcp.2012.06.039
+Tricco, T. S., Price, D. J., & Bate, M. R. 2016, Journal of
+Computational Physics, 322, 326,
+doi: 10.1016/j.jcp.2016.06.053
+Tsukamoto, Y., Iwasaki, K., Okuzumi, S., Machida, M. N.,
+& Inutsuka, S. 2015, MNRAS, 452, 278,
+doi: 10.1093/mnras/stv1290
+Tu, Y., Li, Z.-Y., Lam, K. H., Tomida, K., & Hsu, C.-Y.
+2024, MNRAS, 527, 10131, doi: 10.1093/mnras/stad3843
+T´ oth, G. 2000, Journal of Computational Physics, 161, 605,
+doi: https://doi.org/10.1006/jcph.2000.6519
+Vaytet, N., Commer¸ con, B., Masson, J., Gonz´ alez, M., &
+Chabrier, G. 2018, A&A, 615, A5,
+doi: 10.1051/0004-6361/201732075
+Vides, J., Audit, E., Guillard, H., & Nkonga, B. 2013,
+ESAIM: Proc., 43, 180, doi: 10.1051/proc/201343012
+Wang, P., & Abel, T. 2009, ApJ, 696, 96,
+doi: 10.1088/0004-637X/696/1/96
+Weinberger, R., Springel, V., & Pakmor, R. 2020, ApJS,
+248, 32, doi: 10.3847/1538-4365/ab908c
+Wurster, J., Price, D. J., & Bate, M. R. 2016, MNRAS,
+457, 1037, doi: 10.1093/mnras/stw013
+Xu, W., & Kunz, M. W. 2021, MNRAS, 502, 4911,
+doi: 10.1093/mnras/stab314
+Zhang, M., & Feng, X. 2016, Frontiers in Astronomy and
+Space Sciences, Volume 3 - 2016,
+doi: 10.3389/fspas.2016.00006

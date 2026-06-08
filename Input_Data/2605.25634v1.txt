@@ -1,0 +1,761 @@
+Title: Machine Learning-based Separation of the He I 10830Å Chromospheric Signal: Quantitative Analysis of Chromosphere-Corona Intensity in the Quiet Sun
+Authors: Huaiming Li, Fangyu Xu, Yi Bi, Zhenyu Jin
+Published: 2026-05-25
+Categories: astro-ph.SR
+
+Draft version May 26, 2026
+Typeset using LATEXdefaultstyle in AASTeX7.0.1
+Machine Learning-based Separation of the Hei10830 ˚A Chromospheric Signal: Quantitative Analysis
+of Chromosphere-Corona Intensity in the Quiet Sun
+Huaiming Li, 1, 2 F angyu Xu,1 Yi Bi, 1 and Zhenyu Jin 1, 3
+1Yunnan Observatories, Chinese Academy of Sciences, Kunming 650216, People’s Republic of China
+2University of Chinese Academy of Sciences, Beijing 101408, People’s Republic of China
+3Yunnan Key Laboratory of Solar Physics and Space Science, 650216, People’s Republic of China
+ABSTRACT
+The Hei10830 ˚A line, a crucial optically thin chromospheric line, is frequently used to study
+coronal heating and vertical coupling across the chromosphere-corona interface. However, its images
+are severely contaminated by the strong photospheric background signal, hindering the analysis of
+fine chromospheric structures. Given the morphological differences between the Active Region (AR)
+and the Quiet Sun (QS), we proposed separating the Hei10830 ˚A chromospheric signal using two
+deep learning CNN models. Our model utilizes TiO images and cross-band learning to infer the
+Hei10830 ˚A photospheric background. The output is combined with an exponential absorption model
+to achieve quantitative analysis of the pure chromospheric component. Joint analysis of Solar Dynamics
+Observatory (SDO) data and the separated QS structures reveals a strong spatial negative correlation
+between chromospheric Hei10830 ˚A intensities(R≈ −0.84 in 304 ˚A ), and significant layered coupling
+with EUV (171, 193, and 304 ˚A) radiation. Furthermore, strong Hei10830 ˚A absorption areas are
+highly correlated with regions of strong magnetic fields, while 171 ˚A radiative enhancement areas
+extend to the strong magnetic field edges and the mixed-polarity regions. These findings quantify
+the radiation intensity relationship between Hei10830 ˚A and EUV bands in the Quiet Sun. It also
+demonstrates the differences in heating characteristics between unipolar and mixed-polarity magnetic
+fields.
+Keywords:Solar chromosphere (1479) — Quiet sun (1322) — Active solar regions (1974) — Solar
+coronal heating (1989)
+1.INTRODUCTION
+The vertical coupling and associated observations across the entire solar atmosphere, from the photosphere through
+the chromosphere to the corona, have long been an important unsolved mystery. Understanding this coupling necessi-
+tates fine observations of the interface, which is characterized by extremely steep temperature and density gradients.
+The Hei10830 ˚A triplet spectral line, an optically thin band formed in the chromosphere–corona interface, carries
+multi-layered atmospheric information and is crucial for studying energy and mass coupling between different solar
+atmospheric layers. Its absorption primarily arises from the 2s 3S→2p 3P transition in Orthohelium, forming a triplet
+at 10829.09, 10830.25, and 10830.34 ˚A with a theoretical intensity ratio of 1:3:5 (W. L. Wiese & J. R. Fuhr 2009), while
+the 2s 3S metastable state requires high energy for excitation (T. Libbrecht et al. 2021). One of the primary excitation
+mechanisms for Hei10830 ˚A is the photoionization-recombination (PR) process (R. Centeno et al. 2008). The line
+is highly sensitive to local heating, making it a valuable diagnostic of energy release and vertical coupling across the
+chromosphere-to-corona layers (Z. Zeng 2016). Due to its relatively high formation temperature, the Hei10830 ˚A
+line is representative of chromospheric heating. Specifically, the PR mechanism remains the dominant formation pro-
+cess below 20,000 K, with a characteristic temperature typically modeled at 10,000 K (E. H. Avrett et al. 1994; V.
+Corresponding author: Fangyu Xu
+xu fangyu@ynao.ac.cn
+arXiv:2605.25634v1  [astro-ph.SR]  25 May 2026
+
+2
+Andretta et al. 1995). The line is crucial for studying the structure and evolution of the transition region, tracing the
+photospheric origin of upper atmospheric activity, and the energy and mass coupling between different solar layers.
+Earlier studies using Hei10830 ˚A data focused on coronal heating observation. These studies utilized multi-
+layer Hei10830 ˚A combined with SDO satellite data (including the Atmospheric Imaging Assembly (AIA) and the
+Helioseismic and Magnetic Imager (HMI)) (W. D. Pesnell et al. 2012; J. R. Lemen et al. 2012; J. Schou et al. 2012),
+alongside fine-channel coronal heating observations from the Goode Solar Telescope (GST) (P. R. Goode & W. Cao
+2013; H. Ji et al. 2012). Moreover, related research also focuses on the photospheric origins of coronal heating,
+which is investigated through high-resolution observations of small-scale dynamics such as: granule-driven magnetic
+reconnection (Z. Zeng et al. 2013), granule-driven quasi-periodic microjets (Z. Hong et al. 2022), and the structure
+of various chromospheric jets (Y. Wang et al. 2023; Z. Zeng et al. 2016; Y. Wang et al. 2021; Z. Li et al. 2016).
+Furthermore, Swedish Solar Telescope (SST) raster scan data has been specifically used for observations of Ellerman
+bombs (G. B. Scharmer et al. 2003; T. Libbrecht et al. 2017). Advanced techniques, including polarization observations
+for flow velocities and Fabry-P´ erot multi-band scanning (J. Leenaarts et al. 2025; Y. Xu et al. 2022), underscore the
+line’s unique value in tracing magnetically controlled energy dissipation.
+Previous studies of the Hei10830 ˚A line, particularly observations of the Moss regions (B. N. Handy et al. 1999;
+D. Tripathi et al. 2010), were primarily conducted based on data mixing photospheric and chromospheric signals and
+analyzed using the empirical threshold method (e.g., setting 90% of the mean Hei10830 ˚A intensity as a threshold)
+to track the photospheric origin of coronal heating and its relation to the magnetic field(Z.-X. Hong et al. 2017; P.
+Hashim et al. 2021, 2024). However, the strong photospheric signal in Hei10830 ˚A imaging severely limits the precise
+separation and quantitative analysis of chromospheric and photospheric contributions, hindering the study of fine
+chromospheric structures.
+To address the strong photospheric interference, we developed a novel deep learning framework to separate the
+Hei10830 ˚A chromospheric signal. Given the fundamentally different structural characteristics between AR and
+theQS in the Hei10830 ˚A band, we propose two independent deep Convolutional Neural Network (CNN) models
+based on the ResNet architecture (K. He et al. 2016). These models utilize temporally and spatially matched TiO
+images as input. The spatial matching is achieved using algorithms such as Scale-Invariant Feature Transform (SIFT)
+and Optical Flow(D. G. Lowe 1999, 2004; Y. Wang et al. 2025), employing a cross-band learning paradigm to infer
+the photospheric signal in the Hei10830 ˚A imaging. Notably, in Model B (developed for the Quiet Sun), we incor-
+porated Fourier Features Let Networks (FFLN) (M. Tancik et al. 2020) to enhance the fitting capability for complex
+fine structures. Ultimately, we successfully separated the true Hei10830 ˚A chromospheric information for the first
+time using the method described in Section 3.2. The completeness and continuity of the separated chromospheric
+structures validate the effectiveness of our model and the accuracy of the information separation. This method breaks
+the limitations of traditional thresholding, allowing us for the first time to conduct accurate pixel-level spatial and
+quantitative studies on the Hei10830 ˚A chromospheric line and the AIA EUV lines.
+Unlike previous studies, which mostly focused on Moss regions or areas of intense magnetic fields, this work utilizes
+more generally representative QS data. We conducted the first pixel-level joint analysis of the separated Hei10830 ˚A
+fine chromospheric structures with AIA’s 171˚A, 193 ˚A, 304 ˚A channels, and HMI’sI c andI m data. Our analysis reveals
+a significant negative correlation between the Hei10830 ˚A chromospheric intensity and the corresponding coronal
+intensity in the QS. Furthermore, the observed spatial and layered coupling provides strong evidence for a low-
+atmosphere-driven mechanism for coronal heating in QS fine structures. We also find that while strong Hei10830 ˚A
+absorption generally correspond to intense magnetic fields, the strong AIA radiative enhancement extends to the
+edges of the intense magnetic fields and the magnetic neutral line regions. This observation confirms that there is a
+spatial offset in the magnetic environment between the heating footpoints of the chromosphere and corona, and that
+the coronal heating mechanisms differ between mixed-polarity regions and unipolar regions in the quiet Sun. The
+remainder of this paper is organized as follows: Section 2 introduces the observational data used. Section 3 details
+the data pre-processing steps, the physical principle of chromospheric signal separation, the deep learning approach,
+and the results. Section 4 presents the main findings from the pixel-level joint analysis. Finally, Section 5 provides an
+in-depth discussion of these results, and Section 6 summarizes our primary discoveries.
+2.INSTRUMENT AND DATA
+The data for this study primarily originated from two observation facilities: NVST and SDO. NVST provided high-
+resolution imaging data in the TiO band and the Hei10830 ˚A band, which were used for model training and subsequent
+
+3
+T able 1.Summary of Key Observational Data Properties
+Channel TiO He I HMI AIA
+Data 7058 ˚A 10830 ˚A I c , Im 171, 193, 304 ˚A
+Temporal Cadence 30 s 8 s 45 s 12 s
+Spatial Resolution 0.052 ′′ 0.093′′ 0.6′′ 0.6′′
+chromospheric information separation. Although not strictly hardware-synchronized, the observations are effectively
+simultaneous, as the 30 s interval is much shorter than the typical 5–10 min granulation timescale. SDO data, including
+AIA multi-band imaging at 171 ˚A (Feix, logT≈5.8), 193 ˚A (Fexii, logT≈6.1; Fexxiv, logT≈7.3), and 304 ˚A
+(Heii, logT≈4.7) channels (J. R. Lemen et al. 2012) , and HMI’sI c andI m data,referring to continuum intensity
+and line-of-sight magnetograms respectively (J. Schou et al. 2012), were used for physical interpretation and analysis.
+The NVST is located at Fuxian Lake, Yunnan (Z. Liu et al. 2014). Its Hei10830 ˚A channel achieved first light in
+2022 and was upgraded in 2023 to a 1024×1280 pixel scientific-grade detector for routine scientific observations (W.-J.
+Meng et al. 2024). This high-performance near-infrared camera was developed through a collaboration between the
+astronomical technology laboratory at Yunnan Observatories and the Kunming Institute of Physics. The observation
+line center of this channel is located at 10830.35 ˚A, with a FWHM of 0.5 ˚A. It is equipped with a bandpass filter
+featuring a tunable range of±5 ˚A. High-resolution image reconstruction was performed using the Non-rigid Alignment
+(NASIR) method (H. Liu et al. 2022) at Yunnan Observatories, Chinese Academy of Sciences.
+For model training, two independent datasets were utilized. The AR model employed TiO images as input and
+the Hei10830.35 ˚A blue-shifted 1.00 ˚A off-band images as the photospheric label, collected over multiple days. For
+brevity, Hei10830.35 ˚A and its blue-shifted counterpart at 10829.35 ˚A are hereafter referred to as 10830 ˚A and
+10829 ˚A, respectively. The 10829.35 ˚A off-band signal is primarily dominated by the photospheric continuum, with
+chromospheric contributions effectively suppressed by four factors. First, the Hei10829.09 ˚A line intensity is only 1/8
+of the 10830.34 ˚A main peak (W. L. Wiese & J. R. Fuhr 2009). Second, our filter is centered 0.26 ˚A away from this
+weak line core, placing it outside the FWHM range. Additionally, observed morphological features (e.g., granulation
+and sunspots) are identical to pure photospheric structures, suggesting any residual chromospheric signal is reduced
+to noise levels. Finally, the deep learning model naturally treats spatially uncorrelated chromospheric components
+as random residuals. Collectively, these mechanisms ensure this band provides a stable and reliable photospheric
+background. Chromospheric signals were extracted from observations on July 16, 2024. For the QS model, a single-
+day dataset (November 19, 2024, 05:20–06:10 UT) was used for training. Because the chromospheric signal in the QS
+is weak, this approach is well-suited for residual-optimization-like algorithms, enabling more accurate extraction of
+fine-scale structures. To ensure the quality of model training and the subsequent chromospheric structure separation,
+we selected datasets with favorable seeing conditions. The data were split into training and test sets at an 85%-15%
+ratio, using a random seed of 42 for reproducibility. Key observational parameters regarding spatial and temporal
+resolution are summarized in Table 1.
+3.METHODOLOGY
+3.1.Pre-processing
+The entire research process, from data acquisition to the final separation of chromospheric information, is divided
+into five sequential stages: Firstly, high-resolution observational data were acquired from NVST and reconstructed.
+Secondly, for the time-matched images, precise spatial registration was achieved by employing SIFT (D. G. Lowe 1999,
+2004) and the Optical Flow method (Y. Wang et al. 2025). The Hei10830 ˚A data was utilized as the reference frame for
+this process. Thirdly, two ResNet-based neural network models were trained to learn the mapping relationship between
+the TiO images and the corresponding Hei10830 ˚A band photospheric signal. Fourthly, the trained models were used
+to predict the photospheric equivalent signal in the Hei10830 ˚A band, providing a reference for distinguishing the
+photospheric and chromospheric components. Finally, we successfully extracted the Hei10830 ˚A chromospheric signal
+from the Hei10830 ˚A reconstructed data.
+
+4
+3.2.Physical Principle and Motivation
+We propose a dual-model ResNet-based machine learning approach aimed at processing the complex and highly
+variable chromospheric signal in the Hei10830 ˚A band data under a strong photospheric background. This complexity
+fundamentally arises from the superposition of intense photospheric signals with weak chromospheric signals. The
+physical origins of this phenomenon are multifaceted: firstly, the radiative transfer process of the Hei10830 ˚A
+line is optically thin, enabling the observed data to contain multi-layered information from the photosphere up to
+the upper atmosphere; secondly, the Hei10830 ˚A absorption feature originates from a difficult-to-excite, high-lying
+metastable state transition, resulting in a weak signal; finally, the filter with a FWHM = 0.5 ˚A introduces significant
+photospheric continuum contamination; a narrower bandwidth would reduce the contribution of this photospheric
+signal. Collectively, these three factors give rise to a low signal-to-noise ratio (SNR) of the observed data. The
+main objective of this study is precisely to overcome these challenges by accurately separating and extracting the
+chromospheric signal in the presence of a strong photospheric background. Specifically, the machine learning model
+uses the TiO image as input and, through cross-band learning, infers the corresponding photospheric information
+within the Hei10830 ˚A band. The final chromospheric component (C) is obtained by dividing the observed signal
+(Iobs) by the predicted photospheric background (I cont), a concept derived from the most fundamental exponential
+absorption model:
+C=I obs/Icont
+whereI obs represents the observed Hei10830 ˚A signal, andI cont denotes the predicted photospheric signal. Physically,
+this approach is a simplification of the radiative transfer model under non-LTE conditions. Since the observed signal
+(Iobs) is inherently a combined effect of all physical processes, we do not explicitly calculate complex processes such as
+photon absorption, photoionization-recombination (PR) mechanisms, scattering, or the population of Heitriplet states.
+Instead, our model focuses on reconstructing the pure photospheric background (I cont) as a reference. Consequently,
+the ratioC=I obs/Icont naturally captures and integrates all modulation effects from the chromosphere.
+(A1)
+ (A2)
+(B1)
+ (B2)
+Figure 1.The first row (A1, A2) displays the high-contrast features of the Active Region dataset. The second row (B1, B2)
+shows the low-contrast, fine-scale structures of the Quiet Sun dataset. Panels (A1, B1) are the TiO photospheric signals, and
+Panels (A2, B2) are the observed Hei10830 ˚A signals. All images have a spatial size of 400×400 pixels.
+As shown in Figure 1, there exist substantial morphological and radiative differences between the AR and the QS,
+where the chromospheric signal in the AR (Panels A1-A2) is significantly stronger than the faint features in the QS
+(Panels B1-B2). To address these inherent disparities, a dual-model approach is thus adopted in this study. The
+physical foundation of our method is based on the different characteristics of solar regions. Ideally, the training labels
+should show the 10830 ˚A photosphere with as little chromospheric signal as possible. For Model A (Active Regions),
+
+5
+T able 2.Physical Principles of Model A and Model B
+Model Mapping Relation Region Chromospheric Signal Photospheric Label
+Model A TiO→10830 ˚A Photosphere AR Strong 10829 ˚A
+Model B TiO→10830 ˚A Photosphere QS Weak 10830 ˚A
+the strong chromospheric absorption at Hei10830 ˚A makes it necessary to use a nearby off-band (such as 10829 ˚A) as
+a reference. This is justified because the chromospheric signal at 10829 ˚A is very weak, while its photospheric intensity
+effectively represents the 10830 ˚A background. For Model B (Quiet Sun), we establish a direct mapping from TiO to
+10830 ˚A. This is based on the assumption that chromospheric signals in quiet regions are not only weak but also have
+different structures compared to the photosphere. Therefore, these chromospheric features do not interfere with the
+model’s ability to learn the stable mapping from TiO structures to the 10830 ˚A photospheric background. Table 2
+summarizes the physical principles of these two models.
+Model A is applied to the AR to establish a general mapping between TiO images and the photospheric background
+signal in the 10830 ˚A band, using a training dataset that comprises TiO images and 10829 ˚A band observational data
+acquired over five distinct days. For typical AR features such as sunspots and filaments, the 10830 ˚A signals exhibit
+strong absorption with well-defined contours. However, the observational field of view still encompasses numerous
+magnetic loops, small jets, and faint chromospheric signals embedded within the strong photospheric background. This
+model aims to extract these chromospheric signals while achieving cross-dataset generalization. By using photospheric
+images and 10829 ˚A band data for training, the model generates photospheric reference images. Dividing the observed
+10830 ˚A data by these references provides pixel-wise chromospheric information, enabling the prediction of photospheric
+reference signals and the precise extraction of chromospheric signals under different dates or observational conditions.
+As shown in Figure 2, the Hei10829 ˚A band image reflects the photospheric characteristics of the observed region in
+terms of both structure and intensity distribution. This result provides the model with a high-quality reference label,
+allowing us to establish an accurate mapping relationship between the photospheric images in different bands.
+TiO
+10829 ˚A
+Figure 2.Training data for Model A from NVST observations. From left to right: 2024-11-25, 2024-11-30, 2025-01-13,
+2025-04-25, and 2025-05-12. The first row shows TiO images, and the second row shows 10829 ˚A images representing the
+photospheric component of Hei10830 ˚A.
+Model B addresses the challenge posed by QS and weak absorption regions, where the Hei10830 ˚A chromospheric
+absorption is often too weak to be clearly distinguished under typical observational constraints. Model B treats
+the chromospheric signal as a subtle residual signal, extracting the difference between the raw observational data
+
+6
+T able 3.Comparison of Architectural Components for Model A
+and Model B
+Model SE Block BN Dropout Branches FFLN
+Model A (AR) Yes Yes YES two No
+Model B (QS) Yes NO No two Yes
+and the reconstructed background by learning the mapping relationship between two photospheric signals. This
+difference serves as an approximate representation of the chromospheric signal. This approach is capable of efficiently
+and accurately separating out weak physical signals under low signal-to-noise ratio (SNR) conditions, demonstrating
+strong robustness and universality. During the training process, the model directly utilizes TiO images (see B1 in
+Figure 1) to learn the photospheric equivalent signal of the 10830 ˚A band (see B2 in Figure 1), thereby achieving
+cross-band photospheric mapping and chromospheric residual signal extraction.
+3.3.Network
+Our method employs two dual-branch architectures based on Deep Convolutional Network models: Model A and
+Model B , which incorporates the Fourier Features Let Networks (FFLN) (M. Tancik et al. 2020). Both models are
+fundamentally built upon the Deep Residual Network (ResNet) architecture (K. He et al. 2016). The overall structure
+is composed of an initial convolutional layer, a subsequent series of Residual Blocks used for efficient feature extraction,
+and a final output layer. Specifically, Model B integrates the FFLN module immediately following the input layer.
+The core objective of this architecture is to map the TiO input to the target He I 10830 ˚A corresponding photospheric
+signal. In traditional ResNet architectures, components such as Batch Normalization (BN), Squeeze-and-Excitation
+(SE) blocks, and Dropout are modular options. In this study, the purpose of the dual-branch architecture is to use
+downsampling to account for details at different scales. The detailed configurations of Model A and Model B are in
+Table 3. Our ResNet module implements a crucial enhancement to the classic residual learning paradigm, specifically
+by embedding the Channel Attention Squeeze-and-Excitation (SEBlock) mechanism onto the main path of the residual
+connection. The SEBlock dynamically learns and generates weighting coefficients for each feature channel, thereby
+significantly enhancing the model’s representational capacity and its ability to focus on critical information.
+Model A adopts a dual-branch parallel structure to facilitate cross-scale feature learning. This design is intended
+to simultaneously learn granules and the finer intergranular lane structures, thereby balancing the extraction of local
+details and global contextual information. The architecture implements cross-scale fusion, where the High-Resolution
+Branch maintains the original input size (400×400) to focus on capturing high-frequency details, such as granules and
+intergranular lanes. Meanwhile, the Mid-Resolution Branch downsamples the input to (200×200) to process global
+contextual information and larger-scale granular structures, thus reducing computational complexity and increasing
+the receptive field. Model A incorporates Dropout regularization after the ReLU activation within the residual blocks.
+This strategy effectively prevents the model from overfitting on lower-quality data, thereby enhancing its generalization
+capability. Feature Fusion: The feature maps from the two branches (each with 64 channels) are upsampled and aligned,
+followed by Concatenation along the channel dimension (resulting in 128 total channels), and finally mapped to the
+output through a 1×1 convolutional layer.
+Model B is an optimized variant of Model A, designed to overcome the Spectral Bias in deep learning and better
+learn high-frequency details. The design of Model B incorporates specific regularization and channel design choices.
+It does not utilize Dropout regularization and omits BN layers within its Residual Blocks, while its channel count is
+set to double that of Model A. This distinct design stems from Model B’s specific training purpose: it uses observa-
+tional data from only a single, particular day as its dataset, serving exclusively as a dedicated model for extracting
+the chromospheric signal from that day. The model does not need to address generalization across different dates
+or instruments under this special requirement, thus the removal of Dropout and BN is justified. Simultaneously,
+increasing the network capacity aims to maximize the model’s ability to fit the specific day’s training data, thereby
+preventing underfitting and ensuring the model captures all details within that day’s data as precisely as possible.
+FFLN Integration: This module maps the pixel’s spatial coordinates (x,y) into high-dimensional sine and cosine fea-
+tures, which are then concatenated with the original image features along the channel dimension. This explicit spatial
+
+7
+encoding mechanism significantly enhances the network’s capacity to capture high-frequency information. Dimension
+Adjustment: Considering the additional feature dimensions and computational load introduced by FFLN, we adjusted
+Model B’s input image size to 200×200, and the downsampling target for the mid-resolution branch to 100×100.
+(a) Model A Loss
+ (b) Model B Loss
+Figure 3. Comparison of Loss for Model A and Model B.
+As shown in Figure 3, the total loss function is composed of an L 1 loss and a weighted gradient loss (0.3× L grad).
+The gradient loss enforces the model to learn and preserve high-frequency information such as edge details and texture
+variations in images by jointly optimizing the horizontal and vertical gradient discrepancies between the predicted and
+target outputs. The models were implemented using the PyTorch framework and optimized using the Adam optimizer,
+and cross-validation was not adopted in this study. In practice, the L1 term accounts for approximately half of the total
+loss. Model A started training with a learning rate of 10 −3 and converged to 10 −4. We attempted to further reduce
+the learning rate, but the results showed no significant change in performance, thereby validating the effectiveness
+of the current setting. Model B was initialized with a learning rate of 10 −4 and converged to 10 −6. This small final
+learning rate is appropriate and indicates that the training process achieved good convergence. Regarding performance
+metrics, the Mean Absolute Error (MAE) of Model A is approximately 0.015. Since Model B is a dedicated model for
+high-precision fitting of single-day data, its MAE is even lower, actually falling below 0.01 at approximately 0.007. Our
+models were trained for sufficient epochs so that both the training loss and the validation loss gradually approach a
+nearly stable minimum. This demonstrates that the models not only achieved good training outputs but that Model A
+also exhibited excellent generalization capability.
+As illustrated in Figure 4, the relative errors (σ) for mapping the 10830˚A photospheric information are approximately
+0.015 for Model A and 0.007 for Model B. The magnitude of this statistical error is primarily limited by residual
+chromospheric signals within the observed labels (Obs). Since the model-generated output (Gen) represents a pure
+photospheric background, any residual chromospheric absorption features in the labels result in localized increases
+in residuals (e.g., reaching∼0.025 for Model A and∼0.01 for Model B). Such fluctuations do not signify a decrease
+in accuracy; rather, they reflect the model’s effective decoupling of non-photospheric interference. As observed from
+the diagonal intensity profiles, TiO and Obs exhibit similar variation trends in brightness, indicating they share the
+same underlying morphological structures. However, it is evident that the relationship between them is not a simple
+linear mapping. Therefore, non-linear model training is of critical importance for such tasks. The variation trends and
+absolute magnitudes of the Gen curves match the Obs profiles extremely closely, demonstrating that the model has
+successfully captured the complex non-linear mapping from TiO to 10830 ˚A and achieved high precision.
+3.4.Chromospheric Signal Separation
+Based on the trained and validated deep learning model, the TiO data ( Figure 5, Column 1) is utilized to predict
+and generate the corresponding photospheric image in the Hei10830 ˚A band (Figure 5, Column 3) without requiring
+a target label. This prediction step is crucial as it establishes the necessary photospheric reference for subsequent
+calculations. Subsequently, the final chromospheric signal (Figure 5, Column 4) is separated and extracted by applying
+a simple exponential absorption model to the observed Hei10830 ˚A data (Figure 5, Column 2) and the generated
+photospheric image. Critically, this physical model provides the genuine physical basis for decoupling the chromospheric
+signal from the continuum. In the following section, we analyze the chromospheric activity within a quiet region
+characterized by relatively weak chromospheric emission.
+
+8
+Figure 4.Testing cases of our proposed models: The top row displays results from Model A for active regions, and the
+bottom row shows results from Model B for the quiet Sun. The columns from left to right represent: (1) the observed intensity
+used as the training label (Obs); (2) the predicted 10830 ˚A photospheric signal generated by the model (Gen); (3) the ratio
+map indicating relative deviations (Obs/Gen); (4) the distribution of the Obs/Gen values representing the model’s prediction
+accuracy; and (5) the intensity values of pixels sampled along the diagonal from the bottom-left to the top-right of the images.
+TiO (Model A input)
+ He I (observation)
+ Photospheric
+ Chromospheric
+TiO (Model B input)
+ He I (observation)
+ Photospheric
+ Chromospheric
+Figure 5.Comparison of photospheric and chromospheric components. The first row shows the active region; the second
+row shows the quiet region. Columns 1–2 display the original TiO and Hei10830 ˚A observations; columns 3–4 present the
+generated photospheric reference and extracted chromospheric absorption maps. All images have a spatial size of 400×400
+pixels. Animations of the aligned sequences are available in the HTML version for the AR (300×300 pixel, 3 s) and QS (400×400
+pixel, 4 s) regions. These animations cover∼40–45 minutes of solar evolution, highlighting the dynamic chromospheric fibrils
+(Column 4) isolated from the composite signals (Column 2)
+4.RESULTS
+On November 19, 2024, the observational data analyzed originated from a solar quiet region observation conducted
+between 05:25–06:10 (UT). This joint dataset provides multi-layered information, spanning from the photosphere to
+the corona, and comprises NVST high-resolution imaging data (TiO and Hei10830 ˚A) and SDO data (AIA at 171 ˚A,
+193 ˚A, 304 ˚A, and HMI’sI c andI m). Before analysis, the NVST data were normalized using the average intensity of
+the observation sequence. The SDO data (AIA and HMI), having been calibrated to represent physical quantities such
+as temperature, did not require further normalization. The observational region for this study is contained within the
+
+9
+blue box in Fig. 6A. The alignment process utilized a combination of the SIFT method for robust feature matching
+and Optical Flow for fine-scale image registration. For temporal synchronization,I m were used as the reference, and
+other bands were matched based on the nearest-neighbor principle. For spatial alignment, the 10830 ˚A image was used
+as the reference frame: first, TiO was aligned to 10830 ˚A using SIFT and Optical Flow; subsequently, IDL procedures
+were used to achieve self-alignment of the SDO data, and SIFT+Optical Flow was applied again to alignI c to TiO.
+Based on the resulting transformation matrix, HMI (I c andI m) and AIA (171 ˚A, 193 ˚A, 304 ˚A) data were then aligned
+to Hei10830 ˚A. Bilinear interpolation was used during the alignment process to ensure pixel correspondence without
+changing the resolution of the data.
+Figure 6.Multi-wavelength observations and quantitative analysis of the quiet-Sun region. The images used in this figure are
+45-minute time-averaged data. (A) SDO/AIA 171 ˚A image, with the blue box indicating the area of interest for this study;
+(B) HMI magnetogram; (C) Chromospheric structure separated from the Hei10830 ˚A line; (D)-(F) 304 ˚A, 171 ˚A, and 193 ˚A
+observations within the study region; (G)-(I) Scatter plots and linear fitting relationships, where the x-axis represents the
+intensity of the three AIA bands (AIA 304 ˚A, 171 ˚A, 193 ˚A), and the y-axis represents the Hei10830 ˚A chromospheric signal.
+Legend Details: In subfigures (B)-(F), the blue dashed line represents the contour of the time-averaged mean intensity of the
+Hei10830 ˚A data, with the area inside the dashed line denoting the Hei10830 ˚A absorption region; the red solid line and the
+blue solid line denote the magnetic field contours of positive 40 G and negative 40 G, respectively.
+4.1.Correlation between10830 ˚A and EUV Intensity
+Our observations originate from the region delimited by the blue bounding box in the QS area shown in Figure 6(A).
+Fig. 6 (B)-(F) display the corresponding 45-minute averaged HMI magnetic field, Hei10830 ˚A chromosphere, AIA
+304 ˚A, 171 ˚A, and 193 ˚A data for this observed region. The area enclosed by the blue dashed line represents the
+Hei10830 ˚A absorption region, with the threshold set to the average value of Figure 6C (value = 1), while the red and
+blue solid lines denote the boundaries of the±40 G magnetic fields, respectively. We obtained a Hei10830 ˚A chromo-
+
+10
+spheric signal (Figure 6 (C)) using a deep learning method and performed a comparative analysis with the intensity
+enhancement of three AIA EUV bands (Figure 6 (D)-(F)). We found that, in the QS, the intensity of the Hei10830 ˚A
+chromospheric signal exhibits a significant negative spatial correlation with the EUV band intensity. Furthermore, the
+chromospheric absorption regions and coronal brightening regions spatially overlap.This strong negative correlation
+and spatial overlap strongly support a tight vertical coupling between energy release and response processes in the
+photosphere and corona. On the 45-minute time-averaged data, the correlation coefficientRranges from−0.84 to
+−0.66 (Figure 6 (G)–(I)). The Hei10830 ˚A signal and the AIA 304 ˚A emission show the strongest anti-correlation
+(R≈ −0.84). The anti-correlation weakens with increasing characteristic temperature, reachingR≈ −0.78 in the
+AIA 171˚Achannel andR≈ −0.66 in the AIA 193 ˚A channel. This suggests that the correlation between Hei10830 ˚A
+absorption and EUV brightening decreases with temperature and formation height, and that in quiet regions, it is
+more strongly correlated with EUV radiation from the lower atmospheric layers.
+Figure 7.The images used in this figure are 45-minute time-averaged data. (A) The Hei10830 ˚A chromospheric signal;
+(B)-(D) AIA band images at 304 ˚A, 171 ˚A, and 193 ˚A, respectively; (E) The HMI magnetogram. (F)-(H) Scatter plots and linear
+relationships between the three EUV bands and the Hei10830 ˚A chromospheric signal. Legend Details: In panels (A)-(E),
+the blue dashed line outlines the strong absorption region, defined as the 99% percentile of the time-averaged Hei10830 ˚A
+chromospheric signal;the red and blue solid lines represent the magnetic field contours of±40 G; In panels (F)-(H), data points
+below the blue dashed line correspond to the strong absorption region, and the green dashed line shows the minimum EUV
+brightness within this region.
+4.2.Thresholded EUV Response in Hei10830 ˚A Strong Absorption Regions
+The strong absorption regions of the chromospheric Hei10830 ˚A line do not always coincide with the brightest
+EUV regions. However, the EUV intensity within these regions can still reach a threshold. These strong absorption
+regions are defined as the 99% percentile of the time-averaged Hei10830 ˚A signal (value = 0.99), as indicated by
+the blue dashed box in Figure 7 (A)-(E). Within the strong absorption region, the EUV bands generally exceed
+thresholds of∼25 DN/s for AIA 304 ˚A,∼50 DN/s for AIA 171 ˚A, and∼120 DN/s for AIA 193 ˚A , reflecting
+significant chromospheric, transition region, and coronal heating. However, when the Hei10830 ˚A intensity falls
+below this threshold (blue dashed line in Figure 7 (G)-(H)), the scatter around the fitted line increases and the linear
+correlation with EUV brightness weakens. This effect is particularly pronounced for EUV bands corresponding to
+higher characteristic temperatures and atmospheric layers, as indicated by the scatter plots.
+
+11
+Figure 8.(A) The HMI magnetogram; (B) TheHei10830 ˚A chromospheric signal; (C) The AIA 193 ˚A image. The red dashed
+line outlines the regions where the 193 ˚A intensity is greater than 200 DN/s, representing the strongly heated regions observed
+in the 193 ˚A band.
+4.3.Decoupled Hei10830 ˚A Absorption and EUV Brightening
+We first examine vertical differences in heating. The red dashed line in Figure 8 (C) outlines two bundles of coronal
+loops. The heated regions generally overlap with chromospheric absorption areas and strong magnetic field regions,
+but spatial inconsistencies also exist. The loop on the left connects both positive and negative strong magnetic regions
+and aligns well with the strong Hei10830 ˚A absorption area, whereas the brightening of the right loop clearly extends
+beyond the chromospheric absorption area and the strong magnetic regions. This indicates layer-dependent heating:
+heating in the lower atmosphere is confined to strong magnetic regions, while coronal loops rooted on the solar surface
+transport energy along their length, heating the upper atmosphere. Consequently, the chromosphere beneath these
+surface-rooted loops is not necessarily a primary heating site, which explains why the AIA 193 ˚A brightening can be
+strong while Hei10830 ˚A absorption remains weak.
+Figure 9.(A) The Hei10830 ˚A chromospheric signal; (B) The 171 ˚A image. The area below the yellow-green line indicates
+our primary analysis region.
+We next examine the spatial structure of heating, as revealed by the Hei10830 ˚A absorption and AIA 171 ˚A
+emission. Although strong magnetic field regions generally correspond to stronger Hei10830 ˚A absorption, they do
+not necessarily exhibit strong AIA 171 ˚A emission. This indicates that the significant enhancement of Hei10830 ˚A
+absorption is closely tied to the strong magnetic field, whereas the AIA 171 ˚A emission may extend toward the edges
+of the strong magnetic field or along the neutral line. As illustrated in the region to the lower right of the line segment
+in Figure 9, the brightening region observed in the AIA 171 ˚A band spatially overlaps with the strong absorption
+region of Hei10830 ˚A . However, the strong AIA 171 ˚A brightening region extends clearly beyond both the strong
+Hei10830 ˚A absorption region and the underlying strong magnetic field area, with its strong emission concentrated
+along the edges of the strong absorption region That is, the strong AIA 171 ˚A brightening region envelops the strong
+Hei10830 ˚A absorption feature and its underlying strong magnetic area, yet does not cover them, indicating a clear
+separation of thermal structures.
+
+12
+5.DISCUSSION
+This study develops a novel deep learning framework based on the TiO cross-band learning technique. This frame-
+work achieves a precise and effective separation of the photospheric and chromospheric signals embedded within the
+Hei10830 ˚A line core. Consequently, this advanced method significantly enhanced the observation of chromospheric
+fine structures in the Hei10830 ˚A band, yielding enhanced clarity and resolution. Utilizing the results from this
+separation, we conducted a detailed analysis (Section 4) of the fine chromospheric activities associated with weak,
+small-scale coronal heating in the quiet Sun. Furthermore, we investigated the vertical energy coupling between
+the photospheric magnetic field and the overlying chromospheric and coronal activities, providing new observational
+constraints for understanding energy transfer in the solar atmosphere.
+As detailed in Section 4.1, we confirmed the ubiquitous vertical coupling in the quiet solar atmosphere. The
+Hei10830 ˚A and EUV band intensities exhibit a widespread strong negative spatial correlation, with correlation coef-
+ficients R ranging from−0.84 to−0.66. In comparison, the spatial correlations between the unseparated Hei10830 ˚A
+intensity and the EUV bands are notably weaker, yielding coefficients of−0.72 (AIA 304 ˚A),−0.68 (AIA 171 ˚A), and
+−0.56 (AIA 193 ˚A), respectively. The reduction in correlation coefficients with elevated EUV formation heights and
+characteristic temperatures—as observed from the chromosphere and transition region (304 ˚A, Heii, logT≈4.7) up
+to the upper transition region and quiet corona (171 ˚A, Feix, logT≈5.8) and corona or hot flare plasma (193 ˚A,
+Fexii, logT≈6.1; Fexxiv, logT≈7.3) (J. R. Lemen et al. 2012) , indicates that Hei10830 ˚A absorption correlates
+more strongly with heating in the lower atmospheric layers within quiet solar regions. To interpret this correlation
+physically, we analyze the mechanism from the perspective of spectral line excitation. Specifically, heating processes in
+the chromosphere and corona excite orthohelium to the high-energy metastable state 2s 3S. This excitation enhances
+the characteristic absorption of Hei10830 ˚A photons via the 2s 3S→2p 3P transition. Conversely, the same heating
+processes induce brightening in the EUV band(T. Libbrecht et al. 2021; Z. Zeng 2016). This strong negative correlation
+strongly supports a tight vertical coupling between the chromosphere and corona, suggesting that the heating processes
+in these two atmospheric layers are closely linked. Although previous studies did not perform such precise quantitative
+fitting, our conclusion is consistent with the qualitative findings that EUV band radiation is stronger in He I 10830 ˚A
+absorption regions (P. Hashim et al. 2024) and that these areas correspond to regions of coronal heating (Z.-X. Hong
+et al. 2017).The superior spatial correlation between AIA 304 ˚A and He i 10830 ˚A (compared to the
+AIA 171 ˚A and 193 ˚A bands) likely results from the combined contribution of the PR mechanism
+and collisional excitation. According to the FAL-C model (V. Andretta & H. P. Jones 1997), both He i
+10830 ˚A and He ii 304 ˚A involve PR mechanism and collisional excitation, with the latter being the
+primary driver for He ii 304 ˚A in quiet Sun regions (S. D. Jordan et al. 1993). In quiet Sun regions,
+He i 10830 ˚A typically forms below 2,000 km , although it can extend up to 2,200 km with decreasing
+intensity. (E. H. Avrett et al. 1994), while He ii 304 ˚A can also form below this altitude (J. Trujillo
+Bueno et al. 2012). At 2,200 km, where the VAL-C model temperature reaches∼24,000 K (J. E.
+Vernazza et al. 1981), collisional excitation processes exist for both He i 10830 ˚A and He ii 304 ˚A.
+This suggests that the observed spatial correlation results from the combined contribution of both PR
+mechanism and collisional processes. This effectively explains the stronger correlation between He i
+10830 ˚A and AIA 304 ˚A as compared to the AIA 193 ˚A and 171 ˚A bands.
+Analysis of the strong absorption regions (as discussed in Subsection 4.2) reveals that the spatial distribution of
+both chromospheric absorption and coronal brightening coincides with the strong magnetic field regions. This finding
+is consistent with the view that coronal heating is magnetically driven (P. Hashim et al. 2021). It is noteworthy that
+strong chromospheric absorption does not necessarily correlate with the strongest coronal brightening. However, the
+EUV intensity consistently exceeds a brightness threshold across all these strong absorption areas. This implies that
+the corona in these regions has been heated above a certain temperature.
+Furthermore, observations of atmospheric layer inconsistency (as discussed in Subsection 4.3) highlight the complex-
+ity of vertical energy transport. The coronal loop topology, specifically the AIA 193 ˚A brightening regions extending
+above the non-absorbing chromospheric area, is direct evidence of energy layer decoupling. This confirms that the
+energy in this region is efficiently transported along magnetic field lines and dissipates primarily in the corona, rather
+than being fully consumed in the underlying chromosphere.
+Our observations reveal that the most intense AIA 171 ˚A emission regions are distributed at the edges of the strong
+Hei10830 ˚A absorption areas and unipolar magnetic fields, but they do not completely overlap with the strong
+absorption region. This spatial difference suggests that the heating mechanisms at different atmospheric heights may
+
+13
+possess fundamental disparities (B. De Pontieu et al. 2003). Firstly, a significant co-spatial relationship exists between
+the strong unipolar magnetic field regions and the intense Hei10830 ˚A absorption signals. It is inferred that the
+chromospheric heating process in these areas likely originates from the random magnetic field motion mechanisms
+proposed by Parker (E. N. Parker 1988). However, the coronal brightness exhibits higher intensity within the mixed-
+polarity edge regions. In these areas, the photospheric magnetic flux cancellation and reconnection likely constitute the
+dominant mechanism for transporting energy and mass into the corona (Y.-M. Wang 2016). This process effectively
+accounts for the enhanced EUV brightness observed at the edges compared to the unipolar interiors. Furthermore,
+the continuous emergence and cancellation of magnetic fields in these edge areas promote reconnection with overlying
+atmospheric fields (L. P. Chitta et al. 2017), resulting in sustained energy release into the upper atmosphere. This
+mechanism corroborates the stronger edge EUV brightening relative to the unipolar region interiors. In summary, the
+observed spatial non-overlap between the strong chromospheric absorption areas and the coronal brightening areas is
+collectively explained by these distinct magnetically driven heating mechanisms.
+Despite the considerable success of our deep learning approach in separating the Hei10830 ˚A signal, several method-
+ological and data acquisition limitations remain. These challenges primarily arise from the inherently low signal-to-noise
+ratio of the Hei10830 ˚A band and the fact that the independent reconstruction of TiO and Hei10830 ˚A may disrupt
+the cross-band intensity correlation. Moreover, during the early phase of this study, the NVST infrared channel had
+only recently begun operation, making it difficult to obtain high-quality datasets for model training. As a result,
+the model’s training and test sets contain only a very low proportion of photospheric samples from sunspot regions,
+with a complete exclusion of those from the solar limb. These limitations significantly compromise the generalization
+capability of the AR model (Model A). Predictions of key parameters such as sunspots, intergranular lane depth
+and mean intensity in sunspot regions are biased. Furthermore, the exponential absorption model underlying the AR
+model is not universally applicable to all active region scenarios. Consequently, the application of Model A is highly
+condition-dependent and subject to limitations. In contrast, the QS model (Model B) was specifically designed for the
+relatively uniform structural characteristics of the QS, resulting in fewer generalization issues. Therefore, accurately
+assessing and defining the practical scope of application for both models is essential.
+6.CONCLUSION
+This study presents a novel deep learning framework based on TiO cross-band learning. Utilizing this technique, we
+achieved a precise and effective separation of the photospheric and chromospheric contributions within the Hei10830 ˚A
+signal. This separation facilitated the generation of high-contrast images of chromospheric fine structures, allowing the
+clear observation of features previously obscured by strong photospheric background emission. Applying this method,
+we successfully observed chromospheric fine structures associated with weak, small-scale coronal heating processes
+prevalent in the QS. Our subsequent analysis provided direct observational evidence of energy coupling between the
+chromosphere and the overlying atmosphere. Our research reveals several specific findings regarding vertical energy
+transport in the solar atmosphere.
+Firstly, we observed a significant vertical coupling between the Hei10830 ˚A and EUV intensities(AIA 304 ˚A, 171 ˚A,
+and 193 ˚A), which are negatively correlated. This coupling is most pronounced in the AIA 304 ˚A band. Additionally,
+we found that within the strong absorption regions, the EUV band brightness does not necessarily reach its peak
+intensity, exhibiting a degree of non-linear relationship; however, it is notable that the EUV intensity within these
+strong absorption areas is consistently heated to a certain brightness threshold. Furthermore, observations of the
+AIA 193 ˚A brightening regions extending above the non-absorbing chromospheric area provide strong evidence that
+energy is efficiently transported along magnetic field lines and dissipates primarily in the upper atmosphere, resulting
+in layer decoupling. We observed that the Hei10830 ˚A strong absorption feature is intense in the unipolar regions
+of the QS, but the AIA 171 ˚A brightening is stronger in the mixed-polarity regions. This spatial separation confirms
+that the magnetic field topology strongly constrains the location of heating footpoints. It further demonstrates that
+the coronal heating mechanisms differ between mixed-polarity regions and unipolar regions in the quiet Sun.
+ACKNOWLEDGMENTS
+The authors thank the team of the New Vacuum Solar Telescope (NVST), and NASA’s Solar Dynamics Observatory
+(SDO) for the data used in this paper. We also appreciate all the help from the colleagues in the laboratory team. This
+work was primarily supported by the National Key R&D Program of China under grant No. 2024YFA1612003, and
+
+14
+performed by the Yunnan Observatories, Chinese Academy of Sciences (CAS). Additionally, this work was supported
+by the National Science Foundation of China under grants 12273106 and 12273108, the CAS “Light of West China”
+Program, and the “Yunnan Revitalization Talent Support Program” Innovation Team Project 202405AS350012.
+Facilities:NVST, SDO(AIA), SDO(HMI)
+Software:astropy ( Astropy Collaboration et al. 2013, 2018, 2022), PyTorch (A. Paszke et al. 2019)
+APPENDIX
+A.NETWORK ARCHITECTURES
+This appendix provides a detailed comparison of the two neural network architectures.
+Input x
+(C, H, W) Conv/IN/ReLU (3x3) Conv/IN (3x3) SEBlock Add ReLU Dropout2d Output y
+F(x)
+identity x
+BasicBlock_SE 
+Figure 10.Basic residual block incorporating Squeeze-and-Excitation (SE) attention mechanism, used in Model A.
+Input
+Image
+400×400
+ResBlock
+64ch
+400×400
+ResBlock
+64ch
+400×400
+ResBlock
+64ch
+400×400
+ResBlock
+64ch
+400×400
+ResBlock
+64ch
+400×400
+ResBlock
+64ch
+400×400
+Downsample
+(stride 2)
+200×200
+ResBlock
+64ch
+200×200
+ResBlock
+64ch
+200×200
+ResBlock
+64ch
+200×200
+ResBlock
+64ch
+200×200
+Upsample
+(Bilinear)
+400×400
+Concatenation
+128ch
+400×400
+Fusion Conv
+(128 1ch)
+Output
+He I Map
+400×400
+High-Resolution Branch (400×400)
+Mid-Resolution Branch (200×200)
+Figure 11.Detailed architecture of the Model A. The model maps TiO input to 10829 ˚A to leverage the photospheric
+information of 10829 ˚A as a proxy for the 10830 ˚A photosphere.
+
+15
+Input x
+(C, H, W) Conv/ReLU (3x3) Conv (3x3) SEBlock Add ReLU Output y
+BasicBlock_SE (No Dropout)
+Figure 12.Modified residual block for Model B, with BN and Dropout removed to better fit continuous observations of a
+specific region rather than cross-date generalization.
+Input
+Image
+(1, 200×200)
+Fourier Features
+(1 256ch)
+Conv1x1/BN/ReLU
+(256 128ch)
+ResBlock
+(128ch)
+(200×200)
+ResBlock
+(128ch)
+(200×200)
+ResBlock
+(128ch)
+(200×200)
+ResBlock
+(128ch)
+(200×200)
+ResBlock
+(128ch)
+(200×200)
+ResBlock
+(128ch)
+(200×200)
+Downsample
+(stride 2)
+(128ch, 100×100)
+ResBlock
+(128ch)
+(100×100)
+ResBlock
+(128ch)
+(100×100)
+ResBlock
+(128ch)
+(100×100)
+ResBlock
+(128ch)
+(100×100)
+Upsample
+(Bilinear)
+(128ch, 200×200)
+Concatenation
+(128+128=256ch)
+Fusion Conv
+(256 1ch)
+Output
+He I Map
+(200×200)
+High-Resolution Branch (200×200)
+Mid-Resolution Branch (100×100)
+Figure 13.Detailed architecture of the Model B for Quiet Sun (QS) regions. The model directly maps TiO to 10830 ˚A by
+treating the weak and rapidly varying chromospheric signals as residuals, thereby establishing a mapping relationship between
+TiO and the photospheric information of 10830 ˚A.
+
+16
+REFERENCES
+Andretta, V., Giampapa, M. S., & Jones, H. P. 1995, Irish
+Astronomical Journal, 22, 177
+Andretta, V., & Jones, H. P. 1997, ApJ, 489, 375,
+doi: 10.1086/304760
+Astropy Collaboration, Robitaille, T. P., Tollerud, E. J.,
+et al. 2013, A&A, 558, A33,
+doi: 10.1051/0004-6361/201322068
+Astropy Collaboration, Price-Whelan, A. M., Sip˝ ocz, B. M.,
+et al. 2018, AJ, 156, 123, doi: 10.3847/1538-3881/aabc4f
+Astropy Collaboration, Price-Whelan, A. M., Lim, P. L.,
+et al. 2022, ApJ, 935, 167, doi: 10.3847/1538-4357/ac7c74
+Avrett, E. H., Fontenla, J. M., & Loeser, R. 1994, in In:
+Infrared Solar Physics, Vol. 154, 35–47
+Centeno, R., Trujillo Bueno, J., Uitenbroek, H., &
+Collados, M. 2008, ApJ, 677, 742, doi: 10.1086/528680
+Chitta, L. P., Peter, H., Solanki, S. K., et al. 2017, ApJS,
+229, 4, doi: 10.3847/1538-4365/229/1/4
+De Pontieu, B., Tarbell, T., & Erd´ elyi, R. 2003, ApJ, 590,
+502, doi: 10.1086/374928
+Goode, P. R., & Cao, W. 2013, SoPh, 287, 315,
+doi: 10.1007/s11207-013-0235-6
+Handy, B. N., Acton, L. W., Kankelborg, C. C., et al. 1999,
+SoPh, 187, 229, doi: 10.1023/A:1005166902804
+Hashim, P., Hong, Z.-X., Ji, H.-S., et al. 2021, RAA, 21,
+105, doi: 10.1088/1674-4527/21/4/105
+Hashim, P., Xu, F., Wang, Y., et al. 2024, ApJ, 964, 157,
+doi: 10.3847/1538-4357/ad2e9d
+He, K., Zhang, X., Ren, S., & Sun, J. 2016, in 2016 IEEE
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 1, doi: 10.1109/CVPR.2016.90
+Hong, Z., Wang, Y., & Ji, H. 2022, ApJ, 928, 153,
+doi: 10.3847/1538-4357/ac590c
+Hong, Z.-X., Yang, X., Wang, Y., et al. 2017, RAA, 17, 25,
+doi: 10.1088/1674-4527/17/3/25
+Ji, H., Cao, W., & Goode, P. R. 2012, ApJL, 750, L25,
+doi: 10.1088/2041-8205/750/1/L25
+Jordan, S. D., Thompson, W. T., Thomas, R. J., &
+Neupert, W. M. 1993, ApJ, 406, 346, doi: 10.1086/172444
+Leenaarts, J., van Noort, M., de la Cruz Rodr´ ıguez, J.,
+et al. 2025, A&A, 696, A3,
+doi: 10.1051/0004-6361/202453355
+Lemen, J. R., Title, A. M., Akin, D. J., et al. 2012, SoPh,
+275, 17, doi: 10.1007/s11207-011-9776-8
+Li, Z., Fang, C., Guo, Y., et al. 2016, ApJ, 826, 217,
+doi: 10.3847/0004-637X/826/2/217
+Libbrecht, T., Bjørgen, J. P., Leenaarts, J., et al. 2021,
+A&A, 652, A146, doi: 10.1051/0004-6361/202039788
+Libbrecht, T., Joshi, J., de la Cruz Rodr´ ıguez, J.,
+Leenaarts, J., & Ramos, A. A. 2017, A&A, 598, A33,
+doi: 10.1051/0004-6361/201629266
+Liu, H., Jin, Z., Xiang, Y., & Ji, K. 2022, Research in
+Astronomy and Astrophysics, 22, 095005,
+doi: 10.1088/1674-4527/ac7cba
+Liu, Z., Xu, J., Gu, B.-Z., et al. 2014, RAA, 14, 705,
+doi: 10.1088/1674-4527/14/6/009
+Lowe, D. G. 1999, in Proceedings of the Seventh IEEE
+International Conference on Computer Vision (ICCV),
+1150–1157, doi: 10.1109/ICCV.1999.790410
+Lowe, D. G. 2004, International Journal of Computer
+Vision, 60, 91, doi: 10.1023/B:VISI.0000029664.99615.94
+Meng, W.-J., Xu, F.-Y., & Jin, Z.-Y. 2024, RAA, 24,
+055008, doi: 10.1088/1674-4527/ad37f4
+Parker, E. N. 1988, ApJ, 330, 474, doi: 10.1086/166485
+Paszke, A., Gross, S., Massa, F., et al. 2019, arXiv e-prints,
+arXiv:1912.01703, doi: 10.48550/arXiv.1912.01703
+Pesnell, W. D., Thompson, B. J., & Chamberlin, P. C.
+2012, SoPh, 275, 3, doi: 10.1007/s11207-011-9841-3
+Scharmer, G. B., Bjelksjo, K., Korhonen, T. K., Lindberg,
+B., & Petterson, B. 2003, in Society of Photo-Optical
+Instrumentation Engineers (SPIE) Conference Series,
+Vol. 4853, Innovative Telescopes and Instrumentation for
+Solar Astrophysics, ed. S. L. Keil & S. V. Avakyan,
+341–350, doi: 10.1117/12.460377
+Schou, J., Scherrer, P. H., Bush, R. I., et al. 2012, SoPh,
+275, 229, doi: 10.1007/s11207-011-9842-2
+Tancik, M., Srinivasan, P. P., Mildenhall, B., et al. 2020,
+arXiv e-prints, arXiv:2006.10739,
+doi: 10.48550/arXiv.2006.10739
+Tripathi, D., Mason, H. E., Del Zanna, G., & Young, P. R.
+2010, A&A, 518, A42, doi: 10.1051/0004-6361/200913883
+Trujillo Bueno, J., ˇStˇ ep´ an, J., & Belluzzi, L. 2012, ApJL,
+746, L9, doi: 10.1088/2041-8205/746/1/L9
+Vernazza, J. E., Avrett, E. H., & Loeser, R. 1981, ApJS,
+45, 635, doi: 10.1086/190731
+Wang, Y., Ji, K., Jin, Z., & Liu, H. 2025, ApJ, 982, 161,
+doi: 10.3847/1538-4357/adbaec
+Wang, Y., Zhang, Q., Hong, Z., et al. 2023, A&A, 672,
+A173, doi: 10.1051/0004-6361/202244607
+Wang, Y., Zhang, Q., & Ji, H. 2021, ApJ, 913, 59,
+doi: 10.3847/1538-4357/abf2b9
+Wang, Y.-M. 2016, ApJL, 820, L13,
+doi: 10.3847/2041-8205/820/1/L13
+Wiese, W. L., & Fuhr, J. R. 2009, Journal of Physical and
+Chemical Reference Data, 38, 565, doi: 10.1063/1.3077727
+Xu, Y., Yang, X., Kerr, G. S., et al. 2022, ApJL, 924, L18,
+doi: 10.3847/2041-8213/ac447c
+
+17
+Zeng, Z. 2016, PhD thesis, New Jersey Institute of
+Technology
+Zeng, Z., Cao, W., & Ji, H. 2013, ApJL, 769, L33,
+doi: 10.1088/2041-8205/769/2/L33
+Zeng, Z., Chen, B., Ji, H., Goode, P. R., & Cao, W. 2016,
+ApJL, 819, L3, doi: 10.3847/2041-8205/819/1/L3

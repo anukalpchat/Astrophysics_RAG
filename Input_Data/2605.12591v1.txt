@@ -1,0 +1,642 @@
+Title: Formation of stable exoplanetary systems around pulsars by capture: An exercise in computational classical mechanics
+Authors: Václav Pavlík, Steven N. Shore, Vladimír Karas, Matyáš Fuksa
+Published: 2026-05-12
+Categories: astro-ph.GA, astro-ph.EP, astro-ph.SR
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+This Accepted Manuscript is available for reuse under a CC BY-NC-ND licence after the 12 month embargo period
+provided that all the terms and conditions of the licence are adhered to.
+European Journal of Physics
+PAPERCrossmark
+RECEIVED
+21 December 2025
+REVISED
+22 April 2026
+ACCEPTED
+12 May 2026
+Formation of stable exoplanetary systems around pulsars by
+capture: An exercise in computational classical mechanics
+V´ aclav Pavl´ ık1,2,∗
+ , Steven N. Shore 3,4
+ , Vladim´ ır Karas1
+ , and Maty´ aˇ s Fuksa5
+1 Astronomical Institute of the Czech Academy of Sciences, Boˇ cn´ ı II 1401, 141 00 Prague 4, Czech Republic
+2 Indiana University, Department of Astronomy, Swain Hall West, 727 E 3 rd Street, Bloomington, IN 47405, USA
+3 Dipartimento di Fisica, Universit` a di Pisa, largo B. Pontecorvo 3, Pisa 56127, Italy
+4 INAF-OATS, Via G. B. Tiepolo 11, 34143 Trieste, Italy
+5 Astronomical Institute, Charles University, V Holeˇ soviˇ ck´ ach 2, 180 00 Prague 8, Czech Republic
+∗ Corresponding author.
+E-mail:pavlik@asu.cas.cz
+Keywords:methods: numerical – planets and satellites: dynamical evolution and stability – stars: neutron – stars:
+pulsars: general
+Abstract
+The study of our Solar System—its formation, evolution, and long-term stability—has
+been ongoing for centuries and is now a standard part of scientific education. While the
+formation of other Solar-like exoplanetary systems is generally explained using the same
+mechanisms that describe our own, the discovery of exoplanets around pulsars in 1990s has
+raised new questions about their origin. Several scenarios were proposed, including
+formation by capture during a close encounter of a compact stellar-mass remnant and a
+pre-existing planetary system. It was, however, also conjectured that captured planets
+should exhibit high eccentricities and—if more planets are captured—their evolution
+would lead to chaos. We revisit classical mechanics as applied to planetary systems. As an
+example and follow-up to previous works, we use an open-source high-precisionN-body
+code to investigate dynamical interactions between planetary systems and stellar
+remnants, the orbital properties of captured planets, and their long-term stability over
+gigayears. We corroborate that the captured planets often exhibit high eccentricities
+(unlike some observed pulsar planetary systems), but we also present a student’s
+simulation where a Jupiter-like planet undergoes a series of planet–planet encounters and
+planetary ejections, eventually stabilising at a low eccentricity of∼0.146. This shows that
+a chaotic post-capture evolution may eventually lead to long-term stability, making the
+dynamical formation channel viable for producing low-eccentricity systems. These results
+warrant more detailed investigation in future work. Beyond their astrophysical
+significance, they also illustrate general principles of non-linear dynamics and
+computation, where aspects of the analysis can even be carried out at the high-school or
+undergraduate level, making this type of research accessible to students at an early stage.
+1 Introduction
+Classical mechanics, while essential in the training of a physicist, is often seen by students as a
+formality in anticipation of the exciting stuff, such as quantum and statistical mechanics. Much of
+the current material taught in these basic courses is designed to introduce Lagrangians,
+Hamiltonians, and potential fields that will be needed for generalised field theory courses (e.g.,
+Goldstein et al. 2002; Jackson 2021). In so doing, the fundamental origin problem of Newtonian
+mechanics, the universality of gravitation, is often relegated to a mere exercise in force balance or
+the solution of the two-body problem in a formal way. However, since the 19th century, a core
+1
+arXiv:2605.12591v1  [astro-ph.GA]  12 May 2026
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+problem in mechanics has remained the study of non-linear, complex systems with multiple degrees
+of freedom, the most famous of which is the three-body problem of celestial dynamics. 1
+Planetary system dynamics naturally emerges as a continuation of this classical problem. It
+concerns the gravitational evolution of systems composed of many interacting bodies, where
+nonlinearity, resonances, and chaos are not mere mathematical curiosities but some of the defining
+features (Tremaine 2023). Since the time of Kepler, 2 Newton, Laplace, and Poincar´ e, celestial
+mechanics has sought to understand how planetary systems form, evolve, and remain stable over
+astronomical timescales (see, e.g. Tamayo et al. 2020) or the structure of satellite systems and
+planetary rings (Borderies et al. 1983; Greenberg & Brahic 1985).
+In the last few decades, the development of reliable, publicly available numerical codes to
+calculate orbital elements renders much of the traditional celestial mechanics course irrelevant. But
+it is through celestial mechanics that the fundamental concepts of how periodic systems behave
+were historically introduced (Sommerfeld 1923; Sternberg 1969)—for instance, perturbation
+theories, asymptotic series, symplectic manifolds, and stability. While these are treated in
+mechanics courses, they are frequently divorced from their origin. An opportunity is lost to show
+how methods developed in one area can be adapted to a wide range of problems, and not just in
+classical mechanics. In the age of commercial space development, understanding orbital mechanics
+is no longer a luxury.
+Current advances in computational methods and dynamical systems theory—combined with the
+discovery of Earth-like planets around Solar-like stars and a vast diversity of exoplanetary
+architectures—have significantly expanded this field (see, e.g. Bolmont et al. 2014; Valencia et al.
+2025). The Solar System provides a benchmark for studying long-term stability and secular
+interactions, while extrasolar systems reveal migration histories and configurations that sometimes
+make us question the classical formation scenarios.
+As a prime example, the origin of pulsar planets is still debated. With only three confirmed
+systems—PSR 1257+12 (Wolszczan & Frail 1992; Wolszczan 1994; Go´ zdziewski et al. 2005),
+PSR 1829–10 (Bailes et al. 1991), and PSR B1620–26 (Backer et al. 1993; Arzoumanian et al. 1996;
+Thorsett et al. 1999; Ford et al. 2000)—no firm conclusions can be drawn. One possibility is that
+they are relics of primordial systems that survived the red-giant phase and supernova explosion,
+however, this is considered improbable (Lin et al. 1991). Anin situformation of planets in a
+post-supernova accretion disk is more likely (Podsiadlowski et al. 1991; Phinney & Hansen 1993;
+Currie & Hansen 2007), but only one such disk has been observed to date (Wang et al. 2006), and
+its reported mass is too low to allow for the birth of planets.
+In a recent exploration of a scenario in which a compact massive interloper—a stellar-mass
+black hole or neutron star (NS)—encounters a planetary system, one exit channel resulted in
+planetary captures by the NS (Pavl´ ık & Shore 2021, hereafter PS21). Although dynamical
+formation has already been suggested by Podsiadlowski et al. (1991) and proposed to explain, for
+instance, the origin of PSR B1620–26 (Podsiadlowski 1995; Ford et al. 2000), the long-term
+stability of such systems has not yet been studied. Moreover, the main hypothesis presented by
+PS21 was that the capture of multiple planets would lead to a long-term chaotic behaviour.
+This article presents a summary of a numerical experiment performed by an MSc student
+(Fuksa 2024) as a follow-up to PS21. We aimed to showcase the accessible and straightforward
+nature3 of this research problem (described in Section 2) that ended up providing more insights
+into the evolution of the captured systems on gigayear time scales. Time constraints did not allow
+us to focus on the statistical aspect of the planetary captures in the long term (e.g. several methods
+are described in Section 4). Instead, we present an in-depth case study of the long-term evolution
+of one random set of initial conditions, which we found particularly interesting (see Section 3).
+2 Numerical setup
+Our adopted initial set-up is similar to PS21. We simulated encounter scenarios between the Solar
+System4 (as a test-bed for a known and stable planetary system; see, e.g., the left-hand panel of
+Fig. 1) and a two-solar-mass body (hereafter NS). All bodies were treated as point-masses, and the
+evolution was tracked with theIAS15integrator from theReboundpackage (Rein & Liu 2012),
+1This has even entered popular culture with the novel and a streaming-platform series of the same name. While
+the premise may be absurd, the core idea of a chaotically orbiting planet around a triple star system is well described.
+2For a historical aside unrelated to celestial dynamics, the reader may also wish to consult the discussion of Johannes
+Kepler’s portraits and their cultural context in Shore & Pavl´ ık (2021a,b).
+3Accessibility in this context does not imply conceptual simplicity, but rather that the problem can be explored
+with (i) open-source tools, (ii) modest computational resources, and (iii) incremental conceptual scaffolding.
+4Parameters from NASA JPL HORIZONS as of 01/01/2000.
+2
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+103 104
+t [yr]
+100
+101
+aSun [au]
+Mercury ejec.
+Venus cap.
+Earth cap.
+Mars ejec.
+Jupiter cap.
+Saturn cap.
+Uranus cap.
+Neptune cap.
+Initial
+Solar system
+106 107 108 109
+t [yr]
+100
+101
+102
+103
+104
+aNS [au]
+Evolution of the captured NS system
+2.21 2.22 2.23    
+t [Gyr]
+1.7913
+1.7914
+1.7915
+1.7916
+Venus
+4.9615
+4.9616
+aNS [au] Evolution of the final NS system
+Jupiter
+Orbits of the final NS system
+1 au
+xy zy
+encounter
+Figure 1.Evolution of the planetary semi-major axes in the model time (time zero would correspond to the start of
+the simulation). Left: Semi-major axes of the planets in the system, as the initial model set-up (both axes are in
+log-scale). Centre: Semi-major axes of the planets following the NS capture (both axes are in log-scale). We note
+that the encounter phase was chaotic and the calculation of the semi-major axis was not well-defined because of the
+temporary presence of two massive bodies in the centre of the system; therefore, this plot continues after we have
+removed the Sun from the simulation. Bottom right: Detail of the semi-major axes of Jupiter and Venus in the final
+NS system (both axes are in linear scale and the time range in Gyr corresponds to the detail in Fig. 2). Top right:
+Orbits of the final system at the end of the simulation in two different projections.
+106 107
+t [yr]
+0
+1eSaturn
+0
+1eEarth
+0
+1eNeptune
+108 109
+0
+1eUranus
+0
+1eJupiter
+0
+1eVenus
+2.0 2.2t [Gyr]   
+0
+0.5
+1
+2.21 2.22 2.23
+t [Gyr]
+0.145
+0.146eJupiter
+0.8
+0.9eVenus
+Figure 2.Eccentricities of the captured planets (circles mark escapes from the NS system). The left-hand panels
+show the long-term evolution, where the horizontal axis is the model time in years on a logarithmic scale. The two
+zoomed-in right-hand panels show the final system with Jupiter and Venus in gigayears with time on a linear scale
+(and the time range of the bottom-right plot corresponds to the detail in Fig. 1). The colours are the same as in
+Fig. 1.
+3
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+which offers high accuracy and reproducibility (Rein & Tamayo 2017), and is open source and
+community supported.
+A brief comment on the numerical approach is warranted. TheReboundpackage is a
+general-purposeN-body integrator specifically developed for planetary system dynamics, offering a
+suite of integration schemes—including the classical leapfrog, symplectic methods such asWHF ast
+(Wisdom & Holman 1991; Rein & Tamayo 2015), as well as the high-order, adaptive,
+non-symplectic integratorIAS15(Everhart 1985; Rein & Spiegel 2015) employed in this work. Its
+principal strength lies in the ability to accurately follow the long-term evolution of systems
+consisting of a modest number of gravitating bodies (i.e. up toN∼10 2−103), where the
+conservation of orbital elements and faithful treatment of secular interactions or resonances are
+essential. Since the code relies on direct summation of gravitational forces, it implies anO(N 2)
+scaling with particle number. While this rendersReboundinefficient for large-Nproblems such as
+dense star clusters (N∼10 4−106) or galactic nuclei (N∼10 7), this software is particularly relevant
+for planetary systems evolving over millions to billions of years, as considered in our work. 5,6
+Its modular, open-source design further allows for flexible choices of integrators, collision
+handling, and boundary conditions, making it a standard tool in contemporary computational
+celestial mechanics and an ideal tool for teaching students how to perform numerical simulations.
+In our numerical experiments, we varied the NS’s impact parameter, heliocentric velocity, and
+incidence angle with respect to the ecliptic, reproducing the initial conditions from PS21. The
+novelty here is, instead, that knowing the outcomes of the NS encounters from PS21, we chose
+those initial conditions for which the capture of more than one planet has been reported (see also
+Appendix A for the list of physical initial conditions). We followed these systems for additional
+millions to billions of years in simulation time, which is far longer than what was performed in
+PS21, to assess the long-term dynamical stability of the captured planetary systems. All escaping
+bodies were removed when their distance from the central body reached 1 pc to optimise the
+computations. Those escapers comprise all uncaptured planets and the Sun after the initial
+encounter, and the captured planets that are subsequently ejected from the system after mutual
+close encounters.
+3 An example of a low-eccentricity system
+The full range of initial conditions we tested and their preliminary discussion is in PS21 and Fuksa
+(2024, see also Appendix A). In this section, we focus on one particular case of captured planets
+that initiate in a chaotic state and pass to stability as a low-eccentricity planetary system. In this
+scenario, the NS was initially launched with the heliocentric velocity ofv ∞ = 10 km s−1, from
+i= 30 ◦ ecliptic latitude, and almost head-on withb= 0.2 au impact parameter.
+This is a very close encounter, which is why the capture of multiple planets — rather than the
+destruction of the entire Solar System — is possible. With gravitational focusing, the effective cross
+section for encounters closer thanbfor bodies of massesm 1 andm 2 is
+σ=πb 2
+
+1 + 2G(m1 +m 2)
+bv2∞
+
+,(1)
+whereGis the gravitational constant (see also, e.g., Binney & Tremaine 2008). In an environment
+of stellar densityn, the encounter rate per star is
+R=nσv ∞ .(2)
+For the masses, velocity, and impact parameter from our simulation (m 1 = 1M ⊙ ,m 2 = 2M ⊙,
+v∞ = 10 km s−1,b= 0.2 au), we getR≈8.1·10 −9 (n/pc−3) Myr−1. For completeness, we note that
+the mean encounter rate per star that could lead to capture for any impact parameter and
+incidence angle has already been estimated in PS21 as 3×10 −7 (n/pc−3) Myr−1. Therefore, several
+captured systems could form, e.g. in a globular cluster over its lifetime.
+After the encounter with the Solar System, the NS in our simulation captured six planets on
+highly eccentric orbits (see the left-hand panels of Fig. 2). The captured system subsequently
+underwent substantial changes, which we describe in the following.
+5We have also recently adoptedReboundto follow the dynamical stability of less populous stellar associations in
+the vicinity of the super-massive black hole in the centre of our Galaxy since the scaling of the central body to the
+stars was similar to the ratio of masses between the Sun and its planets (Pavl´ ık et al. 2024a).
+6And as a popular-culture aside, the same class of directN-body tools could equally be used to model hypothetical
+planetary orbits around compact objects such as supermassive black holes (e.g. as depicted in the filmInterstellar).
+While the astrophysical realism of such scenarios depends sensitively on relativistic effects not included here, the
+underlying Newtonian dynamics and numerical methodology are conceptually identical. To add relativistic corrections,
+we refer the reader to theReboundXlibrary (Tamayo et al. 2020).
+4
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+The interactions between Saturn and Jupiter on eccentric orbits (e S ≈e J ≈0.8 on average)
+caused large variations in their semi-major axes; see the yellow and beige lines in the central panel
+of Fig. 1 where they are in anti-phase. This caused rapid, large fluctuations in eccentricities of both
+terrestrial planets (see the panels of Earth and Venus in Fig. 2) and also somewhat longer-period
+oscillations in the eccentricity of the other planets in the system.
+Several close encounters between Jupiter and Saturn att≈2.2 Myr sent the former to an
+extremely elongated trajectory with the semi-major axisa J ≈100 au, and the latter to an orbit
+witha S ≈2 au (see Figs. 1 and 2). We found a subsequent mutual exchange of angular momentum
+between Saturn, Uranus, Earth, and Neptune (mainly observed in the variations of eccentricity)
+which lasted untilt≈4 Myr. Then another series of close encounters between Jupiter and Saturn
+began in the central regions of the system. This resulted in large fluctuations of Saturn’s
+eccentricity and led to its ejection att≈6 Myr. The removal of this second-most massive planet
+lowered Jupiter’s eccentricity significantly, and injected both Venus and Earth into very elongated
+orbits (see Fig. 2). But it also stabilised the semi-major axes of Jupiter, Venus, and—to some
+degree—also that of Uranus (see Fig. 1 aftert≈6 Myr).
+Aftert≈12 Myr, we found strong ongoing interactions of Neptune, Jupiter, and Uranus that
+destabilised the Earth’s orbit and led to its ejection att≈15 Myr, followed by the unbinding of
+Neptune att≈30 Myr. The three-planet system evolved in a semi-stable way for more than a Gyr
+with small variations in their eccentricities and almost no variations in the semi-major axes. But it
+eventually led to the last close encounter between Jupiter and Uranus att≈1.6 Gyr, which ejected
+the latter and stabilised Jupiter’s eccentricity at a low value ofe J ≈0.1455 (see Fig. 2). This
+produced the final NS system consisting of the gas giant and Venus (withe V ≈0.85) in
+non-coplanar orbits (mean mutual inclinationi V −i J ≈60 ◦), see the illustrative orbits in the top
+right corner of Fig. 1.
+The bottom-right panels of Fig. 1 show that both planets are on stable orbits with small
+fluctuations around the mean values of the semi-major axesa J ≈4.96155 au anda V ≈1.7914 au.
+Specifically, the most noticeable period of fluctuations in Venus’ orbit isT a ≈2.8 Myr (and we note
+that the tallest downward spikes ina J appear to coincide with the regions of minimum variations of
+aV).
+The right-hand panels of Fig. 2 further show that Venus and Jupiter periodically exchange
+angular momentum, which affects the evolution of their orbital eccentricities. Specifically, the
+bottom-right-hand panel reveals three periods. The longest variations haveT e1 ≈19 Myr and the
+fastest onesT e3 ≈0.12 Myr. The intermediate oscillations span a range of periods
+Te2 ∈(1.7; 2.6) Myr, where the lower limit corresponds to the largest change ofa V and the upper
+limit (which is comparable toT a) to the smallest change ofa V (vice versa witha J).
+Since this final system has two orbiting bodies—lower-mass Venus inside the orbit of more
+massive Jupiter—we also tested whether Venus’ resonances resemble those in the classical
+Kozai–Lidov problem (hereafter KL; see Kozai 1962; Lidov 1962), or the eccentric KL (hereafter
+eKL; Lithwick & Naoz 2011), taking into account the non-zero eccentricity of Jupiter. We found no
+clear evidence for either. The main issue is that both KL and eKL assume that the gravitational
+effects from the perturbed body (i.e., Venus) on the perturbing body (i.e., Jupiter) are negligible
+and that the Hamiltonian of the perturbed body is separately conserved (Poisson & Will 2014).
+Neither is the case in this system due to the proximity of both planets in the final system
+(aJ −a V ≈3.2 au), and their comparatively larger mass ratio (M V/MJ ≈2.6×10 −3). Hence, the
+Hamiltonian of Venus’ orbit also changes.
+We integrated this final NS system for severalgigayearsbeyond what is shown in the figures,
+and we did not observe any notable change in the planets’ behaviour. Therefore, the final NS
+planetary system appears stable on a time scale comparable to the age of galaxies.
+4 Discussion and implications for teaching
+4.1 Celestial mechanics and modern classical physics
+Celestial mechanics has usually been relegated to specialist mathematics courses and has almost
+completely disappeared from the standard curriculum. If mentioned at all in classical mechanics
+courses, it is only to show closed-form solutions to the Kepler problem. Yet there are remnants of
+the subject lurking in the standard texts (e.g. Goldstein et al. 2002) in the discussion of canonical
+transformations.
+In the development of quantum mechanics, notwithstanding the Bohr atom, canonical variables
+and the Hamiltonian (and Hamilton–Jacobi equation) were central to the formalism (Shore 2003;
+Fraser & Nakane 2023). This was because of the celestial mechanical roots of the transformations
+in passing from Cartesian to specialised coordinates (e.g. the Delaunay variables) that provide
+5
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+Two-body problem
+Theory Numerics
+Orbital elements(a, e, i, . . .)
+Angular momentum
+Action-angle variables
+Orbit integration
+Hamiltonian evolution
+Symplectic methods
+Few-body interactions
+Resonances and perturbations
+Chaos
+Sensitivity to initial conditions
+Lyapunov exponent
+Kolmogorov–Arnold–Moser theorem
+Poincar´ e maps
+Lyapunov estimation and MEGNO
+Spectral diagnostics
+Fast Fourier transform
+Statistical mechanics
+Connection with ergodic problems
+Figure 3.Conceptual pathway illustrating how the two-body problem develops into few-body dynamics, chaos, and
+statistical mechanics. It also highlights the parallel roles of theoretical insight and numerical methods in
+understanding complex systems.
+evolution equations for many-body systems. These are embodied in the symplectic integrators used
+in few-body integrators such asRebound. Consequently, one of the most abstract subjects in the
+current presentation of classical physics can be rendered more comprehensible through the sort of
+simulation we have presented here. From an educational perspective, this conceptual reframing also
+provides a natural entry point for introducing students to modern computational approaches to
+classical mechanics.
+4.2 Chaos, predictability and limits of modelling
+Celestial mechanical problems are purely conservative Hamiltonian systems and were the original
+context for what became known as deterministic indeterminacy or chaos (Poincar´ e 1892; Birkhoff
+1966; Arnold 1978). Numerical simulations of planetary and stellar systems are fundamentally
+constrained by their extreme sensitivity to initial conditions—a defining feature of chaotic
+dynamical systems. Even infinitesimal differences in the initial phase space (i.e. in displacements or
+velocities) may grow exponentially and produce qualitatively different orbital histories at later
+times. This is even though the governing equations of motion are deterministic. This exponential
+sensitivity to the orbital elements is often quantified by the Lyapunov exponent, which measures
+the rate at which nearby trajectories diverge in phase space, and whose inverse (the Lyapunov
+time) gives an estimate of the horizon beyond which detailed prediction of individual orbits is
+effectively impossible (Lyapunov 1966; Benettin & Galgani 1979; Cincotta & Sim´ o 2000; Cencini &
+Ginelli 2013). A positive maximal Lyapunov exponent thus signals chaos, and small observational
+or numerical uncertainties amplify rapidly, rendering precise orbital predictions near impossible on
+much longer timescales (Hussain & Tamayo 2019). This transition from integrable behaviour to
+chaos and its diagnostic characterisation is illustrated schematically in Fig. 3.
+For instance, the Solar System’s Lyapunov time is of order millions of years (commonly quoted
+tL ∼5 Myr for the inner terrestrial planets andt L ∼10−20 Myr for the outer gas giants). The
+Solar System is chaotic yet likely stable over gigayear timescales, with very low but non-zero
+probabilities of extreme events (e.g. Mercury destabilisation) (Mogavero et al. 2023).
+6
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+From an educational perspective, this provides a concrete setting in which students at any level
+can confront a key epistemic insight that deterministic equations do not imply predictable
+outcomes over long timescales. At the high-school level, this can be approached qualitatively by
+comparing two nearly identical simulations (or even precomputed trajectories) and observing how
+small differences in initial conditions lead to visibly different orbital evolutions. This would
+introduce the idea of sensitivity to initial conditions even without formal mathematical machinery.
+At the undergraduate or graduate level, students can actively implement such experiments using a
+numerical tool (e.g. REBOUND) to initialise two systems with a small velocity perturbation (e.g.
+∆v/v≲10 −6) and to track the divergence of orbital elements (e.g. semi-major axis or eccentricity).
+This will allow them to gain hands-on experience with numerical integration and the limits of
+predictability and to extend to a more quantitative analysis, including estimating the rate of
+divergence and relating it, for instance, to the concept of the Lyapunov exponent (discussed above).
+Because of this fundamental limit, the interpretation of long-term integrations must usually
+move away from the expectation of unique predictions and toward a statistical and diagnostic
+approach. Practically, this means characterising ensembles of evolutions, mapping instability
+timescales, and employing chaos indicators—e.g. MEGNO (Mean Exponential Growth factor of
+Nearby Orbits) and other fast chaos detectors (Skokos 2010)—and spectral diagnostics (e.g. with
+the Fast Fourier transform) to distinguish regular from chaotic behaviour in numerical outputs
+(Gemmeke et al. 2006). Furthermore, Kolmogorov–Arnold–Moser theory (KAM; Kolmogorov 1954;
+Arnold 1963; Moser 1973) provides a theoretical framework explaining why regular, quasi-periodic
+motion can persist alongside chaos in weakly perturbed Hamiltonian systems. Such analyses were
+beyond the scope of this paper; however, we refer the interested reader to our earlier study (PS21).
+A complementary and particularly intuitive approach to analysing such dynamical behaviour is
+the Poincar´ e return map (Poincar´ e 1892; Fraser & Nakane 2023). It is a standard analytical tool
+for dynamical systems that is introduced—if at all—in courses on differential equations or in
+engineering-related courses on feedback. It originated in the three-body problem and Poincar´ e’s
+topological approach. The concept is easily understood even without advanced analysis since it is a
+mapping of the orbit onto a projected plane in a phase space. Even if the student has not seen
+statistical mechanics, this is an ideal way of visualising an autonomous system since it deals with
+orbits, for which phase and time are interchangeable. It is also an excellent way to visualize the
+approach to chaos and can be directly compared between simulations with different orbital
+parameters and numbers of bodies. Finally, figuring out how to write the algorithm as an
+automated procedure—as in this project—is an instructive application of post-processing of the
+models (see also Minorsky 1962).
+It is also worth mentioning that in parallel, data-driven and machine-learning methods have
+recently been developed to predict stability boundaries and to classify the long-term behaviour of
+compact multi-planet systems (Tamayo et al. 2020). This shift is especially important for exoplanet
+studies where observational uncertainties in orbital parameters can place apparently acceptable
+orbital fits on chaotic trajectories that rapidly evolve toward collisions or ejections. Conversely,
+configurations that appear unstable when judged from observational fits alone may persist over
+much longer timescales, nonetheless. Stability analysis, therefore, provides an important tool for
+assessing and constraining the plausible architectures of multi-planet systems (Heggie 1991; Gajdoˇ s
+& Vaˇ nko 2023).
+4.3 Conceptual links and broader relevance
+From a dynamical point of view, planetary capture during a close flyby can be viewed as a
+gravitational analogue of classical scattering. Similarly to Rutherford scattering—which is best
+known from particle physics or chemistry courses—the outcome of the encounter is largely
+controlled by the asymptotic velocity and impact parameter. These determine the strength and
+duration of the interaction. Gravitational focusing then defines an effective capture radius and
+enhances energy exchange during slow, close encounters (as emphasised in the theory of stellar
+encounters by Chandrasekhar 1943). In the language of few-body dynamics, such interactions
+resemble the exchange reactions described by the Hills–Heggie law, i.e. that loosely bound systems
+are disrupted while more tightly bound ones preferentially survive (Hills 1975; Heggie 1975).
+Planetary capture may, therefore, be interpreted as a low-mass analogue of these processes, with
+planets being ejected, exchanged, or retained depending on the encounter geometry. Similarly,
+when focused on an even lower-mass scale, close stellar encounters may cause disruptions of the
+orbits of small bodies (e.g. cometary nuclei) within the system (e.g. Dybczy´ nski 2006; Berski &
+7
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+Dybczy´ nski 2016), or their unbinding, leading to the production of interstellar asteroids and comets
+(Meech et al. 2017; de Le´ on et al. 2019; Seligman et al. 2025).7
+In a broader context, dynamical astronomy also offers a natural entry point for student
+engagement at the advanced secondary and early undergraduate levels. Current research
+problems—ranging from stellar dynamics in galactic nuclei to planetary encounters and
+capture—can be explored using publicly available data, open-access literature, and
+well-documented numerical tools. These allow students to work with the same conceptual
+framework as professional researchers.8 Through such projects, students are introduced not only to
+Keplerian motion and gravitational interactions, but also to tidal effects, accretion processes, and
+the dynamical environment of galactic centres hosting supermassive black holes. Moreover, early
+exposure to research helps students learn how to navigate scientific literature and to critically assess
+scientific problems. Consequently, classical mechanics and dynamical astronomy offer an effective
+foundation for developing transferable skills and physical intuition early in academic training.
+5 Conclusions
+Studying the dynamics of captured planetary systems advances our understanding of pulsar planets
+and provides a natural context for student engagement. By working withN-body simulations and
+chaos diagnostics, students can explore real research problems and develop physical intuition for
+orbital dynamics and the long-term evolution of astrophysical systems. In this context, the present
+study also reflects the structure of an MSc-level project, which combined a well-defined physical
+framework with an open-ended outcome. The availability of robust numerical tools and accessible
+initial conditions made it possible to focus on interpretation rather than technical implementation.
+At the same time, the intrinsic sensitivity of the system required iterative reasoning and critical
+assessment of results, which are central aspects of research practice.
+We showed that the long-term evolution of captured systems with multiple planets may go
+through a temporary chaotic evolution and eventually stabilise. The remaining planetary orbits
+decrease their initially high eccentricities through planet–planet interactions that lead to ejections
+of other planets. This partially answers the question posed in PS21: The captured NS planetary
+systems do not always end up in a chaotic state, and it is possible to produce low-eccentricity
+orbits through this channel.
+On the other hand, we also understand the limitations of our models as well as the lack of
+statistics in the observed data. For instance, from the three known pulsar systems, only the planet
+in PSR B1620–26 has a comparable eccentricity to Jupiter from our final simulation. However, the
+central NS in PSR B1620–26 is part of a binary system, whereas our NS is not. Moreover, we
+sourced the planets from specific initial conditions—the Solar System—thus, the modelled capture
+scenario might be biased in a way.
+Nonetheless, we must emphasise that the presented simulation was a random realisation of
+those initial conditions—we did not design it to produce a low-eccentricity planetary system. Given
+the chaotic nature of the post-capture dynamical evolution, trying to arrange such an outcome
+would have been near-impossible, regardless. Therefore, we conclude that our case study produced
+viable results for the possible origin of pulsar planets and showed that planetary captures by stellar
+remnants are worth exploring in a wider parameter space with more diverse initial conditions and
+external perturbations, e.g., in a star cluster environment.
+Finally, this study illustrates how active research can be fitted into a teaching curriculum. The
+pedagogical framing follows the structure of the problem itself. Understanding chaoticN-body
+systems relies on numerical experimentation, statistical interpretation, and the assessment of
+model-dependent outcomes. Planetary dynamics thus provides a hands-on way for students to
+develop scientific reasoning while working on current questions in astronomical research.
+Acknowledgments
+We used computational resources from e-INFRA CZ (project ID:90254), supported by the Ministry
+of Education, Youth and Sports of the Czech Republic. We are also grateful we had the
+opportunity to present part of this research at the MODEST-24 conference (Fuksa et al. 2024).
+7The discovery—to date—of three interstellar comets presents the inverse capture problem. The particular interest
+is that the dynamics are regularly updated during passage and available in real time, so these elements can be used
+to study orbital prediction andretrodiction.
+8For example, international and national Astronomy Olympiads—extracurricular competitions held worldwide and
+supported by Division C of the International Astronomical Union—provide early engagement with astronomy, support
+the development of reasoning skills in students, and serve as a natural entry point for further involvement in research
+(Pavl´ ık et al. 2024b).
+8
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+F unding
+VP is funded by the European Union’s Horizon Europe and the Central Bohemian Region under
+the Marie Sk lodowska-Curie Actions – COFUND, Grant agreement ID:101081195 (“MERIT”). VP
+and VK acknowledge support from the project RVO:67985815 at the Czech Academy of Sciences.
+Data availability
+The data that supports the findings of this study are available from the corresponding author upon
+reasonable request.
+References
+Arnold, V. I. 1963, Russian Mathematical Surveys, 18, 85
+Arnold, V. I. 1978, Mathematical methods of classical mechanics (Springer)
+Arzoumanian, Z., Joshi, K., Rasio, F. A., & Thorsett, S. E. 1996, ASPC, 105, 525
+Backer, D. C., Foster, R. S., & Sallmen, S. 1993, Nature, 365, 817
+Bailes, M., Lyne, A. G., & Shemar, S. L. 1991, Nature, 352, 311
+Benettin, G. & Galgani, L. 1979, in Intrinsic Stochasticity in Plasmas, ed. G. Laval & D. Gresillon,
+93
+Berski, F. & Dybczy´ nski, P. A. 2016, A&A, 595, L10
+Binney, J. & Tremaine, S. 2008, Galactic Dynamics: 2nd Ed (Princeton University Press)
+Birkhoff, G. D. 1966, Dynamical Systems (American Mathematical Society)
+Bolmont, E., Raymond, S. N., & Selsis, F. 2014, in SF2A-2014: Proceedings of the Annual meeting
+of the French Society of Astronomy and Astrophysics, ed. J. Ballet, F. Martins, F. Bournaud,
+R. Monier, & C. Reyl´ e, 63
+Borderies, N., Goldreich, P., & Tremaine, S. 1983, AJ, 88, 1560
+Cencini, M. & Ginelli, F. 2013, Journal of Physics A, 46, 250301
+Chandrasekhar, S. 1943, Reviews of Modern Physics, 15, 1
+Cincotta, P. M. & Sim´ o, C. 2000, A&AS, 147, 205
+Currie, T. & Hansen, B. 2007, ApJ, 666, 1232
+de Le´ on, J., Licandro, J., Serra-Ricart, M., et al. 2019, RNAAS, 3, 131
+Dybczy´ nski, P. A. 2006, A&A, 449, 1233
+Everhart, E. 1985, in IAU Colloquium 83: Dynamics of Comets: Their Origin and Evolution, ed.
+A. Carusi & G. B. Valsecchi, Vol. 115 (Springer), 185
+Ford, E. B., Joshi, K. J., Rasio, F. A., & Zbarsky, B. 2000, ApJ, 528, 336
+Fraser, C. & Nakane, M. 2023, Archive for History of Exact Sciences, 77, 241
+Fuksa, M. 2024, Master’s thesis, Astronomical Institute, Charles University, Prague,
+http://hdl.handle.net/20.500.11956/192817
+Fuksa, M., Pavl´ ık, V., Karas, V., & Shore, S. N. 2024, in Proceedings of “MODEST-24: Exploring
+Dense Stellar Systems Across Cosmic Time”, 1
+Gajdoˇ s, P. & Vaˇ nko, M. 2023, MNRAS, 518, 2068
+Gemmeke, J., Portegies Zwart, S., & Kruip, C. 2006, arXiv e-prints [0607343]
+Goldstein, H., Poole, C., & Safko, J. 2002, Classical Mechanics (Addison Wesley)
+Go´ zdziewski, K., Konacki, M., & Wolszczan, A. 2005, ApJ, 619, 1084
+Greenberg, R. & Brahic, A., eds. 1985, Planetary Rings (University of Arizona Press)
+Heggie, D. C. 1975, MNRAS, 173, 729
+Heggie, D. C. 1991, Chaos in the N-Body Problem of Stellar Dynamics, ed. A. E. Roy (Springer
+US), 47
+Hills, J. G. 1975, AJ, 80, 809
+Hussain, N. & Tamayo, D. 2019, 491, 5258
+Jackson, J. 2021, Classical Electrodynamics (Wiley)
+Kolmogorov, A. N. 1954, Doklady Akademii Nauk SSSR, 98, 527, english translation: Los Alamos
+National Laboratory Report LA-TR-71-67
+Kozai, Y. 1962, AJ, 67, 591
+Lidov, M. L. 1962, Planet. Space Sci., 9, 719
+Lin, D. N. C., Woosley, S. E., & Bodenheimer, P. H. 1991, Nature, 353, 827
+Lithwick, Y. & Naoz, S. 2011, ApJ, 742, 94
+Lyapunov, A. M. 1966, Stability of Motion (Academic Press)
+Meech, K. J., Weryk, R., Micheli, M., et al. 2017, Nature, 552, 378
+Minorsky, N. 1962, Nonlinear Oscillations (D. Van Nostrand Company)
+Mogavero, F., Hoang, N. H., & Laskar, J. 2023, Phys. Rev. X, 13, 021018
+9
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+Moser, J. 1973, Stable and Random Motions in Dynamical Systems (Princeton: Princeton
+University Press)
+Pavl´ ık, V., Karas, V., Bhat, B., Peißker, F., & Eckart, A. 2024a, A&A, 692, A104
+Pavl´ ık, V. & Shore, S. N. 2021, A&A, 648, L2
+Pavl´ ık, V., Voˇ smera, J., Gr´ af, T., & Kˇ r´ ıˇ zov´ a, R. 2024b, in Revista Mexicana de Astronomia y
+Astrofisica Conference Series, Vol. 57, 20
+Phinney, E. S. & Hansen, B. M. S. 1993, ASPC, 36, 371
+Podsiadlowski, P. 1995, ASPC, 72, 411
+Podsiadlowski, P., Pringle, J. E., & Rees, M. J. 1991, Nature, 352, 783
+Poincar´ e, H. 1892, Les m´ ethodes nouvelles de la m´ ecanique c´ eleste (Gauthier-Villars)
+Poisson, E. & Will, C. M. 2014, Gravity: Newtonian, Post-Newtonian, Relativistic (Cambridge
+University Press)
+Rein, H. & Liu, S. F. 2012, A&A, 537, A128
+Rein, H. & Spiegel, D. S. 2015, MNRAS, 446, 1424
+Rein, H. & Tamayo, D. 2015, MNRAS, 452, 376
+Rein, H. & Tamayo, D. 2017, MNRAS, 467, 2377
+Seligman, D. Z., Micheli, M., Farnocchia, D., et al. 2025, ApJ, 989, L36
+Shore, S. N. 2003, Historia Mathematica, 30, 494
+Shore, S. N. & Pavl´ ık, V. 2021a, Physics Today, 74, 10
+Shore, S. N. & Pavl´ ık, V. 2021b, extended version on arXiv e-prints [2108.02213]
+Skokos, C. 2010, in Lecture Notes in Physics, ed. J. Souchay & R. Dvorak, Vol. 790, 63–135
+Sommerfeld, A. 1923, Atomic structure and spectral lines (Dutton)
+Sternberg, S. 1969, Celestial mechanics (W. A. Benjamin)
+Tamayo, D., Cranmer, M., Hadden, S., et al. 2020, Proceedings of the National Academy of
+Sciences, 117, 18194
+Tamayo, D., Rein, H., Shi, P., & Hernandez, D. M. 2020, MNRAS, 491, 2885
+Thorsett, S. E., Arzoumanian, Z., Camilo, F., & Lyne, A. G. 1999, ApJ, 523, 763
+Tremaine, S. 2023, Dynamics of Planetary Systems, Princeton Series in Astrophysics (Princeton
+University Press)
+Valencia, D., Moro-Martin, A., & Teske, J. 2025, arXiv e-prints [2505.09754]
+Wang, Z., Chakrabarty, D., & Kaplan, D. L. 2006, Nature, 440, 772
+Wisdom, J. & Holman, M. 1991, AJ, 102, 1528
+Wolszczan, A. 1994, Science, 264, 538
+Wolszczan, A. & Frail, D. A. 1992, Nature, 355, 145
+10
+
+IOP PublishingEuropean Journal of Physicsvv(2026) aaaaaa Pavl´ ıket al.
+A Parameters of the numerical experiment
+For the reader’s convenience, here we list the initial conditions of all models studied in the MSc
+thesis of Fuksa (2024), which is a subset of models published in PS21. Both of these works have
+already established the initial conditions leading to the capture of planets by the massive remnant.
+Specifically, out of the 156 combinations of the initial parameters listed in Table 1, sixty models
+resulted in the capture of at least one planet (ten of them had two or three planets, and twenty had
+four or more planets). Fuksa (2024) has followed their evolution for another 1 to 2 Myr, and then
+selected 11 simulations (see Table 2) which showed interesting properties – e.g., high number of
+planets or their types, planets in mutually retrograde orbits or hint of resonances. They then
+tracked the evolution of these sets of initial conditions for another 1 to 10 Gyr.
+The model discussed in this paper (marked in Table 2) was one of those that stabilised one of
+its Jupiter-size captured planets at a low-eccentricity value. It showed that a captured system,
+which is initially chaotic, can still dynamically stabilise within a reasonable time frame. Thus, we
+dedicated a more in-depth analysis to it in our paper.
+T able 1.Initial conditions of the models
+Solar System
+Initial positions and masses: taken from NASA JPL HORIZONS as of January 1, 2000
+Intruder
+Mass: neutron star (NS;m= 2M ⊙) or black hole (BH;m= 10M ⊙)
+Distance from the Solar System:d≥0.5 pc
+Heliocentric velocity:v∈ {10; 50}km s −1
+Impact parameter:b∈ {10 −6; 10−5; 10−4}pc
+Incidence angle from the ecliptic:θ∈ {0 ◦; 15◦; 30◦; 45◦; 60◦; 75◦; 90◦; 105◦; 120◦; 135◦; 150◦; 165◦; 180◦}
+T able 2.Initial conditions and properties of the long-term simulations
+Intruderv /km s −1 b /pcθ / ◦ Number of captured planets after 2 Myr
+NS 10 10 −6 30 6 planets – the model described in this paper
+NS 10 10 −6 60 7 planets
+NS 10 10 −5 15 2 giant planets
+NS 10 10 −5 60 all 8 planets
+NS 10 10 −4 0 2 giant planets
+NS 10 10 −4 30 3 giant planets
+NS 50 10 −6 45 5 planets
+BH 10 10 −6 0 3 giant planets
+BH 10 10 −6 60 all 8 planets
+BH 10 10 −5 0 2 giant planets
+BH 50 10 −6 60 3 terrestrial planets
+11

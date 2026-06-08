@@ -1,0 +1,1008 @@
+Title: Modeling the Thermal Low-Frequency Radio Sun with Ray Tracing
+Authors: Peijin Zhang, Bin Chen, Gregory Fleishman, Alexey Kuznetsov, Cooper Downs, Surajit Mondal, Sijie Yu
+Published: 2026-06-01
+Categories: astro-ph.SR, astro-ph.IM
+
+Draft version June 2, 2026
+Typeset using LATEXdefaultstyle in AASTeX7.0.1
+Modeling the Thermal Low-F requency Radio Sun with Ray T racing
+Peijin Zhang
+ ,1 Bin Chen
+ ,1 Gregory Fleishman
+ ,1 Alexey Kuznetsov
+ ,2 Cooper Downs
+ ,3
+Surajit Mondal
+ ,4 and Sijie Yu
+ 1
+1Center for Solar-Terrestrial Research, New Jersey Institute of Technology, Newark, NJ 07102, USA
+2Institute of Solar-Terrestrial Physics, Siberian Branch of the Russian Academy of Sciences, Irkutsk 664033, Russia
+3Predictive Science Inc., San Diego, CA 92121, USA
+4National Centre for Radio Astrophysics, Tata Institute of Fundamental Research, Pune 411007, India
+ABSTRACT
+Incoherent radio emission at meter–decimeter wavelengths provides a key diagnostic of the coronal
+thermal plasma, but at frequencies below∼1 GHz coronal refraction can substantially bend ray paths
+and modify the apparent source size and brightness distribution. We develop a forward-modeling frame-
+work that combines refractive ray tracing through a global 3D coronal model with radiative transfer
+along each ray. The method tracks the ray-tube cross-sectional areaS(s) using a step-wise perturba-
+tion retracing approach and incorporates a geometric magnification term proportional todlnS/dsto
+enforce flux conservation under focusing/defocusing. Thermal free–free emission and absorption are
+then computed with theGRFFradiative transfer code to produce synthetic radio maps over 40–800 MHz.
+Applying the framework to Carrington rotation 2298, we find that including propagation effects al-
+lows the quiet-Sun background spectrum to be well reproduced. However, active region brightness
+is less accurately modeled, suggesting that additional physical factors should be considered in future
+work. These results establish a physics-based method for generating low-frequency quiet-Sun synthetic
+images suitable for quantitative comparison with interferometric observations and for assessing how
+propagation effects shape the observed morphology.
+1.INTRODUCTION
+Solar quiescent radio emission at meter and decimeter wavelengths provides a key diagnostic of the global coronal
+thermal plasma. At frequencies below∼1 GHz, the emission is dominated by thermal emission (free–free and gyro-
+resonance), and the observable brightness distribution is set by a combination of the 3D coronal density/temperature
+structure, magnetic field structure, which set up frequency-dependent optical depth.. In addition, strong gradients in
+the coronal refractive index bend radio rays, shifting the apparent radio emission generation location, altering limb
+brightness, and changing the apparent source size as a function of frequency (e.g., J. L. Steinberg et al. 1971; G. A.
+Dulk 1985; K. Shibasaki et al. 2011).
+The quiet-Sun brightness temperature spectrum and its frequency-dependent apparent size have been measured
+across a wide range of radio frequencies, from submillimeter (C. E. Alissandrakis et al. 2023) and centimeter/microwave
+(H. Zirin et al. 1991) bands to meter wavelengths (e.g., K. R. Subramanian 2004; R. Ramesh et al. 2006; V. N. Melnik
+et al. 2018; P. Zhang et al. 2022). Multifrequency imaging has been used to infer coronal electron density and
+temperature distributions (C. Mercier & G. Chambe 2015; S. Mondal et al. 2026). Such inferences require careful
+forward modeling because propagation effects become increasingly important at low frequencies (T. S. Bastian 1994),
+where refraction and scattering can bias the apparent solar radius, modify centre-to-limb profiles, and change the
+relationship between observed brightness and local plasma properties (R. Sharma & D. Oberoi 2020).
+Forward modeling that connects a physics-based coronal model to synthetic radio images is therefore crucial for
+quantitative comparisons with modern low-frequency observations. The standard approach, that solves the radiative-
+transfer equation along straight lines of sight (LOS) through a 3D coronal volume, breaks down at≲300 MHz, where
+the geometric-optics rays deviate substantially from straight lines. Mapping between the image plane and coronal
+locations as well as the conservation of the flux under focusing/defocusing by refraction should properly be taken into
+account at these long wavelengths.
+arXiv:2606.02413v1  [astro-ph.SR]  1 Jun 2026
+
+2
+In this work we develop a refractive ray-tracing and transfer framework for the thermal emission from the Sun
+at 40–800 MHz. Our method explicitly traces rays through an inhomogeneous plasma and augments the radiative-
+transfer equation with a geometric term that accounts for changes in the ray-tube cross-sectional areaS(s). In the
+absence of emission and absorption, conservation of energy flow impliesI S= const; whenSvaries, this leads to an
+additional term proportional todlnS/dsin the transfer equation. We estimateS(s) numerically using a step-wise
+perturbation retracing method, allowing us to apply a local magnification correction that is naturally consistent with
+flux conservation. We demonstrate the framework using the PSI MAS global MHD corona as input and compute maps
+of the thermal emission from the Sun.
+The paper is organized as follows. Section 2 introduces the ray-tube magnification formalism and the perturbation-
+based area estimate used during ray tracing. Section 3 describes the PSI MAS model setup and the end-to-end
+procedure used to produce synthetic images for a representative snapshot (2025-06-08 20:00 UT). We discuss implica-
+tions for quiet-Sun imaging and future comparisons with interferometric data in Sections 4–5.
+2.RADIATION TRANSFER WITH LOCAL MAGNIFICATION FACTOR
+Refraction in an inhomogeneous plasma bends neighboring rays differently, causing a narrow bundle of trajectories
+(aray tube) to either converge (focusing) or diverge (defocusing). This geometric lensing changes the ray-tube cross-
+sectional areaSand therefore modifies the flux carried by the bundle. In the geometric-optics limit, and in the absence
+of absorption/emission, the energy flow through the tube is conserved, so that
+I(s)S(s) = const,(1)
+whereIis the specific intensity (or ray-tube intensity proxy used by the transfer solver) andsis the path-length
+coordinate along the central ray. In other words, focusing increasesIby decreasingS, while divergence decreasesIby
+increasingS. In practice, we incorporate this effect via a step-wise estimate of thearea magnificationof the ray tube
+during numerical ray tracing.
+With emission and absorption included, conservation of the energy flow through the tube implies that the standard
+radiative-transfer equation acquires an additional geometric term associated with the varying source area.
+dI
+ds =j−κI− I
+S
+dS
+ds (2)
+wheresis the path-length coordinate along the central ray,jandκare the emissivity and absorption coefficient,
+respectively. The quantity
+1
+S
+dS
+ds = dlnS
+ds (3)
+is thelocal magnification factor. If the ray-tube area does not change (dS/ds= 0), this term is zero, and Eq. (2)
+reduces to the usual 1D transfer equation. A positive value of this term indicates defocusing, and a negative value of
+this term indicates focusing.
+Figure 1 illustrates the ray-tube geometry. At each integration step, we define a local orthonormal basis{ ˆt, ˆe1, ˆe2},
+where ˆtis the propagation direction of the central ray and ˆe1, ˆe2 span the plane normal to ˆt. Using ˆe1 and ˆe2, we
+construct two perturbed rays that sample the local deformation of the bundle, advance them by one step with the
+same integrator, and estimate the updated cross-sectional area from the resulting separation vectors. This procedure
+yields a local scaling factor that can be applied to the transfer equation through Eq. (1).
+2.1.Step-wise perturbation retracing algorithm
+We follow the unmagnetized Hamiltonian ray equations:
+dr
+dt = ∂ω
+∂k , dk
+dt =− ∂ω
+∂r ,(4)
+wherer(x, y, z) is the location of the photon,k(k x, ky, kz) is the wave vector. With dispersionω 2 =ω pe(r)2 +k 2 in
+the code’s normalized units. The central-ray state is a 6-dimension real-number arrayx≡(r,k)∈R 6, advanced using
+an RK4 stepper with fixed ∆t.
+At stepi, letr i
+0 be the central-ray position before the RK4 update andr i+1
+0 after the update. We define the local
+propagation unit vector
+ˆti = ri+1
+0 −r i
+0ri+1
+0 −r i
+0
+ .(5)
+
+3
+⃗d′1
+⃗d′2
+⃗ e1
+⃗ e2
+⃗ r−ϵ⃗ e1
+⃗ r+ϵ⃗ e1
+⃗ r+ϵ⃗ e2
+⃗ r−ϵ⃗ e2
+d1 = 2ϵˆe1
+d2 = 2ϵˆe2
+S0 =
+⏐⏐⏐⏐⏐
+(⃗d1×⃗d2)·ˆt
+2
+⏐⏐⏐⏐⏐ S1 =
+⏐⏐⏐⏐⏐
+(⃗d′1×⃗d′2)·ˆt
+2
+⏐⏐⏐⏐⏐
+Figure 1.Ray-tube geometry and transverse basis; perturbed rays probe the cross-sectional area change.
+To form a stable transverse basis, we choose a reference axisathat is least aligned with ˆti (e.g.,a= ˆzunless| ˆtz| ≈1,
+in which casea= ˆy), and set
+ˆei
+1 = a× ˆti
+a× ˆti
+ , ˆei
+2 = ˆti × ˆei
+1.(6)
+We then generate two perturbed initial conditions at the same step originr i
+0:
+ri
+1 =r i
+0 +ϵ i ˆei
+1,r i
+2 =r i
+0 +ϵ i ˆei
+2,(7)
+withϵ i chosen proportional to the step length,
+ϵi =η
+ri+1
+0 −r i
+0
+ ,(8)
+whereηis a user-defined perturbation ratio (parameterperturb ratioin the code). The perturbed rays share the
+same wavevector at stepi,k i
+1 =k i
+2 =k i
+0, and are advanced by one RK4 step to obtainr i+1
+1 andr i+1
+2 .
+The two transverse separation vectors at the end of the step are
+δri+1
+1 =r i+1
+1 −r i+1
+0 , δr i+1
+2 =r i+1
+2 −r i+1
+0 ,(9)
+which defines a local parallelogram in the transverse plane. The corresponding ray-tube cross-sectional area is estimated
+by
+Si+1 ≈
+
+ 
+δri+1
+1 ×δr i+1
+2
+
+2 · ˆti
+ .(10)
+Finally, we define a dimensionlessarea scaling factor(or magnification) for this step by normalizing out the imposed
+perturbation areaϵ 2
+i :
+Mi+1 ≡ Si+1
+ϵ2
+i
+.(11)
+ValuesM>1 indicate divergence (tube expansion), whileM<1 indicate focusing (tube contraction). In the absence
+of radiative sources/sinks, Eq. (1) implies that the intensity update due to geometric lensing over one step is
+I i+1 =I i Si
+Si+1 ∝ 1
+Mi+1 ,(12)
+so that focusing increasesIand defocusing decreasesI. In the full transfer calculation with emission/absorption, this
+factor can be incorporated either as a multiplicative correction per step or equivalently as an additive focusing term
+in the differential form of the transfer equation viad(lnS)/ds.
+
+4
+Figure 1 summarizes the construction: the central ray defines the local normal plane and transverse basis; two
+perturbed rays probe the deformation of the ray tube; the resulting area magnificationMprovides the geometric
+scaling needed to conserveI Sunder refraction.
+3.SYNTHESIZING RADIO IMAGES WITH RAY TRACING
+Our modeling involves two main steps: (1) refractive ray tracing through the inhomogeneous coronal plasma to
+obtain the propagation path and geometric magnification, and (2) solving the radiative-transfer equation along each
+ray (Equation 2) to synthesize an image in the observer’s plane. Ray tracing requires a 3D coronal model that provides
+the electron densityN e(r) to determine the refractive index and propagation path. Solving the radiative-transfer
+equation requires all three parameters:N e(r), the electron temperatureT e(r), and the magnetic fieldB(r).
+3.1.Coronal model
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a)
+Ne at z=0.00 R
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+(b)
+Te at z=0.00 R
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+(c)
+|B| at z=0.00 R
+5 6 7 8 9
+Ne (cm 3) [log10]
+5.2 5.4 5.6 5.8 6.0 6.2
+Te (K) [log10]
+1
+ 0 1
+|B| (G) [log10]
+Figure 2.Plane of sky 2D slices through the PSI MAS model atz= 0, showing the electron densityN e, electron temperature
+Te, and magnetic-field strength|B|used for the ray-tracing calculations.
+(a)
+AIA 304
+(b)
+AIA 171
+(c)
+HMI magnetogram
+SDO context  2025-06-08T20:00
+Figure 3.Context solar images from the Solar Dynamics Observatory (SDO).
+Here we use the MAS (Magnetohydrodynamic Algorithm outside a Sphere) model developed by Predictive Science
+Inc. (PSI) (Z. Miki´ c & J. A. Linker 1996). PSI MAS is a global 3D, time-dependent MHD model of the solar corona
+
+5
+and inner heliosphere: it solves the coupled plasma flow and magnetic-field equations in a spherical domain outside
+the Sun, using photospheric magnetic maps as boundary conditions to produce self-consistent distributions of density,
+temperature, velocity, and magnetic field. We use the coronal model MHD solution corresponding to CR2298 obtained
+from a standard series of MAS calculations developed by PSI for every Carrington Rotation 5. This model, labeled
+‘HMI CR 2298 Thermo 2’, utilizes empirical coronal heating functions similar to (R. Lionello et al. 2009). It is run at
+a relatively modest global resolution, with a spherical grid size of 255×143×300 in radius (r), co-latitude (θ), and
+longitude (ϕ). Figure 2 shows example plane of sky slice ofN e,T e, and|B|, rotated to Carrington longitude 140 ◦ to
+align the model with the observing time 2025-06-08 20:00 UT. Figure 3 shows the corresponding context images from
+SDO at 2025-06-08 20:00:00 UT.
+3.2.Ray-tracing
+We perform ray tracing from the observer’s perspective by launching rays in the + ˆzdirection, with (x, y) defining
+the image (view) plane. Refraction by density gradients causes rays to deviate from straight lines; an example set of
+trajectories is shown in Figure 4. Along each ray, we estimate the ray-tube cross-sectional change using the step-wise
+perturbation retracing method described in Section 2, yielding the local magnification factordlnS/ds. As illustrated
+in Figure 5, for each image pixel the workflow is a two-step process: we first launch a ray from the observer toward
+the Sun (reverse to the physical radiative-transfer direction) and record the full refracted path and geometric factors.
+Only after the ray tracing has been completed, we solve the radiative-transfer equation from the end of each traced ray
+back toward the observer (the actual transfer direction), so theGRFFflux computation waits for the ray-tracing stage
+to finish. In Figure 4, each trajectory is colored by the magnification factor: negative (blue) segments correspond
+2
+ 1
+ 0 1 2 3
+x (R )
+2
+1
+0
+1
+2
+z (R )
+Rays on Ne map (line color: d(log S)/ds)
+0.3
+0.2
+0.1
+0.0
+0.1
+0.2
+0.3
+d(log S)/ds (R 1)
+Figure 4.Ray-tracing trajectories overlaid on an electron-density map from the PSI MAS coronal model. The 32 rays are
+launched fromx=−3.5,y= 0,z= (−1.2,1.2), colors indicate the variation of the magnification factor, positive indicates
+defocusing, negative indicates focusing.
+to focusing (dlnS/ds <0) and positive (red) segments correspond to defocusing (dlnS/ds >0). Figure 6 shows
+an example of the accumulated magnification factorSand the corresponding magnification factor as a function of
+distance along the ray.
+5 www.predsci.com/mhdweb2/tools/data-access
+
+6
+Figure 5.Concept figure for the ray-coordinate convention. The ray coordinate increases along the traced ray toward the Sun
+(observer to source), which is opposite to the radiative-transfer integration direction (source to observer).
+0 1 2 3 4
+Distance along ray (R_sun)
+0.95
+0.96
+0.97
+0.98
+0.99
+1.00
+1.01Magnification Factor S
+ray z0: -1.12
+ray z0: -0.75
+ray z0: -0.38
+ray z0: 0.00
+ray z0: 0.38
+ray z0: 0.75
+ray z0: 1.12
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
+Distance along ray (R_sun)
+1.0
+0.5
+0.0
+0.5
+1.0
+Start z0
+Ray Marching Direction
+Differential Magnification Factor Distribution d(log(S))/ds
+0.25
+0.00
+0.25
+R 1
+Figure 6.Magnification factor (S) along the ray preceding toward the Sun. Upper panel shows the source area S along the
+ray path (equavlent to accumulated local magnification factor); values>1 indicate defocusing and values<1 indicate focusing
+along the ray, lower panel shows the variation of the magnification factor of rays along the ray path, the rays are lauched from
+x=−3.5,y= 0,z= (−1.2,1.2). Figure 5 shows the ray-coordinate convention.
+
+7
+3.3.Synthetic imaging results
+After ray tracing, we solve the radiative-transfer equation using theGRFFcode (G. D. Fleishman et al. 2021), where
+the magnification term (Equation 2) was included in the latest release (A. A. Kuznetsov et al. 2026) 6. The resulting
+brightness maps are then formed on the image plane. Figures 7 and 8 show example of the synthetic images at
+relatively low and high frequencies, respectively.
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a1)
+Tmax
+b = 3.7 × 105 K
+Ray tracing 40 MHz
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a2)
+Tmax
+b = 6.6 × 105 K
+Ray tracing 80 MHz
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a3)
+Tmax
+b = 9.5 × 105 K
+Ray tracing 150 MHz
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(b1)
+Tmax
+b = 4.5 × 105 K
+LOS 40 MHz
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(b2)
+Tmax
+b = 7.4 × 105 K
+LOS 80 MHz
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(b3)
+Tmax
+b = 1.0 × 106 K
+LOS 150 MHz
+Figure 7.Synthetic quiet-Sun radio images at 40, 80, and 150 MHz computed from the PSI MAS coronal model with refractive
+ray tracing and thermal radiative transfer. The model-resolution images are convolved with a representative interferometric
+beam corresponding to a 15 km maximum baseline. The top row panels present the result with ray tracing, the bottom row
+panels present the result without ray tracing.
+Figures 7 and 8 compare synthetic images computed with refractive ray tracing (upper panels) to images computed
+along straight lines of sight (LOS) (lower panels; i.e., neglecting refraction). The comparison reveals the following
+features.
+Lower frequencies are more affected by refraction—The impact of refraction decreases with increasing frequency: the lower
+the frequency, the larger the difference between the two solutions. At 40 and 80 MHz the images with and without
+ray tracing differ dramatically in both morphology and radial brightness profile. In particular, the LOS images exhibit
+stronger apparent limb brightening. At higher frequencies, the two approaches show no substantial differences. By
+550 MHz and 800 MHz the differences between the ray-traced and straight-line images are not significant at the level
+visible by eye in the convolved maps.
+Spurious limb brightening—Figure 7 reveals remarkably more limb brightening in the LOS than in the ray-tracing case
+in the 40 and 80 MHz maps. The artificially enhanced limb brightening in the LOS case arises because the assumed ray
+6 GRFF: https://github.com/kuznetsov-radio/GRFF; latest Zenodo release: https://doi.org/10.5281/zenodo.19368163.
+
+8
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(a1)
+Tmax
+b = 1.1 × 106 K
+Ray tracing 280 MHz
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(a2)
+Tmax
+b = 1.7 × 106 K
+Ray tracing 550 MHz
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(a3)
+Tmax
+b = 1.4 × 106 K
+Ray tracing 800 MHz
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(b1)
+Tmax
+b = 1.3 × 106 K
+LOS 280 MHz
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(b2)
+Tmax
+b = 1.6 × 106 K
+LOS 550 MHz
+1.0
+ 0.5
+ 0.0 0.5 1.0
+x (R )
+1.0
+0.5
+0.0
+0.5
+1.0
+y (R )
+(b3)
+Tmax
+b = 1.4 × 106 K
+LOS 800 MHz
+Figure 8.Synthetic quiet-Sun radio images at 280, 550, and 800 MHz computed from the PSI MAS coronal model using
+refractive ray tracing and free–free radiative transfer. The intrinsic images are convolved with a representative interferometric
+beam corresponding to a 5 km maximum baseline. The dotted circle marks the solar optical limb.
+paths sample a different coronal volume than the physically refracted trajectories. The ray-tracing solution shows that
+rays near the limb bend outward (Figure 4), so that the actual propagation paths preferentially pass through plasma
+with lower density and typically lower temperature (and weaker magnetic field) than the corresponding straight LOS
+would traverse, as also seen in studies of refractive propagation of solar radio bursts (G. Thejappa et al. 2011) and
+in LOFAR quiet-corona imaging with refractive ray tracing (C. Vocks et al. 2018). As a result, the ray-traced paths
+accumulate a smaller effective emission measure and optical depth, leading to lower free–free emission along the ray
+and therefore a reduced apparent limb brightening compared with the LOS integration.
+MaxiumT b bias—We also find a systematic tendency for the maximum brightness temperatureT b to be larger in the
+LOS images than in the corresponding ray-traced solutions, indicating that neglecting refraction correction and the
+associated ray-tube magnification can bias the peak intensities.
+Magnification factor—Refraction focusing/defocusing changesSalong the path, adding a geometric termdlnS/dsto
+the radiative-transfer equation (Section 2). By flux conservation, a shrinking tube increases the observed intensity,
+while an expanding tube decreases it.
+For the density model we use in this case, the magnitude of this correction is modest. Figure 9 shows that in-
+cluding the magnification term changes the brightness temperature by less than∼4% and does not introduce visible
+morphological differences in the synthetic images. Consistent with this, Figure 6 indicates that along traced rays
+dlnS/dsremains below∼0.4 R −1
+⊙ , and the cumulative change of the tube area is small: the maximum integrated
+factorS/S 0 differs from unity by only∼6%. We therefore conclude that the magnification factor provides a formally
+flux-conserving correction but is a second-order effect in our simulations, indicating that the dominant propagation
+effect is ray bending rather than ray focusing. The magnification term does not change the overall image morphology.
+
+9
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a)
+Tmax
+b = 5.75 × 105
+With magnification factor
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2 (b)
+Tmax
+b = 5.76 × 105
+Without magnification factor
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2 (c)
+Difference (Ia Ib)
+2
+ 1
+ 0 1 2
+x (R )
+2
+1
+0
+1
+2 (d)
+Relative difference (Ia Ib)/Ib
+0 200000 400000
+Tb (K)
+0 200000 400000
+Tb (K)
+10000
+ 5000
+ 0 5000 10000
+Tb (K)
+0.02
+ 0.00 0.02
+( Tb/Tb)
+Figure 9.Effect of the ray-tube magnification term in the radiative-transfer calculation. Shown are synthetic quiet-Sun
+brightness maps at 60 MHz computed with refractive ray tracing from the same coronal model, comparing solutions that
+include and omit the geometric magnification factor proportional todlnS/ds.
+3.4.Comparison with observations
+3.4.1.Brightness temperature spectrum
+The near-center (<0.5R ⊙) quiet-Sun brightness temperature spectrum can be derived from the synthetic images.
+For each frequency, we measure the meanTb within the model-predicted solar disk and compare the resulting spectrum
+with historical quiet-Sun measurements reported in the literature.
+102 103 104
+Frequency (MHz)
+104
+105
+106
+TB (K)
+ray-tracing MAS GRFF
+Subramanian et al. 2004
+Ramesh et al. 2006
+Melnik et al. 2018
+Zhang et al. 2022
+Sharma et al. 2020
+Mercier et al. 2015
+Zirin et al. 1991
+Figure 10.Quiet-Sun brightness temperature spectrum. The solid curve shows the modeled<0.5R ⊙ averagedT b derived
+from our synthetic images over 40–800 MHz. Symbols show representative measurements from previous quiet-Sun observations
+in the literature (e.g., K. R. Subramanian 2004; R. Ramesh et al. 2006; V. N. Melnik et al. 2018; P. Zhang et al. 2022).
+Figure 10 shows the modeledT b(ν) over 40–800 MHz together with representative observational constraints from
+previous studies (e.g., K. R. Subramanian 2004; R. Ramesh et al. 2006; V. N. Melnik et al. 2018; P. Zhang et al. 2022).
+The modeled brightness temperatures are consistent with the observed range across the band: the spectrum decreases
+from the lowest frequencies toward a few hundred MHz as the effective formation height moves downward and the
+emission becomes progressively less optically thick, and then flattens at the highest frequencies where the quiet-Sun
+disk approaches the optically thin regime. The remaining differences are at the level expected given the snapshot
+nature of the coronal model, uncertainties in absolute flux calibration among different instruments, and the fact that
+scattering and fine-scale density structure are not included in the present calculations.
+
+10
+3.4.2.Solar images compared with OVRO LWA
+We present a direct comparison between OVRO–LWA quiet-Sun images observed on 2025-06-08T20:07:03 UT and
+synthetic images produced by the refractive ray-tracing MAS–GRFF pipeline using the Carrington rotation 2298 MAS
+solution rotated to the observing epoch (Figure 11). The overall morphology and brightness level are consistent:
+the modeled thermal emission (free–free, with gyro-resonance where applicable) reproduces the dominant background
+quiet-Sun component at decameter wavelengths, supporting the use of the MAS plasma parameters as a physically
+motivated baseline for incoherent emission.
+2
+ 0 2
+2
+1
+0
+1
+2
+y (R )
+38.7 MHz(a1)
+Tmax
+b = 0.38 MK
+OVRO-LWA
+2
+ 0 2
+2
+1
+0
+1
+2
+37.6 MHz(b1)
+Tmax
+b = 0.27 MK
+Ray-tracing MAS GRFF
+2
+ 0 2
+2
+1
+0
+1
+2
+y (R )
+52.4 MHz(a2)
+Tmax
+b = 0.54 MK
+2
+ 0 2
+2
+1
+0
+1
+2
+52.8 MHz(b2)
+Tmax
+b = 0.41 MK
+2
+ 0 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+84.6 MHz(a3)
+Tmax
+b = 0.80 MK
+2
+ 0 2
+x (R )
+2
+1
+0
+1
+2
+83.1 MHz(b3)
+Tmax
+b = 0.61 MK
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9Average TB (MK)
+(c) ROI-1
+Model
+OVRO-LWA
+30 40 50 60 70 80
+Frequency (MHz)
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+0.8
+0.9Average TB (MK)
+(d) ROI-2
+Model
+OVRO-LWA
+Figure 11.Comparison between observed and modeled Sun brightness at decameter wavelengths. Panels (a1–a3) show
+OVRO–LWA quiet-Sun images from 2025-06-08T20:07:03 UT at 38.7, 52.4, and 84.6 MHz. Panels (b1–b3) show the corre-
+sponding synthetic images computed with refractive ray tracing and GRFF radiative transfer using the PSI/MAS coronal model
+for Carrington rotation 2298, rotated to align the coronal configuration to 2025-06-08T20:00:00 UT. Two regions of interest
+(ROIs) are marked in all images: ROI–1 (green square; quiet region) and ROI–2 (blue square; near an active-region vicinity).
+Panels (c) and (d) show the mean brightness temperature spectra (averageT B) within ROI–1 and ROI–2, respectively, compar-
+ing the OVRO–LWA measurements with the model predictions across∼30–85 MHz.
+To quantify local spectral behavior, we define two regions of interest (ROIs) shown in Figure 11. ROI–1 (green)
+is placed in a relatively quiet region, while ROI–2 (blue) samples a location closer to an active-region vicinity near
+disk center. The resulting brightness-temperature spectra are shown in panels (c) and (d). In the quiet ROI–1,
+the observed spectrum follows the modeled trend closely across∼30–85 MHz, indicating that thermal emission and
+refraction captured by the MAS–GRFF framework can explain the local brightness and its frequency dependence in
+quiet areas. In contrast, ROI–2 exhibits a clear mismatch: the observedT B is systematically higher than the model
+and the spectral shape deviates, suggesting that additional physics and/or model limitations become important near
+active-region environments.
+
+11
+2
+ 0 2
+x (R )
+2
+1
+0
+1
+2
+y (R )
+(a) OVRO-LWA 66.0 MHz
+2
+ 0 2
+x (R )
+2
+1
+0
+1
+2
+(b) Model 66.3 MHz
+2
+ 0 2
+x (R )
+2
+1
+0
+1
+2
+(c)  (Iobs Imodel)/Imax
+obs
+3
+ 2
+ 1
+ 0 1 2 3
+x (R )
+0.0
+0.2
+0.4
+0.6
+0.8TB (MK)
+slice
+(d) Slice at y=0
+OVRO
+Model
+Diff
+3
+ 2
+ 1
+ 0 1 2 3
+y (R )
+0.0
+0.2
+0.4
+0.6
+0.8TB (MK)
+slice
+(e) Slice at x=0
+OVRO
+Model
+Diff
+0.0
+0.2
+0.4
+0.6
+TB (MK)
+0.0
+0.2
+0.4
+0.6
+TB (MK)
+1.0
+0.5
+0.0
+0.5
+1.0
+Figure 12.Example image-level comparison between OVRO–LWA observations and the ray-tracing MAS–GRFF model
+at∼66 MHz. (a) OVRO–LWA quiet-Sun brightness temperature map at 66.0 MHz. (b) Corresponding synthetic brightness
+temperature map from the model at 66.3 MHz. (c) Normalized difference map, (I obs −I model)/I max
+obs , shown with a diverging
+color scale. The black circle marks the solar disk, and the dashed lines indicate thex= 0 andy= 0 axes used for 1D cuts. (d)
+Horizontal slice aty= 0 comparing the observed (blue) and modeled (orange)T B profiles; the dashed black curve shows their
+difference. (e) Vertical slice atx= 0 with the same format.
+Figure 12 further highlights where the model departs from the data using an example at∼66 MHz. The normalized
+difference map shows the largest residuals concentrated (1) near the active-region vicinity, consistent with the ROI–2
+behavior discussed above, and (2) toward the limb where the observed emission extends to larger apparent radii than
+predicted by the model. The latter is naturally explained by radio-wave scattering from coronal density fluctuations,
+which can broaden the apparent source and enhance off-limb extension; such scattering is not included in the current
+MAS–GRFF forward modeling and is expected to be increasingly important at these frequencies (see, e.g., T. S.
+Bastian (1994); E. P. Kontar et al. (2019)). Together, Figures 11 and 12 indicate that while thermal emission plus
+refraction can reproduce quiet-region spectra and gross morphology, accurate modeling of active-region neighborhoods
+and limb extension likely requires improved coronal thermodynamics and explicit treatment of scattering and/or weak
+coherent emission.
+There are several factors that may contribute to the discrepancy observed at ROI 2. First, due to its modest
+size, the global MHD solution may not resolve the active-region thermodynamic structure accurately; in particular, an
+underestimated coronal electron temperatureT e and/or densityn e in the low corona would directly reduce the modeled
+free–free emissivity and optical depth, loweringT B relative to observations. Second, weak coherent contributions (e.g.,
+low-level plasma radiation or electron-cyclotron maser emission) may occur intermittently or persistently near active
+regions (S. Yu et al. 2024), elevating the observed brightness above our prediction based on a thermal emission model
+even during otherwise quiet conditions. Additional contributors include (i) unresolved fine-scale density structuring not
+captured by the MAS grid (affecting both emissivity and propagation), (ii) mismatch of temporal evolution between
+the MAS model, which is based on an input synoptic magnetogram from an entire Carrington rotation of 27 days, and
+the actual observation, which is based on a single 10-s snapshot.
+
+12
+4.DISCUSSION AND SUMMARY
+We have developed a forward-modeling framework to synthesize solar radio images at sub-GHz frequencies. This
+framework combines refractive ray tracing using a 3D MHD coronal model with radiative transfer, including a local
+ray-tube area (magnification) correction. In this approach, refraction in the inhomogeneous corona bends rays and
+changes the cross-sectional area of a ray bundleS(s), which introduces an additional geometric term d lnS/dsin the
+transfer equation to ensure flux conservation under focusing/defocusing.
+Our synthetic imaging experiments reinforce that refraction is the dominant propagation effect shaping thermal ra-
+dio Sun morphology. Comparisons between ray-traced images and straight LOS integrations show that refraction has
+the largest impact at low frequencies, where the two solutions differ substantially in both morphology and brightness
+temperature slices. As the frequency increases, the two approaches converge, as expected, because refractive bending
+weakens as the refractive index approaches unity. By∼280 MHz the ray-traced and LOS maps are already similar,
+although residual differences remain discernible; above∼550 MHz the differences become small, with only subtle differ-
+ences persisting. These trends connect naturally to prior thermal Sun forward modeling. For example, R. Sharma & D.
+Oberoi (2020) compared MWA quiet-Sun observations with FORWARD-based thermal bremsstrahlung maps driven
+by a MAS coronal model and found systematic discrepancies (e.g., limb-related differences) attributable to propagation
+effects. Synthetic LOS maps display spurious limb brightening at low frequencies because the assumed paths traverse
+denser/hotter coronal volumes, located lower in the solar corona than the physically refracted trajectories. In our
+calculations, ray tracing reduces this bias: rays near the limb bend outward and preferentially sample lower-density
+plasma, lowering the effective emission measure and optical depth along the true paths and weakening the apparent
+limb brightening relative to LOS integrations. Thus, explicitly modeling refraction provides an improved, physically
+grounded route to reconcile thermal forward models with observed disk morphologies at thermal radio frequencies.
+We implemented a step-wise perturbation re-tracing algorithm to estimate the evolution of the local magnification
+factor along each ray. By launching perturbed rays in the local transverse plane and measuring the resulting separation
+vectors after each integration step, we computeS(s) and incorporate it self-consistently in the transfer solver. For
+the tested thermal radio solar configuration, including this magnification term produces measurable but not dominant
+changes: it modifiesT B at the few-percent level and does not introduce visible morphological changes in the synthetic
+images. This indicates that, for typical thermal radio solar conditions, refraction primarily affects the image through
+ray bending (that defines, which coronal volumes are sampled), while the additional focusing/defocusing correction is
+a smaller effect.
+We also compared our model with OVRO–LWA imaging at decameter wavelengths (Figures 11 and 12). The overall
+morphology and brightness level are consistent, indicating that the combination of free–free and gyroresonance emission
+represent the dominant thermal radio solar background when driven by the MAS model. The agreement is best in
+a quiet region (ROI 1), where the observedT B(ν) follows the modeled trend across∼30–85 MHz (Figure 11c). In
+contrast, the spectrum shows a larger discrepancy in the vicinity of an active region close to the disk center (ROI–2;
+Figure 11d): the observations are systematically brighter than the model and the spectral shape deviates, suggesting
+that additional physics and/or model limitations become important near active regions.
+Several factors may contribute to the ROI–2 discrepancy. First, the global coronal model may not represent active-
+region thermodynamics with sufficient fidelity; for example, an underestimated electron temperatureTe (and/or density
+ne) in the low corona would directly reduce the modeled free–free emissivity and optical depth, loweringT B relative
+to the data. Second, weak coherent contributions may elevate the observed brightness even during nominally quiet
+conditions near active regions, e.g., low-level plasma emission or electron-cyclotron maser emission not captured in
+a purely incoherent forward model. Additional contributors include unresolved fine-scale density structuring (which
+affects both emissivity and propagation), and temporal evolution between the MAS snapshot and the observation time.
+Figure 12 further shows that the largest residuals occur near the active-region vicinity and toward the limb and
+off-limb. The active-region discrepancy is consistent with the behavior of ROI 2 discussed above. The limb-related
+difference is characterized by the observed emission extending to larger apparent radial distances than the model
+prediction. One possible explanation is radio-wave scattering from coronal density fluctuations, which broadens the
+apparent source and redistributes intensity outward; such scattering is not included in the present forward modeling
+and is expected to be important at these frequencies (e.g., T. S. Bastian 1994; E. P. Kontar et al. 2019). Incorporating
+scattering is therefore a clear priority for improving the realism of the synthetic images, particularly for reproducing
+the off-limb extension and the detailed radial profiles.
+
+13
+The combination of well-calibrated interferometric imaging and physics-based forward modeling offers a path to-
+ward constraining the coronal background more directly. If the dominant thermal emission and propagation effects
+(refraction and scattering) are captured with sufficient fidelity, then discrepancies between observed and synthesized
+brightness maps can be used as quantitative constraints on the underlying coronal parameters (T e, n e,B). In this
+perspective, multi-frequency imaging can be used not only to validate coronal models but also to potentially improve
+MAS model through iterative parameter tuning or assimilation, ultimately advancing our understanding of the coronal
+background and its spatial variability.
+ACKNOWLEDGMENTS
+P.Z. acknowledge google cloud for computing resource support. This material is based upon work supported by
+the Google Cloud Research Credits program with the award GCP19980904. The OVRO-LWA expansion project was
+supported by NSF under grant AST-1828784. OVRO-LWA solar operations are supported by NSF grant AGS-2436999
+to the New Jersey Institute of Technology. C.D. acknowledges support from the NASA Living With a Star Strategic
+Capabilities program (award 80NSSC22K0893).
+Facilities:OVRO-LWA
+REFERENCES
+Alissandrakis, C. E., Bastian, T. S., & Nindos, A. 2023,
+A&A, 670, C5, doi: 10.1051/0004-6361/202243774e
+Bastian, T. S. 1994, ApJ, 426, 774, doi: 10.1086/174114
+Dulk, G. A. 1985, ARA&A, 23, 169,
+doi: 10.1146/annurev.aa.23.090185.001125
+Fleishman, G. D., Kuznetsov, A. A., & Landi, E. 2021,
+ApJ, 914, 52, doi: 10.3847/1538-4357/abf92c
+Kontar, E. P., Chen, X., Chrysaphi, N., et al. 2019, ApJ,
+884, 122, doi: 10.3847/1538-4357/ab40bb
+Kuznetsov, A. A., Fleishman, G. D., & Landi, E. 2026,
+Codes for computing the solar gyroresonance and
+free-free radio emissions, v1.0.1, Zenodo,
+doi: 10.5281/zenodo.19368163
+Lionello, R., Linker, J. A., & Miki´ c, Z. 2009, ApJ, 690, 902,
+doi: 10.1088/0004-637X/690/1/902
+Melnik, V. N., Shepelev, V. A., Poedts, S., et al. 2018,
+Solar Physics, 293, doi: 10.1007/s11207-018-1316-3
+Mercier, C., & Chambe, G. 2015, Astronomy &
+Astrophysics, 583, doi: 10.1051/0004-6361/201425540
+Miki´ c, Z., & Linker, J. A. 1996, in American Institute of
+Physics Conference Series, Vol. 382, American Institute of
+Physics Conference Series, 104–107, doi: 10.1063/1.51370
+Mondal, S., Shaik, S. B., Howard, R. A., et al. 2026, ApJ,
+999, 237, doi: 10.3847/1538-4357/ae4353
+Ramesh, R., Nataraj, H. S., Kathiravan, C., & Sastry, C. V.
+2006, The Astrophysical Journal, 648, 707,
+doi: 10.1086/505677
+Sharma, R., & Oberoi, D. 2020, The Astrophysical Journal,
+903, doi: 10.3847/1538-4357/abb949
+Shibasaki, K., Alissandrakis, C. E., & Pohjolainen, S. 2011,
+SoPh, 273, 309, doi: 10.1007/s11207-011-9788-4
+Steinberg, J. L., Aubier-Giraud, M., Leblanc, Y., &
+Boischot, A. 1971, A&A, 10, 362
+Subramanian, K. R. 2004, Astronomy & Astrophysics, 426,
+329, doi: 10.1051/0004-6361:20047120
+Thejappa, G., MacDowall, R. J., & Gopalswamy, N. 2011,
+ApJ, 734, 16, doi: 10.1088/0004-637X/734/1/16
+Vocks, C., Mann, G., Breitling, F., et al. 2018, A&A, 614,
+A54, doi: 10.1051/0004-6361/201630067
+Yu, S., Chen, B., Sharma, R., et al. 2024, Nature
+Astronomy, 8, 50, doi: 10.1038/s41550-023-02122-6
+Zhang, P., Zucca, P., Kozarev, K., et al. 2022, The
+Astrophysical Journal, 932,
+doi: 10.3847/1538-4357/ac6b37
+Zirin, H., Baumert, B. M., & Hurford, G. J. 1991, The
+Astrophysical Journal, 370, 779, doi: 10.1086/169861

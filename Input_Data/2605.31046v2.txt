@@ -1,0 +1,661 @@
+Title: Predictive radar tracking reveals >500 mV/m electric-field transients during the May 2024 superstorm
+Authors: Magnus F Ivarsen, Saif Marei, Jordan Cho, Glenn C Hussey
+Published: 2026-05-29
+Categories: physics.space-ph, astro-ph.EP, astro-ph.IM, physics.plasm-ph
+
+manuscript submitted toJGR: Space Physics
+Predictive radar tracking reveals>500mV/m
+electric-field transients during the May 2024
+superstorm
+Magnus F Ivarsen 1∗, Saif Marei 1, Jordan Cho 1, and Glenn C Hussey 1
+1Department of Physics and Engineering Physics, University of Saskatchewan, Saskatoon, Canada
+Key Points:
+• Ionospheric tracking radar can measure the strength and direction of electric field
+enhancements within the radar’s field-of-view
+• Case studies and statistical aggregates agree well within-situobservations by or-
+biting satellites.
+• During the May 2024 superstorm, we observed extreme spikes ( > 500 mV/m)
+in the electric field equatorward of the cusp.
+∗Contact: magnus.fagernes@gmail.com
+Corresponding author: Magnus F Ivarsen,magnus.fagernes@gmail.com
+–1–
+arXiv:2605.31046v2  [physics.space-ph]  2 Jun 2026
+
+manuscript submitted toJGR: Space Physics
+Abstract
+The bulk motion of E-region radar aurora provides a sparsely distributed, direct mea-
+surement of the ionospheric electric field in intermittent bursts. We present a tracking
+procedure foricebearVHF measurements of Farley-Buneman waves. Each cluster is
+represented as an α-shape; frame-to-frame association is a Hungarian linear-assignment
+problem with a cost combining centroid distance and shape Intersection-over-Union; kine-
+matic prediction amounts to a degenerate Kalman filter. Births, deaths, splits, and merg-
+ers are monitored; each tracked trajectory is reduced to per-segment velocities by piecewise-
+linear regression. We validate againstin-situobservations. During the G5 storm of 10
+May 2024, on closed dayside field-lines, our method recovers a five-second cluster mov-
+ing at 11,240±660 m/s, implying an electric field strength of ≈560 mV/m, a value
+that exceeds documented sub-auroral thermal emission speeds and the most extreme re-
+ported sub-auroral drifts. The detection is consistent with extreme E-field structures ap-
+pearing as short-lived bursts, representing field variability, and we provide parameter-
+izations of this variability for space weather modeling.
+Plain Language Summary
+Earth’s aurorae, or northern and southern lights, mark the location of electric currents
+that flow in the upper atmosphere when the solar wind pushes hard against Earth’s ex-
+tended magnetic field. The strongest of these electrical currents — the auroral electro-
+jets, at roughly 105 km above Earth’s surface — are driven by electric fields that are dif-
+ficult to measure: satellites pass through them too quickly to map their structure, and
+ground-based radars typically return difficult-to-interpret plasma motions. We present
+a machine-learning method that automatically tracks compact clusters of radar echoes,
+clusters that correspond directly to plasma turbulence excited by the strong electric fields.
+This is made possible by the advanced scientific imaging radaricebear, located in Saskatchewan,
+Canada. Each tracked radar echo cluster is automatically followed across consecutive frames;
+its motion is then converted into a local electric field measurement, validated against four
+years of polar-orbiting satellite measurements (2020–2024). During the May 2024 geo-
+magnetic superstorm — the most powerful storm in two decades — the method detected
+a transient (fast-appearing and fast-disappearing) event in which an electric structure
+travelled at over 11,000 meters per second, faster than any value previously documented
+in this region of space.
+1 Introduction
+In Earth’s upper atmosphere, at the lower edge of the partially ionized layers of the iono-
+sphere, intense, small-scale plasma turbulence is observed during geomagnetic storms,
+in the form of crashing waves that appear inside the electrical currents belonging to the
+auroral electrojets. Compared to the large scales of the aurorae and the magnetosphere-
+ionosphere (MI) coupling, these turbulent waves, a few meters in size, aremicroscopic,
+and the highly structured, turbulent, plasma that is created around aurorae subsequently
+disturbs radio propagation through the ionosphere (Bahcivan et al., 2006), a signal whose
+characteristic wavelength is just a few hundred meters across.
+Electrojet turbulence, created by Farley-Buneman (FB, Farley, 1963; Buneman, 1963)
+waves, is excited by the externally applied electric field (Ivarsen et al., 2025a), a field that
+produces a relative velocity between ions and electrons at altitudes between 90 km and
+120 km. Here, the ions experience collisions and their motion is restricted, while the elec-
+trons are unaffected owing to their much smaller sizes. The resulting polarization causes
+instability (St.-Maurice and Hamza, 2001), when the drift speeds exceed ∼400 m/s
+(∼20 mV/m).
+–2–
+
+manuscript submitted toJGR: Space Physics
+The electric field, which triggers FB waves, is proportional to Joule heating, and thevari-
+ability, or spatio-temporal variance, of this field represents a vital quantity in space weather
+modeling (Codrescu et al., 1995; Rosenqvist et al., 2006; Deng and Ridley, 2007; Knipp
+et al., 2004). Moreover, it is exceedingly hard to measure this quantity reliably, as or-
+biting satellites produce static one-dimensional slices through the plasma, and the rou-
+tine means to measure electric fields, using a conventional Superdarnradar (Thomas
+and Shepherd, 2018), cannot resolve scales below 45 km of size and 1 minute of duration.
+However, the very-high-frequency (VHF) radaricebearcan measure scales down to 1 km
+and 1second, and recent advances in radar tracking has yielded a way to quantify the
+ionospheric electric field, bypassing earlier limitations caused by turbulence physics.
+To explain how, we begin with a description of the auroral ionosphere, where the crash-
+ing of FB waves occur fast and numerous. The sum total of these crashing waves out-
+line, in time and space, the structure of the driving electric field imposed by the mag-
+netosphere (Ivarsen et al., 2025a). The short-lived, orephemeral, quality of the waves,
+means that the occurrence of FB turbulence around aurorae act as tracers, tracing the
+shape and trajectory of moving electric field structures (Ivarsen et al., 2024c). This was
+first exploited by the tracking efforts of Ivarsen et al. (2024b), who provided electric field
+measurements around auroral arcs. This is enabled by the plasma being “frozen into” the
+magnetic field at altitudes higher than around 150 km, meaning that the motion of elec-
+tric field structures in the lower ionosphere tracks the convection electric field (Ivarsen
+et al., 2024b,c).
+Building on the former, we present in this paper a comprehensive method to identify and
+track clusters of radar echoes as they appear and dissipate in the space above the Rab-
+bit Lake observation station in Saskatchewan, Canada. This is achieved by amending
+the tracking method presented by Ivarsen et al. (2024b) using modern tracking technolo-
+gies usually applied in aviation and defense contexts, as well as those applied to video-
+feed monitoring. Our paper concludes that the method can detect extreme ( > 10, 000
+m/s) events in the auroral ionosphere.
+2 Methods
+The suite we have implemented is a three-stage chain operating onicebearLevel-2 echo
+data (Huyghebaert et al., 2019, 2021). Recently, Ivarsen et al. (2024b) implemented an
+algorithm to automatically track clutters, or clusters, of radar backscatter targets through
+time and space. The present paper improves on that procedure in four respects.
+(i)The point-cloud footprints are represented as α-shapes (Edelsbrunner and M¨ ucke, 1994),
+which support shape-overlap arithmetic via the Intersection-over-Union (IoU).
+(ii)Frame-to-frame association is formulated as a linear assignment problem on a cost
+matrix combining centroid-to-prediction distance with the IoU between each previous-
+frame α-shape, translated by its kinematic prediction, and each current-frame α-shape
+— following the IoU-association lineage of SORT and DeepSORT (Bewley et al., 2016;
+Wojke et al., 2017) — and solved by the Hungarian/Munkres algorithm (Kuhn, 1955),
+with the gating radius tightening once a track has a velocity estimate.
+(iii)The births, deaths, splits, and mergers of tracked clusters are monitored and book-
+kept explicitly, allowing the evolution of the complex auroral-electrojet field structure
+to be reconstructed without imposing one-to-one correspondences at every frame; the
+motion model is a degenerate Kalman filter that maintains a one-step finite-difference
+velocity per track without covariance propagation (cf. Yang and Baum, 2017, for the explicit-
+noise form).
+(iv)Forward-greedy sliding-window piecewise-linear regression (Keogh et al., 2001) con-
+verts each tracked centroid trajectory into per-segment velocities.
+–3–
+
+manuscript submitted toJGR: Space Physics
+2.1 F rame-to-frame association
+After a new cluster has been identified, the algorithm looks at where each cluster has
+just been, then predicting where that cluster should appear next, and then matching pre-
+dictions to the new frame’s proposals under a cost that combines centroid distance and
+shape overlap. The labels assigned by the associator are the object identities that the
+system ultimately reports, whose evolution is measured. Of some importance, polygons
+called α-shapes (Edelsbrunner and M¨ ucke, 1994) are drawn around the cluster footprints.
+The problem has Ni clusters at frame t and Nj clusters at the most recent non-empty
+frame within a nine-frame lookback window (so the tracker tolerates brief detection gaps),
+and we cast association as a linear assignment problem on an Ni×Nj cost matrix. For
+each previous-frame cluster j this computes a predicted position at frame t by linear ex-
+trapolation using that cluster’s instantaneous velocity. Thegating radiusis the maximum
+allowed centroid-to-prediction distance, in km, for a current cluster to be considered as
+a possible match for j, which starts out at a value between Dgate =10–40 km, but which
+is tightened to a value between Dpredict =5–15 km during tracking. Pairs separated
+by more than the gating radius are excluded from the assignment problem entirely (in-
+finite cost).
+For each pair (i,j ) that areinsidethe gating radius, we compute the Intersection-over-
+Union (IoU) of the current cluster’s polyshape against the previous cluster’s polyshape
+translated by the predicted displacement (see, e.g., Bewley et al., 2016; Wojke et al., 2017,
+for optical implementations in industry applications). IoU is area(intersection)/area(union)
+and is therefore a coefficient that lies in [0 , 1]. Writing d =Dmat(i,j ) for the centroid-
+to-prediction distance (in km), the cost for the pair is,
+Cost(i,j) =d·
+(
+1 +β·(1−IoU)
+)
+,(1)
+where the dimensionless weight βcontrols the relative contribution of shape mismatch
+versus centroid distance. We set β= 1, the maximum-entropy choice in the absence
+of a calibration dataset, and a balance adopted implicitly by SORT (Simple Online and
+Realtime Tracking, Bewley et al., 2016). With this choice, perfect shape continuity ( IoU =
+1) reduces the cost to the kinematic distance d, while zero overlap doubles it to 2 d, which
+ensures that echo clusters thathappen to be spatially closebut are in fact different ob-
+jects do not disrupt the predicted evolution of any cluster. The construction is readily
+implemented as a live solver on a continuous data stream; here, we apply it to histori-
+cal data usingmatlab’s matchpairs(Cost, D gate), which solves the assignment with
+the Hungarian/Munkres algorithm (Kuhn, 1955).
+Figure 1a, b) shows an example snapshots of the associator, illustrating what constitutes
+a tidy, easy tracking situation, where each observed track is naturally assigned a prede-
+cessor. For a “messy”, cluttered tracking situation, when many small clusters appear in-
+side one another’s gating radius, we refer to Figure 1c, d).
+2.2 Births, deaths, mergers, and splits
+Once the foregoing assignment problem is solved, the method maps out the four ways
+a cluster can fail to participate cleanly in a 1-to-1 match (that is, cease to be tracked),
+yielding the lineages of the observed shapes. For each new shape, if the intersection be-
+tween it and a previous shape covers more than 5% of the current cluster’s area, the cur-
+rent cluster is interpreted as a split product of the matched parent, giving the next, fresh,
+target an existing velocity estimation and gating. This allows velocities to be monitored
+over time and space, as in a flow, consistent with the long tail of field strength events
+appearing and quickly vanishing stochastic ensembles. This bookkeeping is borrowed from
+extended-target tracking (Granstrom et al., 2017, and references therein), where a sin-
+gle label cannot represent a one-to-many event and parent/child provenance must be car-
+ried explicitly.
+–4–
+
+manuscript submitted toJGR: Space Physics
+Figure 1. α-shape association in two tracking situations (rows). Clusters are shown with
+their current α-shape (solid outline, shaded area) compared to the previous, with gating radii
+indicated (36 km→15 km). The cost matrix (panels b, d) allows targets to be tracked even in
+highly cluttered regions [the cluster of clusters around position (0,0)].
+–5–
+
+manuscript submitted toJGR: Space Physics
+Figure 2.The three distinct lineages, or series of co-evolving clusters of radar echoes,
+recorded between 04:45 and 04:51 UT on 1 March 2021. Panel a) shows the lineages them-
+selves; panel b) details ‘Lineage 3’ in 24 snapshots. Clusters are plotted as α-shapes overlaid on
+auroral images from thetrexrgbsystem (Gillies et al., 2020).
+–6–
+
+manuscript submitted toJGR: Space Physics
+For each cluster, after its full evolution from birth to death has been documented, the
+trajectoryof the cluster-centroid (median location, or echo centre-of-mass) is treated as
+two scalar time series in displacement (geomagnetic) east and displacement (geomagnetic)
+north (each in km, referenced to the track’s first point), each modelled as piecewise lin-
+ear in time. The algorithm splits the trajectory into intervals where a constant-velocity
+modelfits: a sliding window is extended forward one sample at a time until, for each ac-
+tive displacement component (i.e., one whose range exceeds a minimum displacement thresh-
+old), the linear correlation with time drops below a fixed threshold (akin to online piecewise-
+linear approximations, Keogh et al., 2001). The method’s central output, the speed of
+clusters in aggregate, is|v|=
+√
+v2e +v 2n, where e,n subscripts refer to eastward and
+northward velocities; this velocity is readily converted to electric fields if the local mag-
+netic field vector is known (or estimated using a global model). Speed error is propagated
+by standard quadrature:
+σ|v|=
+√
+(veσe)2 + (vnσn)2
+|v| .(2)
+Also of interest, bearing, or azimuth, for the cluster’s motion is θ= atan2(ve,v n) wrapped
+to [0◦,360◦).
+Figure 2a) shows the foregoing in practice; between 04:45 UT and 04:51 UT there were
+three main “super-clusters”, or lineages, and we show in Figure 2b) the detailed evolu-
+tion of a particularly interesting case where a series of structures were closely following
+the poleward edge of an auroral arc for more than three minutes. During this interval,
+two clusters merge (∼47 s mark), followed by a mass-merger (∼57 s), a split-up (∼
+85 s), and eventual decay.
+3 Data
+The methods of Section 2 turn each radar-aurora cluster into a labeledtrajectory, or track,
+and, via the magnetic-field projection of Section 2.2, they turn into a local electric-field
+estimate (Ivarsen et al., 2024c). This section brings two conjunctions to bear on the above
+interpretation. Figure 3 (20 May 2021) anchors the tracked motions to in-situ ion drifts
+measured by DMSP F16, confirming the proxy relation under standard auroral driving.
+Figure 5 (10 May 2024) applies the same proxy during the recent G5 superstorm, with
+observations made on closed field-lines equatorward of the cusp (the conjunction was first
+reported in Ivarsen et al., 2025b), where the tracker recovers a 5-second event with a fit-
+ted speed of 11,240±660 m/s.
+Between 11:59:48 and 12:15:44 UT on 20 May 2021,icebearresolved 94 clusters of suf-
+ficient duration to enter the segmented-velocity analysis (Figure 3f). The weighted-median
+segmented speed was 770 m/s; the speed-segment distribution is well described by a Gaus-
+sian of σ= 965 m/s. The DMSP F16 horizontal ion-drift moments collected over the
+same interval averaged 851 m/s with a 1σscatter of 209 m/s. The two distributions agree
+on the mode, but theicebeardistribution is considerably broader, owing to a large num-
+ber of in-cluster displacements (whose implied speed distribution is represented by the
+solid red line in Figure 3f). These are averaged out in the quantified tracks — witness
+that only five tracks are faster than 1400 m/s and the rest of the tracks exhibit speeds
+that are wholly enclosed by green histogram (the F-region ion drifts). The long tail of
+segment speeds in Figure 3f) represent small-scale variability, captured byicebear’s ex-
+ceedingly high spatio-temporal resolution.
+All the 94 tracked target motions are on display as a whole in Figure 3b), showing ar-
+rows as a result from spatio-temporal averages of the tracking segments. Whereas the
+satellite’s one-dimensional slice gives the impression of a steady eastward ‘flow’,icebear
+can observe ‘counter-streaming’ behaviour in thisflow, which at times overwhelm the
+ambient field in any which direction, but we note a slight preference for the eastward di-
+rection. In Figure 3c–e), we note that the radar echoes were observed on the poleward
+–7–
+
+manuscript submitted toJGR: Space Physics
+Figure 3. Conjunction between DMSP F16 and icebear on 20 May 2021. Panel
+a)shows DMSP F16 orbit (blue), superposed on a vector-field of Superdarnglobal convection
+(black arrows) andicebearecho locations (gray dots).Panel b)shows theicebeartracked
+motions (black arrows) and the DMSP F16 horizontal ion drifts (red arrows).Panel c)shows
+the DMSP F16 horizontal ion drifts (red line), whilepanels d) and e)show the precipitating
+electron and ion differential energy flux, respectively, represented with a colorscale. In panels c–
+e), the latitudinal distribution oficebearechoes is superposed with a blue line.Panel f)shows,
+on the left y-axis, the distribution of trackedicebearclusters (black circles), taking the eastward
+component only, with a dashed black line giving the weighted median speed (770 m/s). On the
+righty-axis, the distributions inicebearper-frame displacements is shown in a solid red line,
+with a Gaussian fit displayed with a dashed red line ( σ= 965 m/s). The distribution in DMSP
+F16 ion drifts is shown with a green line, with a mean of 851 m/s and a standard deviation of
+209 m/s.
+–8–
+
+manuscript submitted toJGR: Space Physics
+Figure 4.A similar conjunction to Figure 3, with panels a–c) showing the ion drift and parti-
+cle precipitation data from DMSP F16 (echo distributions overlaid in blue), and panel d) showing
+the window variability in tracked speeds (black circles), individual per-frame displacement speeds
+(red line), and DMSP F16 ion drifts (green line).
+–9–
+
+manuscript submitted toJGR: Space Physics
+side of a diffuse, high-energy auroral patch, coinciding with the precipice of low-energy
+precipitation, as well as the latitude of the peak ambient field-strength.
+Looking at the average and the distributions in Figure 3f), we observe that the agree-
+ment between the green distribution and the black circles extends the validation of Ivarsen
+et al. (2024b,c, 2025c), who favourably compared tracked radar motions to ion drifts in-
+ferred from coincident Swarm, DMSP, and Superdarnobservations. A similar conjunc-
+tion betweenicebearand DMSP F16 that occurred some eight days earlier, on 12 May
+2021, is consistent with the emerging picture (Figure 4).
+Figure 5 details themetop-1 conjunction, which took place at ∼18:00 UT on 10 May
+2024, during the main phase of the G5 superstorm of that date, at or near the equator-
+ward edge of the dayside cusp.metop-1 is a weather, or climate, satellite operated by
+EUMETSAT, with an instrumentation seemingly identical to the United States NOAA
+satellites, capable of measuring precipitating particles through a number of telescopes.
+icebearresolved 59 clusters in the 12-minute interval centred on the conjunction. The
+cluster-speed distribution (Figure 5e) had a weighted median of 1388 m/s and a segment-
+fitσ= 2056 m/s, both larger by a factor of approximately two, compared to the val-
+ues measured during the 2021 conjunction in Figure 3. The MEP precipitating-particle
+channels in Figure 5b, c) show a precipitation signature in both the 50 eV–1 keV elec-
+tron and ion fluxes, co-located inmlatwith the bulk of theicebearecho distribution;
+the TED channel in panel d) shows substantial trapped electron flux at 40, 130, and 287 keV
+across the samemlatband. This combination places the observed radar aurora onclosed
+field-linesjust inside the open-closed boundary of the dayside auroral oval, consistent
+with the configuration documented for this event by (Ivarsen et al., 2025b), and with the
+similar conditions observed during the 23 April 2023 storm (Ivarsen et al., 2025c).
+A particular cluster within the interval, labeled by the tracking algorithm as Cluster 3624
+(Figure 5f), had a fitted speed of 11 ,240±660 m/s at an azimuth of 72◦(clockwise from
+magnetic north) over a tracked duration of 5 seconds. The centroid translated ∆ x =
+52.6 km eastward and ∆ y = 16.6 km northward over that interval. Converting via |E|=
+|v||B|with|B|fromigrf-13 at the centroid position implies an electric-field magnitude
+of≈560 mV/m (recall that this value is obtained from the slope of the sliding-window
+piecewise-linear regression over the cluster’s five samples). The α-shape sequence in Fig-
+ure 5f) preserves the cluster’s overall shape throughout the short evolution, with the cen-
+troid path straight, and the kinematic prediction at each step is landing inside the next
+observedα-shape; the extreme trajectory is accurately measured using the tracking al-
+gorithm (also Figure 6 for the other extremely fast cluster observed during this event).
+The May 2024 conjunction occurred onclosed field lines(Figure 5; see also Ivarsen et al.,
+2025b), with widespread particle precipitation co-located with the echo distribution (The-
+mens et al., 2024; Madhanakumar et al., 2025), in the configuration documented for east-
+ward transients equatorward of the cusp (Ivarsen et al., 2025b,c). We therefore attribute
+the measured field-variability to diffuse, dayside particle precipitation, which is shown
+to be present in the region in Figure 5b–d).
+The foregoing exposition makes the 560 mV/m value remarkable. It exceeds the docu-
+mented STEVE distribution, which sits at 100–200 mV/m (Gillies et al., 2020; Mishin
+and Streltsov, 2023), and it meets or exceeds the most extreme reportedsaidevents at
+∼400 mV/m (Anderson et al., 2001). The five-second tracked duration of Cluster 3624,
+which is typical for the extremely fast motions that we detect (Ivarsen et al., 2024c, 2025b),
+supports the notion that extreme E-field structures are highly intermittent and localized
+in space, rather than persistent features of any bulk drift.
+–10–
+
+manuscript submitted toJGR: Space Physics
+Figure 5. Conjunction between metop-1 and icebear on 10 May 2024. Panel a)
+showsmetop-1 orbit (blue), superposed on a vector-field of Superdarnglobal convection (black
+arrows) andicebearecho locations (gray dots).Panels b) and c)show the electron and ion
+fluxes measured bymetop-1 (medium-energy, 0 ◦ telescopes), whilepanel d)shows the trapped
+particle fluxes. In panels b–d), the latitudinal distribution oficebearechoes is superposed with
+a green line.Panel e)shows, on the left y-axis, the distribution of trackedicebearclusters
+(black circles) that were tracked during a 20-minute interval centred on the conjunction, with a
+dashed black line giving the weighted median speed (1388 m/s). On the right y-axis, the distribu-
+tions inicebearvelocity segments is shown in a solid red line, with a Gaussian fit displayed with
+a dashed red line (σ= 2056 m/s). Cluster 3624, whose speed was determined to 11 ,240±660 m/s,
+is indicated, and its evolution is shown in detail inpanel f), showing the displacement of the
+identifiedα-shape (see Section 2).
+–11–
+
+manuscript submitted toJGR: Space Physics
+Figure 6.The evolution of Cluster 3706, whose speed was determined to 10 ,406±900 m/s, in
+four snapshots, showing the displacement of the identifiedα-shape (see Section 2 and Figure 5f).
+The four-yearicebearcluster-speed distribution is shown in Figure 7 against the cor-
+responding distribution of Swarm A’s electric field instrument (EFI, Knudsen et al., 2017)
+cross-track ion-drift moments over the same period. Swarm A is a polar-orbiting space-
+craft at an altitude of around 450 km (Friis-Christensen et al., 2006). Between ∼700
+and∼4000 m/s the two distributions match within a factor of two in PDF, a strong
+indication that the radar-aurora tracking is sampling thesamephysical drift population
+that thein-situcross-track ion-drift measurement samples (which was established for an
+earlier iteration of the algorithm by Ivarsen et al., 2024b,c). Above ∼5000 m/s the
+Swarm distribution flattens at PDF≈10−1s/m, in the regime where the cross-track
+ion-drift moment is dominated by attitude-jitter and calibration-drift contributions (Knud-
+sen et al., 2017). Theicebeardistribution continues to decay exponentially through this
+threshold and beyond, reaching the bin-count noise floor at ∼9000 m/s. Cluster 3624
+(Figure 5f) is the upper-tail sample of this distribution.
+Figure 7b) shows the geomagnetic activity trends in the track dataset, via the speed vari-
+abilityσ(within running 15-minute bins), compared to the occurrence rate of superfast
+(> 6000 m/s) clusters within each geomagnetic activity bin, where we use the Super-
+MAG auroral electrojet index (SME, Newell and Gjerloev, 2011) to quantify geomag-
+netic activity. A solid blue line shows the result of fitting a powerlaw to the black data,
+which we shall discuss in Section 4.1
+The foregoing demonstrated that(i)the variability in Figure 5e), which spawned Clus-
+ter 3624 in Figure 5f) explicitly depends on geomagnetic activity, and(ii)the high-speed
+tail in Figure 7a) shows no clear sign of noise flattening at high speeds, but maintains
+a powerlaw distribution. We conclude that the fast radar motions that we track measures
+highly localized and transient spikes in the ionospheric electric field, whose amplitudes
+are the strongest ever measured using ground-based instrumentation.
+4 Discussion & Summary
+We have tracked clusters of E-region radar aurora through time and space with a Hungarian-
+association scheme acting on α-shape footprints, themselves enclosing clusters in 3D radar
+point-clouds, and we have reduced each tracked cluster trajectory to piecewise-linearve-
+locities. The procedure notably yields the distribution of electric-field structure veloc-
+ities withinicebear’s field-of-view, resolved at kilometre-scales and with second-cadence.
+The statistical comparison, the black and red curves in Figure 7a), shows clearly that
+where the existing, reliable means of obtaining electric fields are discernible, from the
+Swarm spacecraft,icebearis able to penetrate the noise limitation, exhibiting a pow-
+erlaw distribution until the almost-disappearing bin count at around 9000 m/s. And, as
+we demonstrated in Figure 7b), we are able to explicitly quantify the geomagnetic ac-
+tivity dependencies in small-scale, auroral electric field variance.
+–12–
+
+manuscript submitted toJGR: Space Physics
+Figure 7. Panel a)shows, in a solid black line, the distribution of 74,517 clusters tracked by
+icebearduring geomagnetically disturbed conditions (SME-index > 150 nT). The distribution
+of ion drifts speed derived from Swarm A EFI horizontal moments, during the same conditions
+and inside the auroral region (18h<MLT<6h, 61◦ <MLAT< 69◦), is shown with a solid red
+line. A dashed red line indicates the noise limitation caused by spacecraft attitude jitter and
+anomalous spacecraft potential and calibration drift (Knudsen et al., 2017).Panel b)shows the
+same dataset, this time binning all the tracked clusters into 4190 bins of 15-minute length (for a
+total of 1045 hours of radar-time),thenbinning (for the second time) thestandard deviations, σ,
+of the cluster speeds inside each window, for the 24 geomagnetic activity bins. Black circles with
+errorbars denote average σin each geomagnetic activity bin, and a black dashed line shows the
+result of a linear regression (slope = 572 m/s/, Pearson correlation = 0 .84). In green, on the right
+y-axis, the occurrence rate for speeds>6000 m/s is shown for each geomagnetic activity bin.
+–13–
+
+manuscript submitted toJGR: Space Physics
+To pinpoint the significance of this finding, we note that the auroral electric field gov-
+erns the energy budget in that important region, through the field’s second moment. Height-
+integrated Joule dissipation scales as,
+⟨|E⊥|2⟩=|⟨E⊥⟩|2 + Tr Cov(E),(3)
+with the variance termTrCov(E) =Var(E x) +Var(E y) (the trace of the covariance
+of E) carrying the contribution of electric-field structure to the dissipation (Codrescu
+et al., 1995). A global magnetohydrodynamic (MHD) model (a space weather model),
+which is advanced on a resolved-scale convection pattern, represents this crucial term only
+down to the model’s spatial resolution and update cadence. This is the sub-grid, sub-
+cadence remainder — the variability commonly identified as the source of modelled Joule-
+heating underestimation (Deng and Ridley, 2007; Cosgrove et al., 2011) — is absent from
+the electrostatic potential that drives the heating.
+The deficit described above is not alleviated at the ∼50–100 km resolution of contem-
+porary global models. In convergence tests the modelled heating rate still rises as lat-
+itudinal grid spacing sharpens from 2.5◦to 1.25◦(Deng and Ridley, 2007); and the mea-
+sured variability spectrum retains turbulent power below 45 km (Cousins and Shepherd,
+2012); and in global MHD, the electrojet turbulence responsible for part of this variance
+is not intrinsic to the simulation and must be parameterised in, shifting the cross-polar-
+cap potential and conductance by 10–20% once added (Wiltberger et al., 2017). Inject-
+ing the observed sub-grid variability can raise the hemispheric Joule-heating rate by a
+factor∼1.5 (Matsuo and Richmond, 2008; Matsuo et al., 2021).
+Radar tracking withicebearprovides succor; resolving two outstanding issues, thereby
+improving on the state-of-the-art.(1)The radar tracks capturevery small spatial and
+temporal scales(withicebearexhibiting 60 and 40 times higher resolution than a con-
+ventional Superdarnradar). In addition,(2)radar tracking withicebearcan resolve
+much higher electric fieldamplitudesthan Swarm can, primarily due to the latter space-
+craft’s attitude jitter and instrumental calibration issues (Knudsen et al., 2017).
+Cluster 3624 is the upper-tail sample oficebear’s wide speed distribution (Figure 5f).
+Its fitted speed of 11, 240±660 m/s implies|E| ≈560 mV/m, exceeding the docu-
+mented STEVE range (100–200 mV/m, Gillies et al., 2020; Mishin and Streltsov, 2023),
+on the order of the most extreme reported SAID (around 400 mV/m, Anderson et al.,
+2001). Over a tracked duration of five seconds (typical of the fast motions detected by
+icebear, Ivarsen et al., 2024c, 2025b). Fields of this magnitude have been measured
+in situ (Marklund, 1997; Marklund et al., 1998; Johansson et al., 2004; LaBelle et al., 2010)
+and here acquire the surrounding distribution that places them in statistical context.
+4.1 Utility for space weather models
+Aggregated over the four-year radar archive (Figure 7b), the per-window covariance (such
+as those presented in Figures 3f) and 5e), trace geomagnetic activity. A weighted power-
+law fit (f(x) =ax b, for coefficientsa, b) gives,
+σ2
+trace = 3.68×105(
+SME/100 nT
+)0.353
+[m2 s−2],(4)
+yielding a sub-grid field-variance amplitude σE =|B|σtrace of≈30 mV/m at SME =
+100 nT rising to ≈60 mV/m at SME≈4000 nT, using typical values of the geomagnetic
+field (Alken et al., 2021). σE provides closure for the sub-grid term Tr Cov(E), allow-
+ing for an accurate calculation of heating; Q = Σ P⟨|E⊥|2⟩. Its amplitude is of order
+the mean-field contribution (Codrescu et al., 2000), consistent with a ≈1.5×hemispheric
+enhancement (Matsuo and Richmond, 2008; Matsuo et al., 2021). The shallow exponent
+is itself informative: within active windows the conditional dispersion grows only weakly
+with SME, so the steeper activity dependence of the integrated heating resides in thefill-
+ing, or packing number, of supra-threshold electrojet turbulence (Ivarsen et al., 2025a).
+–14–
+
+manuscript submitted toJGR: Space Physics
+With Σ P∼5–30 S, the≈560 mV/m field of Cluster 3624 gives Q = Σ P|E|2≈1.5–10 W/m2,
+at the upper end of point measurements for major storms (Codrescu et al., 1995; Deng
+and Ridley, 2007; Knipp et al., 2004), dissipation that may feed the storm-time budget
+underestimated by convection-driven models (Rosenqvist et al., 2006). The Farley–Buneman
+turbulence serving as the tracer is itself a heating agent, driving anomalous electron heat-
+ing and raising the Pedersen conductance (Dimant and Oppenheim, 2011; Oppenheim
+and Dimant, 2013; St-Maurice and Goodwin, 2021), so the Σ P appropriate within an ac-
+tive structure is plausibly enhanced. As the tracked structures are externally driven by
+precipitation rather than polarization features (Ivarsen et al., 2024b,a,c, 2025a,b), the
+measured variance enters the budget with positive sign (Cosgrove et al., 2011).
+Acknowledgements
+This work is supported in part by the European Space Agency’s Living Planet Grant No.
+1000012348 and by the Research Council of Norway (RCN) Grant No. 324859. We ac-
+knowledge the support of the Canadian Space Agency (CSA) [20SUGOICEB], the Canada
+Foundation for Innovation (CFI) John R. Evans Leaders Fund [32117], the Natural Sci-
+ence and Engineering Research Council (NSERC), the Discovery grants program [RGPIN-
+2019-19135], the Digital Research Alliance of Canada [RRG-4802]. MFI & GCH are grate-
+ful to P. Erickson and Frank Lind for stimulating discussions. Anthropic’s Claude Opus
+4.7 was used for coding assistance inmatlab.
+Data availibility
+icebear3D echo data is available at http://icebear.usask.ca/icebeardata.php?
+page=1 (Huyghebaert et al., 2019; Lozinsky et al., 2022). Supermagdata can be accessed
+at https://supermag.jhuapl.edu/mag/. Solar wind data from NASA’somniservice
+can be accessed at https://omniweb.gsfc.nasa.gov/. Superdarndata was processed
+using RST with the FITACF 3 algorithm, order/degree 6, Ref. (Thomas and Shepherd,
+2018)-empirical model, downloadable using Globus ( https://github.com/SuperDARNCanada/
+globus).metopdata is available from NOAA ( https://www.ngdc.noaa.gov/stp/satellite/
+poes/). Data from DMSP’s SSJ and SSIES instruments can be accessed through Madri-
+gal (http://cedar.openmadrigal.org/).
+References
+Alken, P., Th´ ebault, E., Beggan, C. D., Amit, H., Aubert, J., Baerenzung, J., Bon-
+dar, T. N., Brown, W. J., Califf, S., Chambodut, A., Chulliat, A., Cox, G. A.,
+Finlay, C. C., Fournier, A., Gillet, N., Grayver, A., Hammer, M. D., Holschneider,
+M., Huder, L., Hulot, G., Jager, T., Kloss, C., Korte, M., Kuang, W., Kuvshinov,
+A., Langlais, B., L´ eger, J.-M., Lesur, V., Livermore, P. W., Lowes, F. J., Macmil-
+lan, S., Magnes, W., Mandea, M., Marsal, S., Matzka, J., Metman, M. C., Minami,
+T., Morschhauser, A., Mound, J. E., Nair, M., Nakano, S., Olsen, N., Pav´ on-
+Carrasco, F. J., Petrov, V. G., Ropp, G., Rother, M., Sabaka, T. J., Sanchez, S.,
+Saturnino, D., Schnepf, N. R., Shen, X., Stolle, C., Tangborn, A., Tøffner-Clausen,
+L., Toh, H., Torta, J. M., Varner, J., Vervelidou, F., Vigneron, P., Wardinski, I.,
+Wicht, J., Woods, A., Yang, Y., Zeren, Z., and Zhou, B. (2021). International
+Geomagnetic Reference Field: The thirteenth generation.Earth, Planets and Space,
+73(1):49.
+Anderson, P. C., Carpenter, D. L., Tsuruda, K., Mukai, T., and Rich, F. J. (2001).
+Multisatellite observations of rapid subauroral ion drifts (SAID).Journal of
+Geophysical Research: Space Physics, 106(A12):29585–29599.
+Bahcivan, H., Hysell, D. L., Lummerzheim, D., Larsen, M. F., and Pfaff, R. F.
+(2006). Observations of colocated optical and radar aurora.Journal of Geophysical
+Research: Space Physics, 111(A12).
+Bewley, A., Ge, Z., Ott, L., Ramos, F., and Upcroft, B. (2016). Simple online and
+realtime tracking. In2016 IEEE International Conference on Image Processing
+(ICIP), pages 3464–3468. Ieee.
+–15–
+
+manuscript submitted toJGR: Space Physics
+Buneman, O. (1963). Excitation of Field Aligned Sound Waves by Electron Streams.
+Physical Review Letters, 10(7):285–287.
+Codrescu, M. V., Fuller-Rowell, T. J., and Foster, J. C. (1995). On the importance of
+E-field variability for Joule heating in the high-latitude thermosphere.Geophysical
+Research Letters, 22(17):2393–2396.
+Codrescu, M. V., Fuller-Rowell, T. J., Foster, J. C., Holt, J. M., and Cariglia, S. J.
+(2000). Electric field variability associated with the Millstone Hill electric field
+model.Journal of Geophysical Research: Space Physics, 105(A3):5265–5273.
+Cosgrove, R., McCready, M., Tsunoda, R., and Stromme, A. (2011). The bias on the
+Joule heating estimate: Small-scale variability versus resolved-scale model uncer-
+tainty and the correlation of electric field and conductance.Journal of Geophysical
+Research: Space Physics, 116(A9).
+Cousins, E. D. P. and Shepherd, S. G. (2012). Statistical characteristics of small-scale
+spatial and temporal electric field variability in the high-latitude ionosphere.Jour-
+nal of Geophysical Research: Space Physics, 117(A3).
+Deng, Y. and Ridley, A. J. (2007). Possible reasons for underestimating Joule heating
+in global models: E field variability, spatial resolution, and vertical velocity.Journal
+of Geophysical Research: Space Physics, 112(A9).
+Dimant, Y. S. and Oppenheim, M. M. (2011). Magnetosphere-ionosphere coupling
+through E region turbulence: 2. Anomalous conductivities and frictional heating.
+Journal of Geophysical Research: Space Physics, 116(A9).
+Edelsbrunner, H. and M¨ ucke, E. P. (1994). Three-dimensional alpha shapes.ACM
+Trans. Graph., 13(1):43–72.
+Farley, D. T. (1963). A plasma instability resulting in field-aligned irregularities in the
+ionosphere.Journal of Geophysical Research (1896-1977), 68(22):6083–6097.
+Friis-Christensen, E., L¨ uhr, H., and Hulot, G. (2006). Swarm: A constellation to study
+the Earth’s magnetic field.Earth, Planets and Space, 58:BF03351933.
+Gillies, D. M., Liang, J., Donovan, E., and Spanswick, E. (2020). The Apparent Mo-
+tion of STEVE and the Picket Fence Phenomena.Geophysical Research Letters,
+47(20):e2020GL088980.
+Granstrom, K., Baum, M., and Reuter, S. (2017). Extended Object Tracking: Intro-
+duction, Overview and Applications.
+Huyghebaert, D., Hussey, G., Vierinen, J., McWilliams, K., and St-Maurice, J.-P.
+(2019). ICEBEAR: An all-digital bistatic coded continuous-wave radar for studies
+of the E region of the ionosphere.Radio Science, 54(4):349–364.
+Huyghebaert, D., St.-Maurice, J.-P., McWilliams, K., Hussey, G., Howarth, A. D.,
+Rutledge, P., and Erion, S. (2021). The Properties of ICEBEAR E-Region Coherent
+Radar Echoes in the Presence of Near Infrared Auroral Emissions, as Measured by
+the Swarm-E Fast Auroral Imager.Journal of Geophysical Research: Space Physics,
+126(12):e2021JA029857.
+Ivarsen, M. F., Huyghebaert, D. R., Gillies, M. D., St-Maurice, J.-P., Themens,
+D. R., Oppenheim, M., Gustavsson, B. J., Billett, D., Pitzel, B., Galeschuk, D.,
+Donovan, E., and Hussey, G. C. (2024a). Turbulence Around Auroral Arcs.Journal
+of Geophysical Research: Space Physics, 129(8):e2023JA032309.
+Ivarsen, M. F., Miyashita, Y., St-Maurice, J.-P., Hussey, G. C., Pitzel, B., Galeschuk,
+D., Marei, S., Horne, R. B., Kasahara, Y., Matsuda, S., Kasahara, S., Keika,
+K., Miyoshi, Y., Yamamoto, K., Shinbori, A., Huyghebaert, D. R., Matsuoka,
+A., Yokota, S., and Tsuchiya, F. (2025a). Characteristic E-Region Plasma Sig-
+nature of Magnetospheric Wave-Particle Interactions.Physical Review Letters,
+134(14):145201.
+Ivarsen, M. F., St-Maurice, J.-P., Hussey, G. C., Billet, D., Huyghebaert, D. R.,
+Jin, Y., Miyashita, Y., Kasahara, S., Song, K., Jayachandran, P. T., Yokota,
+S., Miyoshi, Y., Yamamoto, K., Shinbori, A., Kasahara, Y., Shinohara, I., and
+Matsuoka, A. (2025b). Eastward transients in the dayside ionosphere. I. Electro-
+–16–
+
+manuscript submitted toJGR: Space Physics
+dynamics on closed field lines.Physical Review E, 112(4):045204.
+Ivarsen, M. F., St-Maurice, J.-P., Hussey, G. C., Huyghebaert, D. R., and Gillies,
+M. D. (2024b). Point-cloud clustering and tracking algorithm for radar interferom-
+etry.Physical Review E, 110(4):045207.
+Ivarsen, M. F., St-Maurice, J.-P., Hussey, G. C., McWilliams, K., Jin, Y., Huyghe-
+baert, D. R., Miyashita, Y., and Sibeck, D. (2025c). Eastward transients in the
+dayside ionosphere. II. A parallel-plate capacitorlike effect.Physical Review E,
+112(4):045203.
+Ivarsen, M. F., St-Maurice, J.-P., Huyghebaert, D. R., Gillies, M. D., Lind, F.,
+Pitzel, B., and Hussey, G. C. (2024c). Deriving the Ionospheric Electric Field
+From the Bulk Motion of Radar Aurora in the E-Region.Journal of Geophysical
+Research: Space Physics, 129(11):e2024JA033060.
+Johansson, T., Figueiredo, S., Karlsson, T., Marklund, G., Fazakerley, A., Buchert,
+S., Lindqvist, P.-A., and Nilsson, H. (2004). Intense high-altitude auroral electric
+fields - temporal and spatial characteristics.Annales Geophysicae, 22(7):2485–2495.
+Keogh, E., Chu, S., Hart, D., and Pazzani, M. (2001). An online algorithm for seg-
+menting time series. InProceedings 2001 IEEE International Conference on Data
+Mining, pages 289–296. IEEE.
+Knipp, D. J., Tobiska, W. K., and Emery, B. A. (2004). Direct and Indirect Thermo-
+spheric Heating Sources for Solar Cycles 21–23.Solar Physics, 224(1):495–505.
+Knudsen, D. J., Burchill, J. K., Buchert, S. C., Eriksson, A. I., Gill, R., Wahlund,
+J.-E., ˚Ahlen, L., Smith, M., and Moffat, B. (2017). Thermal ion imagers and
+Langmuir probes in the Swarm electric field instruments.Journal of Geophysical
+Research: Space Physics, 122(2):2016JA022571.
+Kuhn, H. W. (1955). The Hungarian method for the assignment problem.Naval Re-
+search Logistics Quarterly, 2(1-2):83–97.
+LaBelle, J., Cairns, I. H., and Kletzing, C. A. (2010). Electric field statistics and mod-
+ulation characteristics of bursty Langmuir waves observed in the cusp.Journal of
+Geophysical Research: Space Physics, 115(A10).
+Lozinsky, A., Hussey, G., McWilliams, K., Huyghebaert, D., and Galeschuk,
+D. (2022). ICEBEAR-3D: A Low Elevation Imaging Radar Using a Non-
+Uniform Coplanar Receiver Array for E Region Observations.Radio Science,
+57(3):e2021RS007358.
+Madhanakumar, M., Spicher, A., Huyghebaert, D. R., Kashcheyev, A., Spogli, L.,
+Oksavik, K., Ivarsen, M. F., Vierinen, J., and Hussey, G. C. (2025). Co-Ordinated
+Observations of Multi-Scale Irregularities Using ICEBEAR and GNSS During the
+May 2024 Superstorm.Space Weather, 23(8):e2025SW004411.
+Marklund, G. T. (1997). Auroral phenomena related to intense electric fields observed
+by the Freja satellite.Plasma Physics and Controlled Fusion, 39(5A):A195.
+Marklund, G. T., Karlsson, T., Blomberg, L. G., Lindqvist, P.-A., F¨ althammar,
+C.-G., Johnson, M. L., Murphree, J. S., Andersson, L., Eliasson, L., Opgenoorth,
+H. J., and Zanetti, L. J. (1998). Observations of the electric field fine structure
+associated with the westward traveling surge and large-scale auroral spirals.Journal
+of Geophysical Research: Space Physics, 103(A3):4125–4144.
+Matsuo, T., Fan, M., Shi, X., Miller, C., Ruohoniemi, J. M., Paul, D., and Lee, T.
+C. M. (2021). Multiresolution Modeling of High-Latitude Ionospheric Electric Field
+Variability and Impact on Joule Heating Using SuperDARN Data.Journal of
+Geophysical Research: Space Physics, 126(9):e2021JA029196.
+Matsuo, T. and Richmond, A. D. (2008). Effects of high-latitude ionospheric electric
+field variability on global thermospheric Joule heating and mechanical energy
+transfer rate.Journal of Geophysical Research: Space Physics, 113(A7).
+Mishin, E. V. and Streltsov, A. V. (2023). The Inner Structure of STEVE-Linked
+SAID.Geophysical Research Letters, 50(8):e2023GL102956.
+–17–
+
+manuscript submitted toJGR: Space Physics
+Newell, P. T. and Gjerloev, J. W. (2011). Evaluation of SuperMAG auroral electrojet
+indices as indicators of substorms and auroral power.Journal of Geophysical Re-
+search: Space Physics, 116(A12).
+Oppenheim, M. M. and Dimant, Y. S. (2013). Kinetic simulations of 3-D Farley-
+Buneman turbulence and anomalous electron heating.Journal of Geophysical
+Research: Space Physics, 118(3):1306–1318.
+Rosenqvist, L., Buchert, S., Opgenoorth, H., Vaivads, A., and Lu, G. (2006). Mag-
+netospheric energy budget during huge geomagnetic activity using Cluster and
+ground-based data.Journal of Geophysical Research: Space Physics, 111(A10).
+St-Maurice, J.-P. and Goodwin, L. (2021). Revisiting the Behavior of the E-Region
+Electron Temperature During Strong Electric Field Events at High Latitudes.Jour-
+nal of Geophysical Research: Space Physics, 126(2):2020JA028288.
+St.-Maurice, J.-P. and Hamza, A. M. (2001). A new nonlinear approach to the
+theory of E region irregularities.Journal of Geophysical Research: Space Physics,
+106(A2):1751–1759.
+Themens, D. R., Elvidge, S., McCaffrey, A., Jayachandran, P. T., Coster, A., Varney,
+R. H., Galkin, I., Goodwin, L. V., Watson, C., Maguire, S., Kavanagh, A. J.,
+Zhang, S.-R., Goncharenko, L., Bhatt, A., Dorrian, G., Groves, K., Wood, A. G.,
+and Reid, B. (2024). The High Latitude Ionospheric Response to the Major
+May 2024 Geomagnetic Storm: A Synoptic View.Geophysical Research Letters,
+51(19):e2024GL111677.
+Thomas, E. G. and Shepherd, S. G. (2018). Statistical Patterns of Ionospheric Convec-
+tion Derived From Mid-latitude, High-Latitude, and Polar SuperDARN HF Radar
+Observations.Journal of Geophysical Research: Space Physics, 123(4):3196–3216.
+Wiltberger, M., Merkin, V., Zhang, B., Toffoletto, F., Oppenheim, M., Wang, W.,
+Lyon, J. G., Liu, J., Dimant, Y., Sitnov, M. I., and Stephens, G. K. (2017). Effects
+of electrojet turbulence on a magnetosphere-ionosphere simulation of a geomag-
+netic storm.Journal of Geophysical Research: Space Physics, 122(5):5008–5027.
+Wojke, N., Bewley, A., and Paulus, D. (2017). Simple online and realtime tracking
+with a deep association metric. In2017 IEEE International Conference on Image
+Processing (ICIP), pages 3645–3649. IEEE.
+Yang, S. and Baum, M. (2017). Extended Kalman filter for extended object track-
+ing. In2017 IEEE International Conference on Acoustics, Speech and Signal Pro-
+cessing (ICASSP), pages 4386–4390. IEEE.
+–18–

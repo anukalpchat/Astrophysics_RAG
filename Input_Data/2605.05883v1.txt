@@ -1,0 +1,1084 @@
+Title: Modeling of Coronal Mass Ejection Originated from a Sheared Arcade of Realistic Active-Region Scale and Its Propagation in the Heliosphere: Methodology
+Authors: Chaowei Jiang, Xueshang Feng, Liping Yang, Huichao Li, Jinhan Guo, Pingbing Zuo, Yi Wang
+Published: 2026-05-07
+Categories: astro-ph.SR
+
+Draft version May 8, 2026
+Typeset using LATEX default style in AASTeX631
+Modeling of Coronal Mass Ejection Originated from a Sheared Arcade of Realistic Active-Region
+Scale and Its Propagation in the Heliosphere: Methodology
+Chaowei Jiang, 1 Xueshang Feng, 1 Liping Yang, 2 Huichao Li, 1 Jinhan Guo, 3, 4 Pingbing Zuo, 1 and Yi W ang1
+1State Key Laboratory of Solar Activity and Space Weather, School of Aerospace, Harbin Institute of Technology, Shenzhen 518055, China
+2State Key Laboratory of Solar Activity and Space Weather, National Space Science Center, Chinese Academy of Sciences, Beijing
+100190, China
+3School of Astronomy and Space Science and Key Laboratory of Modern Astronomy and Astrophysics, Nanjing University, Nanjing
+210023, China
+4Centre for mathematical Plasma Astrophysics, Department of Mathematics, KU Leuven, Celestijnenlaan 200B, B-3001 Leuven, Belgium
+ABSTRACT
+Simulating coronal mass ejections (CMEs) from their origin in active regions (ARs) to their prop-
+agation to Earth remains challenging, particularly when aiming to resolve AR scales and employ
+realistic magnetic field strengths without compromising computational efficiency. Here we present a
+methodology for end-to-end CME modeling that addresses these challenges. Three nested magneto-
+hydrodynamic simulations are coupled to jointly cover the heliosphere from solar surface to beyond
+1.5 au. A block-structured adaptive mesh refinement scheme is employed to achieve∼700 km resolu-
+tion in the low corona, allowing AR scales to be resolved while maintaining the total grid count below
+108 across the entire computational domain. A semi-relativistic Boris correction combined with a rela-
+tivistic mass-density factor is used to handle magnetic field strengths up to 103 G without prohibitively
+small time steps. Using this model, we simulate the emergence of a bipolar AR into the corona, the
+initiation of a CME by shearing of the AR core field and the subsequent evolution. Our simulation
+captures its pre-eruption energy buildup, triggering by magnetic reconnection, rapid acceleration, and
+propagation to 1 au and beyond. The simulated CME exhibits a three-part structure in synthetic coro-
+nagraph images and a torus-shaped flux rope in the heliosphere, with synthetic in-situ observations
+showing shock formation, density compression, and a prolonged southwardB z component at 1 au. The
+entire simulation requires about one day on a moderately sized cluster (e.g., 600 processors), while
+the simulated CME takes three days to arrive at 1 au, offering a lead time of two days if used for
+forecasting.
+Keywords:Sun: Magnetic fields – Sun: Flares – Sun: corona – Sun: Coronal mass ejections –
+magnetohydrodynamics (MHD) – methods: numerical
+1.INTRODUCTION
+Coronal mass ejections (CMEs) are among the most energetic eruptive phenomena in the solar atmosphere, charac-
+terized by the abrupt release of large-scale magnetized plasma into interplanetary space. Since their first detection by
+the coronagraph onboard NASA’s Seventh Orbiting Solar Observatory (OSO-7) in 1971, CMEs have been a central
+subject in solar and heliospheric research due to their profound impacts on space weather and geomagnetic activity.
+Understanding the complete life cycle of CMEs from their initiation in the low corona to their propagation through the
+heliosphere and eventual interaction with Earth remains a fundamental challenge in solar and space physics (Lugaz
+et al. 2023; Temmer et al. 2023; T¨ or¨ ok et al. 2023).
+Over recent decades, substantial progress has been made through a combination of observational analyses, theoretical
+models, and increasingly sophisticated numerical simulations (Alexander et al. 2006; Forbes et al. 2006; Lin et al. 2015;
+Corresponding author: Chaowei Jiang
+chaowei@hit.edu.cn
+arXiv:2605.05883v1  [astro-ph.SR]  7 May 2026
+
+2Jiang et al.
+Manchester et al. 2017; Luhmann et al. 2020; Shen et al. 2022). Magnetohydrodynamic (MHD) simulations have proven
+indispensable for studying processes that are difficult to observe directly, such as magnetic reconnection in the low
+corona (e.g., Wyper et al. 2017; Amari et al. 2018; Dahlin et al. 2019; Jiang et al. 2021; Yan et al. 2022; Guo et al.
+2023), flux-rope formation (e.g., Aulanier et al. 2010; Guo et al. 2019; Inoue et al. 2018; He et al. 2020; Fan 2022; Guo
+et al. 2024a; Xing et al. 2024), and the interaction of CMEs with the structured solar wind (e.g., Manchester 2004;
+Lugaz et al. 2011; Lionello et al. 2013; Shen et al. 2016; Jin et al. 2017; T¨ or¨ ok et al. 2018; Yang et al. 2021; Guo et al.
+2024b; Linan et al. 2024; Cai et al. 2025; Manchester et al. 2025). However, existing MHD simulations of CMEs often
+suffer from limitations: either they focus on the initiation phase within a local Cartesian domain of typical active region
+(AR) sizes, or they model the propagation phase with simplified initial conditions (often with an assumed eruptive
+flux rope such as the Gibson-Low model (Gibson & Low 1998), the Titov-D´ emonlin model (Titov & D´ emoulin 1999)
+and its variant versions (Titov et al. 2018, 2024), and the spheromak model (Lites et al. 1995; Singh et al. 2020)) that
+do not self-consistently capture the magnetic-energy buildup prior to eruption. Some studies of CME generation and
+propagation (e.g., Riley et al. 2003; Linker et al. 2003; Talpeanu et al. 2020a) have considered the energy buildup by
+shearing a coronal helmet streamer and initiating the eruption with flux cancellation, but such source region of CME
+is far larger than typical ARs. Consequently, a seamless simulation that covers the entire journey of a CME from its
+birth near the solar surface of AR scale to its arrival at 1 au has remained elusive.
+In our recent work (Cai et al. 2025), we presented a global-corona MHD simulation of a CME originating from a
+sheared magnetic arcade, consistent with the fundamental mechanism of solar eruption initiations as demonstrated in
+Jiang et al. (2021). That study demonstrated that an internal current sheet forms gradually as driven by photospheric
+shearing motions, and fast reconnection at this sheet triggers the eruption, producing a classic three-part CME struc-
+ture. Similar processes of CME initiation have also been shown in many earlier studies (Mikic et al. 1988; Mikic &
+Linker 1994; Wolfson 1995; Choe & Lee 1996; Antiochos et al. 1999; Amari et al. 2003; Riley et al. 2003; Talpeanu
+et al. 2020a). Nevertheless, our simulation (Cai et al. 2025) was confined to the near-Sun region (up to∼20R ⊙),
+leaving the subsequent interplanetary evolution unexplored. Moreover, in that simulation, although an adaptive mesh
+refinement (AMR) grid is employed that dynamically adjusts the grid resolution based on evolving features (which is
+a common practice in CME simulations, e.g., Groth et al. 2000; Lynch et al. 2008; Karpen et al. 2012; Talpeanu et al.
+2020b; Baratashvili & Poedts 2024; Manchester et al. 2025), the finest grid is still relatively coarse (0.25 ◦ in Carring-
+ton latitude and longitude) which could not resolve the fine-scale magnetic structures within realistic ARs. Another
+limitation is that the magnetic field strength was artificially reduced as only a few tens of Gauss to avoid the severe
+time-step constraints imposed by high Alfv´ en speeds, which is a common compromise in earlier global simulations that
+limits physical realism as typical ARs have magnetic field strength up to a few thousands Gauss.
+In the present study, we overcome these limitations by introducing two key technical advances to the model. First,
+we designed a set of AMR refinement criteria enabling a multi-scale simulation that captures both global solar-wind
+structures and fine-scale AR dynamics by a few of 10 7 grid points in total. The highest resolution is concentrated
+in the AR, reaching∼700 km in the low corona comparable to the resolution of SDO/HMI magnetograms. This
+capability not only allows us to simulate ARs at reasonable physical scales for CME initiations but also paves the
+way for future data-driven simulations that directly use high-resolution observational data. Second, we implement a
+semi-relativistic Boris correction combined with a relativistic inertial density factor depending on an artificial light
+speed, which effectively limits the effective Alfv´ en speed and advoids naturally occurring plasma velocities which are
+too costly to include in strong-field, fast-reconnection regions. This approach allows us to use realistic active-region
+magnetic field strengths (up to several thousand Gauss) without incurring prohibitively small time steps. By using
+an appropriate artificial light speed, the simulation can preserve the physical acceleration and dynamics of eruptions
+while maintaining computational feasibility.
+Building on these methodological advances, we simulate the entire Sun-to-Earth journey of a CME by coupling three
+nested MHD models: a high-resolution coronal model (CO) covering 1–11R ⊙, an interplanetary model (IP) from 9 to
+64R ⊙, and a heliospheric model (HE) from 50 to 360R ⊙. This multi-scale approach maintains appropriate resolution
+and physical approximations in each domain while ensuring a seamless transition of the erupting structure across model
+boundaries, a concept also developed in the Space Weather Modeling Framework (T´ oth et al. 2005). We introduce an
+AR through a boundary condition mimicking the flux-emergence process into a steady-state solar-wind background,
+then energize it with photospheric shearing motions. The resulting eruption is driven by magnetic reconnection in a
+current sheet that forms within the sheared arcade. The CME subsequently propagates through the coupled model
+
+Sun-to-Earth CME modelling3
+Variable Expression Value
+Densityρ s =n(m p +m e) 1.67×10 −16 g cm−3
+TemperatureT s 1×10 6 K
+LengthL s =R ⊙ 6.96×10 2 Mm
+Pressurep s = 2nkBTs =ρ sRTs 2.76×10 −3 Pa
+Magnetic fieldB s = √µ0ps 5.89×10 −1 G
+Velocityv s =
+p
+ps/ρs = √RTs 1.28×10 2 km s−1
+Timet s =L s/vs 5.42×10 3 s
+EnergyE s =ρ sv2
+s L3
+s 9.31×10 30 erg
+T able 1.Parameters used for non-dimensionalization.nis a typical value of electron number density in the corona given by
+n= 1×10 8 cm−3.m p andm e are the proton and electron mass, respectively.k B is the Boltzmann constant.R= 2k B/(mp+me)
+is the gas constant.
+system, allowing us to examine its near-Sun morphology, kinematic evolution, shock formation, and magnetic-structure
+transformation in the heliosphere.
+This work represents a significant step toward a comprehensive, self-consistent numerical framework for simulating
+Sun-to-Earth CME events. By bridging the gap between corona-focused and heliosphere-focused models and incorpo-
+rating advanced numerical techniques that enable both high resolution and physical realism, we aim to elucidate the
+physical processes that govern CME evolution over large spatial scales and to pave the way for future data-driven,
+space-weather forecasting models.
+The remainder of this paper is organized as follows. Section 2 describes the numerical model, including the modified
+MHD equations with the Boris correction, the grid configuration and AMR criteria, the boundary conditions, and the
+procedures for constructing the background solar wind along with emergence and energizing of AR. Section 3 presents
+the simulation results, covering the pre-eruption energy buildup, the initiation of the CME, its near-Sun evolution,
+and its propagation through the inner and outer heliosphere to 1 au. The computational efficiency of the model is also
+assessed in this section. Finally, Section 4 summarizes the main conclusions and outlines directions for future work.
+2.METHODS
+2.1.Modifications to the MHD equations
+We first describe the non-dimensionalization of the MHD variables used in the numerical model. The normalization
+is based on typical values at the coronal base, as summarized in Table 1. Unless otherwise stated with physical units,
+all variables presented in the remainder of the paper are given in non-dimensionalized form.
+Simulating the global corona with an AR of realistic size and magnetic field strength presents a significant numerical
+challenge. On the one hand, ARs demand the highest resolution within the computational domain; in this study, we
+adopt a grid resolution comparable to that of HMI magnetograms, with a minimum cell size of ∆L min ≈700 km. On
+the other hand, the magnetic field in ARs can reach up to several 10 3 G. In a typical coronal plasma with number
+densityn≈10 8 cm−3, the corresponding Alfv´ en speed is on the order of 10 5 km s −1. For an explicit time-stepping
+scheme, this leads to a severely restricted time step:
+∆tmin ≈C ∆Lmin
+vA
+≈10 −3 s,(1)
+assuming a Courant number ofC= 0.3. Since CME evolution spans several days, such a time step is computationally
+prohibitive. Moreover, excessively small time steps can increase numerical dissipation and degrade solution accuracy.
+To address this problem, we incorporate a modification to the MHD equations inspired by the Boris correction, a
+semi-relativistic approach commonly employed to alleviate the stringent time-step constraints imposed by large Alfv´ en
+velocities (Boris 1970; Gombosi et al. 2002; Matsumoto et al. 2019). Specifically, we adopt the following set of modified
+
+4Jiang et al.
+MHD equations:
+∂ρ
+∂t +∇ ·(ρv) = 0,
+∂(ρev)
+∂t +∇ ·(ρ evv+ Ip tot −BB−νρ e∇v) =f−B∇ ·B,
+∂T
+∂t +∇ ·(Tv) = (2−γ)T∇ ·v,
+∂B
+∂t +∇ ×(−v×B) +∇(−µ d∇ ·B) =−v∇ ·B,(2)
+whereρis the plasma density,vthe velocity,Bthe magnetic field,Tthe temperature, andp tot =p+B 2/2 the total
+pressure. In the momentum equation, we replace the standard inertial densityρwith an effective inertial densityρ e
+defined as
+ρe =γ r(ρ+ρ B) (3)
+whereγ r = 1/
+p
+1−v 2/c2 andρ B =B 2/c2 withcbeing an artificially adjustable light speed. The original Boris
+correction introduces the pseudo-densityρ B =B 2/c2 to moderate the Alfv´ en speed. However, we find that in practice,
+particularly in reconnection outflow regions where the magnetic tension force dominates, the plasma velocityvmay
+still exceed the artificial light speedc, leading to numerical instability. To mitigate this, we further enhance the inertial
+density by incorporating the relativistic factorγ r. This modification ensures both the effective Alfv´ en speed and the
+plasma velocity being bounded bycwhich is explained as follows. The effective Alfv´ en speed,
+vA = B√ρe
+< B√ρB
+=c(4)
+remains bounded byc. In our code, the conserved quantity is the momentum densitym=ρ ev, from which the velocity
+is recovered. It follows that
+γr =
+s
+1 + m2
+(ρ+ρ B)2c2 (5)
+wherem=|m|and
+v= m
+ρe
+= mcp
+(ρ+ρ B)2c2 +m 2 .(6)
+Thus, the plasma speedvis guaranteed to stay belowcthroughout the simulation.
+The choice of the artificial light speedcfollows a simple principle: during the CME triggering and acceleration phase,
+cshould be set sufficiently large to avoid artificially suppressing the Lorentz-force-driven acceleration, while still being
+significantly higher than the CME speed to avoid artificially reducing the CME speed. Given that CME speeds are
+at most a few thousand km s −1 (corresponding to a normalized velocity of several tens), we set the maximum value
+ofcto 100 in normalized unit. After the acceleration phase, CMEs gradually decelerate when interacting with the
+ambient solar wind, eventually approaching the background solar wind speed during its propagation. To enhance
+computational efficiency,cis progressively reduced in accordance with this evolutionary trend, yet being always higher
+than the CME speed by at least three times. The specific values used at different stages will be described in the
+context of the simulation results.
+A small kinetic viscosityνis used for keeping numerical stability during the very dynamic phase of the simulated
+eruptions. Specifically, it is given asν= 0.05∆L 2/∆tdepending on the local spatial resolution ∆Land the local time
+step ∆t(our code used a variable timestep scheme depending on the refinement levels), and only restricted within the
+strong-magnetized regions with the original Alfv´ en speedvA =B/ √ρ >10.
+Our simulations are conducted in the heliocentric Carrington co-rotating frame, where the external force is given by
+f=ρ[g−Ω×(Ω×r)−2Ω×v]. The angular velocity Ω corresponds to the sidereal Carrington rotation rate of the
+Sun, with a value of 2π/25.38 radians per day.
+For the thermodynamic description, we currently adopt a simple polytropic assumption, in which the energy (tem-
+perature) equation is closed by choosing a specific value for the ratio of specific heatsγ. Different values ofγare used
+in the three simulation domains, reflecting the distinct physical regimes of the corona and heliosphere. More realistic
+thermodynamic treatments will be incorporated in future model developments.
+
+Sun-to-Earth CME modelling5
+To control the numerical errors associated with the divergence of the magnetic field, source terms proportional to
+∇ ·Bare included in both the momentum and induction equations following the approach of Powell et al. (1999).
+Although these term are errors in themselves, they allow the∇ ·Bto be transported with the flow speed and limit the
+errors if the∇·Bflows off the grid. In addition, a diffusion term of the form∇(−µ d∇·B) is introduced in the induction
+equation to further suppress divergence errors (Marder 1987). The diffusion coefficient is set toµ d = 0.05∆L2/∆t.
+2.2.Grid settings and numerical solver
+While it is possible in principle to cover the entire domain from the solar surface to 1 au and beyond with a single set
+of grid, such an approach would be computationally inefficient due to the vast differences in spatial and temporal scales
+between the corona and the heliosphere. A common strategy to overcome this challenge is to divide the computational
+domain into multiple regions and couple them in a sequential manner, which has been widely adopted in global solar
+wind and CME modeling studies (e.g., Riley et al. 2006; Feng et al. 2012; Jin et al. 2017; T¨ or¨ ok et al. 2018; Linan
+et al. 2024). Following this approach, we divide the computational domain into three distinct but coupled models
+along the radial direction. The first is the coronal model (hereafter CO), which spans from the solar surface to
+approximately 11R⊙, a region where the solar wind flow is predominantly supersonic and super-Alfv´ enic. This radial
+range is smaller than that used in many other global coronal models (which often extend to 20R ⊙ or beyond), and is
+chosen deliberately to reduce the computational cost of the CO model, which is the most time-consuming component
+of the coupled system due to the presence of strong magnetic fields and the need for high resolution near the solar
+surface. The second model, referred to as the interplanetary model (IP), extends from 9R ⊙ to 64R ⊙, a range also
+chosen for computational efficiency. It uses time-dependent MHD data extracted from the CO model at 9R ⊙ as its
+inner boundary condition. The third model, termed the heliosphere model (HE), covers the region from 50R ⊙ to
+360R⊙ and is driven by data extracted from the IP model at 50R ⊙. Each model employs a different value of the
+polytropic indexγto reflect the dominant physical processes in its respective domain. Specifically, we setγ= 1.05 in
+the CO model to approximate a nearly isothermal corona,γ= 1.3 in the IP model, andγ= 1.5 in the HE model to
+account for the increasingly adiabatic behavior of the solar wind in the outer heliosphere.
+For the angular coordinates, we adopt a so-called Yin-Yang grid to avoid the pole singularities inherent in standard
+spherical grids that cover the full sphere withθ∈[0, π] andϕ∈[0,2π]. The Yin-Yang grid consists of two identical,
+low-latitude partial spherical grids oriented perpendicular to each other. These two components overlap slightly along
+their boundaries to provide complete coverage of the sphere without singularities. A detailed description of the grid
+configuration can be found in Jiang et al. (2012).
+The simulation employs a block-structured AMR technique, which dynamically adjusts the grid resolution in response
+to evolving physical features, thereby improving both accuracy and computational efficiency. All three models are
+implemented on AMR grids, each with different maximum refinement levels.
+For the CO model, we use six levels of refinement. The base resolution is set to ∆θ= ∆ϕ= 2 ◦ in longitude
+and latitude, and the highest refinement level reaches 2 ◦/25 = 0.0625 ◦, which corresponds to a spatial resolution of
+approximately 700 km in the low corona. In the radial direction, the grid spacing is chosen such that ∆r=r∆θ,
+ensuring that the cells remain approximately cubic throughout the domain. At each time step, the mesh is refined or
+coarsened based on a set of criteria designed to capture regions of interest with sufficient resolution. These criteria are
+as follows.
+The first criterion is based on a decomposition of the Lorentz force into the magnetic pressure gradient and magnetic
+tension force. We define a refinement indicator as
+TLorentz = (|PB|+|T B|)
+3√
+∆V
+(ρ+ρ B)CLorentz
+,(7)
+whereP B =∇(B 2/2) represents the magnetic pressure gradient,T B =B· ∇Bthe magnetic tension force, ∆Vthe
+cell volume, andC Lorentz an adjustable parameter set to 200 in this study. A grid block (comprising 6 3 cells) is marked
+for refinement if any cell within it satisfiesT Lorentz >1, and refinement continues until the maximum allowed level is
+reached. This criterion is designed to ensure that regions with strong magnetic fields, large field gradients, or intense
+current densities–characteristic of eruptive ARs–are resolved with the finest grid resolution available.
+The second set of refinement criteria is based on gradients in the mass density and on the divergence and curl of the
+momentum densityρ ev. We define two corresponding indicators:
+Tρ = |∇ρ|
+3√
+∆V
+ρCρ
+, T M = (|∇ ·(ρ ev)|+|∇ ×(ρ ev)|)
+3√
+∆V
+(ρvs +|ρ ev|)CM
+,(8)
+
+6Jiang et al.
+wherev s =
+p
+p/ρis the sound speed, andC ρ andC M are free parameters both set to 0.3 in this study. A grid
+block is flagged for refinement if any cell within it satisfiesT ρ >1 orT M >1. These criteria are intended to capture
+dynamic features associated with the eruption and propagation of the CME. To maintain computational affordability,
+refinement based on these criteria is capped at a maximum resolution of 0.5 ◦, as CME-driven structures such as fast
+ejecta and shocks often expand to scales comparable to the entire CO domain.
+Conversely, a grid block is considered for coarsening only when all three refinement indicators in all its cells fall
+below 0.2.
+For the IP and HE models, we employ four levels of refinement, with a base resolution of 2◦ and a maximum resolution
+of 0.25◦. The same refinement and coarsening criteria described above are applied to these models. Specially, in blocks
+adjacent to the inner boundary, the resolution is fixed at 0.5 ◦ to ensure consistency with the boundary driving data,
+which are extracted from the inner model at a uniform resolution of 0.5 ◦.
+The MHD equations are solved using the space-time conservation element and solution element (CESE) method
+developed by Jiang et al. (2010), which has been extended to general curvilinear coordinates and implemented on
+block-structured AMR grids with the PARAMESH toolkit (MacNeice et al. 2000; Olson & MacNeice 2005). The
+PARAMESH package has been further modified to accommodate multi-block overlapping grid systems such as the
+Yin-Yang grid (Jiang et al. 2012; Zhang et al. 2013). The method treats space and time as a unified entity, enforces local
+flux conservation without Riemann solvers, and introduces spatial derivatives of conserved variables as independent
+unknowns for sub-cell resolution. An improved version of the scheme with predictor-corrector time integration is
+adopted to facilitate coupling with PARAMESH and simplify AMR operations. The solver has been validated through
+various MHD benchmark problems in both Cartesian and curvilinear coordinates.
+2.3.Boundary conditions
+At the inner boundary of the CO model, which corresponds to the solar surface, the plasma density and temperature
+are held fixed. The magnetic field at the boundary is updated by solving the induction equation, under the assumption
+that the electric fieldE s is prescribed. When a surface driving velocityv d is specified, the corresponding electric field
+is given byE s =−v d ×B s. In the absence of driving, we setv d =0, which yieldsE s =0. Alternatively, in cases
+where the electric fieldE s is provided directly, the surface velocity can be recovered viav s = (E s ×B s)/B2
+s. Here,
+the subscriptsdenotes quantities evaluated at the solar surface.
+To specify the inner boundary conditions for the IP model, we extract from the CO model the full set of MHD
+variables, namelyρ CO(τn),v CO(τn),p CO(τn), andB CO(τn), on the spherical surface at 9R ⊙. The data are sampled
+with a uniform spatial resolution of 0.5 ◦ in both latitude and longitude at each CO time stepτ n, which results in
+a non-uniform temporal cadence. At each IP time stept m, we perform a time interpolation of these variables with
+third-order accuracy to obtainρ(t m),v(t m),p(t m), andB(t m).
+For the plasma variables (ρ,v,p) and the radial magnetic field componentB r, the interpolated values are directly
+imposed at the inner boundary of the IP model. To update the tangential magnetic field componentsB θ andB ϕ, we
+first compute the electric field asE=−v×B, and then evolve the field using the induction equation applied at the
+boundary. If the IP simulation timet m exceeds the time range covered by the CO output (for instance, after the CO
+model has reached a steady state), the boundary values forρ,v,p, andB r are held fixed, and the electric field is set
+to zero.
+The inner boundary conditions for the HE model are prescribed in an analogous manner. MHD variables are
+extracted from the IP model on the spherical surface at 50R ⊙ with a uniform resolution of 0.5 ◦, and are used to drive
+the HE simulation following the same procedure described above.
+For the outer boundary of all three models, the plasma variablesρ,v, andpare extrapolated radially using a
+zero-gradient condition. The magnetic fieldBis updated by solving the induction equation directly on the boundary
+surface.
+2.4.Construction of a background steady-state solar wind
+We first construct a steady-state solar wind background to initialize all three models. The plasma is initially specified
+using Parker’s classical spherically symmetric solar wind solution, assuming an ideal adiabatic gas withγ= 1.05. At
+the solar surface, the density and temperature are set toρ= 0.33 andT= 1.8 in normalized units. These values are
+chosen such that the simulated plasma number density and flow speed at 1 au are approximatelyn≈10 cm −3 and
+v≈400 km s −1, which are typical of the slow solar wind observed at Earth. The magnetic field is initialized as a
+
+Sun-to-Earth CME modelling7
+Figure 1.The initial steady state of the background solar wind with the embedded AR. Left panel: Magnetic field lines
+in the heliosphere extending to approximately 1.5 au, colorcoded by radial velocity. The central sphere (indicated by the
+boxed region) represents the surface at 10R ⊙ and is color-coded by the radial magnetic fieldB r. The line segment and the
+accompanying number indicate the spatial scale. Middle panel: Magnetic field lines in the CO model, extending from the solar
+surface (color-coded byB r) to 10R ⊙. The small box outlines the location of the AR. Right panel: Enlarged view of the AR
+magnetic flux distribution. The arrows indicate the driving flow pattern used to inject free magnetic energy into the coronal
+field. All quantities are given in normalized units unless otherwise stated. The line segments with numbers in the panels show
+the spatial scales.
+potential field and consists of a background dipole that represents the global coronal magnetic structure during solar
+minimum, with a maximum field strength of 1.5 G at the poles. 1
+The CO model is integrated in time until a relaxed steady state is achieved. The time series of MHD variables
+extracted at the 9R⊙ sphere is then used to drive the IP model. Once the IP model reaches a steady state, the data at
+50R⊙ are in turn used to drive the HE model to a steady state. During this background relaxation phase, the artificial
+light speed is set toc= 100 in the CO model andc= 30 in both the IP and HE models. The resulting steady-state
+solution is illustrated in the left two panels of Figure 1.
+2.5.Emergence of AR
+We introduce an AR to the background mimicking a flux emergence process using an electric-field driving approach.
+LetB a
+r (θ, ϕ) denote the surface flux density of the AR, andB g
+r for the background flux. The flux emergence process
+is designed such that the surface radial field evolves int∈[0, t 0] by
+Br(t) =B g
+r +B a
+r
+ekt −1
+ekt0 −1 ,(9)
+wherekis a constant controlling the flux emerging rate. To realize the flux emergence, we derive an inductive electric
+fieldE I that is required to specify at the inner boundary. It has the form of
+EI =∇ h ×Φe r =
+ 1
+sinθ
+∂Φ
+∂ϕ ,− ∂Φ
+∂θ
+
+.(10)
+Applying the induction equation
+∂Br
+∂t =B a
+r
+kekt
+ekt0 −1 =−∇ h ×E I =∇ 2
+hΦ,(11)
+which gives
+EI(t) =E a
+I
+kekt
+ekt0 −1 ,(12)
+1 We note that this polar field is much lower low than typical strength (around 5∼10 G) in observations, and more realistic values will be
+considered in future studies.
+
+8Jiang et al.
+whereE a
+I is recovered by solving∇ h ×E a
+I =−B a
+r (i.e., first solving∇ 2
+hΦa =B a
+r and thenE a
+I =∇ h ×Φ aer). We
+usedt 0 = 0.5,k= 9.2 and thuse kt0 ≈100. In this way, the surface velocity corresponding to the flux emergence,
+v=E I(t)/Br(t), is roughly constant. In this phase, the artificial light speed is given asc= 100.
+The surface flux distribution of the AR is given by the sum of two 2D Gaussian functions on the (θ, ϕ) plane,
+Ba
+r =B 0 exp
+ 
+− ξ2
+σ2
+ξ
+!
+exp
+
+−(η−η 0)2
+σ2η
+
+−exp
+
+−(η+η 0)2
+σ2η
+
+,(13)
+whereξ=θ−5π/6,η=ϕ−π,η 0 =π/1500,σ η =π/150,σ ξ = 2σ η. The scale factorB 0 is given such that the
+maximal value ofB a
+r is 1000 G. As a result, the total unsigned magnetic flux of the AR is 1.7×10 22 Mx. Therefore
+it has size and field strength of typical ARs. The magnetic flux distribution is shown in Figure 1. The Carrington
+longitude and latitude of AR’s center are 180 ◦ and 30◦, respectively.
+2.6.Surface driving
+After the AR is emerged, the simulation time is reset tot= 0, and beginning with this state as the initial condition,
+we apply a surface rotation flow at each polarity of the AR to inject free magnetic energy into the AR. The driving
+flow is incompressible with streamlines aligning with the contour lines ofB r, therefore not altering the profile ofB r
+on the surface. Specifically, it is given by
+vr = 0, vθ = 1
+Rsinθ
+∂Ψ(Br)
+∂ϕ , vϕ =− 1
+R
+∂Ψ(Br)
+∂θ (14)
+with Ψ given by
+Ψ =kB 2
+r e−(B2
+r −B2
+r,max)/B2
+r,max (15)
+whereB r,max is the maximum value ofB r at the surface, andkis a scaling constant chosen so that the maximum
+surface velocity is 0.4. The pattern of the flow is shown in the rightmost panel of Figure 1. During this phase the
+artificial light speed is fixed asc= 100. Therefore, the surface driving speed, although being much larger than the
+realistic photospheric values, is smaller than the effective Alfv´ en speed (which approaches the artificial light speed
+c= 100 whenB >100) in the model by three orders of magnitude, and still represents a quasi-static driving to the
+model. A benefit of adopting such a relatively high driving speed is the significant reduction in computational time
+required to reach the eruption onset. In reality, the slow accumulation of magnetic free energy in the corona occurs over
+timescales of hours to days, driven by photospheric flows of only a few km s −1. By enhancing the driving speed while
+preserving the quasi-static nature of the evolution, we are able to compress the energy buildup phase substantially
+without altering the essential physical processes leading to the eruption. This acceleration of the pre-eruption evolution
+is essential for making global, high-resolution simulations of CME initiation computationally feasible.
+3.RESULTS
+3.1.Pre-eruption evolution to CME initiation
+The evolution of magnetic and kinetic energies in the CO model, shown in Figure 2, clearly indicates that the
+eruption is initiated at approximatelyt= 22 min. Prior to eruption, the kinetic energy of the active region remains
+very low, confirming that its evolution is quasi-static. The initial magnetic energy of the active region is 3.7×10 32 erg.
+Through the imposed surface driving, the total magnetic energy increases to about 7×10 32 erg, implying a free
+magnetic energy of roughly 3.3×10 32 erg, which is comparable to the energy of the initial potential field.
+Following the onset, the magnetic energy decreases rapidly while the kinetic energy rises sharply. To assess the role of
+continued driving after eruption onset, we performed an additional simulation in which the surface driving was turned
+off once the eruption began. The resulting energy evolution, shown by the dashed curves in Figure 2, demonstrates
+that the eruption proceeds independently of the driving once initiated. The kinetic energy reaches its peak within a few
+minutes after the onset. During this acceleration phase, the magnetic energy decreases by approximately 2×10 32 erg,
+of which about 20% (or 0.37×10 32 erg) is converted into kinetic energy. Thereafter, the kinetic energy gradually
+declines as the CME decelerates through interaction with the ambient solar wind.
+Similar to our previous studies (Jiang et al. 2021; Bian et al. 2022b,a), the pre-eruption evolution of the AR is
+characterized by the gradual formation of a current sheet within the increasingly sheared magnetic arcade, driven by
+
+Sun-to-Earth CME modelling9
+       
+3
+4
+5
+6
+7
+8Magnetic energy (1032 erg)
+Global
+Active region
+0 5 10 15 20 25 30
+Time (min)
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5Kinetic energy (1032 erg)
+Global
+Active region
+Figure 2.Evolution of magnetic and kinetic energies in the CO model. The global values are integration in the whole
+computational volume. The values of AR is integrated for a sub-volume with 30 ◦ in both longitude and latitude centered at the
+AR andr∈[1,1.5]R ⊙ in radial direction. The red vertical lines denote the onset time of the eruption. The dashed curves are
+global values starting at the eruption onset time with the bottom surface driving motion switched off.
+Time  =   7.26 min
+ Time  =  14.47 min
+ Time  =  19.96 min
+ Time  =  21.74 min
+ Time  =  23.62 min
+Figure 3.Evolution of the AR driven by the imposed surface flow. Top panel: Central cross section of the normalized current
+densityJ/B, with the solar surface at the bottom color-coded by the radial magnetic fieldB r. Bottom panel: Magnetic field
+lines color-coded byJ/B, where thick lines represent the core field and thin lines denote the enveloping field. The solar surface is
+shown in the background, color-coded byB r. From left to right, the first three columns correspond to times before the eruption
+onset, while the last column shows the state shortly after the eruption begins.
+the imposed surface motion. This development is illustrated in Figure 3, which shows the evolution of current density
+and magnetic field lines. Once the current sheet becomes sufficiently thin, tether-cutting reconnection (Moore et al.
+2001) initiates, leading to the subsequent eruption and the CME formation.
+3.2.Near-Sun evolution of CME
+
+10Jiang et al.
+Time  =  23.63 min
+Time  =  32.63 min
+Time  =  96.18 min
+Figure 4.Evolution of the erupting magnetic structure near the Sun. From left to right, the panels show the normalized
+current densityJ/Band the radial velocityv r on a central cross section through the AR, as well as the magnetic field lines
+at selected times during the eruption. The times are denoted in the left column from top to bottom. The color bars indicate
+the magnitude ofJ/Bandv r in normalized units. The formation of a twisted flux rope, the underlying current sheet, and the
+fast reconnection outflow are clearly visible. An animation of this evolution is available online, which shows the whole duration
+of the CO simulation. In the animation, the panels from left to right are magnetic field lines, the logarithm of plasma density
+logρ, andJ/B. The top row is shown for they= 0 slice and the bottom row forz= 0 slice.
+
+Sun-to-Earth CME modelling11
+ 32.7 min
+  50.7 min
+  68.8 min
+  86.8 min
+40 60 80 100 120
+0
+2
+4
+6
+8
+10
+40 60 80 100 120
+0
+2
+4
+6
+8
+10
+Length (Rs)
+ 695 km/s
+40 60 80 100 120
+Time (min)
+0
+2
+4
+6
+8
+10
+40 60 80 100 120
+0
+2
+4
+6
+8
+10
+Length (Rs)
+ 927 km/s
+Figure 5.Running difference of synthetic coronal polarized brightness at two different view angles. Top row: face-on view,
+where the inner circle denotes the solar surface and the outer circle indicates 10R ⊙. The rightmost panel shows a time stack
+along the direction indicated in the left panels, with the speed of the CME leading edge labeled. Bottom row: limb view.
+Figure 4 and the accompanying animation illustrate the near-Sun evolution of the erupting structure. The figure
+presents a central cross section of the normalized current densityJ/Band the radial velocityv r, overlaid with three-
+dimensional magnetic field lines. The density distribution on the same cross section is also shown in the animation.
+During the eruption, a highly twisted and rapidly expanding magnetic flux rope forms as the main body of the
+CME. The leading edge of the eruption accelerates quickly, reaching speeds over 3000 km s −1 shortly after onset,
+before decreasing to around 1500 km s −1 byt= 10 min. Because the CME propagates much faster than the ambient
+solar wind, a fast shock develops ahead of the flux rope. Beneath the rope, an elongated current sheet extends
+downward, within which continuous magnetic reconnection drives high-speed reconnection outflows.
+Figure 5 displays running difference images of the synthetic coronal polarized brightness (pB) from two viewing
+angles, mimicking coronagraph observations. In the face-on view (top row), the eruption appears as a halo CME,
+characterized by a bright leading edge surrounding a dark cavity. At 10R s, the speed of the CME front remains
+around 700 km s −1. In the limb view (bottom row), the CME exhibits the classic three-part structure: a bright front,
+a dark cavity, and a bright core. The leading edge speed in this view reaches approximately 930 km s −1 at 10Rs. This
+comparison shows that when viewed from different angles, the apparent speed of the CME also differs significantly.
+The disturbance caused by the CME extends throughout the corona, indicating the global nature of the eruption.
+The leading edge of the CME takes on a roughly ellipsoidal shape that encloses the Sun, consistent with the expanding
+frontal structure observed in large-scale eruptions.
+3.3.CME propagation
+The CO model is run until the CME has completely exited its computational domain. During the later phase of
+the CO simulation, we gradually reduce the artificial light speed from its initial value ofc= 100 down toc= 30,
+which is the same value used throughout the IP and HE models. This gradual reduction significantly accelerates
+the computation without affecting the physical evolution of the CME, as the eruption has already passed its main
+acceleration phase and the plasma speed has decreased considerably.
+The CME takes approximately 80 minutes to reach the outer boundary of the CO domain, after which it continues
+into the IP model. Figure 6 shows the CME crossing the interface between the two models, displaying the normalized
+current densityJ/B, the radial velocityv r, and the logarithm of density logρon a central meridional slice. The
+smooth transition across the interface, with no visible reflection or discontinuity, confirms the effectiveness of the
+coupling method.
+To further validate the coupling, Figure 7 compares the MHD variables extracted from both models on the spherical
+surface at 10R ⊙. It is worth noting that this surface is located more than ten grid cells away from the driving surface
+
+12Jiang et al.
+CO: Time  =  5767.1 s
+IP: Time  =  5652.8 s
+CO: Time  =  8460.3 s
+IP: Time  =  8257.2 s
+CO: Time  = 11178.4 s
+IP: Time  = 10987.7 s
+Figure 6.CME propagation through the interface between the CO and IP models at three different times (from top to bottom
+rows). From left to right, the panels show the normalized current densityJ/B, the radial velocityv r, and the logarithm of
+density log(ρ) on they= 0 meridional plane. The innermost hollow circle represents the Sun. The dashed yellow circle atr= 9
+marks the inner boundary of the IP model, while the dashed white circle atr= 10.6 indicates the outer boundary of the CO
+model. Note that due to slight differences in the output cadences of the two models, the results shown in the same panel may
+correspond to marginally different times.
+extracted from CO (i.e., 9R ⊙) and used in the IP model. The quantities are nearly identical, demonstrating that
+the information transfer from CO to IP preserves the solution accurately. These results confirm that the sequential
+coupling approach successfully maintains consistency between the models and allows the CME to propagate seamlessly
+from the corona into the inner heliosphere.
+Figure 8 and the accompanying animation present the propagation of the CME in the heliosphere up to 360R ⊙. The
+CME front takes 70 hours to reach 1 au, and shows a gradual deceleration during the travel. The whole structure shows
+an approximately self-similar expansion as it moves outward. The magnetic field of the CME mainbody demonstrates
+a donut-shaped structure (a torus), whose plane appears to become perpendicular to the solar equatorial plane. Note
+that the torus is not fully self-closed but with field lines still connecting to the Sun.
+Figure 9 and the accompanying animation present the distribution of key plasma and magnetic field parameters on
+the sphere at 1 au (more exactly the radius at L1 point withr= 214.36R ⊙), including the radial velocity, plasma
+density, total magnetic field strength, and the south-north magnetic field component (−B θ). To emulate in-situ
+
+Sun-to-Earth CME modelling13
+Figure 7.Comparison of MHD variables extracted from the CO and IP models on the sphere at 10R ⊙. The quantities shown
+include the three magnetic field components (B r,B θ, andB ϕ) and the plasma radial velocityv r. Note that, again, there is
+slight difference in the times of the two models. The close agreement between the two solutions confirms that the coupling
+method accurately transfers information from the corona to the inner heliosphere without introducing numerical artifacts at the
+interface.
+observations at Earth, we extract time profiles at three points corresponding to different Carrington longitudes of the
+Earth at the start of the simulation (t= 0). These points are chosen such that the Carrington longitude of the solar
+disk center, as seen from Earth, is 160 ◦ (point A), 170 ◦ (point B), and 180 ◦ (point C). In the latter case, the AR is
+located at the central meridian, since its center has a Carrington longitude of 180 ◦. The latitude of all three points is
+fixed at 7.25 ◦, corresponding to the typical heliographic latitude of Earth.
+The time profiles show that upon reaching 1 au, the CME-driven shock front propagates at a speed of approximately
+480 km s −1, which is about 80 km s −1 faster than the ambient solar wind. A sharp increase in plasma density is
+observed at the shock front, followed by a density depletion within the main body of the CME, corresponding to the
+magnetic flux rope (or magnetic cloud). Within this region, the magnetic field components exhibit a smooth rotation,
+characteristic of a flux rope structure. The total magnetic field strength reaches values between 10 and 15 nT. A
+southwardB z component (which is approximate the−B θ) begins to appear approximately five hours after the arrival
+of the shock front and persists for over 20 hours in points A and B, with a peak value of around 13 nT. The C point
+has a much shorter and weaker southward field. The five-hour interval between the shock front and the flux rope
+corresponds to the CME sheath region. The entire disturbance of the background solar wind caused by the CME lasts
+about 50 hours, spanning fromt= 70 h tot= 120 h.
+3.4.Computation efficiency
+Computational efficiency is a critical factor for Sun-to-Earth CME simulations, particularly if the model is intended
+for operational space weather forecasting. Figure 10 illustrates the computational cost of the present simulation by
+showing the time evolution of the total number of grid points (black curves) and the cumulative CPU time (red curves)
+for each of the three coupled models. All computations were carried out using 640 processors running at 2.6 GHz.
+Each model was run until the kinetic energy flux at its outer boundary became saturated, indicating that the CME
+and its associated disturbances had fully exited the domain. The adaptive refinement of the grid is illustrated in
+Figure 11 (and the accompanying animation), which shows the grid structure on a central cross-section at different
+stages of the simulation. The refinement closely follows the CME front, the current sheet, and the developing flux
+
+14Jiang et al.
+t =   7.98 h
+t =  17.10 h
+t =  36.23 h
+1au
+t =  81.83 h
+Figure 8.Propagation of the CME in the heliosphere. From left to right, the columns show the distribution of radial velocity
+vr in the equatorial plane, a three-dimensional iso-surface ofv r, and magnetic field lines viewed from two different angles: a
+three-dimensional perspective (third column) and a view from the north pole downward (fourth column). The magnetic field
+lines are color-coded byv r. From top to bottom, the first two rows display results from the IP model covering the domain from
+9R⊙ to 65R⊙, while the last two rows show results from the HE model extending from 50R ⊙ to 360R⊙. In the left panel of the
+bottom row, the dashed circle indicates the location of 1 au. An animation of this evolution is available online, which shows the
+whole duration of the IP and HE simulations. The format of plot in panels of the animation is identical to those of this figure,
+and the top row is shown for IP and the bottom for HE.
+
+Sun-to-Earth CME modelling15
+    
+-50
+0
+50
+Carrington Latitute
+    
+-50
+0
+50
+ABC
+Time =  81.83 h
+350
+433
+517
+600
+    
+-50
+0
+50
+Carrington Latitute
+    
+-50
+0
+50
+5
+20
+35
+50
+    
+-50
+0
+50
+Carrington Latitute
+    
+-50
+0
+50
+0.0
+6.7
+13.3
+20.0
+0 100 200 300
+Carrington Longitude
+-50
+0
+50
+Carrington Latitute
+0 100 200 300
+-50
+0
+50
+-20.0
+-6.7
+6.7
+20.0
+     
+400
+420
+440
+460
+480Flow speed (km s-1) A
+B
+C
+     
+10
+20
+30
+40Number density (cm-3)
+     
+2
+4
+6
+8
+10
+12Btot (nT)
+60 80 100 120 140
+Time (h)
+-10
+-5
+0
+5
+-Bθ (i.e., Bz) (nT)
+Figure 9.Synthetic in-situ observations at 1 au. Left panels: From top to bottom, the distributions of flow speed, plasma
+number density, total magnetic field strength, and the northward magnetic field component (−B θ) on the spherical surface at
+r= 214.36R ⊙. Three sampling points mimicking the L1 point are labeled as A, B, and C, corresponding to different Carrington
+longitudes (160 ◦, 170 ◦, and 180 ◦, respectively) of the solar disk center att= 0 as seen on Earth. Right panels: Time profiles
+of the corresponding parameters extracted at these three points, showing the CME-driven disturbances as they propagate past
+Earth. An animation of this evolution is available online, which shows the whole duration of the simulation. The format of
+plot in panels of the animation is identical to those in this figure. Note that for time profiles of L1 points, only the northward
+magnetic field component is shown in the animation.
+rope, demonstrating that the AMR criteria successfully achieve the design goal of concentrating resolution where it is
+most needed while keeping the overall grid count manageable.
+Correspondingly, the number of grid points evolves dynamically in response to the developing structures. In the
+CO model, for instance, the grid count increases sharply after eruption onset as the out-of-equilibrium magnetic field
+rapidly expands. Additional grid points are also triggered by the formation of the shock ahead of the CME and the
+elongation of the current sheet behind it. By the time the CME reaches the outer boundary of the CO domain, the
+total number of grid points peaks at approximately 3×10 7, about three times the initial grid count. Throughout
+the entire simulation, the number of grid points across all models remains a few of 10 7, as constrained by the AMR
+refinement criteria. The majority of the computational cost is incurred by the CO model, which requires about 26
+CPU hours to complete the simulation up tot= 6 h, when the CME has fully left the domain. In contrast, the IP
+model uses only about 2 CPU hours to propagate the CME to 64R ⊙, and the HE model requires roughly 1 CPU hour
+
+16Jiang et al.
+CO model
+0 1 2 3 4 5 6
+Time (h)
+1.0
+1.5
+2.0
+2.5
+3.0Total grid points (× 107)
+0
+5
+10
+15
+20
+25
+30
+CPU time (h)
+1
+2
+3
+4
+5
+6
+Kinetic energy flux
+IP model
+0 10 20 30 40 50 60
+Time (h)
+1
+2
+3
+4
+5Total grid points (× 107)
+0.5
+1.0
+1.5
+2.0
+2.5
+CPU time (h)
+0.8
+1.0
+1.2
+1.4
+Kinetic energy flux
+HE model
+0 50 100 150
+Time (h)
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5Total grid points (× 107)
+0.2
+0.4
+0.6
+0.8
+1.0
+CPU time (h)
+0.8
+0.9
+1.0
+1.1
+1.2
+1.3
+Kinetic energy flux
+Figure 10.Computational cost and grid adaptation for the three coupled models. In each panel, the black curve shows the time
+evolution of the total number of grid points, the red curve represents the cumulative CPU time, and the blue curve indicates
+the kinetic energy flux at the outer boundary, which serves as a diagnostic for CME exit from the computational domain. All
+simulations were performed using 640 processors running at 2.6 GHz. From top to bottom, the panels correspond to the CO,
+IP, and HE models, respectively.
+to track the CME to 360R ⊙. In total, the entire Sun-to-Earth simulation of a typical CME from initiation to arrival
+at 1 au can be completed in approximately one day on a moderately sized parallel computing cluster.
+This level of performance is particularly promising for forecasting applications. Given that CMEs typically take 3-4
+days to reach Earth, the model can provide predictions of key interplanetary parameters at 1 au with a lead time of
+about two days, making it a viable candidate for future operational space weather prediction systems.
+4.CONCLUSIONS
+In this paper, we have presented a methodology for simulating the complete Sun-to-Earth evolution of a CME
+originating from a sheared magnetic arcade. The model couples three nested MHD simulations covering the corona
+(CO, 1-11R⊙), the interplanetary space (IP, 9-64R⊙), and the heliosphere (HE, 50-360R⊙), enabling seamless tracking
+of the CME from its birth near the solar surface to its arrival at 1 au. The main features of the model and the
+simulation results are summarized as follows.
+
+Sun-to-Earth CME modelling17
+Figure 11.Adaptive grid structure of the simulation. The grid lines, formed by centers of all cells (including one layer of guard
+cells), are displayed on a central cross-section and color-coded according to the values indicated by the color bars in each panel.
+Four different times and fields of view are shown. The inner sphere in each panel is labeled with its corresponding radius. The
+top-left panel presents a zoomed-in view of the AR area (which is outlined by the white box in the top-right panel), and the
+solar surface is also shown with the grid lines. An animation covering the full simulation time is available online. The format
+of plot in panels of the animation is identical to those in this figure.
+The model incorporates three technical features that address common challenges in global CME simulations. (1) A
+block-structured AMR scheme is used to achieve multi-scale resolution, with the finest grid reaching∼700 km near
+the solar surface comparable to the resolution of SDO/HMI magnetograms. This allows the simulation to resolve fine-
+scale magnetic structures within ARs at scales consistent with observations. (2) A semi-relativistic Boris correction,
+combined with a relativistic mass-density factor, is implemented in the MHD equations. This modification limits the
+effective Alfv´ en speed and permits the use of realistic active-region magnetic field strengths (up to several thousand
+Gauss) without requiring excessively small time steps. By appropriately adjusting the value of artificial light speed, the
+model can preserve the physical acceleration and dynamics of eruptions while maintaining computational feasibility.
+
+18Jiang et al.
+(3) A modular approach is developed to couple the three models through prescribed inner boundary conditions. The
+CO model provides time-dependent MHD variables at 9R ⊙ to drive the IP model, which in turn drives the HE model
+at 50R ⊙. The coupling method ensures consistency of plasma parameters and magnetic field evolution across the
+interfaces, and validation tests show no numerical reflection or discontinuity at the boundaries.
+Using this modeling framework, we have simulated the entire life cycle of a CME initiated from a sheared arcade. The
+pre-eruption phase is characterized by quasi-static energy buildup driven by photospheric shearing motions, leading to
+the formation of a current sheet and subsequent magnetic reconnection that triggers the eruption. The CME rapidly
+accelerates, reaching speeds over 3000 km s −1 in the low corona, and then propagates through the heliosphere with
+gradual deceleration. The simulated CME exhibits a classic three-part structure in synthetic coronagraph images,
+with a bright front, dark cavity, and bright core. In the heliosphere, the CME main body evolves into a donut-shaped
+magnetic flux rope whose orientation rotates during propagation. Synthetic in-situ observations at 1 au show that the
+CME arrival time is approximately 70 hours after eruption, with a shock speed of∼480 km s −1, density compression,
+and a prolonged southwardB z component up to 13 nT.
+The computational efficiency of the model has also been assessed. The entire Sun-to-Earth simulation, from eruption
+onset to CME passage beyond 360R ⊙, requires approximately one day on a moderately sized parallel cluster with 640
+processors. This level of performance is of practical interest for space weather forecasting applications, as it provides
+a lead time of about two days relative to the typical 3-4 day CME transit time to Earth.
+Further analysis of the simulation results will be presented in a companion paper, where we will examine in detail
+the three-dimensional structure of the CME magnetic field, particularly the formation mechanism of the flux rope,
+and its evolution and propagation processes. In future works, on the one hand, we plan to apply this modeling
+framework to study more complex scenarios, such as the generation of homologous CMEs driven by continuous shearing
+motions (Bian et al. 2022a) and the interaction of the resulting multiple CMEs. On the other hand, we plan to
+incorporate more realistic thermodynamic processes into the model to reproduce the fast and slow solar wind streams,
+thereby obtaining a more accurate background solar wind. Furthermore, we aim to drive the AR evolution using
+observed vector magnetograms, enabling a data-driven MHD simulation of the initiation, evolution, and propagation
+of CMEs (Jiang et al. 2022). The ultimate goal is to develop a data-driven MHD modeling framework capable of
+predicting interplanetary space weather parameters and assessing the geoeffectiveness of Earth-directed CMEs.
+This work is jointly supported by National Key R&D Program of China under No. 2024YFA1612001, National
+Natural Science Foundation of China (NSFC 12573058), Shenzhen Science and Technology Program (grant no.
+RCJC20210609104422048), Guangdong Basic and Applied Basic Research Foundation (2023B1515040021), and the
+Specialized Research Fund for State Key Laboratory of Solar Activity and Space Weather.
+1
+2
+3
+4
+REFERENCES
+Alexander, D., Richardson, I. G., & Zurbuchen, T. H. 2006,
+Space Science Reviews, 123, 3,
+doi: 10.1007/s11214-006-9008-y
+Amari, T., Canou, A., Aly, J.-J., Delyon, F., & Alauzet, F.
+2018, Nature, 554, 211, doi: 10.1038/nature24671
+Amari, T., Luciani, J. F., Aly, J. J., Mikic, Z., & Linker, J.
+2003, The Astrophysical Journal, 585, 1073,
+doi: 10.1086/345501
+Antiochos, S. K., DeVore, C. R., & Klimchuk, J. A. 1999,
+The Astrophysical Journal, 510, 485, doi: 10.1086/306563
+Aulanier, G., T¨ or¨ ok, T., D´ emoulin, P., & DeLuca, E. E.
+2010, The Astrophysical Journal, 708, 314,
+doi: 10.1088/0004-637X/708/1/314
+Baratashvili, T., & Poedts, S. 2024, Astronomy &
+Astrophysics, 683, A81,
+doi: 10.1051/0004-6361/202347864
+Bian, X., Jiang, C., Feng, X., Zuo, P., & Wang, Y. 2022a,
+The Astrophysical Journal Letters, 925, L7,
+doi: 10.3847/2041-8213/ac4980
+Bian, X., Jiang, C., Feng, X., et al. 2022b, Astronomy &
+Astrophysics, 658, A174,
+doi: 10.1051/0004-6361/202141996
+Boris, J. P. 1970, PHYSICALLY MOTIVATED
+SOLUTION of the ALFVEN PROBLEM. Final Report.,
+Tech. Rep. AD-715774; NRL-MR-2167, Naval Research
+Lab., Washington, DC
+Cai, J., Zhang, L., Jiang, C., et al. 2025, Monthly Notices
+of the Royal Astronomical Society, 538, 2569,
+doi: 10.1093/mnras/staf307
+Choe, G. S., & Lee, L. C. 1996, The Astrophysical Journal,
+472, 372, doi: 10.1086/178070
+
+Sun-to-Earth CME modelling19
+Dahlin, J. T., Antiochos, S. K., & DeVore, C. R. 2019, The
+Astrophysical Journal, 879, 96,
+doi: 10.3847/1538-4357/ab262a
+Fan, Y. 2022, The Astrophysical Journal, 941, 61,
+doi: 10.3847/1538-4357/aca0ec
+Feng, X., Yang, L., Xiang, C., et al. 2012, Solar Physics,
+279, 207, doi: 10.1007/s11207-012-9969-9
+Forbes, T. G., Linker, J. A., Chen, J., et al. 2006, Space
+Science Reviews, 123, 251,
+doi: 10.1007/s11214-006-9019-8
+Gibson, S. E., & Low, B. C. 1998, The Astrophysical
+Journal, 493, 460, doi: 10.1086/305107
+Gombosi, T. I., T´ oth, G., De Zeeuw, D. L., et al. 2002,
+Journal of Computational Physics, 177, 176,
+doi: 10.1006/jcph.2002.7009
+Groth, C. P. T., De Zeeuw, D. L., Gombosi, T. I., &
+Powell, K. G. 2000, Journal of Geophysical Research:
+Space Physics, 105, 25053, doi: 10.1029/2000JA900093
+Guo, J. H., Ni, Y. W., Zhong, Z., et al. 2023, The
+Astrophysical Journal Supplement Series, 266, 3,
+doi: 10.3847/1538-4365/acc797
+Guo, J. H., Ni, Y. W., Guo, Y., et al. 2024a, The
+Astrophysical Journal, 961, 140,
+doi: 10.3847/1538-4357/ad088d
+Guo, J. H., Linan, L., Poedts, S., et al. 2024b, Astronomy
+& Astrophysics, 690, A189,
+doi: 10.1051/0004-6361/202449731
+Guo, Y., Xia, C., Keppens, R., Ding, M. D., & Chen, P. F.
+2019, The Astrophysical Journal, 870, L21,
+doi: 10.3847/2041-8213/aafabf
+He, W., Jiang, C., Zou, P., et al. 2020, The Astrophysical
+Journal, 892, 9, doi: 10.3847/1538-4357/ab75ab
+Inoue, S., Kusano, K., B¨ uchner, J., & Sk´ ala, J. 2018,
+Nature Communications, 9, 174,
+doi: 10.1038/s41467-017-02616-8
+Jiang, C., Feng, X., Guo, Y., & Hu, Q. 2022, The
+Innovation, 3, 100236, doi: 10.1016/j.xinn.2022.100236
+Jiang, C., Feng, X., & Xiang, C. 2012, The Astrophysical
+Journal, 755, 62, doi: 10.1088/0004-637X/755/1/62
+Jiang, C., Feng, X., Zhang, J., & Zhong, D. 2010, Solar
+Physics, 267, 463, doi: 10.1007/s11207-010-9649-6
+Jiang, C., Feng, X., Liu, R., et al. 2021, Nature Astronomy,
+5, 1126, doi: 10.1038/s41550-021-01414-z
+Jin, M., Manchester, W. B., van der Holst, B., et al. 2017,
+The Astrophysical Journal, 834, 173,
+doi: 10.3847/1538-4357/834/2/173
+Karpen, J. T., Antiochos, S. K., & DeVore, C. R. 2012, The
+Astrophysical Journal, 760, 81,
+doi: 10.1088/0004-637X/760/1/81
+Lin, J., Murphy, N. A., Shen, C., et al. 2015, Space Science
+Reviews, 194, 237, doi: 10.1007/s11214-015-0209-0
+Linan, L., Baratashvili, T., Lani, A., et al. 2024, Astronomy
+& Astrophysics, 693, A229,
+doi: 10.1051/0004-6361/202451854
+Linker, J. A., Miki´ c, Z., Lionello, R., et al. 2003, Physics of
+Plasmas, 10, 1971, doi: 10.1063/1.1563668
+Lionello, R., Downs, C., Linker, J. A., et al. 2013, The
+Astrophysical Journal, 777, 76,
+doi: 10.1088/0004-637X/777/1/76
+Lites, B. W., Low, B. C., Martinez Pillet, V., et al. 1995,
+The Astrophysical Journal, 446, 877, doi: 10.1086/175845
+Lugaz, N., Downs, C., Shibata, K., et al. 2011, The
+Astrophysical Journal, 738, 127,
+doi: 10.1088/0004-637X/738/2/127
+Lugaz, N., Al-Haddad, N., T¨ or¨ ok, T., et al. 2023, Bulletin
+of the AAS, doi: 10.3847/25c2cfeb.b8b6712c
+Luhmann, J. G., Gopalswamy, N., Jian, L. K., & Lugaz, N.
+2020, Solar Physics, 295, 61,
+doi: 10.1007/s11207-020-01624-0
+Lynch, B. J., Antiochos, S. K., DeVore, C. R., Luhmann,
+J. G., & Zurbuchen, T. H. 2008, The Astrophysical
+Journal, 683, 1192, doi: 10.1086/589738
+MacNeice, P., Olson, K. M., Mobarry, C., de Fainchtein, R.,
+& Packer, C. 2000, Computer Physics Communications,
+126, 330, doi: 10.1016/S0010-4655(99)00501-9
+Manchester, W., Kilpua, E. K. J., Liu, Y. D., et al. 2017,
+Space Science Reviews, 212, 1159,
+doi: 10.1007/s11214-017-0394-0
+Manchester, W. B. 2004, Journal of Geophysical Research,
+109, A01102, doi: 10.1029/2002JA009672
+Manchester, W. B., Sachdeva, N., Kilpua, E., et al. 2025,
+The Astrophysical Journal, 992, 51,
+doi: 10.3847/1538-4357/adf855
+Marder, B. 1987, Journal of Computational Physics, 68, 48
+Matsumoto, T., Miyoshi, T., & Takasao, S. 2019, The
+Astrophysical Journal, 874, 37,
+doi: 10.3847/1538-4357/ab05cb
+Mikic, Z., Barnes, D. C., & Schnack, D. D. 1988, The
+Astrophysical Journal, 328, 830, doi: 10.1086/166341
+Mikic, Z., & Linker, J. A. 1994, The Astrophysical Journal,
+430, 898, doi: 10.1086/174460
+Moore, R. L., Sterling, A. C., Hudson, H. S., & Lemen,
+J. R. 2001, The Astrophysical Journal, 552, 833,
+doi: 10.1086/320559
+Olson, K. M., & MacNeice, P. 2005, in Adaptive Mesh
+Refinement - Theory and Applications, ed. T. Plewa,
+T. Linde, & V. Gregory Weirs, Vol. 41
+(Berlin/Heidelberg: Springer-Verlag), 315–330,
+doi: 10.1007/3-540-27039-6 22
+
+20Jiang et al.
+Powell, K. G., Roe, P. L., Linde, T. J., Gombosi, T. I., &
+De Zeeuw, D. L. 1999, Journal of Computational Physics,
+154, 284, doi: 10.1006/jcph.1999.6299
+Riley, P., Linker, J., Mikic, Z., & Odstrcil, D. 2006,
+Advances in Space Research, 38, 535,
+doi: 10.1016/j.asr.2005.04.040
+Riley, P., Linker, J. A., Miki´ c, Z., et al. 2003, Journal of
+Geophysical Research: Space Physics, 108,
+2002JA009760, doi: 10.1029/2002JA009760
+Shen, F., Shen, C., Xu, M., et al. 2022, Reviews of Modern
+Plasma Physics, 6, doi: 10.1007/s41614-022-00069-1
+Shen, F., Wang, Y., Shen, C., & Feng, X. 2016, Scientific
+Reports, 6, 19576, doi: 10.1038/srep19576
+Singh, T., Kim, T. K., Pogorelov, N. V., & Arge, C. N.
+2020, Space Weather, 18, e2019SW002405,
+doi: 10.1029/2019SW002405
+Talpeanu, D.-C., Chan´ e, E., Poedts, S., et al. 2020a,
+Astronomy & Astrophysics, 637, A77,
+doi: 10.1051/0004-6361/202037477
+—. 2020b, Astronomy & Astrophysics,
+doi: 10.1051/0004-6361/202037477
+Temmer, M., Scolini, C., Richardson, I. G., et al. 2023,
+Advances in Space Research, S0273117723005239,
+doi: 10.1016/j.asr.2023.07.003
+Titov, V. S., & D´ emoulin, P. 1999, Astronomy &
+Astrophysics, 351, 707
+Titov, V. S., Downs, C., Miki´ c, Z., et al. 2018, The
+Astrophysical Journal, 852, L21,
+doi: 10.3847/2041-8213/aaa3da
+Titov, V. S., Downs, C., T¨ or¨ ok, T., et al. 2024,
+Magnetogram-Matching Biot-Savart Law and
+Decomposition of Vector Magnetograms, arXiv.
+https://arxiv.org/abs/2410.02134
+T¨ or¨ ok, T., Downs, C., Linker, J. A., et al. 2018, The
+Astrophysical Journal, 856, 75,
+doi: 10.3847/1538-4357/aab36d
+T¨ or¨ ok, T., Lugaz, N., Lee, C. O., et al. 2023, Bulletin of the
+AAS, doi: 10.3847/25c2cfeb.395f28b4
+T´ oth, G., Sokolov, I. V., Gombosi, T. I., et al. 2005,
+Journal of Geophysical Research: Space Physics, 110,
+2005JA011126, doi: 10.1029/2005JA011126
+Wolfson, R. 1995, The Astrophysical Journal, 443, 810,
+doi: 10.1086/175571
+Wyper, P. F., Antiochos, S. K., & DeVore, C. R. 2017,
+Nature, 544, 452, doi: 10.1038/nature22050
+Xing, C., Aulanier, G., Cheng, X., Xia, C., & Ding, M.
+2024, The Astrophysical Journal, 966, 70,
+doi: 10.3847/1538-4357/ad2ea9
+Yan, X., Xue, Z., Jiang, C., et al. 2022, Nature
+Communications, 13, 640,
+doi: 10.1038/s41467-022-28269-w
+Yang, L., Wang, H., Feng, X., et al. 2021, The Astrophysical
+Journal, 918, 31, doi: 10.3847/1538-4357/ac0ef7
+Zhang, J., Zhang, L., & Jiang, C. 2013, Procedia
+Engineering, 61, 233, doi: 10.1016/j.proeng.2013.08.009

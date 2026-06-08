@@ -1,0 +1,1522 @@
+Title: AKRA 3.0: A matrix-free Inversion Framework for Weak Lensing Mass Mapping and Its Application to DES Y3 Data
+Authors: Yuan Shi, Pengjie Zhang, Li Cui, Jian Qin, Ji Yao
+Published: 2026-06-04
+Categories: astro-ph.CO
+
+AKRA 3.0: A matrix-free Inversion Framework for Weak Lensing Mass Mapping
+and Its Application to DES Y3 Data
+Yuan Shi,1, 2,∗ Pengjie Zhang, 1, 2, 3,† Li Cui, 1, 2 Jian Qin, 4, 5 and Ji Yao 6
+1State Key Laboratory of Dark Matter Physics, School of Physics and Astronomy,
+Shanghai Jiao Tong University, Shanghai 200240, China
+2Key Laboratory for Particle Astrophysics and Cosmology (MOE) / Shanghai Key Laboratory for Particle Physics and Cosmology, China
+3Division of Astronomy and Astrophysics, Tsung-Dao Lee Institute,
+Shanghai Jiao Tong University, Shanghai, 200240, China
+4Center for Astronomy and Space Sciences, China Three Gorges University, Yichang 443000, People’s Republic of China
+5College of Mathematics and Physics, China Three Gorges University, Yichang 443000, People’s Republic of China
+6Shanghai Astronomical Observatory (SHAO), Nandan Road 80, Shanghai, China
+(Dated: June 5, 2026)
+Weak gravitational lensing mass mapping offers a direct probe of the matter distribution. Accurate recon-
+struction of mass maps from masked shear catalogs remains challenging due to survey boundaries and spatially
+varying noise. In AKRA 2.0, we addressed the mask problem on the curved sky by constructing and inverting the
+normal-equation matrixH≡A TN−1Aexplicitly, necessitating a split-scale strategy that reconstructed different
+angular scales independently to reach high resolution. Here we present AKRA 3.0, in whichHis treated as a linear
+operator and the normal equations are solved by the conjugate gradient (CG) method. This reformulation reduces
+the memory requirement fromO (𝑁 2)toO (𝑁)and the inversion cost fromO (𝑁 3)toO (𝑁 iter𝑁3/2), 𝑁∼ℓ 2
+max
+for full-sky (SHT-based) operations. Such optimizations render high-resolution full-sky reconstruction tractable
+for Stage III and Stage IV surveys. Applying AKRA 3.0 to the DES Y3METACALIBRATIONcatalog (4,143
+deg2 and∼10 8 source galaxies), we produce the highest-resolution convergence map of this dataset to date at
+HEALPix𝑁 nside =2048 without imposing any prior assumptions. We extract the convergence power spectrum
+directly from the reconstructed map and demonstrate that unbiased two-point measurements can be obtained
+directly from the reconstructed map. The reconstructed E-mode convergence map will be publicly released as
+data products to enable future studies of non-Gaussian statistics, higher-order moments, and cross-correlations
+with external datasets.
+I. INTRODUCTION
+Weak gravitational lensing has emerged as one of the most
+powerful probes of cosmology [1–3]. By directly tracing the
+total matter distribution, weak lensing offers unique constraints
+on the amplitude of matter fluctuations𝜎 8, the matter density
+Ωm, and the dark energy equation of state𝑤[4]. Current
+Stage-III experiments, such as the Dark Energy Survey (DES)
+[5, 6], the Kilo-Degree Survey (KiDS) [7], and the Hyper
+Suprime-Cam Survey (HSC) [8] have successfully measured
+cosmic shear with total signal-to-noise ratios S/N∼40 [9, 10],
+rising to S/N∼83 in recent DES Y6 analysis [11]. The
+upcoming Stage IV missions, including Euclid [12], the Vera
+C. Rubin Observatory’s Legacy Survey of Space and Time
+(LSST) [13, 14], the Roman Space Telescope [15], and the
+Chinese Space Station Telescope (CSST; [16, 17]) will push
+the total S/N to≳300 [18], nearly an order of magnitude
+above early Stage-III analyses and a factor of∼4 beyond the
+latest DES Y6 measurement.
+While most weak-lensing cosmological analyses rely pri-
+marily on shear (𝛾) statistics using two-point correlation func-
+tions or power spectra, fully exploiting this precision requires
+transitioning to the convergence (𝜅) field. First, the conver-
+gence is a scalar field, it provides a natural basis for extract-
+ing non-Gaussian information through higher-order moments,
+∗ yshi@sjtu.edu.cn
+† zhangpj@sjtu.edu.cn
+such as one-point probability distribution functions (PDFs,
+[19, 20]), peak counts [21–23], skewness and kurtosis [24, 25],
+Minkowski functionals [26–28], wavelet scattering transforms
+[29, 30], as well as recent frameworks like machine learning
+[31–34] and field-level inference [35, 36]. Second, in galaxy–
+galaxy lensing the tangential shear𝛾 𝑡 (𝜃)at a given angular
+scale is inherently nonlocal, it depends on the projected mass
+distribution interior to𝜃, mixing contributions from smaller
+scales𝜃 ′ < 𝜃and complicating the theoretical modeling of
+small-scale signals [37–40]. In contrast, the𝜅-galaxy cross-
+correlation is free of this issue, as𝜅is a local scalar. Moreover,
+a prior-free convergence map constitutes an independent cos-
+mological probe in its own right: two-point statistics measured
+from the map can be directly compared with shear-based esti-
+mates, providing a powerful consistency check and an alterna-
+tive path to parameter constraints. Together, these advantages
+highlight the convergence field as a natural bridge between
+complex observational data and theoretical predictions, en-
+hancing our ability to constrain cosmological parameters in
+future surveys.
+However, reconstructing the convergence from observed
+shear catalog is a non-trivial inverse problem. The semi-
+nal Kaiser–Squires (KS) inversion [41] recovers𝜅from𝛾in
+Fourier space under the idealized assumptions of a flat sky,
+with complete and uniform coverage. In practice, survey
+boundaries, masked regions, and spatially varying noise vi-
+olate these assumptions, causing the KS estimator to produce
+biased maps [42]. A rich landscape of methods has been de-
+veloped to address these challenges: Wiener filtering [43],
+sparsity-based regularization (GLIMPSE; [44, 45]), Bayesian
+arXiv:2606.06175v1  [astro-ph.CO]  4 Jun 2026
+
+2
+forward modeling (KaRMMa; [46]), and deep-learning ap-
+proaches such as score-based diffusion models. While these
+methods improve map quality by imposing a prior on the con-
+vergence field, which may alter its statistical properties. Accu-
+rate mass mapping remains challenging: how can we recover
+the convergence field from noisy and incomplete shear field
+without losing information [47]?
+To address this rigorously, we developed the Accurate Kappa
+Reconstruction Algorithm (AKRA; [48]) on the flat sky and its
+curved-sky extension AKRA 2.0 [49], which provide the un-
+biased minimum-variance linear estimator of the convergence
+field, along with an iterative extension [50] for the galaxy clus-
+ter regime. The framework has been validated on simulations
+and successfully applied to HSC Y1 data [51], demonstrat-
+ing its ability to produce high-accuracy prior-free convergence
+maps. The AKRA series provides a complete theoretical so-
+lution. However, applying AKRA 2.0 at high resolution on
+wide-field data remains computationally prohibitive.
+AKRA 2.0 mitigates computational costs by splitting the
+problem into large-scale (full-sky) and small-scale (flat-sky)
+regimes, which are solved independently. This is a physically
+motivated workaround, and the two scales must be solved,
+stored, and joined separately. Yet, this only reduces the local
+problem size without altering the fundamental computational
+scaling. Within each regime the algorithm still constructs the
+normal-equation matrixH≡A TN−1Aexplicitly and subse-
+quently inverts it. While the decomposition reduces the size
+of each sub-problem, it does not alter the underlying dense-
+matrix scaling, leaving the method computationally infeasible
+for Stage IV survey resolutions.
+AKRA 3.0 overcomes the storage and inversion bottlenecks
+by combining three key ideas. First, convolution in Fourier
+space is equivalent to pointwise multiplication in real space.
+In previous work, we generate dense mask transfer matrix col-
+umn by column using delta function or Toeplitz structures.
+AKRA 3.0 evaluates its action in real space to reproducing the
+exact matrix-vector product in Fourier/Spherical Harmonic
+space [52]. Second, this equivalence enables a paradigm shift
+from explicit matrix products to functional operations: rather
+than being formed or stored explicitly,His represented implic-
+itly through its action on a vectorH𝜈=A T (N−1 (A𝜈)), which
+is evaluated on demand as a sequence of fast operator calls.
+Third, the Conjugate Gradient (CG) solver is naturally suited to
+this functional paradigm. Because it relies solely on applica-
+tions of the functional operatorA T (N −1 (A(𝒗)))for an arbi-
+trary trial vector, it ideally matches our matrix-free setup. Fur-
+thermore, CG constructs a sequence ofH-orthogonal search
+directions within the Krylov subspace, leading to substantially
+faster convergence than steepest descent method.
+This paper is structured as follows. Section II establishes
+the mathematical foundation of AKRA 3.0, we derive the
+maximum-likelihood normal equation on the curved sky and
+reformulate it as a matrix-free linear operator. We then de-
+scribe the CG solver and the construction of the corresponding
+preconditioner. Section III presents the application to the DES
+Y3METACALIBRATIONcatalog: we reconstruct convergence
+maps accounting for realistic mask geometries and spatially
+varying effective source densities, and using them to measure
+both non-tomographic and tomographic convergence power
+spectra. Section IV summarizes our findings and discusses
+the extension of this methodology to real data from ongoing
+surveys, as well as its application to future survey programs.
+We adopt the following notational conventions in this pa-
+per. Vectors representing physical fields are denoted by italic
+Greek letters (e.g.,𝜅,𝛾,𝜈). Matrices are represented by bold-
+face font (e.g.,A,N −1,H), whereas linear operators acting on
+vectors are distinguished by boldfaced calligraphic font (e.g.,
+A,N −1,H). Finally, the superscripts T and † denote the
+adjoint (transpose) and Hermitian conjugate of an operation or
+matrix, respectively.
+II. AKRA 3.0
+Building upon the prior-free, maximum-likelihood foun-
+dation established in AKRA 2.0, this section introduces the
+AKRA 3.0 framework (see Fig. 1), designed specifically to
+overcome the computational bottlenecks. First, the mask con-
+volution previously performed by explicitly constructing the
+coupling matrix ±2Mℓ1𝑚1ℓ𝑚 in AKRA 2.0, is now evaluated
+implicitly through a sequence of spin-weighted spherical har-
+monic transforms (SHT) and diagonal multiplications, reduc-
+ing the storage from𝑂(𝑁 2)to𝑂(𝑁). Second, the direct
+inversion of the normal-equation is replaced by an iterative
+(preconditioned) CG solver that requires only the action of
+Hon a vector instead of its explicit form. Together, these
+two changes reduce the computational cost from𝑂(𝑁 3)to
+𝑂(𝑁 iter 𝑁3/2)on full sky, making arcminute-resolution recon-
+struction over thousands of square degrees practical on a single
+compute node.
+A. AKRA Review
+In ideal case, the relationship between the spin-0 lensing
+convergence𝜅and the complex observable shear𝛾(defined as
+𝛾( ˆ𝜃)=𝛾 1 +𝑖 𝛾 2) is elegantly established through the curved-
+sky Kaiser-Squires (KS) framework. Because𝛾carries spin
+weight+2, the natural basis for its harmonic analysis on the
+sphere is the set of spin-weighted spherical harmonics ±2𝑌ℓ𝑚:
+𝛾( ˆ𝜃)=
+∑︁
+ℓ𝑚
+𝛾2, ℓ𝑚2 𝑌ℓ𝑚 ( ˆ𝜃),
+𝛾∗ ( ˆ𝜃)=
+∑︁
+ℓ𝑚
+𝛾−2, ℓ𝑚−2 𝑌ℓ𝑚 ( ˆ𝜃).
+(1)
+For a real shear field they are related by𝛾 −2, ℓ𝑚 =
+(−1) 𝑚 𝛾∗
+2, ℓ,−𝑚 .
+Analogously to the polarization of the cosmic microwave
+background (CMB), the spin-±2 coefficients are decomposed
+into parity-even (E-mode) and parity-odd (B-mode) compo-
+nents [49]:
+𝑎𝐸,ℓ𝑚 =− 1
+2
+ 𝛾2, ℓ𝑚 +𝛾−2, ℓ𝑚
+ , 𝑎 𝐵,ℓ𝑚 = 𝑖
+2
+ 𝛾2, ℓ𝑚 −𝛾−2, ℓ𝑚
+ .
+(2)
+
+A AKRA Review 3
+Gravitational lensing produces only E-mode shear (𝑎𝐵,ℓ𝑚 =
+0), the shear and convergence harmonics are then related by
+the curved-sky kernel [53]:
+𝛾±2, ℓ𝑚 =−𝑎 𝐸,ℓ𝑚 =𝐷 ℓ 𝜅ℓ𝑚 , 𝐷 ℓ ≡ −
+√︄
+(ℓ−1) (ℓ+2)
+ℓ(ℓ+1) .
+(3)
+This expression is the spherical generalization of the KS rela-
+tion.
+In a realistic survey, the observed shear is modulated by a
+survey mask. Let𝑀( ˆ𝜃)denote mask function in real space,
+the observed (masked) shear field is
+𝛾obs( ˆ𝜃)=𝑀( ˆ𝜃)𝛾( ˆ𝜃),(4)
+where𝑀( ˆ𝜃)=1/0 for unmasked/masked pixels.
+In harmonic space, the pixel-space multiplication by the
+mask becomes a convolution that couples modes of different
+(ℓ, 𝑚). As derived in Ref. [49], the masked spin-±2 harmonic
+coefficients are related to the unmasked ones by
+𝛾 𝑀
+±2, ℓ1𝑚1 =
+∑︁
+ℓ𝑚
+±2Mℓ1𝑚1, ℓ𝑚 𝛾±2, ℓ𝑚 ,(5)
+where ±2Mℓ1𝑚1, ℓ𝑚 is the spin-weighted mask transfer matrix
+of dimension(ℓ max +1) 2 × (ℓ max +1) 2. Combining Eqs. (2)
+and (5), the observed masked shear harmonics are linearly
+related to the true convergence harmonics.
+ 𝛾 𝑀
+2, ℓ1𝑚1
+𝛾 𝑀
+−2, ℓ1𝑚1
+
+=
+
+2Mℓ1𝑚1, ℓ𝑚 0
+0 −2Mℓ1𝑚1, ℓ𝑚
+ 
+−(𝑎 𝐸,ℓ𝑚 +𝑖 𝑎 𝐵,ℓ𝑚 )
+−(𝑎 𝐸,ℓ𝑚 −𝑖 𝑎 𝐵,ℓ𝑚 )
+
+,
+(6)
+Setting𝑎 𝐵,ℓ𝑚 =0, the masked shear harmonics become
+explicitly linear in the convergence harmonics:
+ 
+𝛾 𝑀
+2, ℓ1𝑚1
+𝛾 𝑀
+−2, ℓ1𝑚1
+!
+=
+ 
+2Mℓ1𝑚1, ℓ𝑚
+−2Mℓ1𝑚1, ℓ𝑚
+!
+(𝐷 ℓ 𝜅ℓ𝑚 )(7)
+We collect the masked spin-±2 coefficients
+[𝛾 𝑀
+2, ℓ1𝑚1
+, 𝛾 𝑀
+−2, ℓ1𝑚1
+]into a data vectoryof length 2(ℓ max +1) 2,
+the convergence harmonics𝜅 ℓ𝑚 into a signal vectorxof length
+(ℓmax +1) 2, and define the forward operatorAthat encodes
+both the KS relation and the mask coupling. The resulting
+linear relation is
+y=A x+n,(8)
+wherexis the signal vector of length(ℓ max +1) 2, comprising
+the true convergence harmonics𝜅ℓ𝑚;nis the noise vector with
+covarianceN≡ ⟨nn T⟩.
+The minimum-variance estimator ofxis obtained by mini-
+mizing𝜒 2 =(y−Ax) TN−1 (y−Ax). Setting the gradient to
+zero yields the normal equations [48, 49]:
+(ATN−1A)|       {z       }
+H
+ˆx=A TN−1y|   {z   }
+b
+.(9)
+with the formal solution
+ˆx=H −1b=(A TN−1A) −1ATN−1y.(10)
+This is the foundation of the entire AKRA series pro-
+gram [48, 49, 51]. The AKRA series can be understood as
+the natural generalization of the KS idea: rather than inverting
+the diagonal kernel𝐷 ℓ alone, AKRA solves the full inverse
+problem that accounts for both the KS relation and the mode
+coupling induced by the mask, thereby AKRA successfully
+restores unbiased mass mapping within realistic survey ge-
+ometries.
+B. From AKRA 2.0 to AKRA 3.0
+AKRA solves Eq. (9) to obtain the unbiased convergence
+map. The two generations (AKRA 2.0 and AKRA 3.0) of
+the algorithm differ fundamentally in how they evaluate the
+normal-equation operatorH.
+1. Calculation problem
+In AKRA 2.0 (on full sky, [49]), the mask transfer matrix
+±2Mℓ1𝑚1, ℓ𝑚 (Eq. 5) is computed explicitly for every pair of
+harmonic modes and stored as a dense matrix. The normal-
+equation matrix
+H≡A TN−1A(11)
+is then assembled and inverted directly (via Cholesky decom-
+position or eigendecomposition) to yield ˆx=H −1b.
+However, the storage and inversion costs both scale as high
+powers of𝑁=(ℓ max +1) 2. Specifically,Hcontains𝑁 2 ele-
+ments, requiringO (𝑁×𝑁)storage, while its direct inversion
+costsO (𝑁 3)operations. Figure 2 quantifies the practical con-
+sequence of this scaling.
+To circumvent this bottleneck while retaining the AKRA 2.0
+formalism at manageable resolution, AKRA 2.0 introduces a
+scale-splitting strategy that decomposes the reconstruction into
+two complementary regimes:
+𝜅rec
+ℓ𝑚 =𝜅 large
+ℓ𝑚 +𝜅 small
+ℓ𝑚 .(12)
+AKRA-sphere addresses this by handling the large scales
+(ℓ≲ℓ split) on the full sphere using shear maps smoothed with
+a Gaussian kernel of width𝜃 sm, where the explicit matrix con-
+struction remains feasible owing to the modestℓ max involved.
+AKRA-flat handles the small scales (ℓ≳ℓ split) within flat-sky
+patches where the flat-sky approximation is valid. The two
+reconstructions are combined in harmonic space to produce
+the final convergence map [49].
+While the scale-splitting strategy extends the practical reach
+of AKRA 2.0 (Figure 2, middle column), it does not eliminate
+the underlyingO (𝑁 2)scaling. The total memory footprint
+remains substantial at Stage IV resolutions, and the stitching
+of patches at theℓ split boundary adds procedural complexity.
+AKRA 3.0 overcomes these limitations at their root by replac-
+ing explicit matrix construction with a matrix-free functional
+operator that operates on the full curved sky at any resolution,
+as described in the following subsection.
+
+B From AKRA 2.0 to AKRA 3.0 4
+AKRA 3.0 Workflow: Matrix-Free Inversion Framework
+1. INPUT DATA 2. OPERATION 3. CG SOL VER 4. OUTPUT
+Shear Catalog
+{γi
+1, γ i
+2, w i, R i, z i
+phot, θ i
+RA, θ i
+Dec}
+Survey Mask M (θ)
+Binary HEALPix mask ( Nside)
+Noise Map σ2
+n(θi)
+= σ2
+e / (neff (θi) Apix)
+Pixelize to HEALPix
+Observed Data y
+y =
+[
+γM
+2,ℓ1 m1 , γ M
+− 2,ℓ1 m1
+]T
+length 2(ℓmax + 1)2
+y = A x + n
+x = [ −κℓm] , n ∼ N (0, N)
+OPERATION A
+Matrix Definition
+A =
+(
++2Mℓ1m1,ℓm
+−2Mℓ1m1,ℓm
+)
+dimension: 2(ℓmax +1)2 × (ℓmax +1)2
+Matrix-Free Evaluation of A ·v
+ γ± 2,ℓm= −vℓm [set spin- ±2, harmonic]
+ γ± 2,ℓm
+SHT− 1
+− − − − − − →γ(θ) [harmonic → pixel]
+ M (θ) ·γ(θ) [diag mask, pixel]
+ γM (θ)
+SHT
+− − − − →y′= A ·v [pixel → harmonic]
+ADJOINT OPERATION AT
+Matrix Definition
+AT =
+(
++2MT
+ℓ1m1,ℓm , −2MT
+ℓ1m1,ℓm
+)
+dimension: (ℓmax +1)2 × 2(ℓmax +1)2
+Matrix-Free Evaluation of AT ·u
+ u± 2,ℓm
+SHT− 1
+− − − − − − →u(θ) [harmonic → pixel]
+ M (θ) ·u(θ) [diag mask, pixel]
+ uM (θ)
+SHT
+− − − − →γ± 2,ℓm [pixel → harmonic]
+ γ± 2,ℓm→ aE,ℓm [E/B decomposition]
+y
+Normal Equations: H ˆx = b
+H ≡ ATN− 1A + λeff I
+b ≡ ATN− 1y (computed once)
+(Preconditioned) CG ITERATION LOOP
+Initialize
+x0 = 0 , r0 = b , p0 = P− 1r0
+Preconditioner P
+P = diag
+[
+(ATN − 1A)ℓℓ
+]
+≈ fsky + λ
+Matrix-Free Product
+qk = H ·pk = ATN −1A ·pk + λ eﬀ pk
+= AT(N − 1(A ·pk)) + λeff pk
+KEY: Only O(ℓ2
+max) storage
+No dense matrix ever formed or stored
+Step size & update solution
+αk = rT
+k zk / p T
+k qk , xk+1 = xk + αk pk
+Update residual
+rk+1 = rk − αk qk
+∥rk∥/ ∥b∥
+< ϵ ?
+No
+Yes
+A
+AT
+Scale-Splitting Strategy
+κrec = κlarge + κsmall
+AKRA-sphere ( ℓ ≲ ℓsplit)
++ AKRA-flat ( ℓ ≳ ℓsplit)
+Converged ˆκℓm
+κ harmonics
+Inverse SHT
+κ E Map
+Unbiased E-mode convergence
+Prior-free estimator
+κB Map
+Systematic diagnostic
+FIG. 1. Overview of the AKRA 3.0 matrix-free mass-mapping workflow. Input shear catalogs and survey metadata (column 1) are pixelized
+into spin-weighted spherical-harmonic data vectors. The operatorAand its adjointA T (column 2) are never stored as dense matrices but
+applied implicitly via paired spherical harmonic transforms and masking operations. A (preconditioned) conjugate-gradient solver (column 3)
+iterates the normal equationsH· ˆ𝒙=𝒃to convergence. The output (column 4) is an unbiased, prior-free maximum-likelihood convergence
+map, with𝜅 𝐵 serving as a systematics diagnostic. The computational cost of the direct approach (AKRA 2.0) is contrasted with the AKRA 3.0
+in Fig. 2, which demonstrates a memory reduction by a factor of∼10 6 at𝑁 side =2048 alongside the corresponding speed benchmarks.
+2. AKRA 3.0: matrix-free Inversion framework
+The AKRA 3.0 framework overcomes traditional compu-
+tational hurdles through a fundamental shift in perspective.
+It combines three interdependent elements to entirely bypass
+explicit storage costs and eliminate the need for direct matrix
+inversion.
+1.Conjugate gradient (CG).Rather than directly invert-
+ing the dense matrixH, AKRA 3.0 solves the linear
+systemH ˆ𝒙=𝒃iteratively. The key advantage of the
+CG method is that it never actually requires the matrix
+Hitself. At each step, it only needs the result of mul-
+tiplyingHby a trial vector𝒗. This changes the core
+problem from “how do we store and invertH” to the
+much easier “how do we evaluateH𝒗”.
+2.Reordering the operator chain.Matrix multi-
+plication is inherently associative. Therefore, the
+productA TN−1A𝒗can be evaluated from right to
+left as a sequence of discrete actions on the vector
+AT N −1 (A(𝒗))  instead of first multiplying the un-
+derlying matrices together. We never form the dense
+productA TN−1A. Instead, each operator smoothly acts
+on the vector produced by the previous step.
+3.A matrix-free operator.Each actionA(𝒗)is per-
+formed as a short chain of low-cost steps, a diagonal
+multiplication, an inverse SHT, another diagonal mul-
+tiplication, and a forward SHT (diagonal→SHT −1 →
+diagonal→SHT), which we detail in the discussion of
+the storage problem below. Multiplying by the mask
+matrix in harmonic space is a convolution, and a convo-
+lution in one domain is exactly a pointwise product in
+the conjugate domain. If we write𝑀(𝜃)for the mask in
+pixel space and⊙for the pointwise product, the physical
+action becomes
+M𝒗=SHT
+
+𝑀(𝜃) ⊙SHT −1 (𝒗)
+
+.(13)
+The inverse transform moves the vector to the space
+where the mask is diagonal, the multiplication is a single
+pointwise product, and the forward transform moves the
+result back. AKRA 3.0 follows a straightforward rule of
+keeping each operation in the space where it is physically
+simplest. The mask is simplest in pixel space, so we
+
+B From AKRA 2.0 to AKRA 3.0 5
+apply it there. The physical lensing relation is simplest
+in harmonic space where it just scales each mode by a
+kernel, so we apply it there.
+These three pieces interlock. The iterative CG solver simpli-
+fies the requirement to just the actionH𝒗. Reordering supplies
+that action as a sequence of operator applications rather than
+a stored matrix. Factoring the process into transforms and
+diagonal multiplications scales down the computational com-
+plexity of each application dramatically, limited only by the
+theoretical bound of the underlying spatial transform, such
+asO (𝑁log𝑁)for flat sky FFTs orO (𝑁 3/2)for SHTs. The
+remainder of this subsection develops the two problems this
+solves in turn: thestorageproblem (how to evaluateH𝒗with-
+out the matrix) and theinversionproblem (how to solve for ˆ𝒙
+without a direct inverse).
+a.The storage problem.The central insight of
+AKRA 3.0 is that iterative solvers do not requireHitself,
+they require only its actionHon a trial vector𝒗. The matrix
+His dense because the survey mask couples every harmonic
+mode to every other. But the physical origin of this coupling
+is simple: it is a pointwise multiplication by the mask in pixel
+space. This operation is diagonal, it multiplies each pixel by
+zero or one. The coupling appears only because AKRA 2.0
+translates this pixel-space multiplication into harmonic space,
+where a pointwise product becomes a dense convolution and
+represented by the transfer matrix ±2Mℓ1𝑚1, ℓ𝑚 with𝑂(ℓ 4
+max)
+elements.
+Instead, AKRA 3.0 bypasses this translation. Rather than
+storingAas an explicit matrix, it replaces the matrix-vector
+producty=Axwith a functional evaluationy=A(𝒙), where
+the operatorAperforms exactly the same mapping, from
+convergence harmonics to observed masked shear, but through
+a sequence of four operations (diagonal→SHT−1 →diagonal
+→SHT) rather than a stored array of numbers:
+•Harmonic space (diagonal 1): multiply the convergence
+harmonics𝜅 ℓ𝑚 by the KS relation𝐷 ℓ to obtain the spin-
+±2 shear harmonics𝛾 ±2, ℓ𝑚 =−𝐷 ℓ 𝜅ℓ𝑚.
+•Harmonic→pixel (SHT −1): transform𝛾 ±2, ℓ𝑚 to pixel
+space via an inverse spin-2 spherical harmonic transform
+2 to obtain the shear field𝛾( ˆ𝜽).
+•Pixel space (diagonal): multiply by the survey
+mask𝑀(𝜽)and the inverse noise covariance 3 N−1, both
+diagonal in pixel space.
+1 An operation is diagonal when its matrix representation has nonzero values
+only on the main diagonal. Unlike a general𝑁×𝑁matrix that mixes all
+elements of a vector and scales asO (𝑁 2 ), a diagonal matrix decouples the
+system completely. The operation simplifies into an independent pointwise
+product for each entry, dropping the computational cost dramatically toO (𝑁).
+2 We describe the spherical case throughout, as appropriate for full-sky surveys.
+AKRA 3.0 applies equally to flat-sky analyses by replacing each SHT with
+a 2D FFT; the four-step structure ofAand the CG solver are otherwise
+unchanged.
+3 The inverse noise covarianceN −1 is diagonal in pixel space (for uncorrelated
+shape noise) and enters the normal-equation operatorA TN−1Aonly once. It
+may therefore be incorporated equivalently either (i) as a single pixel-space
+•Pixel→Harmonic (SHT): transform masked shear field
+to spherical harmonic space.
+The adjointA T reverses this sequence. Each step is ei-
+ther a diagonal multiplication at cost𝑂(ℓ 2
+max)or an SHT at
+cost𝑂(ℓ 3
+max), so the action of the full normal-equation opera-
+tor on any vector,
+H·𝒗=A T
+N −1 A(𝒗) 
+,(14)
+is evaluated at only𝑂(ℓ 2
+max)storage. The result is mathemat-
+ically identical to multiplying by the explicit matrixH: the
+mode coupling is fully captured, but never written down as a
+matrix.
+b.The inversion problem.With no explicit matrix,
+direct inversion methods such as Cholesky decomposition
+or eigendecomposition are no longer available. Instead,
+AKRA 3.0 solves the normal equations iteratively using CG
+method. CG refines a trial vector𝒗toward the solution ˆ𝒙by
+repeatedly applying the operatorHto the current iterate:
+H· ˆ𝒙=𝒃,𝒃≡A T (N −1𝒙),(15)
+which is evaluated through the matrix-freeAandA T operator
+sequence described above. Each evaluation costsO (𝑁 3/2),
+dominated by the SHTs. BecauseHis symmetric positive-
+definite, CG is guaranteed to converge 4. For the DES Y3
+footprint, a relative residual of𝜖=10 −3 is reached in𝑁 iter ∼
+80 iterations, giving a total cost ofO (𝑁 iter𝑁3/2), which is
+roughly six orders of magnitude more efficient than theO (𝑁3)
+cost required for direct inversion5.
+The iterative solution of normal equations via the (precon-
+ditioned) CG method is well established in CMB data anal-
+ysis [56–58], where it is used to handle the large volume of
+time-ordered data. The computational context differs from
+weak lensing. In CMB experiments, the pointing matrix is ex-
+tremely sparse and presents manageable storage requirements,
+meaning the CG strategy is motivated by data volume rather
+than operator density. Weak lensing presents the exact oppo-
+site scenario. The pixelized shear data vector is modest, yet
+multiplication folded into one of the two operators, here we absorb it intoA,
+leavingA T to apply only the transpose of the mask and harmonic-space
+operations; or (ii) split symmetrically asN −1/2 applied inside bothAand
+AT. Both choices yield numerically identical matrix–vector products and
+hence identical CG iterates.
+4 The standard convergence bound for preconditioned CG gives, after𝑘itera-
+tions [54],
+∥𝒓 𝑘 ∥
+∥𝒓 0 ∥ ≤2
+ √𝜅−1√𝜅+1
+𝑘
+,(16)
+where𝜅≡𝜅(P −1 H)is the condition number of the preconditioned operator
+and𝒓 𝑘 is the residual at iteration𝑘. Requiring the relative residual to fall
+below a tolerance𝜖, the number of iterations scales as
+𝑁iter ∼ 1
+2
+√𝜅ln(2/𝜖).(17)
+5 Here𝑁denotes the total number of pixels or modes, with𝑁∼ℓ 2
+max on the
+sphere and𝑁∼𝑛 2 on a flat𝑛×𝑛grid. The standard separated SHT scales
+asO (𝑁 3/2 ), while fast algorithms reachO (𝑁log 2 √
+𝑁)and flat-sky FFTs
+achieveO (𝑁log𝑁). The SHTs can also be GPU-accelerated [55].
+
+B From AKRA 2.0 to AKRA 3.0 6
+AKRA 2.0  direct
+form the whole matrix, invert it
+N = (ℓmax+1)2
+dense  every mode coupled
+held in memory
+runtime cost
+storage grows as N 2; runtime is dominated by
+the ∼ 2N 3 product and inversion.
+AKRA 2.0  scale-split
+split the sky, solve blocks in turn
+split stitch
+each block in turn,  × Npatch
+held in memory
+runtime cost
+each block is small, so memory stays low,
+but the blocks pile up and run one by one.
+AKRA 3.0 
+ matrix-free CG solve, three nested speed-ups
+held in memory
+runtime cost
+nothing dense is ever stored;
+the same cheap transforms are reused.
+the full N × N matrix  ⇒ O(N 2)
+matrix product, then invert  ⇒ O(N 3)
+one block at a time  ⇒  modest
+Npatch dense solves, sequential
+a few length-N vectors  ⇒ O(N)
+Niter applies  ⇒ O(NiterN 3/2)
+now
+Conjugate gradient
+needs only Av, never A
+ ¹
+R
+eorder the chain
+no dense N×N product Matrix-free operator
+O(N log N)/apply, O(N) m
+em
+O(N 3)
+O(NlogN)
+per CG solve
+FFT
+128 2048 4096
+Nside
+10 2
+10 1
+100
+101
+102
+103
+104
+105
+106
+107
+108
+peak memory [GB]
+single-node
+RAM ( ∼ 1 TB)
+Memory
+35 GB
+2.3 PB
+36 PB
+12.6 GB
+0.9 TB
+3.6 TB
+2 MB
+0.5 GB
+2 GB
+128 2048 4096
+Nside
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+1010
+1011
+1012
+wall-clock [s]
+1 h
+1 day
+1 yr
+Wall-clock time
+15 min
+460 yr
+30,000 yr
+15 min
+5 day
+20 day
+0.1 s
+20 min
+7 h
+hatched bars: infeasible on a single node
+AKRA 2.0 (direct) AKRA 2.0 (scale-split) AKRA 3.0 
+FIG. 2. Computational comparison of three methods for solving the normal equations.Top:Conceptual diagram illustrating how the normal
+equations are solved. The approaches differ in memory and speed based on the object held in memory and the operation that dominates runtime:
+the full dense𝑁×𝑁matrix (direct), many small dense blocks processed sequentially (scale-split), or a few length-𝑁vectors paired with a
+reused operator (matrix-free), where𝑁=(ℓ max +1) 2.Bottom:Scaling of peak memory and wall-clock time versus resolution. By reducing
+the memory footprint by∼4×10 6 at𝑁 side =2048 and∼2×10 7 at𝑁 side =4096, AKRA 3.0 allows the full reconstruction to be run on a single
+compute node. Specific computational requirements can be estimated using the code available on GitHub.
+the matrixHis severely dense in harmonic space due to mask
+induced mode coupling. What makes the functional operator
+approach viable here is the factorization of this dense operator
+into adiagonal→SHT −1 →diagonal→SHTsequence, a
+structure with no direct analogue in CMB mapmaking and not
+previously exploited for mass mapping.
+We now describe the four stages of the AKRA 3.0 pipeline.
+Figure 1 provides a schematic overview. Because the sur-
+vey is inherently limited to a partial-sky footprint, causing the
+normal-equation operatorHcan become ill-conditioned. Fol-
+lowing AKRA 2.0 [49], we stabilize the inversion by adding
+a regularization term𝜆 effItoH, the regularized maximum-
+likelihood estimator (Eq. 10) then takes the form
+ˆx=  ATN−1A+𝜆 eff I −1 ATN−1 y,(18)
+which AKRA 3.0 evaluates iteratively through the matrix-free
+CG procedure described above. We adopt a constant regular-
+ization parameter of𝜆=10 −3 throughout the reconstruction.
+This threshold ensures that the regularization remains negli-
+
+B From AKRA 2.0 to AKRA 3.0 7
+TABLE I. Summary of the DES Y3 shear samples analyzed with AKRA 3.0. For each sample we list the photometric redshift range, the
+HEALPix resolution𝑁 side and corresponding pixel area𝐴 pix used in the reconstruction, the meanMETACALIBRATIONshear response⟨𝑅⟩, the
+residual multiplicative shear-calibration bias𝑚applied as a power-spectrum correction (𝐶 𝜅 𝜅
+ℓ →𝐶 𝜅 𝜅
+ℓ /(1+𝑚) 2), the sample-averaged effective
+source density ¯𝑛eff, the mean effective galaxy count per pixel ¯𝑁eff =¯𝑛eff 𝐴pix, the adopted mask threshold𝑛 th and its per-pixel equivalent
+𝑁th =𝑛 th 𝐴pix, and the fractional information loss incurred by the mask cut. The two random-split samples are constructed from a galaxy-level
+random partition of the full shear catalog into two disjoint halves.
+Sample𝑧 phot range𝑁 side 𝐴pix 𝑎 ⟨𝑅⟩𝑚bias 𝑏 ¯𝑛eff ¯𝑁eff 𝑛th 𝑁th Info. loss𝑐
+[arcmin2] [arcmin −2] [pix −1] [arcmin −2] [pix −1]
+Non-tomographic
+Total 0.00–1.50 2048 2.95 0.72−0.020 5.14 𝑎 15.16 2.0 5.9≲2%
+Random split A 0.00–1.50 2048 2.95 0.72−0.020 2.57 7.58 1.0 2.95≲2%
+Random split B 0.00–1.50 2048 2.95 0.72−0.020 2.57 7.58 1.0 2.95≲2%
+Tomographic
+Bin 1 0.00–0.36 1024 11.80 0.77−0.006 1.30 15.34 0.5 5.9≲2%
+Bin 2 0.36–0.63 1024 11.80 0.73−0.020 1.30 15.34 0.5 5.9≲2%
+Bin 3 0.63–0.87 1024 11.80 0.70−0.024 1.30 15.34 0.5 5.9≲2%
+Bin 4 0.87–2.00 1024 11.80 0.62−0.037 1.30 15.34 0.5 5.9≲2%
+𝑎 The DES Y3METACALIBRATIONcatalog contains 100,204,026 galaxies; after the photometric-redshift cut 0.0< 𝑧 phot <1.5 the non-tomographic sample
+retains 100,192,740 galaxies. The effective source density ¯𝑛eff depends on the pixelization resolution for the same reason that a measured coastline length
+depends on the ruler used: at𝑁 side =4096 (𝐴 pix ≈0.74 arcmin 2) the mask retains a slightly different set of pixels than at𝑁 side =2048 (𝐴 pix ≈2.95 arcmin 2),
+yielding ¯𝑛eff ≈5.90 arcmin −2 and ¯𝑛eff ≈5.14 arcmin −2, respectively. The specific value does not affect the reconstruction. Once𝑁 side is fixed, the mask, the
+per-pixel noise variance𝜎 2
+𝑛 (𝜃 𝑖 ), and all subsequent pipeline steps are computed self-consistently at that resolution.
+𝑏 For the tomographic bins,𝑚is the central value of the Gaussian prior on the per-bin multiplicative shear-calibration bias𝑚 1–𝑚4 adopted in the DES Y3
+cosmic-shear analyses [9, 10]. The non-tomographic sample uses a single representative value𝑚=−0.02.
+𝑐 Fractional information loss𝑓 loss ≡1−
+Í
+𝑖∈{𝑀=1} 𝑁eff (𝜃 𝑖 )
+Í
+𝑖 𝑁eff (𝜃 𝑖 ) .
+/uni00000016/uni00000013/uni00000013/uni00000083
+/uni00000016/uni00000014/uni00000018/uni00000083
+/uni00000016/uni00000016/uni00000013/uni00000083
+/uni00000016/uni00000017/uni00000018/uni00000083/uni00000013/uni00000083/uni00000014/uni00000018/uni00000083/uni00000016/uni00000013/uni00000083/uni00000017/uni00000018/uni00000083
+/uni00000019/uni00000013/uni00000083
+/uni0000001a/uni00000018/uni00000083
+/uni0000001c/uni00000013/uni00000083
+/uni00000010/uni00000019/uni00000013/uni00000083
+/uni00000010/uni00000018/uni00000013/uni00000083
+/uni00000010/uni00000017/uni00000013/uni00000083
+/uni00000010/uni00000016/uni00000013/uni00000083
+/uni00000010/uni00000015/uni00000013/uni00000083
+/uni00000010/uni00000014/uni00000013/uni00000083
+/uni00000013/uni00000083
+/uni00000035/uni00000014
+/uni00000035/uni00000015
+/uni00000035/uni00000016
+/uni00000003
+/uni00000013/uni00000011/uni00000013/uni00000015/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000014/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000014/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000014/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000014/uni00000018
+/uni00000013/uni00000011/uni00000013/uni00000015/uni00000013
+AKRA
+/uni00000035/uni00000014
+/uni00000035/uni00000015
+/uni00000035/uni00000016
+FIG. 3. Reconstructed convergence map of the DES Y3 weak-lensing data obtained with AKRA 3.0.Left:Full DES Y3 footprint, shown in
+equatorial coordinates.Right:Three 10 ◦ ×10 ◦ zoom-in regions along RA=30 ◦, at Dec=−5 ◦ (R1, top),−30 ◦ (R2, middle), and−55 ◦ (R3,
+bottom). The map is produced on a HEALPix grid with𝑁 side =2048 (pixel scale∼1.72 arcmin) up toℓ max =4096, and smoothed with a 6 ′
+Gaussian kernel for visualization. This represents the highest-resolution, prior-free convergence map of the DES Y3 footprint produced to date.
+gible for physical modes well-constrained by the data, while
+successfully mitigating numerical instabilities.
+The convergence rate of the CG method also depends on the
+condition number ofH+𝜆 effI, which naturally becomes quite
+large on a partial sky with spatially varying noise. To acceler-
+ate the iteration, we apply a preconditionerP≈ (H+𝜆 effI) −1
+constructed under the idealized assumption of a completely
+uniform sky. Incorporating the regularization term yields the
+exact form
+P≡  ⟨𝑀 2𝑁 −1⟩ +𝜆 eff
+ −1I,(19)
+where⟨ · ⟩denotes the pixel average over the full sphere. Con-
+
+B Pixelization 8
+ceptually, AKRA 3.0 thus starts each CG iteration from a
+KS-like inverse, then deploys the matrix-free operatorHto
+adjust that initial guess for the complex realities of mask cou-
+pling and inhomogeneity noise. ApplyingPinvolves just one
+scalar multiplication in harmonic space and therefore adds
+negligible cost to the overall computational loop.
+III. APPLICATION TO DES Y3 DATA
+We now apply AKRA 3.0 to the Dark Energy Survey Year 3
+(DES Y3) shear catalog. We first describe the data prepara-
+tion and pixelization (Secs. III A–III B), then present the recon-
+structed convergence maps (Sec. III C) and the resulting power
+spectra (Sec. III D). Table I summarizes the key properties of
+all samples analyzed in this work, including the photometric
+redshift ranges, HEALPix resolutions, shear calibration pa-
+rameters, effective source densities, mask thresholds, and the
+resulting information loss.
+A. Data and shear catalog
+The DES Y3 public shear catalog [6] contains approximately
+108 galaxies distributed over∼4143 deg 2 in the Southern
+sky. For each galaxy𝑗, the catalog provides two ellipticity
+components𝜖 𝑗
+1 and𝜖 𝑗
+2 measured with theMETACALIBRATION
+algorithm [6, 59], a per-galaxy inverse-variance weight𝑤𝑗, and
+photometric redshift information from theSOMPZscheme [60].
+We perform two classes of reconstruction. The baseline is
+a non-tomographic sample combining all sources with 0.0<
+𝑧phot <1.5, yielding a single high signal-to-noise convergence
+map. To exploit redshift information, we additionally split
+the catalog into the four fiducial DES Y3 tomographic bins
+spanning 0.0< 𝑧 phot <2.0 [60] and reconstruct each bin
+independently.
+B. Pixelization
+The catalog is binned onto a HEALPix grid at𝑁 side =2048
+(∼1.72 ′ pixel scale) for the non-tomographic sample, and at
+𝑁side =1024 (∼3.44 ′) for each tomographic bin. The weight-
+averaged shear in each pixel is
+𝛾𝜈
+obs(𝜃 𝑖)=
+∑︁
+𝑗∈𝜃 𝑖
+𝑤 𝑗 𝜖 𝜈
+𝑗
+¯𝑅
+∑︁
+𝑗∈𝜃 𝑖
+𝑤 𝑗
+, 𝜈=1,2,(20)
+where𝑤 𝑗 is the per-galaxy weight and ¯𝑅is the mean
+METACALIBRATIONshear response (replaced by a bin-
+averaged⟨𝑅⟩ 𝑏 in the tomographic case; see Table I).
+The effective galaxy count per pixel,
+𝑁eff(𝜃 𝑖)=
+Í
+𝑗∈𝜃 𝑖 𝑤 𝑗
+2
+Í
+𝑗∈𝜃 𝑖 𝑤2
+𝑗
+,(21)
+determines the per-pixel noise variance entering the diagonal
+inverse-noise operatorN −1:
+𝜎2
+𝑛 (𝜃 𝑖)= 𝜎2
+𝑒
+𝑁eff(𝜃 𝑖) ,(22)
+where𝜎 𝑒 ≈0.26 is the per-component intrinsic shape disper-
+sion of the DES Y3 sample.
+Pixels with𝑁 eff(𝜃 𝑖)< 𝑁 th are masked:
+𝑀(𝜃 𝑖)=
+(
+1, 𝑁 eff(𝜃 𝑖) ≥𝑁 th,
+0,otherwise.
+(23)
+The threshold𝑁 th is chosen per sample (Table I) to exclude pix-
+els whose noise variance would dominate the reconstruction,
+while keeping the fractional information loss below∼2%.
+C. Convergence map reconstruction
+For all samples, the CG solver is initialized withx0 =0and
+iterated until the relative residual satisfies∥𝑟 𝑘 ∥/∥b∥<10 −3,
+with a regularization parameter𝜆=10 −3.
+1. Non-tomographic map
+The reconstruction uses𝑁 side =2048, ℓ max =4096 and
+converges in∼80 CG iterations, taking∼0.5 hour on a single
+72-CPU compute node. For comparison, direct inversion at
+this resolution would be infeasible (Figure 2).
+Figure 3 shows the resulting𝐸-mode convergence map over
+the full DES Y3 footprint, with three 10 ◦ ×10 ◦ zoom panels.
+This is the highest-resolution, prior-free convergence map of
+the DES Y3 data produced to date.
+2. Tomographic maps
+Each of the four tomographic bins is reconstructed indepen-
+dently at𝑁 side =1024 up toℓ max =2048, using the bin-specific
+mask and effective number density. Figure 5 displays the four
+maps alongside the per-bin number density distributions and
+source redshift distributions𝑛(𝑧). The convergence amplitude
+increases from the lowest to the highest redshift bin, consistent
+with the growth of the lensing kernel with source distance.
+D. Power spectrum results
+We extract the convergence power spectrum directly from
+the reconstructed maps and compare it with the standard KS
+estimator and with the theoreticalΛCDM prediction at the
+fiducialPlanck2018 cosmology [61]. The fiducial curve is
+shown for reference only: we do not fit a lensing amplitude or
+perform cosmological inference here. A quantitative fit would
+require a reliable covariance that includes cosmic variance,
+
+D Power spectrum results 9
+/uni00000014/uni00000013/uni0000001c
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni0000001a
+/uni00000014/uni00000013/uni00000019
+/uni00000014/uni00000013/uni00000018
+ℓ(ℓ + 1)Cℓ /(2π)
+/uni00000033/uni0000004f/uni00000044/uni00000051/uni00000046/uni0000004e/uni00000003/uni00000015/uni00000013/uni00000014/uni0000001b
+/uni00000024/uni0000002e/uni00000035/uni00000024
+/uni0000002e/uni00000036
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+ℓ
+/uni00000014/uni00000013/uni0000001c
+/uni00000014/uni00000013/uni0000001a
+/uni00000014/uni00000013/uni00000018
+ℓ(ℓ + 1)C BB
+ℓ /(2π)
+/uni00000024/uni0000002e/uni00000035/uni00000024/uni00000003B
+/uni0000002e/uni00000036/uni00000003B
+/uni00000014/uni00000013/uni0000001c
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni0000001a
+/uni00000014/uni00000013/uni00000019
+/uni00000014/uni00000013/uni00000018
+ℓ(ℓ + 1)(Cℓ )/(2π)
+/uni00000033/uni0000004f/uni00000044/uni00000051/uni00000046/uni0000004e/uni00000003/uni00000015/uni00000013/uni00000014/uni0000001b
+/uni00000024/uni0000002e/uni00000035/uni00000024
+/uni0000002e/uni00000036
+/uni00000024/uni0000002e/uni00000035/uni00000024/uni00000003/uni0000000bCℓ − Nℓ/uni0000000c
+/uni0000002e/uni00000036/uni00000003/uni0000000bCℓ − Nℓ/uni0000000c
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+ℓ
+/uni00000014/uni00000013/uni0000001c
+/uni00000014/uni00000013/uni0000001a
+/uni00000014/uni00000013/uni00000018
+ℓ(ℓ + 1)C BB
+ℓ /(2π)
+/uni00000024/uni0000002e/uni00000035/uni00000024/uni00000003B
+/uni00000024/uni0000002e/uni00000035/uni00000024/uni00000003Nℓ
+/uni0000002e/uni00000036/uni00000003B
+/uni0000002e/uni00000036/uni00000003Nℓ
+FIG. 4. Non-tomographic power spectra of the DES Y3 convergence map reconstructed by AKRA 3.0 (red) and KS (blue), compared with the
+theoreticalΛCDM prediction at the fiducial Planck 2018 cosmology (gray dashed curve), shown for reference rather than as a best-fit model.
+Left:cross-power spectrum𝐶 𝜅𝐴𝜅𝐵
+ℓ between two independent convergence maps reconstructed from disjoint, randomly split sub-samples of
+the DES Y3 source catalog. Because the shape-noise realizations of the two sub-samples are statistically independent, the cross-spectrum is
+free of shape-noise bias at; error bars are estimated from 10 paired noise realizations.Right:auto-power spectrum𝐶 𝜅 𝜅
+ℓ of the map from the
+full sample. The solid lines is the raw spectrum (signal plus shape noise) and the points show the spectrum after subtracting the estimated
+shape-noise bias𝑁 ℓ; error bars are from 50 realizations. Noise realizations are built by shuffling the observed shear among the unmasked
+pixels.
+intrinsic alignments, and marginalization over nuisance pa-
+rameters such as the multiplicative bias𝑚; building this from
+full pipeline simulations is left to a subsequent work. The goal
+here is a map-level demonstration that prior-free two-point
+measurements can be obtained directly from the AKRA 3.0
+maps.
+The reconstructed map power spectrum inherently contains
+both the cosmological signal and shape noise. We employ
+two distinct methods to isolate the physical signal. The clean
+way is to cross-correlate two maps whose shape-noise realiza-
+tions are independent, so the cross-spectrum requires no noise
+model and stands on its own. The alternative approach auto
+correlates a single map and subtracts an estimated shape noise
+bias𝑁 ℓ. While the auto spectrum achieves higher statistical
+precision, its accuracy depends entirely on the accuracy of the
+𝑁ℓ estimate.
+We adopt the cross spectrum as our primary measurement
+and use the auto spectrum as a supporting check. To esti-
+mate𝑁 ℓ and compute all error bars, we establish a baseline
+pixel shuffling procedure. We generate 50 independent noise
+realizations by randomly shuffling the observed shear values
+among the unmasked pixels and passing each randomized cat-
+alog through the full reconstruction pipeline. This shuffling
+destroys the spatial correlations of the true cosmological sig-
+nal while preserving the exact survey geometry and overall
+noise level, providing an empirical estimate of the background
+shape noise. Since the shape noise in independent maps is
+uncorrelated, this bias vanishes by construction in the cross
+spectrum, allowing its error estimates to converge rapidly (10
+realizations in Figs. 4 and 6).
+1. Non-tomographic power spectra
+Figure 4 shows the two measurements. For the cross-
+spectrum (left) we randomly split the source catalog into two
+disjoint halves, reconstruct each independently and correlate
+the two maps (𝐶 𝜅𝐴𝜅𝐵
+ℓ ). For the auto-spectrum (right) we re-
+construct a single map from the full sample and subtract the
+shape-noise bias (𝐶 𝜅 𝜅
+ℓ ).
+The central result is the cross spectrum. The AKRA 3.0
+points follow the fiducialΛCDM curve across the measured
+multipole range, whereas KS lies far below it. The KS deficit
+is the expected signature of mask-induced mode coupling, KS
+leaks power out of the survey footprint, and removing it is pre-
+cisely what the AKRA forward operatorAis built to do. The
+mode coupling that motivates the method is therefore visible
+directly at the level of𝐶 ℓ. The auto-spectrum reaches higher
+signal-to-noise, but after subtracting the shuffling estimate of
+𝑁ℓ it lies∼10% below the cross-spectrum. This gap reflects
+
+D Power spectrum results 10
+/uni00000019/uni00000013
+/uni00000017/uni00000013
+/uni00000015/uni00000013
+/uni00000013/uni00000015/uni00000013/uni00000017/uni00000013/uni00000019/uni00000013/uni0000001b/uni00000013/uni00000014/uni00000013/uni00000013
+/uni00000035/uni00000024/uni00000003/uni0000003e/uni00000047/uni00000048/uni0000004a/uni00000040/uni00000019/uni00000013
+/uni00000018/uni00000013
+/uni00000017/uni00000013
+/uni00000016/uni00000013
+/uni00000015/uni00000013
+/uni00000014/uni00000013
+/uni00000013
+/uni00000027/uni00000048/uni00000046/uni00000003/uni0000003e/uni00000047/uni00000048/uni0000004a/uni00000040
+/uni00000013/uni00000011/uni00000015
+/uni00000013/uni00000011/uni00000017
+/uni00000013/uni00000011/uni00000019
+/uni00000013/uni00000011/uni0000001b
+/uni00000014/uni00000011/uni00000013
+/uni00000035/uni00000048/uni00000047/uni00000056/uni0000004b/uni0000004c/uni00000049/uni00000057/uni00000003z
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000014/uni00000003/uni00000003¯z = /uni00000013/uni00000011/uni00000016/uni0000001a
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000015/uni00000003/uni00000003¯z = /uni00000013/uni00000011/uni00000018/uni00000018
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000016/uni00000003/uni00000003¯z = /uni00000013/uni00000011/uni0000001a/uni00000018
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000017/uni00000003/uni00000003¯z = /uni00000013/uni00000011/uni0000001c/uni00000017
+n(z)
+/uni0000001a/uni00000011/uni00000018/uni00000014/uni00000013/uni00000011/uni00000013/uni00000014/uni00000015/uni00000011/uni00000018/uni00000014/uni00000018/uni00000011/uni00000013/uni00000014/uni0000001a/uni00000011/uni00000018/uni00000015/uni00000013/uni00000011/uni00000013
+/uni00000028/uni00000049/uni00000049/uni00000048/uni00000046/uni00000057/uni0000004c/uni00000059/uni00000048/uni00000003/uni00000051/uni00000058/uni00000050/uni00000045/uni00000048/uni00000055/uni00000003/uni00000047/uni00000048/uni00000051/uni00000056/uni0000004c/uni00000057/uni0000005c/uni00000003Neff/uni00000003
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000014/uni00000003
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000015/uni00000003
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000016/uni00000003
+/uni00000025/uni0000004c/uni00000051/uni00000003/uni00000017/uni00000003
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000019
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000017
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000015
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000013
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000015
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000017
+/uni00000013/uni00000011/uni00000013/uni00000013/uni00000019
+/uni00000026/uni00000052/uni00000051/uni00000059/uni00000048/uni00000055/uni0000004a/uni00000048/uni00000051/uni00000046/uni00000048/uni00000003/uni00000003
+/uni00000036/uni00000052/uni00000058/uni00000055/uni00000046/uni00000048/uni00000003/uni00000056/uni00000044/uni00000050/uni00000053/uni0000004f/uni00000048/uni00000003/uni00000044/uni00000051/uni00000047/uni00000003/uni00000055/uni00000048/uni00000047/uni00000056/uni0000004b/uni0000004c/uni00000049/uni00000057/uni00000003/uni00000045/uni0000004c/uni00000051/uni00000051/uni0000004c/uni00000051/uni0000004a/uni00000035/uni00000048/uni00000046/uni00000052/uni00000051/uni00000056/uni00000057/uni00000055/uni00000058/uni00000046/uni00000057/uni00000048/uni00000047/uni00000003/uni00000046/uni00000052/uni00000051/uni00000059/uni00000048/uni00000055/uni0000004a/uni00000048/uni00000051/uni00000046/uni00000048/uni00000003/uni00000003ˆ E(θ)
+FIG. 5. Tomographic AKRA 3.0 reconstruction of the DES Y3 weak-lensing data across the four source redshift bins.Left:Three-dimensional
+tomographic volume representation. Four effective galaxy number maps𝑁 eff(𝜃 𝑖)(𝑁 side =1024) are displayed as horizontal slices within a
+box spanned by right ascension (RA), declination (Dec), and photometric redshift𝑧, with the vertical axis indicating the mean redshift of each
+tomographic bin. The corresponding source redshift distributions𝑛(𝑧)are shown to the right, illustrating the radial selection of each bin.Right:
+Reconstructed convergence maps𝜅 𝐸 for each bin on the DES Y3 footprint, shown with a common color scale (red/blue: over-/under-densities
+of projected matter).The amplitude of𝜅 𝐸 increases with source redshift due to the extended lensing path and integrated lensing kernel. Maps
+are computed at𝑁 side =1024 (𝐴 pix ≃11.8 arcmin 2) up toℓ max =2048 and smoothed with a 30 ′ Gaussian kernel for visualization.
+the noise model rather than the map: shuffling the observed
+shear scrambles the spatial pattern ofN −1 that sets the mask-
+induced mode coupling, and the shuffled values still carry the
+signal together with the shape noise, so the estimated𝑁 ℓ is
+biased high and its subtraction removes part of the signal.
+The cross-spectrum also sits a few percent below the fiducial
+curve6. This is consistent with known systematics that are not
+modeled here. The DES Y3 cosmic shear analysis prefers a
+definitively lower amplitude of matter fluctuations than Planck,
+with𝑆 DESY3
+8 ≃0.776 versus𝑆 Planck
+8 ≃0.832 [61, 62]. If the true
+convergence field on the DES Y3 footprint reflects this local
+cosmology, comparing our maps to the fiducial Planck predic-
+tion naturally yields a lower amplitude. Beyond this intrinsic
+cosmological difference, the measured power is also influ-
+enced by additional unmodeled systematic effects. These in-
+clude residual multiplicative shear calibration biases [38, 59],
+photometric redshift errors [60], and effects such as intrinsic
+alignments and baryonic feedback [63–65]. Because this map
+level demonstration does not fully model these effects, they
+introduce additional scatter that can shift the final amplitude.
+6 Although we do not perform cosmological inference here, the offset is conve-
+niently summarized by a single amplitude: scaling the fiducial spectrum by
+a constant𝐴 𝐿 and fitting the binned cross-bandpowers over 10< ℓ <2000
+by inverse-variance-weighted least squares, with errors from the noise real-
+izations, gives𝐴 𝐿 ≃0.97. We quote this only as a one-number description
+of the offset, not as a measurement of the lensing amplitude.
+2. Tomographic power spectra
+From the four reconstructed tomographic maps, we extract
+all ten independent power spectra𝐶𝜅𝑖 𝜅 𝑗
+ℓ (1≤𝑖≤𝑗≤4), which
+are displayed in Fig. 6.
+The high-redshift bins give the cleanest test. Forℓ≳200
+the bin-3 and bin-4 spectra, together with the high signal-
+to-noise off-diagonal cross-spectra, track the fiducialΛCDM
+curve across the measured multipole range. This strong align-
+ment serves as a robust validation of the tomographic maps,
+proving them to be rigorous, independent substrates highly
+capable of supporting future cosmological inference. The two
+lowest-redshift bins (bins-1 and bin-2) lie below the fiducial
+curve nearℓ∼200 and carry the largest uncertainties, con-
+sistent with the non-tomographic case and with the similar
+systematics.
+Any residual scatter and amplitude deficits remain con-
+sistent with the unmodeled systematic effects in the non-
+tomographic analysis (Sec. III D 2). In this tomographic case,
+two specific effects acquire additional bin-dependent struc-
+ture. First, the multiplicative bias is corrected per bin using
+the fixed𝑚 𝑖 values listed in Table I, applied as determinis-
+tic point corrections rather than marginalized over a Gaussian
+prior; thus, residual uncertainties in𝑚 𝑖 are not yet propagated
+into the error budget. Second, photometric-redshift errorsΔ𝑧 𝑖
+propagate directly into each per-bin lensing kernel. A com-
+prehensive and joint treatment of these systematics alongside
+the full tomographic covariance is reserved for future work.
+
+11
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni00000019
+z1/uni00000010z1
+/uni0000003e/uni00000013/uni00000011/uni00000013/uni00000013/uni0000000f/uni00000013/uni00000011/uni00000016/uni00000019/uni0000000c
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni00000019
+z1/uni00000010z2
+ z2/uni00000010z2
+/uni0000003e/uni00000013/uni00000011/uni00000016/uni00000019/uni0000000f/uni00000013/uni00000011/uni00000019/uni00000016/uni0000000c
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni00000019
+z1/uni00000010z3
+ z2/uni00000010z3
+ z3/uni00000010z3
+/uni0000003e/uni00000013/uni00000011/uni00000019/uni00000016/uni0000000f/uni00000013/uni00000011/uni0000001b/uni0000001a/uni0000000c
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+/uni00000014/uni00000013/uni0000001b
+/uni00000014/uni00000013/uni00000019
+z1/uni00000010z4
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+z2/uni00000010z4
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+z3/uni00000010z4
+/uni00000014/uni00000013/uni00000014
+/uni00000014/uni00000013/uni00000015
+/uni00000014/uni00000013/uni00000016
+z4/uni00000010z4
+/uni0000003e/uni00000013/uni00000011/uni0000001b/uni0000001a/uni0000000f/uni00000015/uni00000011/uni00000013/uni00000013/uni0000000c
+/uni00000030/uni00000058/uni0000004f/uni00000057/uni0000004c/uni00000053/uni00000052/uni0000004f/uni00000048/uni00000003ℓ
+ℓ(ℓ + 1)(C i j
+ℓ )/(2π)
+/uni00000024/uni0000002e/uni00000035/uni00000024
+/uni00000033/uni0000004f/uni00000044/uni00000051/uni00000046/uni0000004e/uni00000003/uni00000015/uni00000013/uni00000014/uni0000001b/uni00000003
+FIG. 6. Tomographic auto- and cross-power spectra of the four DES Y3 convergence maps reconstructed by AKRA 3.0 (red points), compared
+with the theoreticalΛCDM prediction at the fiducial Planck 2018 cosmology (gray dashed curves), shown for reference rather than as a best-fit
+model. The 4×4 panel matrix displays all ten independent bin pairs(𝑖, 𝑗)with 1≤𝑖≤𝑗≤4: auto-spectra𝐶 𝜅𝑖 𝜅𝑖
+ℓ on the diagonal and cross-
+spectra𝐶
+𝜅𝑖 𝜅 𝑗
+ℓ off-diagonal. Auto-spectra carry a shape-noise bias𝑁 𝑖𝑖
+ℓ that is estimated and subtracted with the per-bin pixel-shuffling procedure
+of Sec. III D 2 (error bars from 50 noise realizations); cross-spectra between distinct bins are free of shape-noise bias at the ensemble-mean
+level because the shape-noise realizations of different bins are statistically independent.
+
+12
+IV . CONCLUSIONS AND DISCUSSIONS
+The progression from AKRA 2.0 to AKRA 3.0 represents a
+transition from solving the inverse problem by linear algebra
+to solving it by linear operators. The maximum-likelihood
+inverse problem (Eq. 9) was already solved at the level of
+physics in AKRA 2.0 [49]; what changes in AKRA 3.0 is the
+recognition that one need not storeHin order to invert it. Re-
+casting the normal equation as the action of a functional oper-
+atorH=A T N −1 Aand pairing it with a conjugate-gradient
+solver collapses storage fromO (𝑁 2)toO (𝑁)without any
+prior assumption on the convergence field. This ensures that
+high-resolution, maximum-likelihood estimation is no longer
+constrained by the prohibitiveO (𝑁 2)storage andO (𝑁 3)in-
+version costs of explicit normal equations.
+We apply the AKRA 3.0 framework to the DES Y3
+METACALIBRATIONcatalog and reconstruct the matter distri-
+bution across the full survey footprint. Full-footprint recon-
+struction at𝑁 side =2048 can be performed on a single compute
+node without scale splitting. The convergence power spectra
+agree with the fiducialΛCDM prediction in both the non-
+tomographic and tomographic configurations, demonstrating
+that these maps can be used for cosmological inference rather
+than serving solely as visualizations.
+The power spectrum measured directly from the AKRA 3.0
+product is the first prior-free, map-level convergence two-point
+statistics from DES Y3 data, providing an independent cross-
+check of the standard shear-based two-point analysis. The
+AKRA 3.0 reconstruction preserves the full statistical infor-
+mation of the shear field while providing direct access to a
+broad range of map-level statistics, including one-point proba-
+bility distribution function, peak counts, Minkowski function-
+als, and wavelet scattering transforms. The map is equally well
+suited to cross-correlations with other projected fields, includ-
+ing CMB lensing, the Sunyaev–Zel’dovich Compton-𝑦field
+and X-ray surface brightness, which break parameter degen-
+eracies and self-calibrate systematic effects across independent
+probes.
+As weak-lensing surveys progress toward the Stage IV era,
+direct inversion becomes out of reach by orders of magnitude,
+AKRA 3.0 opens a practical route to accurate reconstruction
+at these scales. With reconstruction no longer the primary
+bottleneck, the focus shifts to how convergence maps can be
+most effectively utilized. Most weak-lensing inference today is
+built around the shear catalog: theory predictions, covariance
+models, scale cuts, and likelihood pipelines are all formulated
+at the level of shear two-point functions. As a direct probe of
+the projected matter distribution, convergence maps naturally
+support a broader range of analyses. The challenge ahead is to
+develop the framework needed to fully exploit this potential.
+ACKNOWLEDGEMENTS
+This work is supported by NSFC Grant No. 12503004,
+the National Key R&D Program of China (2023YFA1607800,
+2023YFA1607801), and the Fundamental Research Funds for
+the Central Universities. JY acknowledges the support from
+NSFC Grant No.12573006. This work made use of the Gravity
+Supercomputer at the Department of Astronomy, Shanghai
+Jiao Tong University.
+DATA A V AILABILITY STATEMENT
+The convergence maps will be made publicly available upon
+publication. Due to the large size of the dataset, the𝐵-mode
+maps and noise realizations are not included in the public
+release but will be shared upon reasonable request to the cor-
+responding author.
+Appendix A: Derivation of the B-mode
+The signal vector is extended tox=[𝜅 𝐸
+ℓ𝑚 , 𝜅 𝐵
+ℓ𝑚 ]T of
+length 2(ℓ max +1) 2, and the forward operatorAmaps this
+joint signal to the observed masked shear harmonicsy=
+[𝛾 𝑀
+2,ℓ𝑚 , 𝛾 𝑀
+−2,ℓ𝑚 ]T. Retaining both E- and B-mode contribu-
+tions in Eq. (7):
+ 
+𝛾 𝑀
+2, ℓ1𝑚1
+𝛾 𝑀
+−2, ℓ1𝑚1
+!
+=
+ 
+2Mℓ1𝑚1, ℓ𝑚 0
+0 −2Mℓ1𝑚1, ℓ𝑚
+!  
+−(𝑎 𝐸,ℓ𝑚 +𝑖 𝑎 𝐵,ℓ𝑚 )
+−(𝑎 𝐸,ℓ𝑚 −𝑖 𝑎 𝐵,ℓ𝑚 )
+!
+.
+(A1)
+Substituting the relations𝑎 𝐸,ℓ𝑚 =𝐷 ℓ 𝜅𝐸
+ℓ𝑚 and𝑎 𝐵,ℓ𝑚 =
+𝐷ℓ 𝜅 𝐵
+ℓ𝑚, the full forward operator takes the block form
+A=
+ 
+A𝐸 𝐸 A𝐸 𝐵
+A𝐵𝐸 A𝐵𝐵
+!
+,(A2)
+whereA 𝐸𝐸 =− 2M𝐷 ℓ,A 𝐸 𝐵 =−𝑖 2M𝐷 ℓ,A 𝐵𝐸 =
+−−2M𝐷 ℓ, andA 𝐵𝐵 =+𝑖 −2M𝐷 ℓ. The joint normal equa-
+tionsH ˆx=b, withH≡A TN−1A, then expand in 2×2 block
+form as
+ 
+H𝐸 𝐸 H𝐸 𝐵
+H𝐵𝐸 H𝐵𝐵
+!  
+ˆ𝜅𝐸
+ˆ𝜅𝐵
+!
+=
+ 
+b𝐸
+b𝐵
+!
+,(A3)
+where the four blocks ofHare
+H𝐸𝐸 =A T
+𝐸𝐸 N−1
++ A𝐸 𝐸 +A T
+𝐵𝐸 N−1
+− A𝐵𝐸 ,(A4)
+H𝐵𝐵 =A T
+𝐸 𝐵N−1
++ A𝐸 𝐵 +A T
+𝐵𝐵 N−1
+− A𝐵𝐵 ,(A5)
+H𝐸 𝐵 =H T
+𝐵𝐸 =A T
+𝐸 𝐸N−1
++ A𝐸 𝐵 +A T
+𝐵𝐸 N−1
+− A𝐵𝐵 .(A6)
+The off-diagonal blocksH𝐸 𝐵 andH 𝐵𝐸 are generically nonzero
+because the mask𝑀( ˆ𝜃)couples spin-+2 and spin-−2 modes
+of different(ℓ, 𝑚), mixing parity under the survey geometry.
+They vanish only for a full-sky survey (𝑀≡1), in which case
+the spin-weighted mask matrices reduce to the identity and the
+E- and B-mode sectors decouple exactly.
+a. Conditional B-mode solve.Given the converged E-
+mode solution ˆ𝜅𝐸 obtained from the E-mode normal equations,
+the lower block row of Eq. (A3) is
+H𝐵𝐸 ˆ𝜅𝐸 +H 𝐵𝐵 ˆ𝜅𝐵 =b 𝐵 .(A7)
+
+13
+Then the B-mode satisfies the reduced normal equation
+H𝐵𝐵 ˆ𝜅𝐵 =b 𝐵 −H 𝐵𝐸 ˆ𝜅𝐸
+|           {z           }
+˜b𝐵
+.(A8)
+The effective right-hand side ˜b𝐵 =b 𝐵 −H 𝐵𝐸 ˆ𝜅𝐸 subtracts the
+E-mode leakage contribution that arises from mask-induced E–
+B mixing: the off-diagonal blockH𝐵𝐸 transfers power from the
+known E-mode signal into the B-mode equation, and must be
+removed before solving for ˆ𝜅𝐵. Omitting this correction would
+yield B-mode estimates biased by mask-induced E-to-B leak-
+age, defeating the purpose of the systematic diagnostic. The
+operatorH 𝐵𝐵 and the correction termH 𝐵𝐸 ˆ𝜅𝐸 are both evalu-
+ated matrix-free through the same sequence of spin-weighted
+spherical harmonic transforms and diagonal multiplications
+described in Sec. II B, at a computational cost of a single
+forward–adjoint operator pair each.
+Since gravitational lensing produces no intrinsic B-modes
+to leading order [53], the converged ˆ𝜅𝐵 serves exclusively as a
+systematic diagnostic.
+[1] M. Bartelmann and P. Schneider, Phys. Rep.340, 291 (2001),
+astro-ph/9912508.
+[2] M. Kilbinger, Rep. Prog. Phys.78, 086901 (2015), 1411.0115.
+[3] R. Mandelbaum, Annu. Rev. Astron. Astrophys.56, 393 (2018),
+1710.03235.
+[4] D. H. Weinberg, M. J. Mortonson, D. J. Eisenstein, C. Hirata,
+A. G. Riess, and E. Rozo, Phys. Rep.530, 87 (2013), 1201.2434.
+[5] The Dark Energy Survey Collaboration, Mon. Not. R. Astron.
+Soc.460, 1270 (2016), 1601.00329.
+[6] M. Gatti et al., Mon. Not. R. Astron. Soc.504, 4312 (2021),
+2011.03408.
+[7] K. Kuijken et al., Astron. Astrophys.625, A2 (2019),
+1902.11265.
+[8] H. Aihara et al., Publ. Astron. Soc. Jpn.70, S4 (2018),
+1704.05858.
+[9] A. Amon et al., Phys. Rev. D105, 023514 (2022), 2105.13540.
+[10] L. F. Secco et al., Phys. Rev. D105, 023515 (2022), 2105.13544.
+[11] DES Collaboration, T. M. C. Abbott, M. Aguena, A. Alar-
+con, O. Alves, A. Amon, D. Anbajagane, F. Andrade-Oliveira,
+W. d’ Assignies, S. Avila, et al., arXiv e-prints arXiv:2602.10065
+(2026), 2602.10065.
+[12] Euclid Collaboration, arXiv e-prints p. arXiv:2405.13491
+(2024), 2405.13491.
+[13] LSST Science Collaboration, arXiv e-prints p. arXiv:0912.0201
+(2009), 0912.0201.
+[14] ˇZ. Ivezi´c et al., Astrophys. J.873, 111 (2019), 0805.2366.
+[15] D. Spergel et al., arXiv e-prints p. arXiv:1503.03757 (2015),
+1503.03757.
+[16] Y. Gong, X. Liu, Y. Cao, X. Chen, Z. Fan, R. Li, X. D. Li, Z. Li,
+X. Zhang, and H. Zhan, ASTROPHYSICAL JOURNAL883
+(2019), export Date: 30 March 2025; Cited By: 200.
+[17] H. Zhan, Kexue Tongbao/Chinese Science Bulletin66, 1290
+(2021), ISSN 0023074X (ISSN), export Date: 15 September
+2025; Cited By: 0.
+[18] J. Yao, H. Shan, R. Li, Y. Xu, D. Fan, D. Liu, P. Zhang, Y. Yu,
+C. Wei, B. Hu, et al., Monthly Notices of the Royal Astronomical
+Society527, 5206 (2024), export Date: 30 March 2025; Cited
+By: 7.
+[19] C. Chang, A. Pujol, B. Mawdsley, D. Bacon, J. Elvin-Poole,
+P. Melchior, A. Kov´acs, B. Jain, B. Leistedt, T. Giannantonio,
+et al., Monthly Notices of the Royal Astronomical Society475,
+3165 (2018), 1708.01535.
+[20] A. Barthelemy, S. Codis, C. Uhlemann, F. Bernardeau, and
+R. Gavazzi, Mon. Not. R. Astron. Soc.492, 3420 (2020),
+1909.02615.
+[21] H. Shan, X. Liu, H. Hildebrandt, C. Pan, N. Martinet, Z. Fan,
+P. Schneider, M. Asgari, J. Harnois-D´eraps, H. Hoekstra, et al.,
+Monthly Notices of the Royal Astronomical Society474, 1116
+(2018), 1709.07651.
+[22] N. Martinet, P. Schneider, H. Hildebrandt, H. Shan, M. Asgari,
+J. P. Dietrich, J. Harnois-D ´eraps, T. Erben, A. Grado, C. Hey-
+mans, et al., Monthly Notices of the Royal Astronomical Society
+474, 712 (2018), 1709.07678.
+[23] D. Z. Liu, X. M. Meng, X. Z. Er, Z. H. Fan, M. Kilbinger, G. L.
+Li, R. Li, T. Schrabback, D. Scognamiglio, H. Y. Shan, et al.,
+Astronomy & Astrophysics669, A128 (2023), 2210.16341.
+[24] L. Van Waerbeke, J. Benjamin, T. Erben, C. Heymans, H. Hilde-
+brandt, H. Hoekstra, T. D. Kitching, Y. Mellier, L. Miller,
+J. Coupon, et al., Monthly Notices of the Royal Astronomical
+Society433, 3373 (2013), 1303.1806.
+[25] A. Petri, J. Liu, Z. Haiman, M. May, L. Hui, and J. M. Kra-
+tochvil, Physical Review D91, 103511 (2015), 1503.06214.
+[26] J. M. Kratochvil, E. A. Lim, S. Wang, Z. Haiman, M. May,
+and K. Huffenberger, Physical Review D85, 103513 (2012),
+1109.6334.
+[27] M. Vicinanza, V. F. Cardone, R. Maoli, R. Scaramella, X. Er, and
+I. Tereno, Physical Review D99, 043534 (2019), 1905.00410.
+[28] D. Z¨ urcher, J. Fluri, R. Sgier, T. Kacprzak, and A. Refregier,
+Journal of Cosmology and Astroparticle Physics2021, 028–028
+(2021), ISSN 1475-7516, URLhttp://dx.doi.org/10.
+1088/1475-7516/2021/01/028.
+[29] S. Cheng, Y. S. Ting, B. Menard, and J. Bruna, MONTHLY NO-
+TICES OF THE ROYAL ASTRONOMICAL SOCIETY499,
+5902 (2020), cited By :84 Export Date: 2 April 2025.
+[30] S. Cheng and B. M ´enard, MONTHLY NOTICES OF THE
+ROYAL ASTRONOMICAL SOCIETY507, 1012 (2021), ISSN
+0035-8711.
+[31] A. Gupta, J. M. Z. Matilla, D. Hsu, and Z. Haiman, Physical
+Review D97, 103515 (2018), 1802.01212.
+[32] D. Ribli, B. ´A. Pataki, and I. Csabai, Nature Astronomy3, 93
+(2019), 1806.05995.
+[33] J. Fluri, T. Kacprzak, A. Lucchi, A. Schneider, A. Refregier,
+and T. Hofmann, Physical Review D105, 083518 (2022),
+2201.07771.
+[34] T. Lu, Z. Haiman, and X. Li, Monthly Notices of the Royal
+Astronomical Society521, 2050 (2023), 2301.01354.
+[35] A. J. Zhou, X. Li, S. Dodelson, and R. Mandelbaum, Phys. Rev.
+D110, 023539 (2024), URLhttps://link.aps.org/doi/
+10.1103/PhysRevD.110.023539.
+[36] J. Zeghal, D. Lanzieri, F. Lanusse, A. Boucaud, G. Louppe,
+E. Aubourg, A. E. Bayer, and L. D. E. S. Collaboration, Astron-
+omy and Astrophysics699, A327 (2025), ISSN 0004-6361.
+[37] T. Baldauf, R. E. Smith, U. Seljak, and R. Mandelbaum, PHYS-
+ICAL REVIEW D81, 063531 (2010), 0911.4973.
+[38] N. MacCrann, J. Blazek, B. Jain, and E. Krause, Mon. Not. Roy.
+Astron. Soc491, 5498 (2020), 1903.07101.
+
+14
+[39] Y. Park, E. Rozo, and E. Krause, Physical Review Letters126,
+021301 (2021), 2004.07504.
+[40] J. Prat, J. Blazek, C. S ´anchez, I. Tutusaus, S. Pandey, J. Elvin-
+Poole, E. Krause, M. A. Troxel, L. F. Secco, A. Amon, et al.,
+PHYSICAL REVIEW D105, 083528 (2022), 2105.13541.
+[41] N. Kaiser and G. Squires, Astrophysical Journal404, 441
+(1993), cited By :715 Export Date: 2 April 2025.
+[42] N. Jeffrey, M. Gatti, C. Chang, L. Whiteway, U. Demirbozan,
+A. Kovacs, G. Pollina, D. Bacon, N. Hamaus, T. Kacprzak, et al.,
+Mon. Not. R. Astron. Soc.505, 4626 (2021), 2105.13539.
+[43] N. Jeffrey, F. B. Abdalla, O. Lahav, F. Lanusse, J.-L. Starck,
+A. Leonard, D. Kirk, C. Chang, E. Baxter, T. Kacprzak, et al.,
+Mon. Not. R. Astron. Soc.479, 2871 (2018), 1801.08945.
+[44] A. Leonard, F. Lanusse, and J.-L. Starck, Mon. Not. R. Astron.
+Soc.440, 1281 (2014), 1308.1353.
+[45] M. A. Price, J. D. McEwen, X. Cai, T. D. Kitching, and LSST
+Dark Energy Science Collaboration, Mon. Not. R. Astron. Soc.
+489, 3236 (2019), 1812.04018.
+[46] P. Fiedorowicz, E. Rozo, S. S. Boruah, C. Chang, and M. Gatti,
+Mon. Not. R. Astron. Soc.512, 73 (2022), 2105.14699.
+[47] M. Tegmark, The Astrophysical Journal480, L87 (1997), URL
+https://doi.org/10.1086/310631.
+[48] Y. Shi, P. Zhang, Z. Sun, and Y. Wang, Phys. Rev. D109, 123530
+(2024), 2311.12353.
+[49] Y. Shi, P. Zhang, F. Deng, S. Zhou, H. Cai, J. Yao, and Z. Sun,
+J. Cosmol. Astropart. Phys.2025, 038 (2025).
+[50] Y. Shi and L. Cui, Phys. Rev. D113, 103514 (2026), 2601.02816.
+[51] Y. Shi, P. Zhang, Z. Chen, J. Qin, L. Cui, F. Deng, and J. Yao,
+arXiv e-prints arXiv:2511.12488 (2025), 2511.12488.
+[52] U.-L. Pen, ApJ534, L19 (2000), astro-ph/9910502.
+[53] W. Hu, Phys. Rev. D62, 043007 (2000), astro-ph/0001303.
+[54] Y. Saad, Iterative methods for sparse linear systems. (SIAM,
+2003), ISBN 978-0-89871-534-7.
+[55] S. Belkner, A. J. Duivenvoorden, J. Carron, N. Schaeffer, and
+M. Reinecke, RAS Techniques and Instruments3, 711 (2024),
+2406.14542.
+[56] C. M. Cantalupo, J. D. Borrill, A. H. Jaffe, T. S. Kisner, and
+R. Stompor, ApJS187, 212 (2010), 0906.1775.
+[57] H. K. Eriksen, I. J. O’Dwyer, J. B. Jewell, B. D. Wandelt, D. L.
+Larson, K. M. G ´orski, S. Levin, A. J. Banday, and P. B. Lilje,
+ApJS155, 227 (2004), astro-ph/0407028.
+[58] J. Papeˇ z, L. Grigori, and R. Stompor, A&A620, A59 (2018),
+1803.03462.
+[59] E. S. Sheldon and E. M. Huff, Astrophys. J.841, 24 (2017),
+1702.02601.
+[60] J. Myles, A. Alarcon, A. Amon, C. S ´anchez, S. Everett,
+J. DeRose, J. McCullough, D. Gruen, G. M. Bernstein, M. A.
+Troxel, et al., Mon. Not. R. Astron. Soc.505, 4249 (2021),
+2012.08566.
+[61] Planck Collaboration, N. Aghanim, Y. Akrami, M. Ashdown,
+J. Aumont, C. Baccigalupi, M. Ballardini, A. J. Banday, R. B.
+Barreiro, N. Bartolo, et al., A&A641, A6 (2020), 1807.06209.
+[62] T. M. C. Abbott, M. Aguena, A. Alarcon, S. Allam, O. Alves,
+A. Amon, F. Andrade-Oliveira, J. Annis, S. Avila, D. Bacon,
+et al., Phys. Rev. D105, 023520 (2022), 2105.13549.
+[63] N. E. Chisari, M. L. A. Richardson, J. Devriendt, Y. Dubois,
+A. Schneider, A. M. C. Le Brun, R. S. Beckmann, S. Peirani,
+A. Slyz, and C. Pichon, Mon. Not. R. Astron. Soc.480, 3962
+(2018), 1801.08559.
+[64] M. P. vanDaalen, I. G. McCarthy, and J. Schaye, Mon. Not. R.
+Astron. Soc.491, 2424 (2020), 1906.00968.
+[65] Z. Chen, P. Zhang, and X. Yang, Astrophys. J.953, 188 (2023),
+2201.12591.

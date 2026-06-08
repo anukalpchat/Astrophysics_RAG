@@ -1,0 +1,2536 @@
+Title: 21cmEMUv3: a hybrid diffusion-LSTM emulator of 21cmFAST summary observables
+Authors: Daniela Breitman, Andrei Mesinger, Steven G. Murray, Ivan Nikolic, Roberto Trotta
+Published: 2026-05-29
+Categories: astro-ph.CO, astro-ph.GA, cs.LG
+
+Astronomy & Astrophysicsmanuscript no. aanda©ESO 2026
+June 2, 2026
+21cmEMUv3: a hybrid diffusion-LSTM emulator of21cmFASTsummary
+observables
+D. Breitman1,2,3★ , A. Mesinger3,4, S. G. Murray3,5, I. Nikolić6,7,3 , and R. Trotta8,9,10
+1 Research Center for the Early Universe, Graduate School of Science, The University of Tokyo, 7-3-1 Hongo, Bunkyo, Tokyo
+113-0033, Japan
+2 Department of Physics, Graduate School of Science, The University of Tokyo, 7-3-1 Hongo, Bunkyo, Tokyo 133-0033, Japan
+3 Scuola Normale Superiore (SNS), Piazza dei Cavalieri 7, Pisa, PI, 56125, Italy
+4 Department of Physics and Astronomy“Ettore Majorana”, University of Catania, Via Santa Sofia 64, 95123 Catania, Italy
+5 Physics Department, Stellenbosch University, 42 Merriman Ave, Stellenbosch, South Africa, 7600
+6 Cosmic Dawn Center (DAWN)
+7 Niels Bohr Institute, University of Copenhagen, Jagtvej 128, 2200 Copenhagen N, Denmark
+8 SISSA, Via Bonomea 265, 34136 Trieste, Italy & INFN Sezione di Trieste
+9 Centro Nazionale di Ricerca in High Performance Computing, Big Data e Quantum Computing, Via Magnanelli 2, Bologna, Italy
+10 Physics Department, Blackett Lab, Imperial College London, Prince Consort Road, London SW7 2AZ, UK
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+Wearewitnessingasurgeinobservationsofthecosmicdawn(CD)andepochofreionisation(EoR),drivinganincreasingdemandfor
+fast and robust theoretical interpretation frameworks. In response, machine learning (ML), and emulation in particular, has emerged
+as a powerful approach to accelerate and enhance inference pipelines. In this work, we present 21cmEMUv3, an emulator trained
+on 21cmFASTv3 simulations that model both atomically and molecularly cooling galaxies. 21cmEMUv3 is conditioned on𝜎8 and
+ten astrophysical parameters to produce seven summary observables: (i) the cylindrical 21cm power spectrum (PS), emulated for the
+first time at such high resolution and accuracy across a wide redshift range of𝑧∼6–30; (ii) the spherically-averaged 21cm PS; (iii)
+the mean neutral fraction of the intergalactic medium (IGM); (iv) the mean 21cm spin temperature; (v) the global 21cm signal; (vi)
+the ultraviolet (UV) luminosity functions (LFs); and (vii) the Thomson scattering optical depth. Notably, the cylindrical 21cm PS is
+emulated via score-based diffusion, while the remaining six summaries are emulated via long-short term memory (LSTM) networks,
+all achieving sub-percent median accuracy. We use the emulator to reinterpret current 21cm PS upper limits from HERA, for the first
+timeusingstate-of-the-arthydrodynamicalsimulationstoinformpriorsonstarformationinsidemolecularlycoolinggalaxies.Wefind
+that our inferred soft-band X-ray luminosity per unit star formation rate is consistent with extrapolations of high-mass X-ray binaries
+to the low-metallicity regimes expected in the first galaxies, excluding values below1039.2 erg s−1 𝑀 −1
+⊙ yrat95%confidence. Finally,
+we produce forecasts for the detection of the cosmic 21cm PS with the Square Kilometre Array for different array configurations. The
+21cmEMU package is publicly available.
+Key words.cosmology: theory — dark ages, reionization, first stars — methods: statistical – methods: data analysis
+1. Introduction
+One of the greatest challenges in modern cosmology is under-
+standingthecosmicdawn(CD)ofthefirstluminoussourcesand
+the subsequent reionisation of the intergalactic medium (IGM).
+Key open questions include when and how the first stars and
+galaxies formed, which sources drove reionisation, and how
+ionised bubbles grew and percolated through the IGM to com-
+plete the reionisation process. Over the past decade, there has
+been a surge in observational constraints to answer these ques-
+tions, from a diverse suite of probes each sensitive to different
+aspects of this complex process. These include the Lyman-𝛼
+forest (e.g., Fan et al. 2006; Becker et al. 2007, 2015; Bosman
+et al. 2018; D’Odorico et al. 2023), damping wings in quasar
+spectra (e.g., Bolton et al. 2011; Mortlock et al. 2011; Bañados
+et al. 2018; Wang et al. 2020; Yang et al. 2020), Lyman-𝛼emis-
+sion from galaxies (e.g., Ouchi et al. 2010; Clément et al. 2012;
+Konno et al. 2014; Drake et al. 2017; Hoag et al. 2019; Shibuya
+★ E-mail: daniela.breitman@sns.it
+et al. 2019), large-scale polarization of the cosmic microwave
+background (CMB; e.g., Planck Collaboration et al. 2020; de
+Belsunce et al. 2021; Heinrich & Hu 2021, secondary kinetic
+Sunaev-Zeldovich(kSZ)CMBanisotropies(e.g.,Dasetal.2014;
+Georgeetal.2015;Reichardtetal.2021),andfinallyupperlimits
+on the cosmic 21-cm power spectrum (PS; e.g., Mertens et al.
+2025; Nunhokee et al. 2025; The HERA Collaboration et al.
+2025).
+These observations are highly complementary and combin-
+ing them in a standard Bayesian inference framework results in
+the strongest constraints on astrophysical and cosmological pa-
+rameters (e.g., Greig & Mesinger 2017; Qin et al. 2020; HERA
+Collaborationetal.2022b;Breitmanetal.2024;Nunhokeeetal.
+2025; Mertens et al. 2025). This is challenging however, as in-
+terpreting such diverse data requires large-scale cosmological
+simulationsthatself-consistentlytrackgalaxyevolutionandhow
+galactic radiation fields impact the IGM. Even the most efficient
+semi-numerical simulators (e.g., Mesinger & Furlanetto 2007;
+Visbal et al. 2012; Ghara et al. 2015; Maity & Choudhury 2022;
+Davies et al. 2025; Santos et al. 2010; Hutter et al. 2021) typi-
+Article number, page 1 of 21
+arXiv:2606.00219v1  [astro-ph.CO]  29 May 2026
+
+A&A proofs:manuscript no. aanda
+cally require≳1 core hour per forward model. This means that
+exploringthehigh-dimensionalparameterspaceofastrophysical
+uncertainties can be very computationally expensive, even using
+semi-numericalsimulations.Thesecomputationalchallengesare
+further exacerbated by the fast pace of new EoR data releases,
+with each new dataset typically requiring a new inference.
+As a result, there has been increasing interest in methods
+that accelerate Bayesian inference for EoR and CD data. These
+typically "amortize" the computational cost: building an initial
+database to train a neural network (NN) to perform either emu-
+lation (e.g., Kern et al. 2017; Shimabukuro & Semelin 2017) or
+simulationbased(i.e.implicitlikelihood)inference(SBI;seee.g.
+Cranmer et al. 2020 for a review). Once these NNs are trained,
+subsequent inferences can be performed at very low computa-
+tional cost.
+Amortized SBI involves stochastically sampling all relevant
+sources of uncertainty in order to build a training set of mock
+observation-parameter pairs that include realistic error realiza-
+tions. Then a NN is trained to rapidly evaluate the posterior
+(e.g.Papamakarios&Murray2016),likelihood(e.g.Papamakar-
+ios et al. 2018), or likelihood to evidence ratio (e.g. Hermans
+et al. 2019), for the given observational data. As such, a key
+advantage of SBI is that it bypasses the need to explicitly de-
+fine a likelihood,which can be useful when the likelihood is
+analytically intractable. However, current EoR / CD data has
+relativelylowsignal-to-noise,andcommonlyusedobservational
+summaries tend to have nearly-Gaussian likelihoods (e.g. Prelo-
+gović & Mesinger 2023).
+Emulation, on the other hand, involves learning the map-
+ping between model parameters and simulation outputs. Once
+trained, an emulator can be conveniently reused within an infer-
+ence framework to interpret multiple datasets without retraining
+or with minimal refinement, assuming its output can be further
+post-processed to include instrument-specific effects. This flex-
+ibility makes emulation particularly well suited for broad com-
+munityuseandforkeepingpacewithfrequentobservationaldata
+releases.Whileinprincipleanemulatorcanbeembeddedwithin
+a likelihood-free framework, the emulator itself does not learn
+the likelihood in the way that SBI does. Consequently, the main
+drawbackofemulationisthatitrequiresanexplicitspecification
+of the likelihood function during inference, which may become
+an issue with future high signal-to-noise ratio (S/N) datasets.
+Emulators were introduced into the CD/EoR community
+nearly a decade ago (e.g., Kern et al. 2017; Shimabukuro &
+Semelin 2017; Schmit & Pritchard 2018; Ghara et al. 2020).
+Early efforts focused on learning the 21-cm power spectrum,
+as it is the summary statistic targeted by interferometric 21-cm
+experiments. As interest grew in measuring the global (volume-
+averaged) 21-cm signal, emulators for this observable likewise
+became increasingly common (e.g., Cohen et al. 2020; Bevins
+et al. 2021; Bye et al. 2022). Initial implementations typically
+relied on relatively simple architectures, such as Gaussian pro-
+cess regression (GPR; e.g., Kern et al. 2017) and multilayer per-
+ceptrons (MLPs; Shimabukuro & Semelin 2017; Cooper et al.
+2025). More recent emulators, however, have adopted substan-
+tially more sophisticated models, including convolutional neural
+networks (CNNs; e.g., Breitman et al. 2024; Scelfo et al. 2026),
+Bayesianneuralnetworks(BNNs;e.g.,Mahidaetal.2025),recur-
+rentneuralnetworks(RNNs;e.g.,Prelogovićetal.2022;Dorigo
+Jones et al. 2024), generative adversarial networks (GANs; e.g.,
+Diao&Mao2025),anddenoisingdiffusionprobabilisticmodels
+(DDPMs;Zhaoetal.2023;Mishraetal.2025)andtransformers
+(e.g.,Moriwakietal.2026),aswellasscatteringtransform-based
+maximum entropy generative models (e.g., Hothi et al. 2026).
+Despite this progress, most existing emulators are designed
+topredictasingleobservable.Previousstudies(e.g.HERACol-
+laboration et al. 2022a, 2023; The HERA Collaboration et al.
+2025;Nunhokeeetal.2025)haveshownthatBayesianinference
+with upper limits on the 21-cm power spectrum is significantly
+strengthened by a synergistic approach where multiple comple-
+mentary observables are combined. This result created a rising
+interest in emulators capable of jointly predicting multiple ob-
+servables within a unified framework. In Breitman et al. (2024),
+wepresented21cmEMUv1,thefirstemulatorofsixEoRsummary
+statistics from the public semi-numerical simulator21cmFAST1
+(Mesinger & Furlanetto 2007; Mesinger et al. 2011). In Cang
+et al. 2024, we introduced21cmEMUv2trained on a different
+astrophysicalmodelwhichincludesapopulationofmolecularly-
+cooling galaxies (MCGs) (expected to host mostly Pop III stars
+and their remnants) in addition to the population of atomically-
+cooling galaxies (ACGs, hosting primarily Pop II stars) already
+present in21cmEMUv1. In this work, we present21cmEMUv3, a
+significant expansion to previous versions both in terms of the
+physicalmodelaswellasthenetworkarchitecture:(i)21cmEMUv3
+is trained on a21cmFASTmodel including both populations of
+ACGsandMCGs,wherewealloweachpopulationtohavediffer-
+ent stellar properties; (ii)21cmEMUv3is the first high-resolution
+emulator of the cylindrical (2D) 21-cm PS (c.f. Cooper et al.
+2025) with 32 bins along the sky-plane wavemode axis and 64
+binsalongtheline-of-sightwavemodeaxistrainedacrossawide
+rangeofredshifts(𝑧∼5−30) 2;(iii)21cmEMUv3isthefirstscore-
+based diffusion (Hyvärinen 2005; Sohl-Dickstein et al. 2015;
+Song et al. 2020) emulator of themean21-cm PS (rather than
+a single realisation of the 21-cm PS); (iv)21cmEMUv3emulates
+five other summaries besides the 2D 21-cm PS with long-short
+term memory (LSTM) layers (e.g., Hochreiter & Schmidhuber
+1997), whose purpose is to better capture temporal structure in
+timeseries data (e.g. Prelogović et al. 2022; Dorigo Jones et al.
+2024).
+We begin by introducing the physical model being emulated
+inSection2.Next,wedescribethemachinelearningarchitecture
+of the emulator in Section 3. In Section 4, we quantify the per-
+formance of21cmEMUv3on a test set. In Section 5.1, we apply
+21cmEMUv3in an inference problem, where we demonstrate that
+the prior choice can notably affect the resulting posterior and
+therefore the corresponding scientific conclusions. We conclude
+in Section 6.
+2. Simulated database
+In this section we discuss the training set used to develop our
+emulator. We begin by summarizing the galaxy model, and then
+discuss the cosmological simulations and emulated summary
+statistics.
+1 https://github.com/21cmfast/21cmFAST
+2 Thefirst21-cm2DPSemulatorpresentedinCooperetal.2025takes
+asinputthreeastrophysicalparametersandoutputsa21-cm2DPScube
+across eight redshifts𝑧∼5−12and eight bins along each wavemode
+axis.Incomparison,21cmEMUv3takestenastrophysicalparametersplus
+𝜎8 alongwitharedshift𝑧∈ [5,30]asanadditionalinputparameterand
+outputs a 2D PS with 32 bins along the sky-plane wavemode axis and
+64 bins along the line-of-sight wavemode axis. A finer Fourier-space
+gridmorecloselymatchesthenativeresolutionofradiointerferometers,
+avoiding information loss from heavy binning and enabling more direct
+comparison with observations.
+Article number, page 2 of 21
+
+D. Breitman et al.:21cmEMUv3
+2.1. Galaxy model
+Our simulations use the code21cmFASTv3.0.4(Mesinger &
+Furlanetto 2007; Mesinger et al. 2011; Murray et al. 2020), with
+a galaxy model that includes two distinct galaxy populations:
+ACGs and MCGs. For more details on the galaxy model, users
+areencouragedtoconsultQinetal.2020andMuñozetal.2022.
+Below we summarize the most relevant points, focusing on the
+free parameters that will serve as inputs to our emulator.
+We characterize the stellar-to-halo mass relations (SHMRs)
+of the faint galaxies that dominate the EoR photon budget (e.g.
+Qin et al. 2025) via power laws (e.g., Behroozi & Silk 2015;
+Mutch et al. 2016; Sun & Furlanetto 2016; Yue et al. 2016).
+Specifically, the stellar mass𝑀 ∗,acg (mcg) of an ACG (MCG)
+galaxy hosted by a halo of mass𝑀ℎ can be written as:
+𝑀∗,acg (mcg) /𝑀ℎ =min
+
+1, 𝑓 ∗,10(7)
+ 𝑀ℎ
+𝑀10(7)
+ 𝛼∗,acg (mcg)
+×
+ Ω𝑏
+Ω𝑚
+
+,
+(1)
+whereΩ 𝑏 andΩ 𝑚 are the baryon and total matter energy den-
+sities, respectively. We can write the stellar fraction in ACGs
+(MCGs) as𝑓 ∗,acg (mcg) ≡𝑓 ∗,10(7)
+
+𝑀ℎ
+𝑀10(7)
+ 𝛼∗,acg (mcg)
+∈ [0,1], with
+𝑓∗,10(7) corresponding to the fraction of galactic gas in stars nor-
+malized to the amount in a halo of mass𝑀10(7) ≡10 10(7) 𝑀⊙.
+These SHMRs introduce a total of four free parameters: the nor-
+malisation and power-law index of each of the two relations.
+We keep𝑓 ∗,10(7) and𝛼 ∗,acg as three free parameters, and fix
+𝛼∗ ≡𝛼 ∗,mcg =𝛼 ∗,acg 9 (e.g. Xu et al. 2016).
+We assume that stellar mass grows exponentially over time.
+We write the corresponding star formation rate (SFR) as a func-
+tion of the Hubble time,𝐻−1 (𝑧), (or analogously the dynamical
+time,whichalsoscaleswiththeHubbletimeduringmatterdom-
+ination):
+¤𝑀∗,acg (mcg) = 𝑀∗,acg (mcg)
+𝑡∗𝐻 −1 (𝑧) ,(2)
+where the characteristic star formation timescale,𝑡∗ ∈ [0,1], is
+another free parameter.
+Star formation is suppressed in low mass halos due to inef-
+ficient gas cooling and/or feedback (e.g., Hui & Gnedin 1997;
+Springel & Hernquist 2003; Okamoto et al. 2008; Sobacchi &
+Mesinger 2013; Xu et al. 2016; Ocvirk et al. 2020; Ma et al.
+2020). We account for this suppression by including an expo-
+nential duty cycle to the mass function of halos (HMF) that host
+star-forming ACGs (MCGs):
+𝜙acg (mcg) = d𝑛
+d𝑀ℎ
+×
+ 
+
+exp
+
+−
+𝑀acg
+crit
+𝑀ℎ
+
+exp
+
+−
+𝑀mcg
+crit
+𝑀ℎ
+
+exp
+
+− 𝑀ℎ
+𝑀cool
+crit
+ .(3)
+𝑀 acg (mcg)
+crit is the turnover mass below which star formation is
+suppressed, which we write as:
+𝑀 acg (mcg)
+crit =max
+h
+𝑀cool(diss)
+crit , 𝑀 ion
+crit, 𝑀 sn
+crit
+i
+.(4)
+Here the efficiency of star formation is limited by three physical
+processes: (i) inefficient cooling𝑀cool
+crit below the atomic cool-
+ing threshold for ACGs (e.g. Mesinger & Furlanetto 2007) and
+Lyman-Werner feedback that photodissociates molecular hydro-
+genvia thetwo-stepSolomon process,𝑀 diss
+crit ,for MCGsHaiman
+et al. 2000; Visbal et al. 2014; Muñoz et al. 2022); (ii) photo-
+heating feedback,𝑀 ion
+crit, inside the ionized IGM (e.g. Okamoto
+et al. 2008; Sobacchi & Mesinger 2013); (iii) supernova feed-
+back,𝑀 sn
+crit (cites). Moreover, for MCGs, in addition to the lower
+massthreshold,𝑀 mcg
+crit ,wealsoincludeasecondexponentialterm
+with an upper mass threshold,𝑀cool
+crit , to smoothly transition be-
+tween MCGs and ACGs around the atomic cooling threshold
+𝑇vir ∼10 4K(c.f. Qin et al. 2020).
+The population-averaged ionizing escape fraction,
+𝑓esc,acg (mcg) ∈ [0,1]is described by a power-law (e.g.,
+Paardekooper et al. 2015; Kimm et al. 2017; Lewis et al. 2020):
+𝑓esc,acg (mcg) =min
+
+1, 𝑓 esc,10(7)
+ 𝑀ℎ
+𝑀10(7)
+ 𝛼esc
+,(5)
+wherewehaveatotalofthreefreeparametersforbothrelations:
+the normalizations𝑓 esc,10(7) , and the power-law index,𝛼esc.
+The specific X-ray luminosity escaping the galaxies is also
+taken to be a power-law in energy (e.g., Das et al. 2017),
+𝐿 𝑋,acg (mcg) ∝𝐸 −𝛼 𝑋. We normalise it via the soft-band (i.e.<2
+keV) X-ray luminosity per unit SFR for each galaxy population:
+𝐿acg (mcg)
+𝑋<2keV/ / ¤𝑀∗,acg (mcg) =
+∫ 2keV
+𝐸0
+dE𝐿 x/ ¤𝑀∗,acg (mcg) ,(6)
+where𝐸 0 is the minimum energy of X-ray photons capable of
+escaping their host galaxy, for a total of three additional free
+parameters.
+In21cmEMUv3,wemodelACGsandMCGsbyvaryingatotal
+ofelevenparameters:sevenACGastrophysicalparameters,three
+MCGastrophysicalparameters,andonecosmologicalparameter
+𝜎8.InTable1,welistthe21cmEMUv3inputparametersandtheir
+limiting values in the database used to train the emulator (c.f.
+Section 2.3).
+2.2. Simulations and summary observables
+For a set of cosmological and astrophysical parameters,
+21cmFASTproduces 3D lightcones of IGM properties. When
+performinginference,theselightconesaregenerallycompressed
+into summary statistics that are compared with observations. As
+such, rather than emulating full 3D lightcones, we emulate only
+lower-dimensional summary statistics:
+(i) 𝒙hi(𝒛)— volume-averaged (global) neutral fraction of hy-
+drogen as a function of redshift (aka the EoR history).
+(ii) 𝑻s (𝒛)—themeanneutralIGMspintemperatureasafunc-
+tion of redshift3.
+(iii) 𝜹𝑻b (𝒛)— global 21-cm brightness temperature (e.g.,
+Madau et al. 1997; Furlanetto 2006; Pritchard & Loeb
+2012):
+𝛿𝑇b (𝒙, 𝑧)= 𝑇S −𝑇 R
+1+𝑧 (1−𝑒 𝜏21)(7)
+≈27𝑥 HI (1+𝛿 𝑏)
+ Ω𝑏 ℎ2
+0.023
+  0.15
+Ω𝑚ℎ2
+1+𝑧
+10
+1/2
+mK
+×
+ 𝑇S −𝑇 R
+𝑇S
+  𝜕𝑟 𝑣 𝑟
+(1+𝑧)𝐻(𝑧)
+
+,
+3 The IGM spin temperature is only defined for neutral hydrogen that
+is outside of the cosmic HII regions that surround galaxies. As in
+21cmEMUv1, the volume average is performed over simulation cells that
+have𝑥 HI ≥95 %.
+Article number, page 3 of 21
+
+A&A proofs:manuscript no. aanda
+Table 1: In21cmEMUv3, we model ACGs and MCGs by varying a total of eleven parameters: seven ACG astrophysical parameters,
+threeMCGastrophysicalparameters,andcosmologicalparameter𝜎 8.ThesecondcolumnshowsthetruncatedGaussiandistribution
+mean,standarddeviation,andtheupperandlowerboundsforeachparameter.TheACG,MCG,and𝜎 8 priorsaremotivatedby(Qin
+et al. 2021a; Park et al. 2019), (Qin et al. 2021b), and (Planck Collaboration et al. 2020), respectively.
+Parameter Distribution and limits Description
+log10 𝑓∗,10 N (−1.2,0.2) ∈ [−2,−0.5]SHMR normalisation for ACGs
+𝛼∗ N (0.5,0.15) ∈ [0,1]power-law index of the SHMR
+𝑡∗ N (0.55,0.3) ∈ [0.01,1]characteristic SF timescale
+log10 𝑓esc,10 N (−1.3,0.4) ∈ [−3,0]normalisation of the𝑓 esc −M h relation for ACGs
+𝛼esc N (0,0.5) ∈ [−1,1]power-law index of the𝑓 esc −M h relation
+log10 𝑓∗,7 N (−2.5,0.8) ∈ [−4,−1]SHMR normalisation for MCGs
+log10 𝑓esc,7 N (−1.5,0.8) ∈ [−3,−1]normalisation of the𝑓 esc −M h relation for MCGs
+log10 𝐿acg
+X<2keV/SFRN (40.5,1) ∈ [38,43] erg s−1
+𝑀⊙ yr−1 soft-band X-ray luminosity per unit SFR for ACGs
+log10 𝐿mcg
+X<2keV/SFRN (41.5,1) ∈ [39,44] erg s−1
+𝑀⊙ yr−1 soft-band X-ray luminosity per unit SFR for MCGs
+𝐸0 N (500,300) ∈ [100,1500]keV minimum energy of X-ray photons that can escape their host galaxy
+𝜎8 N (0.8118,0.01) ∈ [0.75,0.85]matter power spectrum normalisation
+where𝜏 21 isthe21-cmopticaldepthoftheinterveninggas,
+𝛿𝑏 ≡𝜌/¯𝜌−1is the baryon overdensity, with𝜌being the
+baryon density, and𝑇S and𝑇 R are the spin and background
+temperatures, respectively. We assume throughout that the
+radiobackgroundisprovidedbytheCMB,𝑇 R =𝑇 CMBisthe
+temperatureoftheCMB.Wenotethat21cmFASTcomputes
+thebrightnesstemperatureateachcelllocation,x,usingthe
+exact expression in the first line of the equation above; the
+second line is a Taylor expansion in the limit of𝜏21 ≪1
+that provides physical intuition.
+(iv)𝚫 2
+21 (𝒌 ⊥, 𝒌 ∥ , 𝒛)— cylindrically-averaged 21-cm power
+spectrum (PS) as a function of sky-plane mode𝑘⊥ and
+line-of-sight (LOS) mode𝑘 ∥:Δ 2
+21 (𝑘 ⊥, 𝑘 ∥ , 𝑧)
+
+mK2
+≡
+𝑘3/(2𝜋 2)⟨ ˜𝑇𝑏 ˜𝑇 ∗
+𝑏⟩, where𝑘=
+√︃
+𝑘2
+⊥ +𝑘 2
+∥, and ˜𝑇𝑏 (𝒌, 𝑧)is
+theFourierdualofthebrightnesstemperaturefromeq.(7).
+Note that in this work we calculate all PS withtuesday4
+(Breitman et al. 2025) and use trilinear interpolation to
+angular grid-points when performing angular averaging,
+instead of simple standard binning. This approach avoids
+biasesthatmayoccurwhenthesignalevolvesoverthewidth
+of the radial bin.
+(v)𝚫 2
+21 (𝒌, 𝒛)— spherically-averaged 21-cm PS as a function
+of wavemode𝑘 5.
+(vi)𝝓(M 1500, 𝒛)— the non-ionizing UV luminosity func-
+tion (UV LF), defined as the number density of galax-
+ies per UV magnitude,𝑀 1500, as a function of redshift.
+The∼1500 Å rest frame luminosity is assumed to be
+proportional to the SFR:𝐿UV = ¤𝑀∗(𝑀 ℎ, 𝑧)/KUV,where
+KUV =1.15·10 −28M⊙yr−1 Hz s erg−1 assumes a Salpeter
+initial mass function (e.g., Madau & Dickinson 2014; Sun
+&Furlanetto2016).TheUVluminosityisrelatedtotheAB
+magnitude using (Oke & Gunn 1983):log
+
+𝐿UV
+erg s −1 Hz−1
+
+=
+0.4× (51.63−𝑀 UV).
+(vii)𝝉 𝒆 — the CMB optical depth:𝜏𝑒 =𝜎 𝑇
+∫ 𝑧LSS
+0 𝑑𝑧 𝑐𝑑𝑡
+𝑑𝑧 𝑛𝑒,
+where𝜎 𝑇 istheThompsonscatteringcrosssection,𝑧 LSS ∼
+4 github.com/21cmfast/tuesday
+5 Weemulatethe1DPSseparatelyratherthanaveragingoverthecylin-
+drical21-cmPStominimisetheuncertaintyandspeeduptheemulation.
+Averagingthe2DPSusesscore-baseddiffusionandisthereforeslower.
+Since the 2D PS is a much more complex quantity than the 1D PS,
+averaging it down to 1D yields a larger error than emulating the 1D
+PS directly. Users may employ either method depending on the desired
+application.
+1100the redshift of lass scattering, and𝑛𝑒 is the electron
+number density calculated assuming hydrogen and helium
+are singly ionized at a fraction(1−𝑥Hi)and that helium is
+doubly ionized at𝑧 <3.
+2.3. Database
+We create a database of∼47k simulations total:∼44k with stan-
+dard sampling and an additional∼3k with higher SHMRs, as
+described below. Each simulation has unique initial conditions,
+consisting of a 400 cMpc lightcone spanning redshift𝑧∼5−35
+at a resolution of 1.5 cMpc/cell. Rather than sampling parame-
+ters uniformly, we populate the database by sampling from trun-
+cated Gaussian distributions whose mean, standard deviation,
+and bounds are shown in Table 1.
+InTable1,themeansandstandarddeviationsofthepriordis-
+tributions of each ACG parameter (namely,𝑓∗,10,𝛼 ∗,𝑡 ∗,𝑓 esc,10
+and𝛼 esc) are motivated by results from Qin et al. 2021a, who
+performed a joint Bayesian inference combining high-redshift
+UV luminosity functions (Bouwens et al. 2015, 2016; Oesch
+etal.2018),theneutralhydrogenfractionfromquasardarkpixel
+fractions (McGreer et al. 2015), the CMB Thomson scattering
+optical depth (Planck Collaboration et al. 2020; Qin et al. 2020),
+and Lyman-𝛼forest opacity fluctuations (Bosman et al. 2018).
+The prior for the X-ray parameters (𝐿acg
+X<2keV/SFRand𝐸 0) are
+based on Park et al. (2019). The prior for the three MCG param-
+eterslog 10 𝑓∗,7,log 10 𝑓esc,7, andlog 10 𝐿mcg
+X<2keV/SFRare based
+on Qin et al. (2021b), where the X-ray production parameter,
+𝐿mcg
+X<2keV/SFRis adjusted to allow for higher X-ray luminosities
+at earlier cosmic times as implied by HERA Collaboration et al.
+(2022b).The𝜎 8 priorisbasedontheposterioranalysisinPlanck
+Collaboration et al. (2020). Centring the sampling distributions
+aroundthesevaluesensuresthatthedatabaseisdenselysampled
+in regions of parameter space most consistent with current ob-
+servations, rather than sampling uniformly across the full prior
+volume.
+Wefindbelowhoweverthattheresultingpriorisinsufficiently
+broad to cover the full SHMR range required for the applica-
+tion in Section 5.1. We therefore supplement the database with
+an additional∼3k simulations with higher SHMRs, in which
+log10 𝑓∗,10 and𝛼 ∗ are drawn fromN (0,0.3) ∈ [−1,1]and
+N (0.9,0.08) ∈ [0.5,1.2], respectively, with all remaining pa-
+rameters retaining the distributions in Table 1.
+Article number, page 4 of 21
+
+D. Breitman et al.:21cmEMUv3
+3. 21cmEMUv3 architecture and training
+Figure 1 shows the architecture of21cmEMUv3. It is composed
+of two independent parts: the generative score-based diffusion
+modelforthecylindrical21-cmPS(rightbranchinredinFigure
+1),andtheLSTMplusmultilayerperceptron(MLP)architecture
+(leftbranchinblackinFigure1)thatemulatestheremainingsix
+summary observables. In this section, we describe the architec-
+ture of each of these neural networks.
+3.1. Generative score-based diffusion emulator of the
+cylindrical 21-cm PS
+State-of-the-art CD/EoR simulations of the 21 cm signal typi-
+cally span volumes that are orders of magnitude smaller than
+those probed by observations, primarily because such simula-
+tionsbecomecomputationallyimpracticalastheirsizeincreases.
+As a result, the number and overlap of Fourier modes common
+to both simulation and observation is limited, particularly in the
+cylindrical (2D) k-space that is natural for 21 cm interferometry.
+This mismatch introduces a key challenge for interpreting up-
+coming21-cmobservationsatlargerscales:samplevariance,the
+deviation of the simulated realisation from the true population
+mean due to the finite simulation volume. Following Breitman
+et al. 2025, we treat sample variance as mildly non-Gaussian
+noise (Mondal et al. 2015; Shaw et al. 2019) added onto the tar-
+get mean PS, and use score-based diffusion (Song et al. 2020;
+Ho et al. 2020) to marginalise over it. In the rightmost branch
+of Figure 1, we illustrate the diffusion process as applied to a
+cylindrical 2D PS:
+–Bottom to top: the forward diffusion process is a continuous
+noise-adding stochastic process where we corrupt a 2D PS
+realisationfromthetrainingsamplewithGaussiannoisewith
+increasingvarianceuntilitistransformedintoasamplefrom
+a known Gaussian prior distribution. This process can be
+described with the following stochastic differential equation
+(SDE):
+𝑑x=f(x, 𝑡)𝑑𝑡+𝑔(𝑡)𝑑w,(8)
+wherex=  𝑥(0), . . . , 𝑥(𝑇)  is the diffused 2D PS realisa-
+tion at a given time in the diffusion process,𝑡∈ [0, 𝑇], with
+𝑥(0)denotingasamplefromthedatadistributionand𝑥(𝑇)a
+sample from the Gaussian prior.wis a Wiener process (aka
+Brownian motion). The choice of drift functionf(x, 𝑡)and
+diffusioncoefficient𝑔(𝑡)areessentiallymodelhyperparame-
+ters. As in Breitman et al. 2025, we choose the drift function
+and diffusion coefficient that correspond to the commonly-
+used variance preserving (VP) SDE, the continuous time-
+limit of the DDPM in Ho et al. 2020. In this work, however,
+we also test two other common SDEs: the subVP SDE first
+introduced in Song et al. 2020 and the variance exploding
+(VE) SDE. We find that the emulator performs best with the
+VP SDE.
+–Top to bottom: to emulate the cylindrical PS, we need to re-
+versetheforwardprocesswhileconditioningitonthedesired
+inputparameters𝜃.Thisforwardprocesscanbereversedwith
+another SDE (Anderson 1982):
+𝑑x=
+
+f(x, 𝑡) −𝑔(𝑡) 2∇x log𝑃 𝑡 , 𝜃(x)
+
+𝑑𝑡+𝑔(𝑡)𝑑 w,(9)
+where the only unknown is thescore function∇x log𝑃 𝑡 , 𝜃(x)
+of the probability density function (PDF)𝑃of the data𝑥
+explicitlyconditionedontheeleveninputparametersandthe
+redshift all denoted by𝜃, in addition to the continuous time
+index𝑡.
+Theneuralnetworkisthereforetrainedtolearnthescorefunction
+inordertosolvethereverseSDE,andconditioningitontheeleven
+input parameters𝜃allows us to generate new 2D PS samples for
+any parameter combination.
+For the NN architecture, we choose a standard U-Net (Ron-
+nebergeretal.2015)autoencoder 6followingSongetal.2020;Ho
+et al. 2020, as U-Nets are efficient in recognising local informa-
+tion in images over a range of scales. The model is implemented
+withPyTorch(Paszke et al. 2019). The network is trained on
+44k 2D PS at 32 redshifts logarithmically-spaced between 5.5
+and 29 and are split into training (90%) and validation (10%)
+for∼500 epochs using theAdamW(Loshchilov & Hutter 2017)
+optimiser with an initial learning rate of10−4, a cosine anneal-
+ing schedule with𝜂min =10 −6, and exponential moving average
+(EMA) checkpointing. Since we plan to integrate this emula-
+tor into an inference pipeline, we solve the reverse SDE via the
+fast probability-flow ODE (Song et al. 2020) method rather than
+Euler-Maruyama, emulating a mean 2D PS averaged over 200
+samplesin∼2sonaGPU.Ourentirecodeispubliclyavailable 7.
+Eachtrainingsampleisasingle2DPSrealisationthatcanbe
+interpretedasameanPSwithsamplevarianceaddedasstochas-
+tic noise. Since the "noise" (i.e. initial conditions) realisation
+is unique to each simulation, learning any specific noise pattern
+wouldbepenalisedbythelossacrosstrainingexamplesatsimilar
+𝜃. The model therefore implicitly learns to associate parameters
+with the underlying mean PS while treating sample variance as
+noise. As a result, individual diffusion samples already approxi-
+mate the mean PS. Averaging over multiple diffusion samples at
+fixed𝜃furthersuppressestheresidualgeneratedvariance,yield-
+ing predictions that minimally suffer from sample variance in
+contrast to the individual training realisations, as we shall see in
+Section 4.1.
+3.2. LSTM emulator for timeseries data
+A typical feed-forward neural network processes information in
+a single direction. Long short-term memory (LSTM) networks
+(Hochreiter & Schmidhuber 1997) are a type of recurrent neu-
+ral network (RNN; e.g. Rumelhart et al. 1986; Werbos 1990),
+a broader class of architectures that, in contrast to feed-forward
+NNs,incorporateinternalfeedbackloopstoefficientlylearnpat-
+terns in sequential data. Unlike feed-forward networks, RNNs
+maintain an internal state or "memory" that allows informa-
+tion from previous inputs to influence subsequent predictions.
+As such, RNNs are particularly well-suited for sequential data
+where context is essential, such as natural language processing
+and timeseries data (see e.g. Schmidt 2019; Mienye et al. 2024
+for recent reviews).
+We adopt LSTMs following Dorigo Jones et al. 2024, who
+foundthemwell-suitedforemulatingtheglobal21-cmsignal,and
+buildingontheearlierfindingofPrelogovićetal.2022thatRNNs
+performwellon21-cmlightconeregression.The2Doutputs(1D
+PS and UV LFs) use an 2D LSTM-based head designed to cap-
+turecorrelationsacrossbothredshiftandwavenumber/magnitude
+axes,whichwefindoutperformsbothastandard1DLSTMhead
+and a CNN head for these outputs. The scalar Thomson optical
+6 The model architecture is based on thePyTorchim-
+plementation available here:https://github.com/lucidrains/
+denoising-diffusion-pytorchthat is in turn based on the origi-
+nal implementation from Ho et al. 2020 here:https://github.com/
+hojonathanho/diffusion
+7 https://https://github.com/21cmfast/21cmEMU/
+releases/tag/v3.0
+Article number, page 5 of 21
+
+A&A proofs:manuscript no. aanda
+…
+Score-based diffusion
+Reverse SDE
+21cmEMUv3
+Forward SDE
+Fig. 1: Diagram of the architecture of21cmEMUv3. The input consists of a total of eleven parameters:𝜎8 and ten astrophysical
+parameters, three of which affect pop III galaxies.21cmEMUv3consists of two networks: timeseries LSTM network on the left
+and the score-base diffusion network for the 2D 21-cm PS on the right. The network on the left emulates the globally-averaged
+21-cm signal, spin temperature, and neutral fraction all as a function of redshift𝑧. The UV LFs as a function of magnitude at seven
+redshifts and spherically-averaged PS as a function of redshift and wavemode are emulated with 2D LSTM networks since they are
+two-dimensional quantities. This network also includes a branch with a feed-forward neural network that emulates the Thomson
+scattering optical depth. The eleven parameters along with the desired redshift are also passed to the score-based diffusion network
+that produces one 2D 21-cm PS in∼2s on a single GPU.
+depth is emulated with a simple feed-forward network with four
+layers of 256 nodes each. All LSTM branches use two layers,
+asadditionallayersdonotimproveperformance,consistentwith
+Dorigo Jones et al. 2024.
+Training this multi-output network presents a multi-task
+learning challenge, as the 1D PS is significantly more complex
+than the other summaries and benefits from being trained jointly
+rather than in isolation. Similarly to the 2D PS, we also find that
+theLSTMnaturallymarginalisesoversamplevarianceandtends
+toemulatethemeanPS,asexpectedwithstandardmean-squared
+error (MSE) loss. We explored several strategies including gra-
+dient surgery methods such as CAGrad (Liu et al. 2021) and
+various loss weighting schemes, finding only marginal improve-
+mentsoverasimplerbaseline.Moreover,wefindthatweightde-
+cay is catastrophic for LSTM performance and do not use it. We
+therefore adopt a straightforward training procedure: theAdam
+optimiser (Kingma & Ba 2017) with aReduceLROnPlateau
+scheduler,decayingfrom10 −3to10 −7,withEMAcheckpointing.
+Training converges by∼400 epochs on∼45k training samples.
+4. 21cmEMUv3 performance
+We assess the performance of21cmEMUv3by evaluating it on a
+test set and calculating the error using the following metrics:
+(i) absolute difference (Abs Diff):
+Abs Diff≡ |𝑦 true −𝑦 pred|(10)
+(ii) fractional error (FE):
+FE(%)= Abs Diff
+max(|𝑦 true |, 𝑦floor) ×100,(11)
+wherethefloorissetto𝑦 floor =1.0forthe21-cmPSinlog
+space(𝑦 floor =10 −2 mK2 forthe21-cmPSinlinearspace),
+and neutral fraction,𝑦 floor =5mK for the global 21-cm
+signal. No floor is applied to other summaries.
+4.1. Cylindrical 21-cm PS
+Training an emulator of the cylindrical PS is significantly more
+challengingthanforthe1DPSduetotheincreaseddimensional-
+ity.Wefindthatemulatorperformancevariesby∼10–20%when
+the training set size changes by a similar amount. To maximise
+accuracy,weusethe∼90%ofthedatabasefortrainingand∼10%
+for validation, reserving only 90 parameter combinations for the
+test set.
+AsmentionedinSections3.1and3.2,weexpect21cmEMUv3
+tonaturallymarginaliseoversamplevarianceinboththe1Dand
+2D PS, since each training sample has a different Gaussian IC
+realisation and learning the mean minimises the loss. We check
+this by simulating an average of∼60 PS realisations (varying
+the IC seeds) for each of the 90 parameter combinations in the
+test set and averaging over the realisations to obtain mean PS
+estimates. Comparing against the IC-averaged PS, we find that
+the emulator error is smaller than the sample variance error of
+individual realizations (by∼7% and∼5% for the 2D and 1D PS
+respectively).Figure2illustratesthisforasinglerandomsample
+ofthe2DPSatredshift𝑧∼6(topleft),showingthattheemulated
+PS (top right) deviates from the mean by less than∼1% across
+mostscales(bottomright),whileasinglerealisationmaydeviate
+byover∼10%(bottomleft).InAppendixA,FigureA.2showsthe
+linear 2D PS fractional error as a function of each of the eleven
+input parameters across the 90-parameter test set, confirming
+that the≲1% accuracy is maintained uniformly across the full
+parameter range and does not degrade toward the prior edges.
+Article number, page 6 of 21
+
+D. Breitman et al.:21cmEMUv3
+10 1
+100
+k  [Mpc 1]
+Sample
+z ~ 6.1
+21cmEMUv3
+10 1
+100
+k  [Mpc 1]
+10 1
+100
+k  [Mpc 1]
+10 1
+100
+k  [Mpc 1]
+4
+6
+2
+21 [mK2]
+100
+101
+FE(%)
+Fig. 2: Top row: a cylindrical 21-cm PS realisation from the test set (left) and the corresponding21cmEMUv3output (right). Bottom
+row: fractional error comparing each PS in the top row against the mean PS estimated by averaging 76 IC realisations at fixed
+astrophysical and cosmological parameters. The emulator produces a 2D PS much closer to the mean than the single realisation.
+4.2. Other summaries
+In Figure 3, we plot true (solid) and emulated (dashed) outputs
+for 10 random test set samples across all summaries. The 10
+samples are identical across panels. True and emulated curves
+are typically indistinguishable by eye, consistent with the sub-
+percent accuracy reported in Table 2. In the 1D PS panel on
+thetopleft,weadditionallyshowindividualICrealisations(thin
+solid lines) alongside the mean (thick solid line), highlighting
+that the emulated 1D PS (dashed line) is closer to the mean
+than any realisation. Looking at the bottom panel, we show the
+68% and 95% confidence limits (CLs) of the absolute difference
+in black when comparing the emulated PS against individual
+realisations from about 4k different parameters. The red shaded
+regionsshowthesamewhencomparingtheemulatedPSagainst
+themeanfromthe90parametercombinations.Wealsoshowthe
+equivalent of Figure 3 but with the fractional error in Figure A.1
+of the appendix.
+We summarise performance in Table 2, where statistics are
+evaluated over 4k test samples for all summaries except the 1D
+and 2D PS, for which we use the 90-parameter mean PS test set.
+The median (68% CL) error is 0.45% (0.81%) for the log 2D
+PS8and 0.73% (2.57%) for the log 1D PS. The remaining sum-
+mariesarealsoallemulatedtosub-percentmedianaccuracy.This
+is particularly noteworthy in comparison to21cmEMUv1, which
+achieved a median (68% CL) 1D PS error of 1.4% (3.8%) de-
+spitebeingtrainedonadatabasenearlytwoordersofmagnitude
+larger, on a lower-dimensional summary statistic, and on a fixed
+ICrealisationwithnosamplevariance.Thisimprovementcanbe
+likely attributed to the enhanced performance of the LSTM and
+diffusion architectures.
+8 Note that the full error covariance matrix is available within the
+21cmEMUpackage.
+Table 2: Performance of the emulator over the test set for all
+summaries. Note that the test set for the PS consists of 90 mean
+PS,whileforallothersummaries,thetestsetcontains4ksamples.
+Summary Median FE (%) 68% CL (%)
+log10 Δ2
+21 (𝑘 ⊥, 𝑘 ∥ )0.45 0.81
+log10 Δ2
+21 (𝑘)0.73 2.57
+𝑇 b 0.46 1.49
+log10 𝑇 S 0.47 3.48
+𝑥Hi 0.02 0.29
+𝜏e 0.29 0.47
+log𝜙0.21 1.33
+5. Applications to inference
+In this section, we apply21cmEMUv3on a set of inference prob-
+lems.Weperformallinferenceswiththe21cmMC 9driver(Greig&
+Mesinger2015)thatcannowalsoberunwith21cmEMUv3inad-
+dition to21cmFAST,21cmEMUv1, and21cmEMUv2.21cmMCnow
+also incorporates thenautilus(Lange 2023) sampler, which
+we find provides a good balance between posterior accuracy and
+efficiency (see Appendix B for a detailed discussion).
+5.1. Revisiting the interpretation of HERA observations
+HERA Collaboration et al. 2023 (henceforth HERA23) reported
+the deepest upper limits on the 21-cm PS to date and interpreted
+them with Bayesian inference using21cmFASTv3(Mesinger &
+Furlanetto2007;Mesingeretal.2011;Murrayetal.2020),where
+the likelihood was determined by four complementary CD/EoR
+observables:
+9 https://github.com/21cmfast/21CMMC/
+Article number, page 7 of 21
+
+A&A proofs:manuscript no. aanda
+0
+20
+40
+60
+2
+21 [mK2]
+k  0.1 Mpc 1
+Realisations
+True mean
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0.0
+2.5
+5.0Abs diff
+68% CL
+95% CL
+Mean PS
+Median
+75
+50
+25
+0
+25
+Tb [mK]
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0
+1Abs diff
+68% CL
+95% CL
+Median
+0.00
+0.25
+0.50
+0.75
+1.00xHI
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0.00
+0.01Abs diff
+68% CL
+95% CL
+Median
+1.0
+1.5
+2.0
+2.5
+3.0
+log10 TS [K]
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0.0
+0.2Abs diff
+68% CL
+95% CL
+Median
+2
+0
+log10  [Mpc 3 Mag 1]
+z  6 
+True
+21cmEMU
+20
+18
+16
+14
+12
+10
+MUV
+0.00
+0.05Abs diff
+68% CL
+95% CL
+Median
+0.04 0.06 0.08 0.10 0.12
+e
+0.0000
+0.0005
+0.0010
+0.0015Abs diff
+Fig. 3: True (solid) and emulated (dashed) outputs from21cmEMUv3for ten random test set samples. From top to bottom, left to
+right: 1D 21-cm PS at𝑘=0.1Mpc −1, mean 21-cm brightness temperature, neutral hydrogen fraction, mean spin temperature (all
+as a function of redshift), UV LF at𝑧=6, and CMB optical depth. Bottom sub-panels show absolute differences between true and
+emulated quantities; individual sample errors are shown in colour and the median over the full test set in dashed black. Dark (light)
+shaded regions enclose 68% (95%) CL. The red shaded regions for the PS are evaluated against PS means rather than individual
+realisations.
+Article number, page 8 of 21
+
+D. Breitman et al.:21cmEMUv3
+Table 3: Comparison of the priors used in this work (two right-
+mostcolumns)withthepriorsusedinLazareetal.2024(second
+column). The table only lists the parameters whose prior in this
+workisdifferentfromLazareetal.2024.Thethirdcolumnisthe
+closestpriorpossibletoLazareetal.2024within theconstraints
+of our emulator training database. The fourth column is an in-
+formed prior based on Xu et al. 2016 and ensures continuity of
+the SHMR around108 M⊙.
+Parameter Lazare+24 Lazare-like Renaissance-like
+log10 𝑓∗,7 [−3.5,−1] [−3.5,−1] N (−3.3,1)
+∈ [−5,−1]
+𝛼∗,mcg [−0.5,0.5]𝛼 ∗,acg 𝛼∗,acg
+log10 𝑓∗,10 [−3,0] [−2,0.5] N (−1,1.1)
+∈ [−2.5,0.5]
+𝛼∗,acg [−0.5,1] [0,1] N (0.8,0.2)
+∈ [0,1]
+log10 𝑓esc,7 [−3,0] [−3,−1] [−3,−1]
+𝛼𝑋 [−1,3]1 1
+(i) UVluminosityfunctions(Bouwensetal.2015,2016;Oesch
+et al. 2018) with a Gaussian likelihood;
+(ii) ThomsonscatteringopticaldepthtotheCMB(PlanckCol-
+laboration et al. 2020; Qin et al. 2020) which uses a Gaus-
+sian likelihood around𝜏𝑒 =0.0569 +0.0081
+−0.0086;
+(iii) upperlimit 𝑥Hi <0.06±0.05ontheEoRhistoryat𝑧=5.9
+(McGreer et al. 2015) obtained with the Ly𝛼dark fraction
+method (Mesinger 2010; McGreer et al. 2015). The likeli-
+hood function is unity at𝑥Hi(𝑧=5.9)<0.06, decreasing
+as a one-sided Gaussian for higher neutral fraction values;
+(iv) HERA23 upper limits on 21-cm PS with a positive un-
+bounded prior on systematics.
+The analysis in HERA Collaboration et al. 2022a and
+HERA23revealsthatcurrentupperlimitsonthe21-cmPSfavour
+earlygalaxiesthatweremoreX-rayluminousperunitstarforma-
+tionrate,comparedtopresent-daygalaxies.TheX-rayluminosity
+of present day star-forming galaxies is dominated by high mass
+X-ray binary stars (HMXBs; e.g. Mineo et al. 2012), and the
+inferred luminosities from HERA23 are consistent with HMXB
+models and extrapolations of empirical trends to the low metal-
+licityregimeexpectedinthefirstgalaxies(e.g.Fragosetal.2013;
+Brorby et al. 2016; Madau & Fragos 2017; Lehmer et al. 2021;
+Kaur et al. 2022; Sartorio et al. 2023).
+TheHERA23analysis,however,onlyaccountedforHMXBs
+hosted in ACGs. As pointed out in HERA23, if the first MCGs
+wereefficientinformingstars,thecorrespondingHMXBswould
+add an additional population contributing to the X-ray back-
+ground. This would weaken the inferred constraints on ACG
+X-ray efficiency, allowing for lower values than those obtained
+under the single-population assumption. This was confirmed by
+Lazare et al. 2024 (henceforth L24), who repeated the HERA
+analysisusinganemulatorofa21cmFASTv3modelthatincludes
+both ACGs and MCGs. L24 assumed the same X-ray efficiency
+per unit SFR (𝐿X<2keV/SFR) for both ACGs and MCGs, find-
+ing that the additional population of HMXBs hosted by MCGs
+resulted in weaker limits on𝐿X<2keV/SFR.
+However,L24demonstratedthattheirconclusionswereheav-
+ily dependent on their choice of priors for the unknown star for-
+mation efficiency of MCGs. Here, we revisit these results, using
+high-resolution hydrodynamical simulations of MCGs to moti-
+vate physical priors on their star formation efficiency.
+We begin by repeating the analysis in L24 us-
+ing21cmEMUv3with thenautilussampler. Like L24,
+we assumelog 10 𝐿X<2keV/SFR≡log 10 𝐿mcg
+X<2keV/SFR=
+log10 𝐿acg
+X<2keV/SFR.Ourpriordiffersslightlyfromtheirsbecause
+21cmEMUv3was not trained on the same simulation database as
+their emulator. Consequently, we adopt a "L24-like" prior that is
+as close as possible to theirs while ensuring that it remains rea-
+sonably within the parameter space on which our emulator was
+trained. Table 3 compares the two priors: the second column is
+thepriorinL24,whilethethirdcolumnistheL24-likepriorused
+inthiswork.Wecancomparevisuallythedifferencebetweenthe
+two priors in Figure 4, where we plot the 68% CL of the SHMR
+for their prior in grey and for our prior in green. Comparing the
+two we see general agreement, although our L24-like prior in
+green has a somewhat steeper drop in the SHMR approaching
+the smallest-mass MCGs with Mℎ ∼10 5𝑀⊙.
+In the right panel of Figure 4, we compare two inference
+results: the L24 result (grey) and our21cmEMUv3result using
+the L24-like prior (green)10. The latter can be obtained in two
+ways with21cmEMUv3: (i) directly from the LSTM network that
+emulates the 1D 21-cm PS; or (ii) by averaging the 2D PS pro-
+duced by the score-based diffusion network down to 1D. We
+show the full corner plot including both methods in Figure C.2
+intheappendix.Wefind,asexpected,thatbothapproachesyield
+nearly identical posteriors, validating the consistency of the two
+emulation pathways. Comparing the green and grey posteriors,
+the two are qualitatively similar, though our L24-like prior pro-
+vides a slightly stronger lower limit onlog10 𝐿X<2keV/SFRdue
+to the fact that it implies slightly less efficient star formation in
+Mℎ ∼10 5 −10 6𝑀⊙ halos. In both cases, the data used provide
+only a lower limit onlog10 𝐿X<2keV/SFRover our prior range.
+We note however that values beyondlog10 𝐿X<2keV/SFR≳42
+start to be disfavoured by measurements of the present-day un-
+resolvedX-raybackground(notconsideredinthiswork),though
+theseconstraintsdependontheassumedspectralenergydistribu-
+tion of X-ray sources (e.g. Mirocha et al. 2025; Katz et al. 2025;
+Dhandha et al. 2025).
+Having verified that we broadly reproduce the result from
+L24, we repeat the analysis with a more physically informed
+prior for star formation in MCGs. The informed prior choice is
+motivated by the Renaissance hydrodynamical simulations (Xu
+et al. 2016, henceforth Xu16) and is also consistent with find-
+ings from other recent studies (e.g. Brauer et al. 2025). The
+Renaissancesimulationsareasuiteofzoom-incosmologicalhy-
+drodynamic simulations designed to model the first generation
+ofgalaxiesinunprecedenteddetail.Theysimulatetheformation
+of metal-free stars, including the process of metal enrichment
+due to star formation, and the effects of radiative and supernova
+feedback. Specifically, the simulations use the adaptive mesh re-
+finement(AMR)codeEnzo(Bryanetal.2014),coupledwithits
+adaptive ray tracing moduleEnzo+Moray(Wise & Abel 2011)
+for self-consistent on-the-fly radiative transfer. Three zoom-in
+regions — overdense, average, and underdense — each span-
+ning∼220–430 comovingMpc3,are evolvedtofinalredshifts of
+𝑧=15, 12.5, and 8, respectively, reaching a maximum spatial
+resolution of 19 comoving parsecs with a dark matter particle
+mass of2.9×10 4𝑀⊙. The feedback prescription encompasses
+photo-ionization and photo-heating from H,iiregions, Lyman–
+Werner dissociation of H2, and supernova feedback from both
+PopIII and metal-enriched stellar populations, with the resulting
+overpressurised H,iiregions and supernova-driven outflows reg-
+ulating star formation through repeated cycles of gas expulsion
+and re-accretion in low-mass halos.
+10 This inference requires about 100k likelihood evaluations and takes
+about 20 GPU-minutes to complete.
+Article number, page 9 of 21
+
+A&A proofs:manuscript no. aanda
+Xu16 examined the properties of early galaxies from popu-
+lations hosted by at least a few thousand halos. In the left plot of
+Figure5,weshowinyellowthe1𝜎regionoftheSHMRreported
+by Xu16 (see their Table 2). In particular, the thin yellow curve
+plottedthroughtheyellowregioncorrespondstothemeanSHMR
+foracosmicregionwithnear-averagedensity.Theupper(lower)
+boundsareobtainedbyaveragingtheupper(lower)boundsofthe
+SHMR for average, underdense, and overdense cosmic regions
+analysedinXu16.Theresultingyellowshadedregion,therefore,
+spans a wide range of MCG stellar masses across diverse cos-
+mic environments. Comparing the yellow and green 1𝜎shaded
+regions, we see that the L24 prior favours higher stellar masses
+for MCGs in comparison to the Renaissance simulations. Thus
+if star formation inside actual MCGs is similar to that in the
+Renaissance simulations, we would expect L24 to overestimate
+their impact on the HERA23 conclusions.
+Usingtheyellowshadedregionforguidance,wechooseanew
+"simulation-informed"priorshowninbluethatapproximatesthe
+yellow region while remaining reasonably within the parameter
+spaceonwhich21cmEMUv3wastrained.WealsochangetheACG
+SHMR parameters to ensure that the priors across MCG SHMR
+and ACG SHMR are consistent around108 𝑀⊙. The informed
+priorconsistsoftruncatedGaussiandistributions.Thetruncation
+avoidssamplestoofaroutsidethetrainingrangeoftheemulator.
+Theparametersoftheinformedpriorareshownintherightmost
+column in Table 3.
+IntherightpanelofFigure5,weshowthe1Dmarginalposte-
+rioroftheX-rayluminosityperunitSFRfortheinformedpriorin
+blue11,comparedtotheL24posterioringrey.ComparedtoL24,
+the informed prior more strongly disfavours the lowest values of
+X-ray luminosity per unit SFR. This can be understood by com-
+paring the blue and grey 1𝜎shaded regions of the priors in the
+left panel: the L24 prior favours higher MCG stellar masses and
+in turn higher SFRs. Having a higher SFR in MCGs means that
+the IGM heating detected by HERA can be accomplished with
+lower values of X-ray luminosities per unit SFR. For reference,
+the vertical lines indicate the mean X-ray luminosity for local
+high-mass X-ray binaries (HMXBs) (Fragos et al. 2013) (grey
+dotted) and a low-metallicity extrapolation of local relations ex-
+pected for the first galaxies (Kaur et al. 2022) (red dash-dotted).
+Our posterior is consistent with this low-metallicity extrapola-
+tion and disfavours the local HMXB relation at∼93%credible
+interval (CI). This re-analysis thus provides the state-of-the-art
+interpretation of current 21-cm observations, grounded in theo-
+retical predictions from hydrodynamical simulations.
+5.2. SKA forecasts with different antenna layouts
+Inthissection,weuse21cmEMUv3toforecastCD/EoRconstraints
+achievable with the 1D and 2D 21-cm PS from the upcoming
+Square Kilometre Array (SKA)12. SKA-Low, the low-frequency
+component of the SKA relevant for 21-cm CD/EoR science, is
+currentlyunderconstructioninAustralia.Eachstationcomprises
+256dipoleantennas,coveringthefrequencyrange50−220MHz
+— corresponding to redshifts𝑧∼5.5−27for the redshifted 21-
+cm line. Construction is proceeding in staged Array Assembly
+(AA) increments. Here we consider three layouts representative
+11 Note that we perform the inference twice: once with the 1D PS from
+theLSTMandanothertimewiththe2DPSfromthediffusionmodelthat
+we then average down to 1D. We confirm that both approaches produce
+anearlyidenticalposterior,asexpected.Forreference,theresultsshown
+in the figures are obtained with the 1D PS LSTM emulator.
+12 https://www.skao.int/en
+ofdifferentdeploymentstagesasshowninFigureC.1:(i)thefully
+deployed AA4 with all 512 stations; (ii) AA∗ with 307 stations;
+and(iii)aproposedlayoutP1with257stations 13,accountingfor
+the Fall 2025 announcement of the deferral of the construction
+of 50 SKA-Low stations due to budget constraints. This forecast
+willallowustoassesshowmuchconstrainingpowerislostbythe
+deferralof50stationsincomparisontoAA ∗andfulldeployment.
+The deferred stations are predominantly located in the outskirts
+of the core, preferentially reducing long-baseline density while
+leavingtheshort-baselinedensityatthecentreofthecore,which
+drives CD/EoR sensitivity, largely intact. While the impact of
+the deferral on CD/EoR sensitivity is expected to be minimal,
+in practice, the loss of long-baseline density affects calibration,
+which will likely impact CD/EoR science in ways not captured
+by our idealised forecast, as we discuss below.
+Table 4: Mock SKA observation fiducial parameters.
+Parameter Values
+log10 𝑓∗,10 -1.2
+𝛼∗ 0.5
+𝑡∗ 0.55
+log10 𝑓esc,10 -1.3
+𝛼esc 0.0
+log10 𝑓∗,7 -2.5
+log10 𝑓esc,7 -1.5
+log10 𝐿acg
+X<2keV/SFR40.5
+log10 𝐿mcg
+X<2keV/SFR41.5
+𝐸0 500
+𝜎8 0.8118
+To simulate a realistic observation, we select a parameter set
+fromtheemulatortestsetasthefiducialmockcosmologicalsig-
+nal.Thefiducialparameters,showninTable4,areconsistentwith
+currentobservationalconstraintssuchasUVLFs,andarerepre-
+sentative of values commonly adopted in the literature (e.g.,Qin
+etal.2020;Muñozetal.2022).Wemodifyoursensitivitysimu-
+lator21cmSense(Murray et al. 2024) to interface with the SKA
+packageska-ost-array-config 14 in order to obtain the most
+up-to-date SKA antenna layouts. We then use21cmSenseto
+forecast sensitivities for the three layouts. The SKA forecasting
+pipeline is made publicly available in the21cmSensedocumen-
+tation15.
+In the left panel of Figure 6, we show the mock 1D PS as
+a function of redshift at𝑘∼0.18Mpc −1 together with the cor-
+responding SKA thermal noise sensitivity for the three antenna
+layouts. At the most sensitive wavenumber and redshift in the
+forecast (𝑘∼0.44Mpc −1,𝑧∼7.9), the 21-cm PS is detected at
+∼14𝜎,∼13𝜎, and∼12𝜎for AA4, AA ∗, and P1, respectively
+— a∼7%sensitivity reduction per deployment stage at this
+frequency. At other redshifts, however, the reduction between
+successive layouts can reach∼20%, highlighting that the im-
+pact of the 50-station deferral is frequency-dependent and most
+pronounced away from the peak sensitivity.
+We use21cmEMUv3with thenautilussampler to perform
+11-parameter inference on the simulated mock 21-cm PS obser-
+vation. The inference setup follows that of Section 5.1 with the
+13 P1 station layout obtained from Florent Mertens (private communi-
+cation), based on engineering constraints provided by SKAO.
+14 https://gitlab.com/ska-telescope/ost/
+ska-ost-array-config
+15 https://21cmsense.readthedocs.io/en/latest/
+tutorials/SKA_forecast.html
+Article number, page 10 of 21
+
+D. Breitman et al.:21cmEMUv3
+5 6 7 8 9 10
+log10 Mh/M
+4
+6
+8
+log10M /M
+Lazare+24 prior
+Lazare+24-like prior
+38.0 38.5 39.0 39.5 40.0 40.5 41.0 41.5 42.0
+log10LX < 2keV/ SFR [erg s 1 M 1 yr]
+0.0
+0.2
+0.4
+0.6Probability Density
+Lazare+24 ACGs + MCGs emcee
+21cmEMUv3 Lazare-like nautilus
+Fig. 4: Left plot: Prior on the SHMR from L24 (Lazare et al. 2024) (grey). Prior used in this work that is similar to L24 but not
+exactly the same due to differences in the simulation database (green). Note that our L24-like prior favours lower stellar masses in
+comparison to L24. Right plot: Posteriors of the X-ray luminosity per unit SFR parameter for the two priors shown in the left plot.
+5 6 7 8 9 10
+log10 Mh/M
+4
+6
+8
+log10M /M
+Renaissance Xu+16
+Lazare+24 prior
+This work
+38.0 38.5 39.0 39.5 40.0 40.5 41.0 41.5 42.0
+log10LX < 2keV/ SFR [erg s 1 M 1 yr]
+0.0
+0.2
+0.4
+0.6Probability Density
+40.2639.23
+Lazare+24 ACGs + MCGs emcee
+21cmEMUv1 UltraNest
+This work
+Local HMXBs Mineo+12
+Low-metallicity HMXBs Kaur+22
+Fig. 5: Left plot: In yellow, we show the SHMR for the Renaissance hydrodynamic simulations (Xu et al. 2016). We use these to
+motivate our prior range (blue), which favours lower stellar masses for MCGs compared to Lazare et al. 2024 (gray). Right plot:
+Posteriors of the X-ray luminosity per unit SFR parameter for the two priors shown in the left plot. The shaded areas correspond
+to 95% highest posterior density (HPD) interval (pale) and 68% (dark). The posterior in black is obtained from Breitman et al.
+2024withtheUltraNestsamplerand21cmEMUv1thatmodelsonlyasinglepopulationofACGs.Asexpected,theposteriorwhich
+uses our simulation-informed prior lies between the fiducial one of L24 and the fiducial HERA23 result that assumes only a single
+populationofACGs.Forreference,theverticallinesindicatemeanvaluesforlocalHMXBs(Fragosetal.2013),andanextrapolation
+of local relations to the metal-poor regime expected in the first galaxies (Kaur et al. 2022). Our new posterior is consistent with the
+extrapolation, and disfavours the local HMXB relation at∼93%CI.
+5 10 15 20 25
+Redshift
+10 1
+101
+103
+2
+21 [mK2]
+k = 0.18 Mpc 1
+Sensitivity
+Mock AA4
+AA*
+P1
+10 1
+102
+2
+21 [mK2]
+ k  0.18 Mpc 1
+ P1
+AA*
+AA4
+80
+60
+40
+20
+0
+20
+Tb, 21 [mK]
+HERA23
+MWA [Nunhokee+25]
+LOFAR [Mertens+25]
+HERA23
+MWA [Nunhokee+25]
+LOFAR [Mertens+25]
+6 8 10 12 14 16 18 20 22 24 26 28
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI
+McGreer+15
+Fig. 6: Left panel: Mock SKA observation of the 21-cm 1D PS at wavemode𝑘∼0.18Mpc−1 (black solid), and the corresponding
+thermal noise sensitivity for the AA4 (purple), AA∗ (yellow), and proposed deferral P1 (blue) antenna layouts simulated with
+21cmSense. Right panel: Marginalised 95% credible intervals on the 1D 21-cm PS (top), global 21-cm signal (middle), and neutral
+fraction (bottom) as a function of redshift, for the three layouts. The ground truth from the mock is shown in red in each panel.
+Article number, page 11 of 21
+
+A&A proofs:manuscript no. aanda
+Renaissance-likeprior,withthesolemodificationthattheHERA
+upperlimitsarereplacedbytheSKA21-cmPSmockdetections,
+adopting a Gaussian likelihood. The resulting posteriors on de-
+rived summaries are shown in the right panel of Figure 6. The
+full corner plot is provided in Figure C.3 in Appendix C.
+We find that the additional baseline density of the AA4 lay-
+out provides only marginal improvement in constraining power
+relative to AA∗, suggesting that AA∗ already captures most of
+the astrophysical information encoded in the 21-cm PS for this
+fiducialmodel.TheEoRhistoryiswellrecoveredacrossallthree
+layouts, with 95% CI on the neutral fraction narrowing from
+Δ¯𝑥HI =0.098(P1) to0.085(AA ∗) to0.077(AA4) around the
+midpoint of reionisation. The global 21-cm signal is similarly
+well constrained. Most notably, the Thomson scattering optical
+depth𝜏 𝑒 is recovered to∼5–6 times the precision of the Planck
+Collaborationetal.(2020)measurementacrossallthreelayouts,
+demonstrating that even the most conservative deployment stage
+would represent a dramatic improvement over CMB-based con-
+straintsonthereionisationhistory(thoughseeQinetal.2025for
+state-of-the-art constrains on the EoR history from the Lyman
+alphaforest).Wenotethattheseconstraintsrepresentarelatively
+conservative estimate, as they are obtained by varying all 10 as-
+trophysical parameters and𝜎8 simultaneously. Simpler models
+withfewerfreeparametersyieldconsiderablytighterbounds.For
+instance, forecasts using21cmEMUv1, which varies 9 parameters
+underalessflexiblegalaxymodel,recoverΔ¯𝑥 HI ≈0.03andcon-
+strain𝜏 𝑒 to∼20timestheprecisionofPlanckCollaborationetal.
+(2020).Theconstrainingpowerreportedhereshouldthereforebe
+interpreted in the context of the model complexity and inference
+dimensionality.
+Theforecastspresentedhereareidealisedandshouldbeinter-
+preted with care. While our sensitivity calculations do assume a
+moderate foreground avoidance model excluding Fourier modes
+withintheforegroundwedge,aregionincylindrical𝑘-spacecon-
+taminated by spectrally smooth foregrounds (e.g., Morales et al.
+2012; Parsons et al. 2012; Liu et al. 2014), plus a0.1ℎMpc−1
+buffer (e.g. see HERA Collaboration et al. 2022b), they do not
+accountforresidualsystematicsthatcurrentlylimitrealobserva-
+tions. Mertens et al. (2025) illustrate their importance, demon-
+strating that a more contaminated LOFAR field can yield better
+21-cm PS upper limits than a cleaner one, owing largely to the
+greater maturity of its calibration and foreground subtraction
+pipeline. This shows that the achievable sensitivity strongly de-
+pends on the accuracy of sky modelling and calibration rather
+than thermal noise alone. Since long baselines are essential for
+building accurate sky models and constraining gain solutions,
+thereducedlong-baselinedensityoftheAA ∗ andP1layoutsmay
+increaseresidualforegroundcontaminationinwaysnotcaptured
+by our forecasts. The actual impact of the station deferral on
+CD/EoR science is therefore likely more significant than sug-
+gested here. We further note that science cases relying heav-
+ily on long baselines, such as very long baseline interferometry
+(VLBI), are expected to be considerably more affected by the
+deferral than CD/EoR science. Overall, despite these caveats,
+our forecasts suggest that the scientific return of SKA-Low for
+CD/EoR science remains strong even under the deferred deploy-
+ment schedule.
+6. Conclusion
+We have presented21cmEMUv3, an emulator of21cmFASTv3
+modelling two galaxy populations: atomically and molecularly
+cooling galaxies, conditioned on eleven astrophysical and cos-
+mological parameters.21cmEMUv3jointly predicts seven sum-
+mary observables using a score-based diffusion model for the
+cylindrical21-cmPS,LSTMnetworksforthefivetime-evolving
+summaries, and a feed-forward network for the optical depth
+to reionization, achieving sub-percent median fractional error
+across all outputs. Notably, the 2D PS is emulated at a better
+accuracy than the 1D PS from21cmEMUv1, despite being a sig-
+nificantly more complex summary statistic and being trained on
+a database nearly two orders of magnitude smaller.
+Weapplyouremulatortore-interprettheHERA23measured
+upper limits on the 21cm PS, together with complimentary ob-
+servations. HERA23 discovered a new source of IGM heating
+at𝑧≳10, likely provided by HMXBs in the first galaxies. The
+fiducialHERA23analysisonlyconsideredHMXBsinACGs.As
+quantified in Lazare et al. 2024, the inclusion of an additional
+population of MCG-hosted HMXBs would weaken the implied
+constraints on the X-ray luminosity per unit star formation, sim-
+plybyincreasingthetotalstarformationdensityoftheUniverse.
+We revisit this claim, using for the first time a simulation-
+informed prior for star formation in MCGs. Our prior is moti-
+vated by the Renaissance hydrodynamical simulations (Xu et al.
+2016) that favour less efficient star formation inside MCGs in
+comparison to the fiducial prior in Lazare et al. 2024. As ex-
+pected,ourresultingconstraintsontheX-rayluminosityperunit
+star formation are in between those of L24 and HERA23. These
+results provide a simulation-informed interpretation of current
+21-cm upper limits that grounds MCG priors in theoretical pre-
+dictions from state-of-the-art hydrodynamical simulations, thus
+trading dependence on an arbitrary prior choice for dependence
+on the specific star-formation and feedback prescriptions of the
+Renaissance simulations. Our posterior is consistent with low-
+metallicity extrapolations of empirical HMXB trends, and dis-
+favours the local HMXB relation at∼93%C.I.
+Finally,weshowcase21cmEMUv3byproducingSKAparame-
+terforecastsfrommock21-cmPSobservationsin∼1GPU-hour,
+over 6 orders of magnitude faster than with direct simulation on
+CPUs.WeconsiderthreeSKA-Lowlayoutsrepresentativeofdif-
+ferentdeploymentstages:thefullydeployedAA4(512stations),
+AA∗ (307 stations), and a proposed P1 layout (257 stations) re-
+flectingtheFall2025announcementofthedeferralof50stations
+duetobudgetconstraints.The21-cmPSisforecasttobedetected
+at∼14𝜎,∼13𝜎,and∼12𝜎forAA4,AA ∗,andP1,respectively,
+at the most sensitive wavemode and redshift (𝑘∼0.44Mpc−1,
+𝑧∼7.9), with sensitivity reductions between successive layouts
+of∼7%at peak sensitivity and up to∼20%at other redshifts
+and wavemodes. Notably, AA4 provides only marginal improve-
+mentoverAA ∗,suggestingthatthelatteralreadycapturesmostof
+theavailableastrophysicalinformationforthisfiducialmodel.A
+joint11-parameterinferencewiththeSKAmock1DPSrecovers
+theEoRhistorywitha95%CIofΔ¯𝑥 HI =0.098,0.085,and0.077
+forP1,AA ∗,andAA4,andconstrains𝜏 𝑒 to∼5–6timesthepreci-
+sion of Planck Collaboration et al. (2020). We caution that these
+forecastsareidealised,aswedonotaccountforresidualsystem-
+aticsoutsideoftheforegroundwedge.Itispreciselytheinclusion
+ofthelong-baselineswithsuccessivedeploymentswhichwillal-
+low us to improve calibration and mitigate systematics. Overall,
+however, our forecasts suggest that even the most conservative
+deployment stage will deliver transformative constraints on the
+CD/EoR astrophysics and cosmology, and that the impact of the
+station deferral on CD/EoR science is modest, suggesting that
+the scientific return of SKA-Low remains strong even under the
+deferred deployment schedule.
+Article number, page 12 of 21
+
+D. Breitman et al.:21cmEMUv3
+Acknowledgements
+D.B.thanksNicholasKernforusefuldiscussionabouttheproject,
+andElyKovetzforcommentingonthemanuscript.Wegratefully
+acknowledgecomputationalresourcesoftheCenterforHighPer-
+formance Computing (CHPC) at SNS. A.M. and R.T. acknowl-
+edge support from the Italian Ministry of Universities and Re-
+search(MUR)throughthePRINproject"Optimalinferencefrom
+radio images of the epoch of reioniza-tion". S.M. has received
+funding from the European Union’s Horizon 2020 research and
+innovationprogrammeundertheMarieSkłodowska-Curiegrant
+agreement No. 101067043.
+Data Availability
+21cmEMUisonapubliclyaccessiblegithubrepository,aswellas
+available for install as a Python package usingpip.
+References
+Albert,J.,Balázs,C.,Fowlie,A.,etal.2025,ComputerPhysicsCommunications,
+315, 109756
+Anderson, B. D. 1982, Stochastic Processes and their Applications, 12, 313
+Bañados, E., Venemans, B. P., Mazzucchelli, C., et al. 2018, Nature, 553, 473
+Becker, G. D., Bolton, J. S., Madau, P., et al. 2015, MNRAS, 447, 3402
+Becker, G. D., Rauch, M., & Sargent, W. L. W. 2007, ApJ, 662, 72
+Behroozi, P. S. & Silk, J. 2015, ApJ, 799, 32
+Bevins,H.T.J.,Handley,W.J.,Fialkov,A.,deLeraAcedo,E.,&Javid,K.2021,
+MNRAS, 508, 2923
+Bolton, J. S., Haehnelt, M. G., Warren, S. J., et al. 2011, MNRAS, 416, L70
+Bosman, S. E. I., Fan, X., Jiang, L., et al. 2018, MNRAS, 479, 1055
+Bouwens, R. J., Illingworth, G. D., Oesch, P. A., et al. 2015, ApJ, 803, 34
+Bouwens, R. J., Oesch, P. A., Labbé, I., et al. 2016, ApJ, 830, 67
+Brauer, K., Mead, J., Wise, J. H., et al. 2025, ApJ, 993, 2
+Breitman, D., Mesinger, A., Murray, S. G., & Acharya, A. 2025, A&A, 703,
+A130
+Breitman, D., Mesinger, A., Murray, S. G., et al. 2024, MNRAS, 527, 9833
+Brorby,M.,Kaaret,P.,Prestwich,A.,&Mirabel,I.F.2016,MNRAS,457,4081
+Bryan, G. L., Norman, M. L., O’Shea, B. W., et al. 2014, ApJS, 211, 19
+Buchner, J. 2021, The Journal of Open Source Software, 6, 3001
+Bye, C. H., Portillo, S. K. N., & Fialkov, A. 2022, ApJ, 930, 79
+Cang, J., Mesinger, A., Murray, S. G., et al. 2024, arXiv e-prints,
+arXiv:2411.08134
+Clément, B., Cuby, J. G., Courbin, F., et al. 2012, A&A, 538, A66
+Cohen, A., Fialkov, A., Barkana, R., & Monsalve, R. A. 2020, MNRAS, 495,
+4845
+Cooper, N., Norregaard, C., Meriot, R., & Pritchard, J. R. 2025, arXiv e-prints,
+arXiv:2508.16329
+Cranmer, K., Brehmer, J., & Louppe, G. 2020, Proceedings of the National
+Academy of Science, 117, 30055
+Das, A., Mesinger, A., Pallottini, A., Ferrara, A., & Wise, J. H. 2017, MNRAS,
+469, 1166
+Das,S.,Louis,T.,Nolta,M.R.,etal.2014,J.CosmologyAstropart.Phys.,2014,
+014
+Davies,J.E.,Mesinger,A.,&Murray,S.2025,arXive-prints,arXiv:2504.17254
+de Belsunce, R., Gratton, S., Coulton, W., & Efstathiou, G. 2021, MNRAS, 507,
+1072
+Dhandha, J., Fialkov, A., Gessey-Jones, T., et al. 2025, MNRAS, 544, 1608
+Diao, K. & Mao, Y. 2025, ApJ, 992, 173
+Dittmann, A. 2024, The Open Journal of Astrophysics, 7, 79
+D’Odorico, V., Bañados, E., Becker, G. D., et al. 2023, MNRAS, 523, 1399
+DorigoJones,J.,Bahauddin,S.M.,Rapetti,D.,Mirocha,J.,&Burns,J.O.2024,
+ApJ, 977, 19
+Drake, A. B., Guiderdoni, B., Blaizot, J., et al. 2017, MNRAS, 471, 267
+Fan, X., Strauss, M. A., Becker, R. H., et al. 2006, AJ, 132, 117
+Feroz, F., Hobson, M. P., & Bridges, M. 2009, MNRAS, 398, 1601
+Fragos, T., Lehmer, B., Tremmel, M., et al. 2013, ApJ, 764, 41
+Furlanetto, S. R. 2006, MNRAS, 371, 867
+George, E. M., Reichardt, C. L., Aird, K. A., et al. 2015, ApJ, 799, 177
+Ghara, R., Choudhury, T. R., & Datta, K. K. 2015, MNRAS, 447, 1806
+Ghara, R., Giri, S. K., Mellema, G., et al. 2020, MNRAS, 493, 4728
+Greig, B. & Mesinger, A. 2015, MNRAS, 449, 4246
+Greig, B. & Mesinger, A. 2017, MNRAS, 472, 2651
+Haiman, Z., Abel, T., & Rees, M. J. 2000, ApJ, 534, 11
+Hee,S.,Handley,W.J.,Hobson,M.P.,&Lasenby,A.N.2015,MonthlyNotices
+of the Royal Astronomical Society, 455, 2461
+Heinrich, C. & Hu, W. 2021, Phys. Rev. D, 104, 063505
+HERA Collaboration, Abdurashidova, Z., Adams, T., et al. 2023, ApJ, 945, 124
+HERA Collaboration, Abdurashidova, Z., Aguirre, J. E., et al. 2022a, ApJ, 924,
+51
+HERA Collaboration, Abdurashidova, Z., Aguirre, J. E., et al. 2022b, ApJ, 925,
+221
+Hermans, J., Begy, V., & Louppe, G. 2019, arXiv e-prints, arXiv:1903.04057
+Ho, J., Jain, A., & Abbeel, P. 2020, arXiv e-prints, arXiv:2006.11239
+Hoag, A., Bradač, M., Huang, K., et al. 2019, ApJ, 878, 12
+Hochreiter, S. & Schmidhuber, J. 1997, Neural computation, 9, 1735
+Hothi, I., Allys, E., Semelin, B., & Meriot, R. 2026, A&A, 706, A15
+Hui, L. & Gnedin, N. Y. 1997, MNRAS, 292, 27
+Hutter, A., Dayal, P., Yepes, G., et al. 2021, MNRAS, 503, 3698
+Hyvärinen, A. 2005, Journal of Machine Learning Research, 6, 695
+Katz, O. Z., Redigolo, D., & Volansky, T. 2025, J. Cosmology Astropart. Phys.,
+2025, 047
+Kaur, H. D., Qin, Y., Mesinger, A., et al. 2022, MNRAS, 513, 5097
+Kern, N. S., Liu, A., Parsons, A. R., Mesinger, A., & Greig, B. 2017, ApJ, 848,
+23
+Kimm, T., Katz, H., Haehnelt, M., et al. 2017, MNRAS, 466, 4826
+Kingma, D. P. & Ba, J. 2017, Adam: A Method for Stochastic Optimization
+Kish, L. 1965, Survey Sampling (New York: John Wiley & Sons)
+Konno, A., Ouchi, M., Ono, Y., et al. 2014, ApJ, 797, 16
+Lange, J. U. 2023, MNRAS, 525, 3181
+Lazare, H., Sarkar, D., & Kovetz, E. D. 2024, Phys. Rev. D, 109, 043523
+Lehmer, B. D., Eufrasio, R. T., Basu-Zych, A., et al. 2021, ApJ, 907, 17
+Lewis, J. S. W., Ocvirk, P., Aubert, D., et al. 2020, MNRAS, 496, 4342
+Liu, A., Parsons, A. R., & Trott, C. M. 2014, Phys. Rev. D, 90, 023018
+Liu, B., Liu, X., Jin, X., Stone, P., & Liu, Q. 2021, arXiv e-prints,
+arXiv:2110.14048
+Loshchilov, I. & Hutter, F. 2017, arXiv e-prints, arXiv:1711.05101
+Ma, X., Quataert, E., Wetzel, A., et al. 2020, MNRAS, 498, 2001
+Madau, P. & Dickinson, M. 2014, ARA&A, 52, 415
+Madau, P. & Fragos, T. 2017, ApJ, 840, 39
+Madau, P., Meiksin, A., & Rees, M. J. 1997, ApJ, 475, 429
+Mahida, Y., Yadav, S. K., Majumdar, S., et al. 2025, J. Cosmology Astropart.
+Phys., 2025, 055
+Maity, B. & Choudhury, T. R. 2022, MNRAS, 515, 617
+McGreer, I. D., Mesinger, A., & D’Odorico, V. 2015, MNRAS, 447, 499
+Mertens, F. G., Mevius, M., Koopmans, L. V. E., et al. 2025, arXiv e-prints,
+arXiv:2503.05576
+Mesinger, A. 2010, MNRAS, 407, 1328
+Mesinger, A. & Furlanetto, S. 2007, ApJ, 669, 663
+Mesinger, A., Furlanetto, S., & Cen, R. 2011, MNRAS, 411, 955
+Mienye, I. D., Swart, T. G., & Obaido, G. 2024, Information, 15
+Mineo, S., Gilfanov, M., & Sunyaev, R. 2012, MNRAS, 419, 2095
+Mirocha, J., Anderson, C., Chang, T.-C., Doré, O., & Lidz, A. 2025, ApJ, 983,
+54
+Mishra, S., Trotta, R., & Viel, M. 2025, Mon. Not. Roy. Astron. Soc., 545,
+staf2071
+Mondal, R., Bharadwaj, S., Majumdar, S., Bera, A., & Acharyya, A. 2015, MN-
+RAS, 449, L41
+Morales, M. F., Hazelton, B., Sullivan, I., & Beardsley, A. 2012, ApJ, 752, 137
+Moriwaki,K.,Jun,R.L.,Osato,K.,&Yoshida,N.2026,MNRAS,545,staf2124
+Mortlock, D. J., Warren, S. J., Venemans, B. P., et al. 2011, Nature, 474, 616
+Muñoz, J. B., Qin, Y., Mesinger, A., et al. 2022, MNRAS, 511, 3657
+Murray, S., Greig, B., Mesinger, A., et al. 2020, The Journal of Open Source
+Software, 5, 2582
+Murray, S., Pober, J., & Kolopanis, M. 2024, The Journal of Open Source Soft-
+ware, 9, 6501
+Mutch, S. J., Geil, P. M., Poole, G. B., et al. 2016, MNRAS, 462, 250
+Nunhokee, C. D., Null, D., Trott, C. M., et al. 2025, arXiv e-prints,
+arXiv:2505.09097
+Ocvirk, P., Aubert, D., Sorce, J. G., et al. 2020, Monthly Notices of the Royal
+Astronomical Society, 496, 4087
+Oesch,P.A.,Bouwens,R.J.,Illingworth,G.D.,Labbé,I.,&Stefanon,M.2018,
+ApJ, 855, 105
+Okamoto, T., Gao, L., & Theuns, T. 2008, MNRAS, 390, 920
+Oke, J. B. & Gunn, J. E. 1983, ApJ, 266, 713
+Ouchi, M., Shimasaku, K., Furusawa, H., et al. 2010, ApJ, 723, 869
+Paardekooper,J.-P.,Khochfar,S.,&DallaVecchia,C.2015,MNRAS,451,2544
+Papamakarios, G. & Murray, I. 2016, arXiv e-prints, arXiv:1605.06376
+Papamakarios, G., Sterratt, D. C., & Murray, I. 2018, arXiv e-prints,
+arXiv:1805.07226
+Park, J., Mesinger, A., Greig, B., & Gillet, N. 2019, MNRAS, 484, 933
+Parsons, A. R., Pober, J. C., Aguirre, J. E., et al. 2012, ApJ, 756, 165
+Paszke, A., Gross, S., Massa, F., et al. 2019, arXiv e-prints, arXiv:1912.01703
+Planck Collaboration, Aghanim, N., Akrami, Y., et al. 2020, A&A, 641, A6
+Article number, page 13 of 21
+
+A&A proofs:manuscript no. aanda
+Prelogović, D. & Mesinger, A. 2023, MNRAS, 524, 4239
+Prelogović, D., Mesinger, A., Murray, S., Fiameni, G., & Gillet, N. 2022, MN-
+RAS, 509, 3852
+Pritchard, J. R. & Loeb, A. 2012, Reports on Progress in Physics, 75, 086901
+Qin, Y., Mesinger, A., Bosman, S. E. I., & Viel, M. 2021a, MNRAS, 506, 2390
+Qin, Y., Mesinger, A., Greig, B., & Park, J. 2021b, MNRAS, 501, 4748
+Qin, Y., Mesinger, A., Prelogović, D., et al. 2025, PASA, 42, e049
+Qin, Y., Poulin, V., Mesinger, A., et al. 2020, MNRAS, 499, 550
+Reichardt, C. L., Patil, S., Ade, P. A. R., et al. 2021, ApJ, 908, 199
+Ronneberger, O., Fischer, P., & Brox, T. 2015, arXiv e-prints, arXiv:1505.04597
+Rumelhart, D. E., Hinton, G. E., & Williams, R. J. 1986, in Parallel Distributed
+Processing:ExplorationsintheMicrostructureofCognition,Volume1:Foun-
+dations,ed.D.E.Rumelhart&J.L.Mcclelland(Cambridge,MA:MITPress),
+318–362
+Santos, M. G., Ferramacho, L., Silva, M. B., Amblard, A., & Cooray, A. 2010,
+MNRAS, 406, 2421
+Sartorio, N. S., Fialkov, A., Hartwig, T., et al. 2023, MNRAS, 521, 4039
+Scelfo, G., Mishra, S., Rigo, M., Trotta, R., & Viel, M. 2026
+[arXiv:2605.26210]
+Schmidt, R. M. 2019, arXiv e-prints, arXiv:1912.05911
+Schmit, C. J. & Pritchard, J. R. 2018, MNRAS, 475, 1213
+Shaw, A. K., Bharadwaj, S., & Mondal, R. 2019, MNRAS, 487, 4951
+Shibuya, T., Ouchi, M., Harikane, Y., & Nakajima, K. 2019, ApJ, 871, 164
+Shimabukuro, H. & Semelin, B. 2017, MNRAS, 468, 3869
+Skilling, J. 2004, in American Institute of Physics Conference Series, Vol. 735,
+Bayesian Inference and Maximum Entropy Methods in Science and Engi-
+neering: 24th International Workshop on Bayesian Inference and Maximum
+Entropy Methods in Science and Engineering, ed. R. Fischer, R. Preuss, &
+U. V. Toussaint (AIP), 395–405
+Skilling, J. 2006, Bayesian Analysis, 1, 833
+Sobacchi, E. & Mesinger, A. 2013, MNRAS, 432, L51
+Sohl-Dickstein,J.,Weiss,E.A.,Maheswaranathan,N.,&Ganguli,S.2015,arXiv
+e-prints, arXiv:1503.03585
+Song, Y., Sohl-Dickstein, J., Kingma, D. P., et al. 2020, arXiv e-prints,
+arXiv:2011.13456
+Springel, V. & Hernquist, L. 2003, MNRAS, 339, 312
+Sun, G. & Furlanetto, S. R. 2016, MNRAS, 460, 417
+The HERA Collaboration, Abdurashidova, Z., Adams, T., et al. 2025, arXiv
+e-prints, arXiv:2511.21289
+Visbal, E., Barkana, R., Fialkov, A., Tseliakhovich, D., & Hirata, C. M. 2012,
+Nature, 487, 70
+Visbal, E., Haiman, Z., & Bryan, G. L. 2014, MNRAS, 445, 1056
+Wang, F., Davies, F. B., Yang, J., et al. 2020, arXiv e-prints, arXiv:2004.10877
+Werbos, P. 1990, Proceedings of the IEEE, 78, 1550
+Wise, J. H. & Abel, T. 2011, MNRAS, 414, 3458
+Xu, H., Wise, J. H., Norman, M. L., Ahn, K., & O’Shea, B. W. 2016, ApJ, 833,
+84
+Yang, J., Wang, F., Fan, X., et al. 2020, ApJ, 897, L14
+Yue, B., Ferrara, A., & Xu, Y. 2016, MNRAS, 463, 1968
+Zhao, X., Ting, Y.-S., Diao, K., & Mao, Y. 2023, MNRAS, 526, 1699
+Article number, page 14 of 21
+
+D. Breitman et al.:21cmEMUv3
+Table B.1: Each inference uses 2k livepoints and the same prior
+andlikelihood.Thenumberofeffectivesamples𝑛 effisthenumber
+of posterior samples considered independent from one another
+andiscalculatedwithKisch’sformulainEq.B.1.Theefficiency
+is𝑛 eff/𝑛 L.
+Algorithm𝑛 eff 𝑛L Efficiency
+UltraNest10k 2.3M0.004
+MultiNest8k 52k 0.15
+nautilus10k 113k 0.09
+Appendix A: Emulator performance
+This appendix provides additional performance plots for
+21cmEMUv3, supplementing the accuracy metrics discussed in
+Section 4. Figure A.1 shows true (solid) and corresponding em-
+ulated (dashed) outputs for ten random test set samples across
+all six LSTM and feed-forward network summaries: the 1D 21-
+cm PS, mean 21-cm brightness temperature, neutral hydrogen
+fraction, mean spin temperature, UV LF at𝑧=6, and CMB
+optical depth. Individual fractional errors are shown in colour,
+withthemedianoverthefulltestsetindottedblackand68%and
+95%confidencelimitsshaded.Thesub-percentmedianaccuracy
+achievedacrossallsummariesandredshiftsisconsistentwiththe
+results reported in the main text. Note that for the 1D PS (upper
+left panel), we also shade in red the FE distribution comparing
+emulatedPStomeanPSforthe90-parametertestset.FigureA.2
+showsthemedianfractionalerrorofthe2DPSasafunctionofthe
+eleven input parameters, evaluated on the 90-parameter test set.
+This allows us to identify any regions of parameter space where
+the diffusion emulator performs less well, and confirms that the
+sub-percent accuracy is maintained broadly across the parame-
+ter space rather than being driven by a particularly well-sampled
+region.
+Appendix B: Impact of different samplers
+Nested sampling (NS; Skilling 2004, 2006) is a popular choice
+for Bayesian inference, as it facilitates model comparison by
+efficiently calculating the Bayesian evidence. There are several
+choicesofpublicNSalgorithms.MultiNest(Ferozetal.2009)
+is one of the first science grade NS samplers. It is numeri-
+cally efficient, typically requiring fewer likelihood evaluations
+than other algorithms for 21-cm inferences.However, in Breit-
+man et al. 2024, we foundMultiNestto be inaccurate close
+to prior edges (see also Hee et al. 2015; Dittmann 2024). We
+found thatUltraNest(Buchner 2021) yielded more accurate
+posteriors close to prior edges; however, the inferences in Bre-
+itman et al. 2024 were numerically demanding, requiring about
+12M likelihood evaluations and taking about 6 GPU hrs with
+5k livepoints. Since21cmEMUv3includes a score-based diffu-
+sion model that is about 3 orders of magnitude slower than the
+MLP in21cmEMUv116, here we usenautilus: a NS algorithm
+that balances accuracy and efficiency.The choice ofnautilus
+over other NS algorithms was motivated by its performance in
+Lange 2023 and especially Albert et al. 2025 which presents
+an in-depth comparison of many MCMC and NS algorithms on
+various problems in physics and cosmology.
+In the left panel of Figure B.1, we show the 1D marginal
+posterioroftheX-rayluminosityperunitSFRforthesameinfer-
+16 Note that if not needed, the score-based diffusion component can
+be turned off in21cmEMUv3, in which case it is roughly as fast as
+21cmEMUv1.
+ence performed with three different samplers and 2k livepoints:
+UltraNest(yellow),MultiNest(green), andnautilus(red).
+Tocomparetheirefficiency,wecomputetheeffectivesamplesize
+(ESS;𝑛 eff) for each sampler using Kish’s formula (Kish 1965):
+𝑛eff = (Í
+𝑖 𝑤 𝑖)2
+Í
+𝑖 𝑤2
+𝑖
+,(B.1)
+where𝑤 𝑖 is the posterior weight of sample𝑖. The efficiency,
+defined as the ratio𝑛eff/𝑛 L, where𝑛 L is the total number of
+likelihood evaluations, is reported for each sampler in the right
+columnofTableB.1.Wefindthatnautilusproducesaposterior
+nearly identical toUltraNest, while being over an order of
+magnitude more efficient, making it the best choice among the
+three samplers for this inference problem.
+In the right plot of Figure B.1, we perform a similar com-
+parison to the one in the left plot, but with21cmEMUv3instead.
+Here we only compareMultiNestandnautilus. We can see
+the same trends in this plot as in the one on the left, where
+MultiNesttends to undersample at the prior edges. We present
+thefullcornerplotsforthesecomparisonsinFiguresB.2andB.3.
+Based on these comparisons, we conclude thatnautiluspro-
+videsthebestbalancebetweenposterioraccuracyandefficiency,
+and we therefore use it for all the inferences in this work.
+Appendix C: Full posterior distributions
+In this appendix, we show the full posterior distributions for the
+inferences presented in the main text. Figure C.1 shows the sta-
+tion layouts for the three SKA-Low configurations considered in
+this work. Figure C.2 shows the full corner plot for the HERA23
+re-analysis comparing the L24-like and Renaissance-like priors,
+with both the LSTM (1D PS) and score-based diffusion (2D PS
+averagedto1D)emulationpathways.Thetwopathwaysarecon-
+sistentamongeachotheracrossallelevenparameters.FigureC.3
+shows the full corner plot for the SKA forecast inference, com-
+paring the posterior distributions obtained with the AA4, AA∗,
+and P1 layouts. There is marginal improvement from AA4 over
+AA∗ and P1, as all three layouts yield visually similar posteriors
+in spite of the increasing station count.
+Appendix D: 2D PS to 1D PS
+Wecanobtainthe1Dsphericallyaveraged21cmPSfromthe2D
+cylindrical PS. The 2D PS is averaged down to 1D by weighting
+each 2D PS bin by the number of 3D Fourier modes it contains,
+𝑁𝑘, as follows:
+Δ2
+21 (𝑘 𝑖)= 1Í
+𝑘∈ K𝑖 𝑁𝑘 (𝑘 ⊥, 𝑘 ∥ )
+∑︁
+𝑘∈ K𝑖
+𝑁𝑘 (𝑘 ⊥, 𝑘 ∥ ) ×Δ 2
+21 (𝑘 ⊥, 𝑘 ∥ ),
+(D.1)
+whereK 𝑖 is the set of𝑘=
+√︃
+𝑘2
+⊥ +𝑘 2
+∥ ∈𝑘 𝑖17.
+17 For more details, seecylindrical_to_sphericalin tuesday.
+Article number, page 15 of 21
+
+A&A proofs:manuscript no. aanda
+0
+20
+40
+60
+2
+21 [mK2]
+k  0.1 Mpc 1
+Realisations
+True mean
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0
+50FE (%)
+68% CL
+95% CL
+Mean PS
+Median
+75
+50
+25
+0
+25
+Tb [mK]
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0
+10FE (%)
+68% CL
+95% CL
+Median
+0.00
+0.25
+0.50
+0.75
+1.00xHI
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0
+20FE (%)
+68% CL
+95% CL
+Median
+1.0
+1.5
+2.0
+2.5
+3.0
+log10 TS [K]
+True
+21cmEMU
+5 10 15 20 25 30
+Redshift z
+0
+10FE (%)
+68% CL
+95% CL
+Median
+2
+0
+log10  [Mpc 3 Mag 1]
+z  6 
+True
+21cmEMU
+20
+18
+16
+14
+12
+10
+MUV
+0
+20FE (%)
+68% CL
+95% CL
+Median
+0.04 0.06 0.08 0.10 0.12
+e
+0.0
+0.5
+1.0
+1.5FE (%)
+Fig. A.1: True (solid) and emulated (dashed) outputs from21cmEMUv3for ten random test set samples. From top to bottom, left
+to right: 1D 21-cm PS at𝑘=0.1Mpc −1, mean 21-cm brightness temperature, neutral hydrogen fraction, mean spin temperature
+(all as a function of redshift), UV LF at𝑧=6, and CMB optical depth. Bottom sub-panels show fractional errors between true and
+emulated quantities; individual sample errors are shown in colour and the median over the full test set in dashed black. Dark (light)
+shaded regions enclose 68% (95%) CL. The red shaded regions for the PS are evaluated against PS means rather than individual
+realisations.
+Article number, page 16 of 21
+
+D. Breitman et al.:21cmEMUv3
+0.0
+0.5
+1.0
+0.5
+1.0
+t
+2
+0
+log10 fesc, 10
+1
+0
+1
+esc
+4
+2
+log10 f*, 7, mini
+3
+2
+1
+log10 fesc, 7, mini
+40.0
+42.5
+log10 LX
+40.0
+42.5
+log10 LX, mini
+500
+1000
+1500
+E0
+2
+ 1
+log10 f*, 10
+0.75
+0.80
+0.85
+8
+0 1
+ 0.5 1.0
+t
+2.5
+ 0.0
+log10 fesc, 10
+1
+ 0 1
+esc
+4
+ 2
+log10 f*, 7, mini
+3
+ 2
+ 1
+log10 fesc, 7, mini
+40.0 42.5
+log10 LX
+40.0 42.5
+log10 LX, mini
+50010001500
+E0
+0.75 0.80 0.85
+8
+100
+2 × 100
+log10 2
+21 FE (%)
+68 % CL
+95 % CL
+Fig. A.2: Median linear 2D PS fractional error as a function of parameters for the 90-parameter test set.
+38.0 38.5 39.0 39.5 40.0 40.5 41.0 41.5 42.0
+log10LX < 2keV/ SFR [erg s 1 M 1 yr]
+0.0
+0.2
+0.4
+0.6Probability Density
+41.03+0.67(0.92)
+0.75(1.37)
+41.05+0.65(0.90)
+0.77(1.40)
+41.03+0.61(0.91)
+0.76(1.35)
+21cmEMUv1 UltraNest
+21cmEMUv1 nautilus
+21cmEMUv1 MultiNest
+38.0 38.5 39.0 39.5 40.0 40.5 41.0 41.5 42.0
+log10LX < 2keV/ SFR [erg s 1 M 1 yr]
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5Probability Density
+40.64+0.92(1.30)
+1.00(2.09)
+40.68+0.83(1.24)
+0.96(1.88)
+Lazare+24 emcee
+21cmEMUv3 nautilus
+21cmEMUv3 MultiNest
+Fig. B.1: Left plot: The posterior on X-ray luminosity per unit SFR for the same inference performed withUltraNest(yellow),
+nautilus(red), andMultiNest(green) using21cmEMUv1. Right plot: Similar to the left plot, we are comparing inferences with
+different samplers. In grey, we show the result from Lazare et al. 2024 obtained withemcee. We show the posteriors obtained using
+21cmEMUv3withnautilus(red) andMultiNest(green) from a similar inference as the one in grey (see Section 5.1 for more
+details).
+Article number, page 17 of 21
+
+A&A proofs:manuscript no. aanda
+0.30
+0.45
+0.60
+0.75
+2.0
+1.5
+1.0
+0.5
+0.0
+log10 fesc, 10
+21cmEMUv1 UN
+21cmEMUv1 nautilus
+21cmEMUv1 MN
+0.8
+0.4
+0.0
+0.4
+esc
+8.0
+8.4
+8.8
+9.2
+9.6
+log10 Mturn
+0.2
+0.4
+0.6
+0.8
+1.0
+t
+38.4
+39.2
+40.0
+40.8
+41.6
+log10 LX < 2keV/SFR
+300
+600
+9001200
+1500
+E0
+2.00
+1.75
+1.50
+1.25
+1.00
+log10 f*, 10
+1
+0
+1
+2
+3
+X
+0.300.450.600.75
+ 2.0
+1.5
+1.0
+0.5
+0.0
+log10 fesc, 10
+0.8
+0.4
+0.00.4
+esc
+8.08.48.89.29.6
+log10 Mturn
+0.20.40.60.81.0
+t
+38.439.240.040.841.6
+log10 LX < 2keV/SFR
+30060090012001500
+E0
+1
+ 0 1 2 3
+X
+6 8 10 12 14 16 18 20 22
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI McGreer+15
+200
+150
+100
+50
+0
+Tb, 21 [mK]
+100
+102
+104
+2
+21 [mK2]
+k  0.13 Mpc 1
+HERA23
+20
+15
+10
+MUV
+10 3
+10 2
+10 1
+100
+101
+[Mpc 3dex 1]
+z = 6
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z = 7
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z = 8
+0.05 0.10
+e
+100
+101
+102
+103
+dn/d e
+Planck18
+0.057+0.008
+0.007
+Fig. B.2: Comparing the three samplers with21cmEMUv1
+Article number, page 18 of 21
+
+D. Breitman et al.:21cmEMUv3
+2.4
+1.6
+0.8
+0.0
+log10 fesc, 10
+1.0
+0.5
+0.0
+0.5
+1.0
+esc
+nautilus
+MultiNest
+38
+39
+40
+41
+42
+log10 LX < 2keV/SFR
+300
+600
+9001200
+1500
+E0
+3.0
+2.4
+1.8
+1.2
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.2
+0.4
+0.6
+0.8
+1.0
+t
+2.00
+1.75
+1.50
+1.25
+1.00
+log10 f*, 10
+0.30
+0.45
+0.60
+0.75
+0.90
+2.4
+1.6
+0.8
+0.0
+log10 fesc, 10
+1.0
+0.5
+0.00.51.0
+esc
+3839404142
+log10 LX < 2keV/SFR
+30060090012001500
+E0
+3.0
+2.4
+1.8
+1.2
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.20.40.60.81.0
+t
+0.300.450.600.750.90
+6 8 10 12 14 16 18 20 22
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI McGreer+15
+200
+150
+100
+50
+0
+Tb, 21 [mK]
+100
+102
+104
+2
+21 [mK2]
+k  0.13 Mpc 1
+HERA23
+20
+15
+10
+MUV
+10 3
+10 2
+10 1
+100
+101
+[Mpc 3dex 1]
+z = 6
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z = 7
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z = 8
+0.05 0.10
+e
+100
+101
+102
+103
+dn/d e
+Planck18
+0.057+0.008
+0.007
+Fig. B.3: Comparing two samplers with21cmEMUv3
+50
+ 25
+ 0 25 50
+X position [km]
+20
+0
+20
+Y position [km]
+0.5
+ 0.0 0.5
+0.5
+0.0
+0.5AA4
+AA*
+P1
+Fig. C.1: SKA station layouts for the three layouts considered in this work: AA4 with 512 stations (purple), AA∗ with 507 stations
+(yellow), and P1 with 257 stations (blue).
+Article number, page 19 of 21
+
+A&A proofs:manuscript no. aanda
+2.4
+1.6
+0.8
+0.0
+log10 fesc, 10
+1.0
+0.5
+0.0
+0.5
+1.0
+esc
+L24-like LSTM
+X16-like LSTM
+L24-like Diffusion
+X16-like Diffusion
+38
+39
+40
+41
+42
+log10 LX < 2keV/SFR
+300
+600
+9001200
+1500
+E0
+4
+3
+2
+1
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.2
+0.4
+0.6
+0.8
+1.0
+t
+2.4
+2.0
+1.6
+1.2
+log10 f*, 10
+0.30
+0.45
+0.60
+0.75
+0.90
+2.4
+1.6
+0.8
+0.0
+log10 fesc, 10
+1.0
+0.5
+0.00.51.0
+esc
+3839404142
+log10 LX < 2keV/SFR
+30060090012001500
+E0
+4
+ 3
+ 2
+ 1
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.20.40.60.81.0
+t
+0.300.450.600.750.90
+6 8 10 12 14 16 18 20 22 24 26 28
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI
+McGreer+15
+200
+150
+100
+50
+0
+Tb, 21 [mK]
+10 1
+100
+101
+102
+103
+2
+21 [mK2]
+k  0.13 Mpc 1
+ HERA2320
+15
+10
+MUV
+10 3
+10 2
+10 1
+100
+101
+[Mpc 3dex 1]
+z=6
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z=7
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z=8
+0.05 0.10
+e
+100
+101
+102
+103
+dn/d e
+Planck18
+0.057+0.008
+0.007
+Fig.C.2:ComparinginferenceswiththeRenaissance-likepriorbasedonXuetal.2016andL24-likeprior.Weperformtheanalysis
+in two ways: (i) with the LSTM network that directly produces the 1D PS; and (ii) with the score-based diffusion network that
+produces the 2D PS that we then average down to 1D. We can see that both methods produce consistent results.
+Article number, page 20 of 21
+
+D. Breitman et al.:21cmEMUv3
+1.5
+1.2
+0.9
+0.6
+log10 fesc, 10
+0.75
+0.50
+0.25
+0.00
+0.25esc
+AA4
+AA*
+P1
+38
+39
+40
+41
+42
+log10 LACG
+X < 2keV/SFR
+39
+40
+41
+42
+43
+log10 LMCG
+X < 2keV/SFR
+300
+600
+9001200
+1500E0
+4.8
+4.0
+3.2
+2.4
+1.6
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.2
+0.4
+0.6
+0.8
+1.0
+t
+0.4
+0.5
+0.6
+0.7
+0.8
+1.8
+1.5
+1.2
+0.9
+log10 f*, 10
+0.750
+0.775
+0.800
+0.825
+0.8508
+1.5
+1.2
+0.9
+0.6
+log10 fesc, 10
+0.75
+0.50
+0.25
+0.000.25
+esc
+3839404142
+log10 LACG
+X < 2keV/SFR
+3940414243
+log10 LMCG
+X < 2keV/SFR
+30060090012001500E0
+4.8
+4.0
+3.2
+2.4
+1.6
+log10 f*, 7
+3.0
+2.5
+2.0
+1.5
+1.0
+log10 fesc, 7
+0.20.40.60.81.0
+t
+0.40.50.60.70.8
+0.7500.7750.8000.8250.8508
+6 8 10 12 14 16 18 20 22 24 26 28
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI
+McGreer+15
+80
+60
+40
+20
+0
+20
+Tb, 21 [mK]
+10 1
+100
+101
+102
+103
+2
+21 [mK2]
+k  0.18 Mpc 1
+SKA AA*20
+15
+10
+MUV
+10 3
+10 2
+10 1
+100
+101
+[Mpc 3dex 1]
+z=6
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z=7
+20
+15
+10
+MUV
+10 4
+10 3
+10 2
+10 1
+100
+101
+z=8
+0.05 0.10
+e
+100
+101
+102
+103
+dn/d e
+Planck18
+0.057+0.008
+0.007
+Fig. C.3: Full corner plot from inferences with SKA mock observations for the AA4 (purple), AA∗ (yellow), and P1 (blue) SKA
+layouts.
+Article number, page 21 of 21

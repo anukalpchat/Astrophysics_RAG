@@ -1,0 +1,1262 @@
+Title: Hybrid Particle Gaussian Mixture (H-PGM) Solution for Cislunar Target Tracking
+Authors: Ishan Paranjape, Tarun Hejmadi, Utkarsh Ranjan Mishra, Suman Chakravorty
+Published: 2026-06-03
+Categories: astro-ph.EP, astro-ph.IM, stat.AP
+
+Hybrid Particle Gaussian Mixture (H-PGM) Solution for Cislunar
+Target Tracking
+Ishan P . Paranjape*, Tarun Hejmadi†, Utkarsh Ranjan Mishra ‡and Suman
+Chakravorty§,
+ABSTRACT
+Gauss’s method of orbit determination (OD) is one of the most popular, minimal assumption target tracking tech-
+niques in astrodynamics, especially for generating an initial state estimate. However, due to Gauss’s method’s as-
+sumption of Keplerian motion (part of the larger two-body problem), this method cannot be applied in a cislunar
+environment, where three body, non-planar effects dominate. In this work, we showcase a hybrid Particle Gaus-
+sian Mixture (H-PGM) filtering method, a purely recursive probabilistic OD framework that relies upon a sequential
+combination of the Markov Chain Monte Carlo (MCMC) based Particle Gaussian Mixture-II (PGM-II) and Kalman
+update based Particle Gaussian Mixture-I (PGM-I) filters. This method allows us to fuse probabilistic information with
+angles-only observations from terrestrial telescopes for short- and long-term cislunar target tracking. This method also
+allows us to fuse other targeta prioriinformation in an effort to reduce target uncertainty in the short term. This hybrid
+filtering technique is demonstrated for several popular and important cislunar orbit regimes and compared with several
+homogeneous and hybrid filtering frameworks.
+1 INTRODUCTION
+The National Cislunar Science and Technology Strategy identifies the extension of space situational awareness
+(SSA) into a cislunar environment as one of its key objectives. Similar to regimes closer to the Earth’s surface, this
+document describes the need to detect and identify possible colliding objects, space weather elements, and other
+dangerous spacecraft operations (i.e. tumbling, abrupt maneuvers) to ensure safe spacecraft navigation.1 The cislunar
+domain is defined by the full4πsteradian volume in which Earth- and Moon-based three-body dynamics dominate. 2, 3
+This volume is almost a thousand times larger than the volume of possible orbits below the geosynchronous (GEO)
+limit, at which point two-body dynamics become prominent. Many targets operate within this cislunar domain; we
+refer to them more specifically as cislunar Resident Space Objects (RSOs). In order to maintain a proper catalog of
+*Graduate Assistant - Research, Department of Aerospace Engineering, Texas A&M University, 710 Ross St., College Station, TX 77843.
+†Graduate Assistant - Research, Department of Aerospace Engineering, Texas A&M University, 710 Ross St., College Station, TX 77843.
+‡Sensor Fusion Engineer, Lucid Group, Inc., 7373 Gateway Blvd., Newark, CA 94560
+§Professor, Department of Aerospace Engineering, Texas A&M University, 710 Ross St., College Station, TX 77843.
+1
+arXiv:2606.04334v1  [astro-ph.EP]  3 Jun 2026
+
+these cislunar RSOs, effective target tracking becomes a critical problem. Interest within the cislunar domain has
+burgeoned due to missions such as India’s Chandrayaan, China’s Chang’e-5, and NASA’s Artemis. To ensure safe
+operation of similar targets in a cislunar environment, we use initial orbit determination (IOD) and orbit determination
+(OD) to initialize a state estimate and continue to maintain custody of such targets.
+Every major target tracking problem associated with near-Earth or cislunar regimes – especially in a probabilistic
+sense – begins with IOD, defined as the process of generating an initial state estimate. The goal of IOD for single
+target tracking is to accumulate several measurements of a single RSO and then to rely on somea prioriinformation
+to fit a state vector through the measurements. 4 To this day, Gauss’s method of orbit determination (OD) – which
+consists of IOD and a nonlinear least-squares refinement of the resulting initial state estimate – continues to be one
+a powerful method for generating a deterministic initial state estimate, leveraging three consecutive, closely-spaced
+angular observations.5 For probabilistic initial orbit determination (IOD) approaches, specialized methods such as
+probabilistic admissible region (PAR) and constrained admissible region (CAR) persist throughout space situational
+awareness (SSA) literature.5–10 However, most of these probabilistic techniques are limited to the two-body problem
+and Keplerian mechanics.
+Literature on probabilistic initial orbit determination in a cislunar environment – encompassing three-body dynam-
+ics – is sparse. Most cislunar orbit determination research involves formulating an initial state estimate whose mean is
+centered at or close to the true target state (i.e. the truth) and whose state covariance is small.11, 12 One set of scientists
+utilizes sparse grid collocation for generating an initial state estimate by solving a large-scale nonlinear programming
+(NLP) problem.13 Developing a target tracking technique parallel to the geometric PAR (G-PAR) solution for Keple-
+rian orbits, a team of scientists and engineers extended the idea of PAR to the cislunar domain, postulating information
+about camera angular rate constraints, light intensity curves for range inference, and Jacobi’s constant. 2, 3, 10 Seek-
+ing a way to solve the problem of cislunar initial orbit determination by leveraging as littlea prioriinformation as
+possible, we introduced a probabilistic IOD and OD framework leveraging minimal range information or weak range
+measurements to form sets of initial position estimates, from which initial velocity estimates were derived to form a
+particle-based initial state estimate. 14, 15 A major conclusion resulting from this work is that even if an IOD method
+results in a large, highly uncertain initial state estimate, a good OD or filtering technique will properly address this
+concern.
+The second part of target tracking problems involves orbit determination. For probabilistic orbit determination,
+filters are utilized for uncertainty reduction. The most well-known filter is the Kalman-Bucy Filter, which is typically
+used for systems with linear dynamics and linear observation models with respective additive, zero-mean Gaussian
+noises.16 This linearity in dynamics and measurement models is relaxed in the formulations of Extended Kalman Fil-
+ters (EKFs), Unscented Kalman Filters (UKFs), and Ensemble Kalman Filters (EnKFs).17–22 Within the astrodynamics
+community, the batch least squares filter – paired with IOD – is a popular probabilistic target tracking framework.23, 24
+2
+
+For each technique, however, the underlying assumption of Gaussiana prioristate estimates persists. Due to the
+nonlinearity of dynamics within the cislunar domain, most Gaussian-based filtering techniques will fail in the ab-
+sence of strong initial state estimates. Since mosta prioristate estimates may be accurately represented by Gaussian
+Mixture Models (GMMs), the use of GMMs has grown for cislunar and near-Earth orbit determination problems.
+Examples of such filters include adaptive GMM filters, ensemble GMM filters, and UKF/particle filter hybrids. 25–29
+The UKF/particle filter hybrid formulation, in particular, inspired the creation of the Particle Gaussian Mixture (PGM)
+filters.30, 31
+The Particle Gaussian Mixture filters refer to two related hybrid filters utilizing particles for estimate prediction,
+clustering-based interactive mixture modeling for estimatinga prioristate distributions, and a Bayesian update pro-
+cess. At the end of these three steps, a new posterior state estimate is obtained by resampling particles from the
+updated state estimate. While the propagation and clustering steps are identical for both PGM filters, the two filters
+– differentiated as PGM-I and PGM-II – significantly deviate in their update process. The better-known PGM-I filter
+was designed to address two major issues: 1) adaptability in the number of GMM components between iterations, and
+2) particle depletion resulting from the update step of a particle filter. This filter has been successfully demonstrated
+for multiple one-dimensional and three-dimensional systems. 30 The OD framework for G-PAR and its multi-target
+tracking extension also consisted of this filter.10, 24 The Particle Gaussian Mixture filter has also been used to address
+the problem of cislunar target tracking. The PGM-I filter has proven to be particularly resilient for long sensor shutoffs
+or long periods without observations, a common occurrence in cislunar target tracking.2, 3, 14, 15, 32
+The PGM-II filter was developed in parallel to address target tracking scenarios in which Kalman updates are
+insufficient or where a Bayesian update or information fusion expects multi-modality. 31, 33 While the PGM-I filter
+assumes that the number of GMM components of thea prioriand posterior state estimate are identical, the PGM-II
+filter adds flexibility in the number of GMM components throughout its update process. To address potential multi-
+modality in the update process, the PGM-II filter utilizes Markov Chain Monte Carlo (MCMC) sampling. This MCMC
+sampling step considers ana prioriGMM estimate and the measurement likelihood function, and samples from the
+product of these two PDFs, also referred to as the posterior. From here, a second clustering step (which usually
+changes the number of GMM components) and weight update step complete the update process. This filter has been
+demonstrated on a limited, but chaotic, set of dynamic systems.31
+The precursor to the orbit determination framework in this article is a combined cislunar IOD/OD framework,
+hereafter named the Kinematic Fitting Particle Gaussian Mixture (KF-PGM) framework. 14, 15 The IOD framework
+in KF-PGM relies upon simply fitting polynomials through a series of observations of the same cislunar RSO along
+with some weak but valid assumption of the range to estimate target position. By kinematically fitting polynomials
+or splines through the initial position estimate, an initial state estimate may be formulated and later abstracted into
+a probabilistic initial state estimate. When this probabilistic initial state estimate is combined with the PGM-I filter
+3
+
+subsequently, KF-PGM robustly tracks cislunar RSOs for weeks or even months, even in the event of long sensor
+shutoffs or gaps between observations.
+A disadvantage to the KF-PGM framework, however, is the fact that a large number of observations are required
+to obtain an initial state estimate. In reality, we may only be able to observe a cislunar RSO for a few times in a
+week or even a month, causing long lags in the target tracking process, requiring frequent redos of the IOD process.
+Furthermore, as we shall demonstrate later in this article, although small-order kinematic fits yield a consistent initial
+state estimate, they break down with the PGM-I filter at subsequent update steps. As a result, a combined IOD/OD
+framework which leverages minimal assumptions and minimal observations – similar to Gauss’s method – is desired.
+In this article, we present a purely recursive approach that involves both Particle Gaussian Mixture filters for tracking
+cislunar RSOs. The only two pieces ofa prioriinformation that this approach requires is that 1) the object belongs
+to the cislunar domain, and 2) the cislunar RSO is moving at a vaguely valid speed. For the PGM-based update
+processes, we utilize angles-only measurements from ground-based telescopes. This recursive OD method utilizes a
+mix of PGM-I and PGM-II based filtering over the same measurement sets as KF-PGM to create up to a 100-fold
+improvement in state component estimates. Due to the hybrid use of both PGM filters, we refer to this approach as the
+hybrid PGM (H-PGM) solution. With this approach, we are able to demonstrate an accurate, data-efficient solution to
+the problem of cislunar target tracking.
+The following sections of this article are organized as follows. First, we set up the cislunar target tracking problem
+by discussing the dynamics and observation models pertaining to terrestrial-based target tracking. Next, we provide a
+mathematical background about the PGM-I and PGM-II filters, and Bayesian filtering in general. Then, we discuss a
+modification in the PGM-II update step that allows us to localize extremely uncertain estimates and fuse other target
+characteristic information. This hybrid PGM filtering method utilizes both filters sequentially. Finally, we showcase
+this hybrid PGM filtering approach for popular cislunar orbit regimes, compare various filtering frameworks to our
+H-PGM solution, and discuss short- and long-term effects of targeta prioriinformation fusion at the first time step
+and its effect on subsequent state estimates.
+2 CISLUNAR TARGET TRACKING PRELIMINARIES
+In this article, we define cislunar target tracking as a two-part process. The first part, IOD, is used to generate or
+abstract a probabilistic initial state estimate for some cislunar RSO. The second part, OD, involves the use of a filter
+to continuously maintain custody of the same cislunar RSO. We dedicate this section to outlining the dynamics and
+measurement models which we utilize in this work that lend themselves to making the development of our target
+tracking framework possible.
+4
+
+2.1 Dynamics Model: Circular Restricted Three Body Problem
+In cislunar regimes, two-body dynamics cannot be assumed because the mass of the Moon becomes too large to
+ignore. The resulting new gravitational forces lead to non-conic, out of plane motion in an Earth-centered inertial
+reference frame, violating fundamental assumptions of Keplerian motion, requiring dynamics modeling associated
+with the three-body problem.34 Currently, one of the most popular models for explaining three-body dynamics within
+the cislunar domain, in which the spacecraft or RSO mass is negligible with respect to the Earth and the Moon, is
+the circular-restricted three-body problem (CR3BP). 35, 36 From this dynamics model, several orbital element based
+approximations have been introduced.11, 37
+The synodic coordinate reference frame in which CR3BP dynamics are expressed is centered at the barycenter
+(or center of mass) of the two largest orbiting bodies (i.e. the Earth and the Moon). Within the cislunar domain,
+the Earth and the Moon rotate around their respective barycenter in a circular motion with a period of roughly 29
+days. For the Earth-Moon-RSO system, this barycenter is located inside the Earth’s surface, and a single period of the
+Moon’s motion around the Earth and barycenter is approximately equal to the length of the lunar cycle. The RSO has
+negligible mass relative to the Earth and Moon, and its dynamics in the barycentric frame are expressed with respect
+to the rotation of the Earth-Moon vector.
+¨x=x+ 2 ˙y− (1−µ)(x+µ)
+r3
+1
+− µx−µ(1−µ)
+r3
+2
+(1a)
+¨y=y−2 ˙x− (1−µ)y
+r3
+1
+− µy
+r3
+2
+(1b)
+¨z= (1−µ)z
+r3
+1
+− µz
+r3
+2
+(1c)
+In Eq. (1),xandydefine the Earth-Moon orbital plane,r 1 andr 2 define the distances between the target and the the
+Earth and Moon mass centers, respectively.µis a constant mass parameter that defines the weight ratio between the
+middle and most massive bodies. The distance between the Earth and Moon centers is normalized to 1 for simplicity.
+Time and mass are nondimensionalized accordingly.36
+Eq. (1) consists of five equilibrium points – three unstable and two stable. 38, 39 Interest in the regions around the
+first two unstable equilibrium points, known as theL 1 andL 2 Lagrange points, has burgeoned due to their proximity
+to the Moon and the high potential for chaotic bifurcations and breakdowns in Gaussianity beginning with localized
+state estimates.40, 41 In this article, we focus on a few trajectories and orbits around theL 2 Lagrange point.
+2.2 Measurement Model
+As mentioned in Section 2.1, the state of the target or cislunar RSOTis expressed with respect to the barycenterB.
+However, ground based radars, lidars, and optical telescopesOlocalize observer-target states with angular quantities
+5
+
+such as azimuth and elevation in a topocentric reference frame. Lettingx T
+OT = [xT , yT , zT ,˙xT ,˙yT ,˙zT ]T define the
+state vectorxin this topocentric observer frame, we can define our measurement modelz k = [AZ, EL] T with the
+following equations.
+AZ=tan −1
+ yT
+xT
+
+(2a)
+EL= π
+2 −cos −1
+ 
+zT
+p
+(xT )2 + (yT )2 + (zT )2
+!
+(2b)
+For computational efficiency and our article’s use of a single observer based in College Station, TX, USA, we
+elect to express our state vectors exclusively in the topocentric reference frame. The process for converting between
+the barycentric reference frame to an Earth-centered inertial (ECI) reference frame involves a singular rotation. 42
+Computational tools may be used to convert between the ECI and topocentric reference frames for a given time. Due
+to electro-optical (EO) sensors’ high fidelity, we assume that the measurement noise for both azimuth and elevation
+angles is distributed as zero-mean Gaussian with one standard deviation equal to 1.5 arcsec.
+Given angles-only measurements, an initial full position estimate requires range information. Obtaining cislunar
+target ranges using ground-based radars and lidars is difficult, if not impossible, due to the fact that received signal
+power varies highly inversely with the distance. Although this inaccuracy may be partially modeled by utilizing a high
+range standard deviation, it is far more efficient and cheaper to utilize weaker forms of range information such as the
+underlying assumption of an RSO orbiting within the cislunar domain – which runs a wide gamut of range values.14, 15
+In reality, we may have a good amount ofa prioriinformation from which we can extrapolate target range and other
+characteristics. We outline these characteristics in Section 2.3.
+2.3 Cislunar Target Characteristics
+We define cislunar targeta prioriinformation or characteristics to be parameters or traits relating to the state of
+an object. Some examples of cislunar targeta prioriinformation includes range, angular rates, potential energy, and
+Jacobi’s constant of integration.40–42 Just like for PAR-based techniques, these orbital characteristics are expressed
+as a PDF. Since cislunar RSO characteristics are rarely expressed as a measurement with an associated measurement
+noise but rather as a range with upper and lower bound values, we assume a uniform distribution for targeta priori
+information. This also allows us to model maximum possible uncertainty in oura prioriinformation. We defineΘ k
+as a multivariate uniform PDF defining sets of targeta prioriinformation.
+To demonstrate the abstraction of targeta prioriinformation into a PDF, we use the following example. Within
+the past decade, research into the 9:2 resonant near-rectilinear Halo orbit (NRHO) in the Earth-Moon system has
+grown.43 Knowledge that a target exists within this orbit regime may be abstracted probabilistically into a set of valid
+observer-target distances or potential energies over time by a simple simulation. We can place upper and lower bounds
+6
+
+on target-observer range and/or orbit energies to abstract a uniform PDF.40, 41 In theory, the fusion of this PDF with the
+angles-only measurement set will allow us to better narrow the probabilistically admissible regions of the target states
+compared to solely the measurements.
+We emphasize that cislunar targeta prioriinformation isnotconsidered part of the measurement model in any
+way. Rather, we fuse these target characteristics sequentially with the measurements. The values of these target
+characteristics can also be functions of the target state in multiple reference frames. To make that distinction, we
+denote the state vector in the topocentric and CR3BP synodic reference frames asx= [x, y, z,˙x,˙y,˙z] T andx s =
+[xs, ys, zs,˙xs,˙ys,˙zs]T , respectively. This notation is slightly different from those expressed in Sections 2.1 and 2.2.
+We provide the translation modelsθ(x)between target state and target characteristic in both reference frames in Table
+1. In the following section, we define the filtering methods that we shall use to fuse target characteristics with our
+underlying state estimates and measurements.
+Table 1: Cislunar TargetA PrioriInformation and Functions of State
+A PrioriInformation θ(x)
+Range (ρ)
+p
+x2 +y 2 +z 2
+Angular Rates ([ ˙AZ, ˙EL]T ) [ ˙yx−y˙x
+x2+y2 ,− ˙z(x2+y2)−z(x˙x+y˙y)
+ρ2
+√
+x2+y2 ]T
+Orbit Energy (U ∗) 1−µ
+r1
++ µ
+r2
++ 1
+2[(xs)2 + (ys)2]
+Jacobi’s Constant (J C) 2U ∗ −[( ˙xs)2 + ( ˙ys)2 + ( ˙zs)2]
+3 PARTICLE GAUSSIAN MIXTURE FILTERS
+In this section, we discuss the two Particle Gaussian Mixture filters extensively. 30, 31 Although most of the article
+focuses on the application of the PGM-I and PGM-II filters in a cislunar environment, this section focuses on the
+general PGM-I and PGM-II filters and is applicable to any system with nonlinear dynamics and nonlinear measurement
+models.
+3.1 Preliminaries of Bayesian Filtering
+Supposex k ∈R nx represents ann x-dimensional state vectorx k at time stepk. This state vector is propagated
+according to a nonlinear functionf(x k)and a Markov Chain that has a probability density function (PDF) defined by
+p(xk|xk−1)for time stepskandk−1. Letz k ∈R nz represent ann z-dimensional vector of observation quantities at
+time stepk.z k is related to the state vector by a nonlinear functionh(x)with added measurement noise. In most cases,
+this measurement noise – expressed as a conditional PDFp(z k|x)– is modeled as additive, zero-mean Gaussian. The
+7
+
+general form of the dynamics and measurement equations is given as
+xk+1 =f(x k) +w k (3a)
+zk =h(x k) +v k,(3b)
+wheref(x k)describes the nonlinear dynamics model,w k represents the process noise, andv k represents the process
+noise, which we noted for the PGM Filters is modeled as zero-mean Gaussian. We do not consider measurement noise
+in this article since the cislunar environment can be relatively free of external disturbances in many cases and because
+both PGM filter updates tend not to be overconfident.
+We can use the transition density functionp(x k|xk−1)to propagate our PDF with time. Given a sequence of
+observationsZ k−1 up to timek−1, we denote the posterior function at time stepk−1asp +(xk−1) =p(x k−1|Zk−1).
+Thea prioridistribution for the state at time stepkthen becomes
+p−(xk) =p +(xk−1)p(xk|xk−1).(4)
+At this point, we slightly abuse notation such thatp +(xk) =p +
+k (x)andp −(xk) =p −
+k (x). Given an observationz k
+at time stepk, we apply Bayes’ rule such that the posterior state distribution at time stepkbecomes
+p+
+k (x) = p−
+k (x)p(zk|x)
+p(zk) = p−
+k (x)p(zk|x)R
+p−
+k (x)p(zk|x)dx .(5)
+The denominator on the right hand side (RHS) of Eq. (5) is derived from the continuous form of the law of total
+probability. Both Particle Gaussian Mixture filters assume thatp −
+k (xk)for allkis expressed as a Gaussian Mixture
+Model (GMM)
+p−
+k (x) =
+NX
+i=1
+ω−
+i N(x k;µ −
+i ,P −
+i ),(6)
+withNGaussian mixture components with weightsω −
+i and normal distributionsN(·)represented bya priorimeans
+µ−
+i anda prioricovariancesP −
+i . Next, we show that ifp −
+k (x)is expressed as a GMM, then the posterior estimate
+p+
+k (x)may also be expressed as a GMM.
+8
+
+We substitute Eq. (6) into the RHS of Eq. (5), noting that the sum and integral are linear operators.
+p+
+k (x) = p−
+k (x)p(zk|x)R
+p−
+k (x)p(zk|x)dx
+=
+PN
+i=1 ω−
+i N(x;µ −
+i ,P −
+i )p(zk|x)RPN
+j=1 ω−
+j N(x;µ −
+j ,P −
+j )p(zk|x)dx
+=
+PN
+i=1 ω−
+i N(x;µ −
+i ,P −
+i )p(zk|x)
+PN
+j=1 ω−
+j
+R
+N(x;µ −
+j ,P −
+j )p(zk|x)dx
+.
+(7)
+We define the likelihood functionl i(zk)– expressing the probability density value of an observationz k coming from
+thei-tha prioriGMM component – as
+li(zk) =
+Z
+Rnx
+N(x;µ −
+i ,P −
+i )p(zk|x)dx.(8)
+We substitute Eq. (8) into Eq. (7), noting thatl i(zk)>0for allz k.
+p+
+k (x) =
+PN
+i=1 ω−
+i N(x;µ −
+i ,P −
+i )p(zk|x)
+PN
+j=1 ω−
+j li(zk)
+li(zk)
+li(zk)
+=
+NX
+i=1
+ω−
+i li(zk)PN
+j=1 ω−
+j li(zk)
+N(x;µ −
+i ,P −
+i )p(zk|x)
+li(zk)
+=
+NX
+i=1
+ω+
+i p+
+i,k(x).
+(9)
+Multiplying the numerator and denominator byli(zk)and rearranging the terms gives us a product of two components:
+the discrete (i.e. weight) update and the continuous (i.e. PDF) update. If we assume additive zero-mean Gaussian
+measurement, then the continuous updatep +
+i,k(x)simply becomes a Kalman update for each component. These
+discrete and continuous update equations are given by Eqs. (10a) and (10b), respectively.
+ω+
+i = ω−
+i li(zk)PN
+j=1 ω−
+j lj(zk)
+(10a)
+p+
+i,k(x) = N(x;µ −
+i ,P −
+i )p(zk|x)
+li(zk) .(10b)
+Both PGM filters utilize the same discrete update in Eq. (10a). They differ, however, in terms of likelihood compu-
+tation. Furthermore, while the PGM-I filter utilizes a Kalman update, the PGM-II filter utilizes an intensive, three-step
+update process with MCMC sampling, clustering, and weight updates. These differences are explained in greater
+detail in Sections 3.3 and 3.4.
+9
+
+3.2 Similarities Between the Particle Gaussian Mixture Filters
+Before highlighting major and minor differences between the Particle Gaussian Mixture filters, we outline their
+similarities. Both Particle Gaussian Mixture filters utilize particles to propagate GMM-based estimates, much like
+a particle filter. The PGM filters use particle-based propagation due to the ability of particles to better define the
+breakdown of Gaussianity in the presence of chaotic, nonlinear dynamics. Especially in cases of long measurement
+separation, particle ensembles may bifurcate and diverge. 15, 32, 40, 41 From a computational standpoint, this is the least
+efficient part of the PGM-I algorithm.
+The ensemble of particles is propagated until the time of the next observation. These particles are abstracted into
+a PDF as follows. Since both PGM filters require a GMM-baseda prioriestimate, both PGM filters have to use
+a clustering algorithm (broadly referred to asC) to fit or approximate a GMM-based estimate. So far, most PGM-
+based works have utilized thek-means++algorithm, while others have utilized DBSCAN. 44, 45 Our work utilizes the
+former method. Thek-means++algorithm partitions the ensemble of propagated particles intoM − different sets
+or clusters. From the clustered particles, we can compute the weight, mean, and covariance associated with each
+GMM component. Both PGM filters bypass the problem of particle depletion in particle filters by utilizing a Bayesian
+update for each GMM component rather than the particles associated with eacha prioriGMM component. After their
+respective Bayesian updates, the PGM filters resampleN p particles from the posterior GMM-based estimate, which
+are then propagated per the system dynamics, leading to the next iteration for both filters.
+3.3 Particle Gaussian Mixture-I Filter
+As previously noted, the Particle Gaussian Mixture filters differ in their Bayesian update processes. The first Particle
+Gaussian Mixture filter – PGM-I – focuses on a Kalman or Kalman-family update step, expressed by
+p+
+i,k(x) = N(x;µ −
+i ,P −
+i )p(zk|x)
+li(zk) =N(x;µ +
+i ,P +
+i ),(11)
+for each GMM componentiat time stepk. Although literature about and adjacent to the PGM-I filter typically
+involves EKF-based updates for several examples, more recent literature has trended towards an Ensemble Kalman
+Filter (EnKF) type of update.10, 14, 30, 31We describe the PGM-I update process below.
+The PGM-I filter starts by considering an initial state estimate that can be accurately modeled as a GMM. The prop-
+agation and clustering steps are described in Section 3.2. Literature about the PGM-I filter only considers up to three
+types of update steps for each GMM component – an EKF update, a UKF update, and an EnKF update. While the for-
+mer two update steps are well-known, they have a tendency to be overconfident after long gaps between observations.
+The EnKF update step considered in this article as well as some previous works involving PGM-I filtering is a varia-
+tion of the original EnKF’s update step.10, 22 Since the variation of the EnKF considered in this paper is particle-based
+10
+
+through the clustering step, the EnKF-based update fuses observations with thea prioricomponent distributions (i.e.
+component means and covariances) rather than the particles of each GMM component. This consideration mitigates
+overconfidence at the update step.
+An illustration of a PGM-I filter’s update process, beginning with somea prioriestimate, is provided by Figure 1.15
+We also summarize the PGM-I filter in Algorithm 1.30
+Algorithm 1Particle Gaussian Mixture Filter I
+Givenπ 0(x) =PM(0)
+i=1 ωi(0)pg(x;µ i(0), Pi(0)), transition density kernelp(x ′|x),n= 1.
+1. SampleN p particles fromπ n−1 and the transition density kernelp n(x′|x)as follows:
+• SampleX (i)′
+fromπ n−1(.).
+• SampleX (i) fromp(.|X (i)′
+).
+2. Use a clustering algorithmCto cluster the set of particlesX (i) intoM −(n)Gaussian clusters with weights,
+mean, and covariance given by{ω −
+i (n), µ−
+i (n), P −
+i (n)}.
+3. Update the mixture weights and mixture means and covariances to{ω +
+i (n), µ+
+i (n), P +
+i (n)}, given the obser-
+vationz n, utilizing an EKF, UKF, or EnKF-based Kalman update.
+4.n=n+ 1. Go to Step 1.
+3.4 Particle Gaussian Mixture-II Filter
+The propagation and clustering processes for both the PGM-I and PGM-II filters are identical. The key distinction
+between the Particle Gaussian Mixture-I and Particle Gaussian Mixture-II filters lies within the update process. In
+certain cases, a Kalman-based update can be insufficient, and multi-modality at the update step is expected. 31 The
+PGM-II filter was created to address the issue of inflexibility of the number of GMM components between the cluster-
+ing and update steps of the PGM-I filter. The PGM-II filter’s update process consists of three major steps: 1) Markov
+Chain Monte Carlo (MCMC) sampling, 2) clustering of resulting MCMC chain samples, and 3) weight update.
+The first part of the PGM-II filter update involves MCMC sampling. A sampling function expressed as
+P(x) =p −
+k (x)p(zk|x)(12)
+is used. We denote this posterior sampling function with a capitalPto emphasize the fact that it is not a proper PDF,
+but rather a function proportional to Bayes rule in Eq. (5). Since the traditional PGM-II filter algorithm defines every
+a prioriestimate as a Gaussian Mixture Model, the apparent posterior sampling function would be expressed as
+P(x) =
+NX
+i=1
+ω−
+i N(x;µ −
+i ,P −
+i )p(zk|x).(13)
+In this work, however, we do not use Eq. (13) because it causes MCMC sampling to be more computationally inten-
+11
+
+(a)A prioriestimate for some cislunar RSO clustered into a GMM with six components
+(b) EnKF-based update for each GMM comoponent in Fig. 1a
+Figure 1: This example is borrowed from the authors’ previous work with permission. 15 Ana prioriestimate is
+partitioned into six clusters or GMM components per the PGM-I algorithm. An EnKF-based update is performed
+directly on each cluster/GMM component. The result is a posterior estimate localized roughly along a straight line,
+indicative of uncertainty in the target range.
+12
+
+sive than it already is. For this reason, it is recommended that MCMC sampling be done component by component. 31
+Mathematically, each posterior sampling function would be expressed as
+Pi(x) =N(x;µ −
+i ,P −
+i )p(zk|x),(14)
+fori= 1,2,· · ·M −. Thea prioricomponent weightsω −
+i are retained for the weight update.
+The Metropolis algorithm is commonly used for MCMC sampling since it uses a symmetric proposal PDF, whose
+spread we control such that the acceptance rate of the Metropolis algorithm is ideally between 10-40%. 46 In the
+original PGM-II work, the authors recommend utilizing a proposal function of the form
+qi(x) =N(x;µ −
+i , KpP−
+i ),(15)
+whereidenotes a specifica prioriGMM component, andK p is a user-controlled parameter quantifying proposal
+spread.31 To efficiently sample the state space, we recommend running hundreds of MCMC chains in parallel. These
+numerous chains result in a large ensemble of particles representative of the posterior sampling functions for eacha
+prioriGMM component. This particle ensemble is denoted byA i.
+The second step of the PGM-II filter update process involves clustering. The same clustering algorithmCas the
+PGM-I filter’s clustering process may be used for each component’s MCMC chain ensemble. We primarily cluster
+particles withinA i to de-correlate samples of the MCMC chains due to their random walk behavior. The MCMC
+chains from the first part of the update process may be further de-correlated by picking every thousandth or so sample
+from each of the parallel Markov chains beyond a certain burn-in period. Sequentially picking every thousandth or so
+particle for each MCMC chain inA i and then clustering usingCresults in a PDF which we can denote as
+pi,m(x) =
+NiX
+m=1
+ω+
+i,mN(x;µ +
+i,m,P +
+i,m).(16)
+The number of clustersN i can vary with each MCMC-based ensembleA i from the first part of this update process,
+depending on the shape of the ensemble. Furthermore,ω +
+i,m denotes the cluster weight and this value will need to
+be multiplied by the posterior ensemble weight. We denote the(i, m)subscript and+superscript for the mean and
+covariance quantities of Eq. (16) to underscore the actual posterior component PDFs. We only need to compute the
+ensemble weight update now.
+This second clustering step offers much more flexibility than the PGM-I filter during the update process because the
+number of clusters at this particular step may be user-defined. Since this clustering step is done for eachAi, the number
+of GMM components in the posterior estimate is strictly greater than or equal to the number of GMM components
+13
+
+from thea priorimixture. If we desire fewer GMM components than thea prioriestimate at the end of the clustering
+process, it would make sense to use the apparent posterior sampling function in Eq. (13). However, since Eq. (13) is
+computationally unwieldy, each posterior estimate considered in this work has an equal or greater number of GMM
+components as itsa prioriestimate. We shall next discuss the PGM-II filter’s weight update.
+The third and final step of the PGM-II update process computes the posterior component weights. We set thea
+prioriweight for eachA i to be equal to thea prioriweight of its corresponding GMM component. Just like the
+PGM-I filter, we use Eq. (10a) to update ensemble weights. However, computation ofl i(zk)differs.
+We begin with Bayes’ rule in Eq. (10b) for each GMM component and by considering any proper PDFπ(x)>0.
+p+
+i,k(x) = N(x;µ −
+i ,P −
+i )p(zk|x)
+li(zk)
+π(x)
+π(x) =N(x;µ +
+i ,P +
+i ) π(x)
+π(x) .(17)
+Rearranging these fractions, we obtain
+li(zk)
+π(x) = N(x;µ −
+i ,P −
+i )p(zk|x)
+p+
+i,k(x)π(x) .(18)
+Then, we take the inverse of both sides, assuming all of the quantities in Eq. (18) are strictly positive for all inputs.
+π(x)
+li(zk) =
+p+
+i,k(x)π(x)
+N(x;µ −
+i ,P −
+i )p(zk|x) .(19)
+We integrate both sides with respect todx, which simplifies the left hand side (LHS) of Eq. (19) considerably.
+Z
+Rnx
+π(x)
+li(zk) dx=
+Z
+Rnx
+p+
+i,k(x)π(x)
+N(x;µ −
+i ,P −
+i )p(zk|x) dx
+= 1
+li(zk) =
+Z
+Rnx
+p+
+i,k(x)π(x)
+N(x;µ −
+i ,P −
+i )p(zk|x) dx.
+(20)
+At this point, we consider the fact that each component ensembleAi is discrete. We manipulate the continuous-form
+result in Eq. (20) to discretize the likelihood computation by recognizing the following expectation property:
+1
+li(zk) =
+Z
+Rnx
+p+
+i,k(x)π(x)
+N(x;µ −
+i ,P −
+i )p(zk|x) dx
+=E
+ π(x)
+p(zk|x)N(x;µ −
+i ,P −
+i )
+
+≈ 1
+Si
+SiX
+s=1
+π(xs)
+p(zk|xs)N(x s;µ −
+i ,P −
+i ) .
+(21)
+In Eq. (21),x s refers to each sample withinA i (after removing burn-in samples and de-correlating remaining
+samples). While any proper PDFπ(x s)is theoretically acceptable, we simplify Eq. (21) by equatingπ(x s) =
+14
+
+N(x s;µ −
+i ,P −
+i ). Once we compute all ensemble likelihoods with Eq. (21), the resulting posterior ensemble weights
+ω+
+i are multiplied by re-clustered weightsω +
+i,m from Eq. (16) for alliand(i, m)tuple to obtain the posterior weights
+for the(i, m)-th GMM component. The final posterior PDFp +(x)then becomes
+p+(x) =
+NX
+i=1
+NiX
+m=1
+ω+
+i ω+
+i,mN(x;µ +
+i,m,P +
+i,m).(22)
+We draw numerous particles from Eq. (22), leading to the next PGM-II filtering iteration.
+To summarize the PGM-II filter for a single iteration, we reuse the same resampling, propagation, anda priori
+estimate clustering steps as the PGM-I filter. However, the update process of the second PGM filter is more computa-
+tionally involved due to MCMC sampling and likelihood computation. We outline the PGM-II algorithm in Algorithm
+2.31 We also illustrate the PGM-II update process in Figure 2.
+Algorithm 2Particle Gaussian Mixture Filter II
+Givenπ 0(x) =PM(0)
+i=1 ωi(0)pg(x;µ i(0), Pi(0)), transition density kernelp(x ′|x),n= 1.
+1. SampleN p particles fromπ n−1 and the transition density kernelp n(x′|x)as follows:
+• SampleX (i)′
+fromπ n−1(·).
+• SampleX (i) fromp(·|X (i)′
+).
+2. Use a clustering algorithmCto cluster the set of particlesX (i) intoM −(n)Gaussian clusters with weights,
+mean, and covariance given by{ω −
+i (n), µ−
+i (n), P −
+i (n)}.
+3. Use MCMC to sample from the component posteriorsπ i,n(x)to generate the ensemblesA i.
+4. Compute the mixture weightsw i(n)by evaluating the sequence of modal likelihoods using the likelihood
+function definition and the weight update equation.
+5. Sample N particles from the weighted collection of ensembles{w i(n), An,i}.
+6.n=n+ 1. Go to Step 1.
+4 HYBRID PARTICLE GAUSSIAN MIXTURE (H-PGM) FILTERING FRAMEWORK
+In theory, alla prioriprobability distributions may be expressed as a Gaussian Mixture Model. However, highly
+uninformative priors will require tens, or even hundreds, of GMM components, posing a dimensionality issue for both
+the Particle Gaussian Mixture filters. Two major limitations of both PGM filters is that both rely upon GMM-baseda
+prioriestimates exclusively, and measurement noise has to be modeled as additive zero-mean Gaussian. The highest
+level of uncertainty is typically quantified by a uniform PDF. In this section, we describe a few extensions to the
+PGM-II filter that help us design a hybrid Particle Gaussian Mixture (H-PGM) filtering framework leveraging both
+PGM filters for a cislunar environment under extremely high state uncertainty.
+15
+
+(a)A prioriclustered estimate for a target at some point in time
+(b) Collective MCMC chainsA i for alliafter sample de-correlation
+(c) Posterior state estimate expressed as a GMM
+Figure 2: PGM-II filtering MCMC sampling, clustering, and ensemble update steps outlining major parts of the larger
+update process. MCMC sampling narrows ana prioriestimatep −
+k (x)into a narrow region of high likelihood given
+somep(z k|x). MCMC samples are decorrelated into ensemblesA i and clustered into posterior GMM components.
+An ensemble weight update is computed to obtain final posterior GMM component weights.
+16
+
+4.1 Extensions to the Particle Gaussian Mixture-II Filter
+Due to a homogeneous probability density within a defined range, it is difficult to model any multivariate uniform
+PDF with a finite number of Gaussian Mixture Model components small enough to computationally justify MCMC
+sampling. As we shall demonstrate in Section 5.5, even if we are able to model a large multivariate uniform PDF as a
+Gaussian Mixture Model, the unwieldy uncertainty will eventually cause the PGM-I filter to lose target custody. We
+revisit the MCMC sampling function in Eq. (12). We note that even though the PGM-II filter requiresp −
+k (x)and
+p(zk|x)to be modeled as a GMM and as additive zero-mean Gaussian respectively. However, generalized MCMC
+samplers do not, and this allows us to generalize how targeta prioriestimates and measurement noise and other
+fusion parameter PDFs are distributed. We test the H-PGM solution in unwieldy, high uncertainty environments by
+considering Baysian updates or target characteristic fusions in which either or bothp−
+k (x)andp(z k|x)are modeled as
+(multivariate) uniform PDFs.
+For the remainder of this work, we shall consider four types of information fusions related to Eq. (12), placing
+heavy emphasis on the first three:
+• Gaussian/GMM-distributedp −
+k (x)with Gaussian-distributedp(z k|x)
+• Gaussian/GMM-distributedp −
+k (x)with uniformly distributedp(Θ k|x)
+• Uniformly distributedp −
+k (x)with Gaussian-distributedp(z k|x)
+• Uniformly distributedp −
+k (x)with uniformly distributedp(Θ k|x)
+The two traditional Particle Gaussian Mixture filters solely consider the first fusion. For the second and fourth fusions,
+we invoke the target characteristic vector notation in Section 2.3, noting that measurements are typically given as a
+single value with an associated noise distribution, whereas targeta prioriinformation is given as a multivariate uniform
+PDF with heuristic constraints (e.g. telescope angular velocities are no greater than a certain value). We shall only
+consider the third fusion in this list for the very first time step, in which we start with a highly uncertain, multivariate
+uniform PDFp −
+0 (x). We describe how to obtain thisp −
+0 (x), also known as our IOD estimate, in Section 4.2.
+4.2 New Cislunar Initial Orbit Determination: Modeling Extreme Initial State Uncertainty
+As noted in Section 1, literature about probabilistic IOD techniques for a cislunar environment is sparse. Many prob-
+abilistic target tracking problems start with a Gaussian distribution whose mean is centered at some point generated
+using a deterministic initial orbit determination method and whose covariance is small. Sometimes, these means are
+centered directly at the target truth. In reality, making a good deterministic initial state estimate requires many pieces
+of well-defineda prioriinformation. Furthermore, many filters are known to fail in the face of extreme initial state
+uncertainty. To that end, we develop an initial state estimate that leverages only two pieces ofa prioriinformation: 1)
+the range within which the cislunar domain is defined, and 2) a sufficiently large target speed bound.
+17
+
+For part of our KF-PGM work, we noted that we may be able to reasonably characterize cislunar observer-target
+ranges to lie between two times the geosynchronous (GEO) orbit distance and below roughly 550000 km. 15 This
+implies that thex,y, andzcoordinates of the state vector in the ECI reference frame are bounded by±550000km.
+apiece. Lettingx(j)represent thej-th index of the state vector in the ECI reference frame, we can mathematically
+define the uniform PDF for1≤j≤3asx(j)∼ U[−550000,550000]km. We note that the ranges encompassed
+by these uniform PDF bounds extend beyond the 550000 km. upper bound of cislunar space and also encompass
+regions defined by the two-body problem with the Earth. We nevertheless include these regions within our initial state
+estimate to emphasize that our hybrid PGM-based orbit determination framework is robust to highly uncertain position
+estimates.
+In the same KF-PGM work, we introduced a valid assumption that cislunarresidentspace objects are unlikely to
+escape the gravitational pull of the solar system and are therefore confined to speeds less than or equal to 42 km/s. 15
+However, we extend that speed bound to 100 km/s to begin with a distribution whose spread can be characterized by an
+entropy greater than that produced by the minimal range assumption from our KF-IOD work.15 Similar to our position
+PDF formulation, we setx(j)∼ U[−100,100]km/s for4≤j≤6(i.e. the velocity components). Together, these
+six restrictions form a PDF which we shall consider as the initial state estimate or the IOD equivalent of this work.
+Figure 3 illustrates this large, multivariate normal PDF in the state space. Subsequent state updates and predictions are
+modeled as GMMs.
+Figure 3: A large multivariate uniform PDF representingp −
+0 (x), our initial state estimate in the ECI reference frame.
+Samples within this multivariate uniform PDF may be converted to the synodic or topocentric frames to obtain appro-
+priate uniform PDF bounds in those reference frames.
+18
+
+We note that the distribution in Figure 3 may be used to initial cislunar RSOs states at any time step. While KF-
+PGM’s IOD method has allowed us to develop more refined initial state estimates with a large, singular range bound,
+it requires several measurements for consistent state estimates over time. When we encounter infrequent observations,
+we no longer need to rely upon frequent observations to develop an IOD estimate; initialization with the PDF shown
+in Figure 3 will suffice. In Section 5.5, we shall expand upon some of the limitations of the KF-PGM framework and
+how our H-PGM solution obviates the need for several short-arc observations.
+Compared to the standard PGM-II algorithm described in Section 3.4, no major modifications are required to Al-
+gorithm 2 to fuse the uniform PDF with observations whose noise is modeled as additive, zero-mean Gaussian. After
+the MCMC sampling step of Algorithm 2, de-correlating the resulting ensembles will involve modeling the resulting
+state estimate and any subsequent state estimates into Gaussian Mixture Models. As a result, the fusion of a uniformly
+distributedp −
+k (x)with a Gaussian-distributedp(z k|xk)will only need to be performed once.
+4.3 Information Fusion Leveraging Target Characteristics
+In Section 2.3, we introduced a variableΘ k to represent some targeta prioriinformation at time stepk. We make
+clear distinctions betweenz k andΘ k, namely that target characteristics are not considered part of the measurement
+modelh(x k)and that measurement noisep(z k|x)is distributed as Gaussian whereasp(Θ k|x)is distributed uniformly.
+Since measurement noise and targeta prioriinformation are distributed differently, it helps to perform MCMC sam-
+pling sequentially. Expressing the resulting MCMC sampling functionP(x k)at time stepkwhen both targeta priori
+information and angles-only observations are available as
+P(x k) =p −(xk)p(Θk|x)p(zk|x) =p −(xk)p(zk|x)p(Θk|x),(23)
+we notice that we can either first fuse our targeta prioriestimate with our target characteristic PDF and then our
+angles-only measurements or first fuse our targeta prioriestimate with our angles-only measurements and then our
+target characteristic PDF.
+It is recommended to do MCMC sampling one product at a time since ensemble likelihoods are computed differently
+based on howp(z k|x)andp(Θ k|x)are distributed. It may also be noted per Section 4.2 that whenk= 0, the fusion of
+p−(xk)withp(Θ k|x)involves fusing two uniform PDFs, whose resulting representation we would model as a GMM.
+Even whenp(Θ k|x)is uniformly distributed, the modified MCMC sampling and subsequent steps of Algorithm 2 are
+similar to the original algorithm. However, likelihood computation and the subsequent ensemble weight update steps
+will differ.
+We begin by observing that whenp(Θ k|x)is uniformly distributed and normalized, the conditional PDF may be
+expressed as an indicator functionI F (xk), which defines whether or not some state estimatex k drawn fromp −
+k (x)
+19
+
+lies within the target characteristic bounds. Bayes’ rule and the law of total probability then give us
+p(x|Θk) = p−
+k (x)p(Θk|x)R
+p−
+k (x)p(Θk|x)dx = p−
+k (x)IF (x)R
+p−
+k (x)IF (x)dx .(24)
+Noting that the likelihood function may be expressed asl i(Θk) =
+R
+p−
+k (x)IF (x)dx, we derive the following approx-
+imation:
+li(Θk) =
+Z
+p−
+k (x)IF (x)dx=E[I F (x)]≈ 1
+Si
+SiX
+s=1
+IF (x).(25)
+In other words, given an ensemble of de-correlated, MCMC-sampled statesA i, the likelihood is simply the number of
+particles consistent with the targeta prioriinformation functionΘ k =θ(x)over the total number of particles inA i.
+Now that we show how to extend the PGM-II filter MCMC sampling, clustering/de-correlation, and the subsequent
+weight update, we can apply this extended PGM-II filter to subsequent state estimates.
+4.4 The Hybrid Solution
+In this section, we have so far discussed the four types of information fusions forP(x)in Eq. (12), a new unin-
+formative but consistent IOD estimate for cislunar RSOs, and an extension of the PGM-II filter update process when
+p(zk|x)orp(Θ k|x)are distributed differently and given at the same time. While the PGM-II filter has potential
+in a cislunar environment, its MCMC sampling step will have limited parallelization, resulting in a computationally
+exhaustive algorithm. For this reason, we recommend using a sequential mixture orhybridof the two PGM filters.
+Due to high computational runtime of a single iteration of the PGM-II filter, it is recommended to run the filter with
+only the firstn k observations. We recommend settingn k = 2since two spaced sets of angles-only measurements
+implicitly localize both position and velocity, whereas a single set of angles-only measurements only localizes the
+position. Once the PGM-II filter sufficiently localizes state estimates in the position and velocity spaces, it becomes
+more computationally efficient to switch to the PGM-I filter for subsequent target tracking. This hybrid solution is
+encapsulated in Algorithm 3.
+5 RESULTS AND DISCUSSION
+In this section, we demonstrate our H-PGM solution upon several orbits. We make several comparisons of this
+OD framework to the KF-PGM framework. Finally, we demonstrate the short- and long-term effects of several target
+characteristic fusions on target estimates. For each result provided in this section, we set our starting distributionp−
+0 (x)
+equal to the large, multivariate uniform PDF provided in Figure 3. The highly uncertain uniform PDF bounds serve
+to underscore the robustness of our H-PGM solution under minimal information. For each of the results discussed
+below, we assume that measurement noisep(z k|x)is additive zero-mean Gaussian. We also assume that our observer
+is based in College Station, TX, USA.
+20
+
+Algorithm 3Hybrid Particle Gaussian Mixture (H-PGM) Solution
+Given a uniformly distributed initial PDFp −
+0 (x), transition density kernelp(x ′|x),n= 1, switching time stepn k.
+1. SampleN p particles fromπ n−1 and the transition density kernelp n(x′|x)as follows:
+• SampleX (i)′
+fromπ n−1(.).
+• SampleX (i) fromp(.|X (i)′
+).
+2. Use a clustering algorithmCto cluster the set of particlesX (i) intoM −(n)Gaussian clusters with weights,
+mean, and covariance given by{ω −
+i (n), µ−
+i (n), P −
+i (n)}.
+3.ifn≤n k then
+4. Follow Steps 3-5 from Algorithm 2.
+5.else
+6. Follow Step 3 from Algorithm 1.
+7.end if
+8.n=n+ 1. Go to Step 1.
+5.1 Important Noise Characteristics and Metrics
+Since we assume that measurement noisep(z k|x)is additive zero-mean Gaussian, we express its noise covariance
+matrixRas
+R=
+
+
+(1.5arcsec)2 0
+0 (1.5arcsec) 2
+
+ .(26)
+We chose an angular standard deviation of 1.5 arcsec due to the high precision of modern optical telescopes. 10 We
+analyze the performance of the H-PGM solution, especially with respect to the KF-PGM framework and other filters,
+using the Shannon entropy metricH(k)for some time stepk. Abusing notation slightly, we notice that whenp(x)is
+a Gaussian Mixture Model, there is no closed-form solution to the Shannon entropy integral, given by
+H(k) =−
+Z
+Rnx
+p(x) logp(x)dx.(27)
+As a result, we make a discrete approximation to the entropyH(k)with
+H(k) =E[−logp k(xi)]≈ − 1
+N
+NX
+i=1
+logp k(xi),(28)
+wherep k(xi)is the GMM-based probability density of some particlex i at time stepkin ourN-particle ensemble.
+For UKFs and Ensemble Kalman Filters (EnKFs), the closed-form integral solution in Eq. (27) is used.
+21
+
+5.2 Example 1: 9:2 Resonant Near-Rectilinear Halo Orbit Baseline Solution
+NASA’s now-suspended Gateway program chose the 9:2 resonant near-rectilinear halo orbit (NRHO) based around
+theL 2 Lagrange point due to strong communication coverage of the lunar South Pole and low∆vrequirements for
+potential targets operating within the vicinity.43 Since this orbit has historically provided several promising results in
+cislunar target tracking literature, we shall demonstrate several examples of our H-PGM solution for a target operating
+in this orbit. Here, we demonstrate what we shall refer to as our “Baseline” solution. For the “Baseline” solution,
+we ignore targeta prioriinformation from Section 2.3. Instead, we simply perform measurement updates using our
+extended PGM-II filter for the first two measurements before subsequently switching to the PGM-I filter.
+For sensor tasking, we make our observer take measurements roughly every 40 minutes during the target’s first pass,
+treating the target as a new object in the cislunar space object catalog. This measurement schedule is identical to the
+first pass measurement schedule described in the original KF-PGM works.14, 15 The target stays above the local horizon
+– during which period our observer may search for the target – for roughly 10 hours, after which the simulation ends.
+We choose a short time period in this example to focus on the short-term benefits of the H-PGM solution. We begin
+with the IOD estimate shown in Figure 3. We showcase the posterior estimates at the end of the second time step –
+when we switch filters – and at the end of the first pass in Figure 4.
+Observing the axis labels between Figures 3 and 4b, we see that at the end of the simulation, the position estimate is
+improved from the hundreds of thousands of kilometers to thetensof kilometers and the velocity estimate is improved
+from hundreds of kilometers per second to tens ofmetersper second. With relatively frequent observations, our H-
+PGM solution significantly reduces target uncertainty without being overconfident. To compare the H-PGM solution
+with the KF-PGM framework, we compare component state estimate precisions at the IOD stage and the end of the
+simulation with KF-PGM.
+The probabilistic IOD aspect of KF-PGM (i.e. the “KF” part) involves the fusion of several consecutive[AZ, EL]T
+measurement sets with a uniform PDF defining the possible ranges of cislunar space. Leveraging measurement noise
+statistics and the range PDF, we draw several i.i.d samples of the three quantities to generate several initial position
+estimates, through which we fit polynomials strictly as functions of time. We take the derivatives of these polynomials
+to obtain the resulting velocity estimates at the last fitted observation’s time step. The result is a large particle cloud
+such as that shown in Figure 5. Since this state estimate has some localization in position and velocity (especially for
+theY-Zand ˙Y- ˙Zprojections), we utilize the PGM-I filter for uncertainty reduction. We provide plots of the initial
+and final time steps, as well as a table of standard deviation values of each state vector component in Figure 5 and
+Table 2, respectively.
+An important distinction between the KF-PGM framework and our H-PGM solution is the number of observations
+utilized for orbit determination (OD) strictly. For KF-PGM, instead of placing assumptions on valid cislunar target
+22
+
+(a) Posterior target estimate after two iterations of the modified
+PGM-II filter. Two iterations are necessary for sufficient, “pencil-
+like” localization in the state and velocity spaces.
+(b) Posterior state estimate at the end of target’s pass above the
+local horizon
+Figure 4: Target estimates resulting from H-PGM sequencing – two iterations of PGM-II and then PGM-I thereafter –
+for a target (truth denoted by a blackX) within the 9:2 resonant NRHO.
+23
+
+(a) IOD estimate resulting from kinematically fitting polynomials
+through the first eight observations of the first pass along with a
+uniform PDF defining the range bounds of the cislunar domain.
+(b) Posterior state estimate at the end of target’s pass above the
+local horizon, leveraging eight observations
+Figure 5: Target state estimates resulting from a kinematic fitting IOD procedure and PGM-I filtering through the end
+of one pass. The same measurements and schedule as Figure 4 are utilized.
+24
+
+states, we abstract valid observer-target ranges into a PDF and fit a state estimate through the firstMmeasurements.
+WhileM≥2in theory, as we shall demonstrate in Section 5.5, we need a sufficiently large number of measurements
+through which to fit polynomials to mitigate PGM-I filter overconfidence. For Figure 5,M= 8, corresponding to half
+the measurements within the first pass.
+Table 2: Target estimate standard deviations for KF-PGM and the H-PGM solution at the IOD stage and at the end of
+the first pass
+Component KF-PGM Start KF-PGM End H-PGM Start H-PGM End
+x(km) 15370 29869 359028 406.47
+y(km) 82919 9902.4 444363 135.18
+z(km) 95764 5791.4 449691 77.709
+˙x(km/s) 54.047 0.32216 85.836 0.010630
+˙y(km/s) 78.993 1.2984 88.528 0.014715
+˙z(km/s) 88.644 1.9414 97.135 0.025009
+5.3 Example 2:L 2 Lagrange Point Target Trajectory Solution
+In some of our KF-PGM based works, we highlighted the importance of the first three Lagrange points within
+CR3BP dynamics.14, 15 We specifically pointed out how theL 1,L 2, andL 3 points are points of unstable equilibrium,
+and how localized distributions propagated through this point experience some of the most chaotic warping or bifur-
+cations. In particular, we presented a trajectory in which Gaussian-likea prioriestimates warp and bifurcate, but are
+re-localized efficiently with the PGM-I filter. We apply our H-PGM solution on this trajectory.
+To demonstrate that our H-PGM solution is effective for sparser observations, we schedule measurements every
+24 hours. Because theL 2 Lagrange point lies behind the Moon, there is roughly a five-day period during which no
+optical telescope can observe the target state. By that point, our hybrid PGM filtering method has already transitioned
+to the PGM-I filter. In Figure 6, we illustrate the estimates just before and after an observation update after that five-
+day period with no observations. When we apply the extended PGM-II filter exclusively to this same trajectory for
+the same set of observations (i.e. without switching to the PGM-I filter), we shall notice in Figure 7 vastly differing
+posterior state estimates once the target re-emerges from behind the Moon. Unlike the PGM-I filter update step, which
+places heavier emphasis on measurement likelihoods, multiple clusters become consistent with the PGM-II update,
+resulting in a multi-modal distribution for proceeding time steps. However, this multi-modality is temporary and
+disappears after five days of observations. Figure 8 depicts the posterior estimates 12 days after the target passes
+through theL 2 Lagrange point using the H-PGM and extended PGM-II solutions. These final state estimates become
+roughly as precise as each other.
+25
+
+(a)A prioriestimate of a target after it has passed through theL 2
+Lagrange point and has reappeared in the sensor FOV .
+(b) Posterior state estimate of the target in Figure 6a after applying
+the PGM-I filter update step.
+Figure 6: State estimates of a target passing through theL 2 Lagrange point behind the Moon after it reappears within
+our sensor FOV . The H-PGM solution is applied to this trajectory.
+26
+
+(a)A prioriestimate of a target after it has passed through theL 2
+Lagrange point and has reappeared in the sensor FOV .
+(b) Posterior state estimate of the target in Figure 6a after applying
+the PGM-II filter update step.
+Figure 7: State estimates of a target passing through theL 2 Lagrange point behind the Moon after it reappears within
+our sensor FOV using solely the extended PGM-II filter.
+27
+
+(a) Final target estimate resulting from our hybrid PGM-based
+filtering solution.
+(b) Final target estimate resulting from a solely PGM-II based
+filtering solution.
+Figure 8: Final state estimates of a target passing through theL 2 Lagrange point using the H-PGM and extended
+PGM-II filtering methods.
+28
+
+5.4 Example 3: Southern Butterfly Orbit H-PGM Solution
+In Sections 5.2 and 5.3, we demonstrated the effectiveness of our H-PGM solution for two different trajectories,
+including when measurements are both closely-spaced and infrequent. Furthermore, in Section 5.3, we demonstrated
+the effectiveness of the extended PGM-II filtering solution. In this subsection, we shall discuss the effectiveness of the
+H-PGM solution over the extended PGM-II filtering method for the Southern Butterfly Orbit. We chose this orbit due
+to its relatively short period (roughly 12 days) and bifurcation from the NRHO family of orbits.40, 47
+For the first pass of this target trajectory, we schedule measurements every three hours to allow for some localization
+with the extended PGM-II filter. For each pass thereafter, we attempt to take a single observation at a random point
+in the pass. Starting with the same initial state estimate shown in Figure 3, we arrive at two different posterior target
+estimates in Figure 9 at the end of one full orbit with the H-PGM and extended PGM-II filtering solutions. To better
+quantify the effectiveness of the H-PGM solution over a purely recursive extended PGM-II solution for the Southern
+Butterfly Orbit, we utilize the entropy metric from Eq. (28) for Figure 10.
+As discussed in Section 5.3, the PGM-I filter update step tends to be more effective about eliminating the number of
+clusters especially when measurements are sparse. Since measurements for this orbit become more random and sparse
+beyond a certain point, the PGM-II filter tends to retain several clusters and distributions from itsa prioriestimates,
+resulting in larger, more multi-modal posterior distributions. As a result, the effectiveness of the PGM-II filter reduces
+considerably, while the PGM-I filter continues to robustly estimate the target state more confidently.
+5.5 Limitations of KF-PGM and Exclusive PGM-I Based Approaches
+In Sections 5.2 through 5.4, we demonstrated the ability of our H-PGM solution on a variety of chaotic orbits and
+trajectories in cislunar space. We also highlighted the H-PGM solution’s superiority over the KF-PGM solution’s over
+the same measurement set in 2 due to the H-PGM solution’s observation-efficient approach. Although exclusive use
+of the PGM-I filter has been highlighted and demonstrated in several space domain awareness works, discussion of the
+limitations of PGM-I based approaches has been sparse.2, 3, 10, 14, 15We include this subsection discuss some limitations
+of KF-PGM and PGM-I based approaches to further highlight the need of our H-PGM solution.
+The KF-PGM approach requires polynomial fitting over some measurement set extrapolated several thousands of
+times with some range information and measurement noise. In theory, the minimum number of measurements through
+which we need to do kinematic fitting is two (i.e. a linear fit), so that a constant time derivative for the velocity exists.
+While this approach yields a consistent initial state estimate, the PGM-I filter becomes unable to correctly associate
+the correct cluster with the truth in the measurement space for subsequent time steps, yielding an inconsistent posterior
+estimate, as demonstrated by Figure 11. Because the PGM-I update step fails to update the correct cluster in the state
+space, the use of more information (i.e. observations) in developing an initial state estimate is required, as is a higher-
+order kinematic fit. As a result, the KF-PGM approach is not effective when few observations are available during that
+29
+
+(a) Final target estimate resulting from our hybrid PGM-based (H-
+PGM) filtering solution.
+(b) Final target estimate resulting from the extended PGM-II fil-
+tering solution.
+Figure 9: Final state estimates of a target within the Southern Butterfly Orbit after one full orbit with the H-PGM and
+extended PGM-II solutions.
+30
+
+Figure 10: A comparison of the entropy evolution of the state estimates of a target within the Southern Butterfly Orbit
+with the hybrid PGM-II (H-PGM) filtering method and a purely recursive extended PGM-II method.
+(a)A prioriestimate propagated and clustered from an IOD
+estimate formulated from a linear kinematic fit
+(b) An inconsistent posterior estimate after application of a
+single PGM-I update step
+Figure 11: Limitations of utilizing KF-PGM with a linear fit between the first two measurements
+critical first pass.
+Due to the computationally high cost of MCMC sampling and the PGM-II update step, the question of whether
+a purely recursive PGM-I orbit determination approach is possible arises. The clustering steps of both PGM filters
+allow us to model almost any initial ora prioriestimate as a GMM. Although clustering a uniform PDF will yield a
+consistent IOD estimate and consistent subsequent filtering estimates, our PGM-I filter will become inconsistent after
+just four measurement updates, as shown by Figure 12 for a target within the 9:2 resonant NRHO orbit and with an
+identical measurement set as Section 5.2. Although Figure 12 partitions the particles within 3 into six clusters, higher
+number of clusters typically result in similar loss of target custody. Because of MCMC sampling, the PGM-II filter
+31
+
+(a) Initial state estimatep −
+0 (x)that results from clustering
+the particles in the uniform PDF from Figure 3 into a six-
+component GMM
+(b) An inconsistent posterior estimate after four iterations
+of the PGM-I filter
+Figure 12: A demonstration of why a purely recursive PGM-I orbit determination approach is not possible with
+extremely high initial target uncertainty such as that given by Figure 3. The target estimate becomes inconsistent after
+just four iterations of the PGM-I filter.
+32
+
+is much more efficient than the PGM-I filter at localizing estimates in the measurement space during the first few
+time steps, when particles in the measurement space are spread across all possibleAZandELvalues. KF-PGM’s
+requirement of multiple observations for rendering a robust initial state estimate, coupled with the PGM-I filter’s
+inability to keep custody of targets with large, multivariate uniform initial state estimates underscores the need to
+utilize a hybrid PGM-based orbit determination approach that makes use of the extended PGM-II filter and PGM-I
+filter in sequence.
+5.6 Comparison of the H-PGM Solution to Other Hybrid Target Tracking Frameworks
+The development of a UKF-PF hybrid filter for near-Earth target tracking taught us that the propagation and update
+steps for any filter may be modularized. 29 Similarly, we are not limited to the use of a single filter for orbit determi-
+nation purposes.14 Just as we switch from the extended PGM-II filter to the PGM-I filter in the hybrid approach after
+two iterations, we can substitute the PGM-I filter with other, more common filtering approaches. We demonstrate how
+the entropy changes with each iteration for the same target and measurement set as Section 5.2 with several hybrid
+filtering scenarios in Figure 13.
+Figure 13: Comparing entropies for several hybrid filters, including a purely recursive PGM-I and PGM-II solutions,
+and the extended PGM-II filter coupled with a UKF or EnKF.
+Note that the sequences for KF-PGM and H-PGM in Figure 13 reflect the change in target estimate precision
+outlined by Table 2, and that the entropy sequence for a purely recursive extended PGM-II approach as that described
+in Sections 5.3 and 5.4 is also provided. The “PGM-II + EnKF” sequence may be thought of as the H-PGM sequence,
+but with the PGM-I filter only containing a single GMM component (i.e. Gaussiana prioriand posterior estimates).
+Finally, while the “PGM-II + UKF” approach is much faster at reducing state uncertainty, the UKF filter becomes
+overconfident and loses custody of the target by the fifth filter iteration. The entropy sequence from the purely recursive
+PGM-I approach from Section 5.5 is also provided for comparison, demonstrating the importance of the PGM-II filter
+for the first few update iterations. For many of these hybrid and homogeneous filtering approaches, there is a slight
+33
+
+upward tick in the entropy after obtaining the initial step (i.e. Filter Step 0 for most sequences and Filter Step 9 for
+KF-PGM). The reason for this uptick is the inability of a single angles-only observation set to sufficiently localize
+the velocity, whose spread may actually widen from the clustering step more than the position will become localized.
+From the second filtering steps in each sequence onward, target estimates become more precise.
+5.7 Target Characteristic and Measurement Fusion
+Throughout this section, we have tracked targets in several cislunar orbit regimes with noa prioriknowledge of the
+target’s orbit. In reality, we may have morea prioriinformation about the cislunar RSO in the form of constraints on
+characteristics outlined in Table 1. As an example, we can abstract angular rates[ ˙AZ, ˙EL]T and their constraints into a
+uniform PDF by recognizing our optical sensor’s angular FOV and exposure durations.2 Multiple target characteristics
+may be vectorized together asa prioriinformation, and the resulting multivariate uniform PDFs may be fused in
+conjunction with the angles-only measurements to further refine the state estimate over time. In this subsection, we fuse
+all targeta prioriinformation just once – after the first[AZ, EL] T measurement update. Subsequent fusion or filtering
+steps involve angles-only measurements. At the first time step, choosing whether to fuse angles-only measurements
+or target characteristic information first will not matter. Subsequent fusions are with angles-only measurements. We
+compare the initial and subsequent fusions of quantities in Table 1 and combinations thereof with the measurements-
+only (i.e. “Baseline”) fusion from Section 5.2 in Figure 14. Note that the same measurement sequence as Sections 5.2
+and 5.6 is used.
+Figure 14: Comparing differences between different information fusion entropy sequences and a baseline entropy
+sequence over the first pass of a cislunar RSO in the 9:2 NRHO from Section 5.2.
+Each curve in Figure 14 represents the entropy difference between the fusions of different sets of target character-
+istics fused in conjunction with the first measurement relative to the baseline (i.e. measurements-only) fusion. The
+“Baseline” sequence is identical to the “H-PGM” sequence in Figure 13. The “ρ” plot refers to range information
+fusion, namely, knowing that our cislunar RSO is within the 9:2 NRHO at the first time/fusion step. Since targeta
+34
+
+prioriinformation sets such as[ ˙AZ, ˙EL]T – corresponding to angular rates fusion – and[ρ, ˙AZ, ˙EL]T – correspond-
+ing to the combination of characteristics fusion – provide insight into the target velocities, the entropy curves for those
+fusions do not see an increase during the first 1-2 fusions, unlike those noted Figure 13. At the end of the first pass, it
+becomes clear that having better access toa prioriinformation about the cislunar RSO does not result in a materially
+advantageous precision in the long term. Instead, it shows us that having morea prioriknowledge isnotnecessary for
+long-term target tracking, so long as we have a robust filtering framework such as the H-PGM solution.
+6 CONCLUSIONS AND FUTURE WORK
+In this work, we presented a novel OD framework for cislunar target tracking which involved a small extension of
+the PGM-II filter to handle initial state estimates and target characteristic information modeled as multivariate uniform
+PDFs. We emphasized the need to run the PGM-II filter twice for sufficient localization and subsequently switching
+to the PGM-I filter. Through several examples, we demonstrated the superiority of the H-PGM solution over other
+hybrid filtering scenarios and purely recursive PGM-I and PGM-II based approaches. We highlighted the PGM-I
+filter’s ability to remove unlikely clusters ofa prioristate estimates after infrequent observations over the PGM-II
+filter, which tends to retain such clusters for longer periods of time. We also noted that PGM-II filtering is far more
+computationally intensive than PGM-I filtering due to the MCMC sampling step. Since hybrid PGM-II and UKF
+or EnKF filtering sequences are either too overconfident or under-confident for simple target tracking scenarios with
+large uncertainties, the H-PGM solution becomes a viable OD method for cislunar target tracking under extremely
+high initial uncertainty.
+Finally, we observed the short- and long-term effects of fusing cislunar target characteristic information from Table 1
+with our initial state estimate and the first[AZ, EL]T measurement set. While fusion of this targeta prioriinformation
+yielded some precise estimates in the short term, long term target estimates by the end of our measurement sequence
+closely matched those of our baseline H-PGM solution. We deduced that while having somea prioriinformation about
+target state might be beneficial, it is not necessarily advantageous in the long term, so long as our filtering framework
+is robust to minimal information.
+We hope to make several extensions to this work. Although we have demonstrated our H-PGM solution for several
+orbits in the cislunar domain, we wish to test the feasibility of this solution in near-Earth and other xGEO regimes.
+Additionally, we are eager to extend our H-PGM solution to multi-target tracking scenarios in the cislunar domain
+due to the effectiveness of the MCMC sampling step in localizing large, uncertain estimates with a single angles-only
+measurement. Finally, we wish to study the utility of our H-PGM solution with more complex dynamics models such
+as the small-eccentricity restricted three-body problem (SER3BP) and other, more generalized three- or four-body
+dynamical systems.
+35
+
+REFERENCES
+[1]National Cislunar Science & Technology Strategy. Washington, DC: National Science and Technology Council,
+1st ed., 2022.
+[2] M. Bolden, I. Hussein, H. Borowski, R. See, and E. Griggs, “Probabilistic Initial Orbit Determination and Ob-
+ject Tracking in Cislunar Space Using Optical Sensors,”Proceedings of the Advanced Maui Optical and Space
+Surveillance Technologies Conference, Wailea, HI, 2022.
+[3] E. Griggs, M. Schierholtz, I. Hussein, M. Bolden, K. Charles, and H. Borowski, “Probabilistic Initial Orbit
+Determination and Object Tracking in Cislunar Space Using Passive Radio Frequency Sensors,”Proceedings of
+the Advanced Maui Optical and Space Surveillance Technologies Conference, Wailea, HI, 2023.
+[4] R. Gooding, “A New Procedure for the Solution of the Classical Problem of Minimal Orbit Determination from
+Three Lines of Sight,”Celest. Mech. Dyn. Astron., V ol. 66, No. 4, 1997, pp. 387–423.
+[5] L. Taff, “ON GAUSS’S METHOD OF ORBIT DETERMINATION,” tech. rep., Massachusetts Institute of Tech-
+nology Lincoln Laboratory, 06 1979.
+[6] K. J. DeMars and M. K. Jah, “Probabilistic Initial Orbit Determination Using Gaussian Mixture Models,”Journal
+of Guidance, Control, and Dynamics, V ol. 36, No. 5, 2013, pp. 1324–1335, 10.2514/1.59844.
+[7] T. Kelecy, M. Shoemaker, and M. Jah, “APPLICATION OF THE CONSTRAINED ADMISSIBLE REGION
+MULTIPLE HYPOTHESIS FILTER TO INITIAL ORBIT DETERMINATION OF A BREAK-UP,”Proceedings
+of the 6th European Conference on Space Debris, 2013.
+[8] I. I. Hussein, C. W. Roscoe, M. P. Wilkins, and J. Paul W. Schumacher, “Probabilistic Admissibility in Angles-
+Only Initial Orbit,”Proceedings of the 24th International Symposium on Space Flight Dynamics, Laurel, MD,
+2014.
+[9] I. I. Hussein, C. W. Roscoe, M. P. Wilkins, and J. Paul W. Schumacher, “Probabilistic Admissible Region for
+Short-Arc Angles-Only Observations,”Proceedings of the Advanced Maui Optical and Space Surveillance Tech-
+nologies Conference, Wailea, HI, 2014.
+[10] U. R. Mishra, S. Chakravorty, W. R. Faber, I. I. Hussein, S. G. Hesar, and B. Sunderland, “Geometric Solution
+to Probabilistic Admissible Region (PAR),”The Journal of the Astronautical Sciences, 2024.
+[11] M. Gupta and K. DeMars, “CISLUNAR ASTRODYNAMICS LEVERAGING GENERALIZED EQUINOC-
+TIAL ORBITAL ELEMENTS,” preprint on webpage athttps://s3.amazonaws.com/amz.
+xcdsystem.com/A464D031-C624-C138-7D0E208E29BC4EDD_abstract_File25201/
+FinalManuscriptPDForDoc_288_0214113128.pdf.
+[12] A. Lopez, J. MacMahon, and H. Schaub, “Gaussian Mixture Square Root Filters for Cislunar Angles-
+Only Relative Orbit Determination,” preprint on webpage athttps://s3.amazonaws.com/amz.
+xcdsystem.com/A464D031-C624-C138-7D0E208E29BC4EDD_abstract_File25843/
+PreprintPaperUpload_711_0725041613.pdf.
+[13] C. Heidrich and M. Holzinger, “Universal Angles-Only Cislunar Initial Orbit Determination Using Sparse Grid
+Collocation,”The Journal of the Astronautical Sciences, 2025.
+[14] I. Paranjape and S. Chakravorty, “CISLUNAR INITIAL ORBIT DETERMINATION AND TARGET TRACK-
+ING USING KINEMATIC FITTING AND PARTICLE GAUSSIAN MIXTURE FILTERING,” to appear in
+36
+
+Proceedings of the 2025 AAS/AIAA Spaceflight Mechanics Conference. Submitted manuscript accessible at the
+following link.
+[15] I. Paranjape, T. Hejmadi, and S. Chakravorty, “Probabilistic Methods for Initial Orbit Determination and Orbit
+Determination in Cislunar Space,” 2026.
+[16] R. E. Kalman and R. S. Bucy, “New Results in Linear Filtering and Prediction Theory,”Journal of Basic Engi-
+neering, V ol. 83, 03 1961, pp. 95–108, 10.1115/1.3658902.
+[17] J. L. Crassidis and J. L. Junkins,Optimal Estimation of Dynamic Systems, Second Edition (Chapman & Hall/CRC
+Applied Mathematics & Nonlinear Science). Chapman & Hall/CRC, 2nd ed., 2011.
+[18] E. Wan and R. Van Der Merwe, “The unscented Kalman filter for nonlinear estimation,”Proceedings of the IEEE
+2000 Adaptive Systems for Signal Processing, Communications, and Control Symposium (Cat. No.00EX373),
+2000, pp. 153–158, 10.1109/ASSPCC.2000.882463.
+[19] S. Julier and J. Uhlmann, “Unscented filtering and nonlinear estimation,”Proceedings of the IEEE, V ol. 92,
+No. 3, 2004, pp. 401–422, 10.1109/JPROC.2003.823141.
+[20] G. Evensen, “Sequential data assimilation with a nonlinear quasi-geostrophic model using Monte Carlo methods
+to forecast error statistics,”Journal of Geophysical Research, V ol. 99, 1994, pp. 10143–10162.
+[21] G. Evensen, P. J. Van Leeuwen, and E. A, “Assimilation of Geosat Altimeter Data for the Agulhas Current using
+the Ensemble Kalman Filter with a Quasi-Geostrophic Model,”Monthly Weather Review, V ol. 124, 06 1995,
+10.1175/1520-0493(1996)124¡0085:AOGADF¿2.0.CO;2.
+[22] G. Evensen, “The Ensemble Kalman Filter: theoretical formulation and practical implementation,”Ocean Dy-
+namics, V ol. 53, Nov. 2003, pp. 343–367, 10.1007/s10236-003-0036-9.
+[23] B. D. Tapley, B. E. Schutz, and G. H. Born, “Statistical Orbit Determination,” 2004.
+[24] U. R. Mishra, S. Chakravorty, I. I. Hussein, W. Faber, S. Hesar, and B. Sunderland, “Comparing Traditional
+and Admissible-Region Schemes For Angles-Only Initial Orbit,”Proceedings of the Advanced Maui Optical and
+Space Surveillance Technologies Conference, Wailea, HI, 2023.
+[25] J. L. Iannamorelli and K. A. LeGrand, “Adaptive Gaussian Mixture Filtering for Multi-sensor Maneuvering
+Cislunar Space Object Tracking,”The Journal of the Astronautical Sciences, 2025.
+[26] S. Yun, R. Zanetti, and B. A. Jones, “Kernel-based ensemble gaussian mixture filtering for orbit de-
+termination with sparse data,”Advances in Space Research, V ol. 69, No. 12, 2022, pp. 4179–4197,
+https://doi.org/10.1016/j.asr.2022.03.041.
+[27] A. A. Popov and R. Zanetti, “Ensemble Gaussian Mixture Filtering with Particle-localized Covariances,”
+2023 26th International Conference on Information Fusion (FUSION), 2023, pp. 1–7, 10.23919/FU-
+SION52260.2023.10224227.
+[28] D. Durant, A. Popov, and R. Zanetti, “MCMC EnGMF for Sparse Data Orbit Determination,”Proceedings of the
+AAS/AIAA Astrodynamics Specialist Conference, Austin, TX, 2023.
+[29] D. R. A.V . and S. Chakravorty, “An Unscented Kalman-Particle Hybrid Filter for Space Object Tracking,”Jour-
+nal of Astronautical Science, V ol. 65, 2017, pp. 111–134, https://doi.org/10.1007/s40295-017-0114-8.
+[30] D. Raihan and S. Chakravorty, “Particle Gaussian mixture filters-I,”Automatica, V ol. 98, 2018, pp. 331–340,
+https://doi.org/10.1016/j.automatica.2018.07.023.
+37
+
+[31] D. Raihan and S. Chakravorty, “Particle Gaussian mixture filters-II,”Automatica, V ol. 98, 2018, pp. 341–349,
+https://doi.org/10.1016/j.automatica.2018.07.024.
+[32] M. Givens, A. Cortiella, A. Marlow, V . Rankowicz, A. Koehler, A. Liao, J. Spurbeck, C. Cain, and P. Miga,
+“Novel Algorithms for Custody Maintenance and Tracking in the Cislunar Environment,”Proceedings of the
+Advanced Maui Optical and Space Surveillance Technologies Conference, Wailea, HI, 2025.
+[33] D. Raihan and S. Chakravorty, “Particle Gaussian Mixture Filters-II,”2018 21st International Conference on
+Information Fusion (FUSION), 2018, pp. 1092–1099, 10.23919/ICIF.2018.8455307.
+[34] W. S. Koon, M. W. Lo, J. Marsden, and S. D. Ross, “Dynamical Systems, the Three-Body Problem, and Space
+Mission Design,”Proceedings of the International Conference on Differential Equations, 1999.
+[35]A Primer on Cislunar Space. Washington, DC: Air Force Research Laboratory, 1st ed., 2021.
+[36] H. Schaub and J. L. Junkins,Analytical Mechanics of Space Systems. Reston, V A: AIAA Education Series,
+October 2003, 10.2514/4.861550.
+[37] L. T. Peterson and D. J. Scheeres, “Local orbital elements for the circular restricted three-body problem,”Journal
+of Guidance, Control, and Dynamics, V ol. 46, No. 12, 2023, pp. 2275–2289.
+[38] E. J. DOEDEL, V . A. ROMANOV , R. C. PAFFENROTH, H. B. KELLER, D. J. DICHMANN, J. GAL ´AN-
+VIOQUE, and A. V ANDERBAUWHEDE, “ELEMENTAL PERIODIC ORBITS ASSOCIATED WITH THE
+LIBRATION POINTS IN THE CIRCULAR RESTRICTED 3-BODY PROBLEM,”International Journal of
+Bifurcation and Chaos, V ol. 17, No. 08, 2007, pp. 2625–2677, 10.1142/S0218127407018671.
+[39] V . Szebehely and E. Grebenikov,Theory of Orbits - The Restricted Problem of Three Bodies. Academic Press,
+1969.
+[40] E. M. Zimovan, “CHARACTERISTICS AND DESIGN STRATEGIES FOR NEAR RECTILINEAR HALO
+ORBITS WITHIN THE EARTH-MOON SYSTEM,” Master’s thesis, Purdue University, 2017.
+[41] E. M. Zimovan-Spreen, K. C. Howell, and D. C. Davis, “Near rectilinear halo orbits and nearby higher-period
+dynamical structures: orbital stability and resonance properties,”Celestial Mechanics and Dynamical Astronomy,
+V ol. 132, Jun 2020, p. 28, 10.1007/s10569-020-09968-2.
+[42] J. A. Dahlke, “OPTIMAL TRAJECTORY GENERATION IN A DYNAMIC MULTI-BODY ENVIRONMENT
+USING A PSEUDOSPECTRAL METHOD,” Master’s thesis, Air Force Institute of Technology, 2018.
+[43] “National Aeronautics and Space Administration (NASA) White Paper: Gateway Destination Orbit Model: A
+Continuous 15 Year NRHO Reference Trajectory,” 2019.
+[44] S. Lloyd, “Least squares quantization in PCM,”IEEE Transactions on Information Theory, V ol. 28, No. 2, 1982,
+pp. 129–137, 10.1109/TIT.1982.1056489.
+[45] S. Kim, M. Sun, I. Petrunin, and H.-S. Shin, “DBSCAN-based particle Gaussian mixture filters,”Digital Signal
+Processing, V ol. 168, 2026, p. 105546, https://doi.org/10.1016/j.dsp.2025.105546.
+[46] U. R. Mishra, W. Faber, S. Chakravorty, and I. Hussein, “A Subset Simulation based technique for calculating
+the probability of collision,”Proceedings of the Advanced Maui Optical and Space Surveillance Technologies
+Conference, Wailea, HI, 2021.
+[47] E. Spreen, K. Howell, and D. Davis, “Near Rectilinear Halo Orbits and Their Application in Cis-lunar Space,”
+05 2017.
+38

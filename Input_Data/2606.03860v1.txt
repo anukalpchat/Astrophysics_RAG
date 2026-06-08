@@ -1,0 +1,2412 @@
+Title: Biased tracers, Hybrid Effective Field Theory and Modified Gravity
+Authors: Guilherme Brando, Baojiu Li, Kazuya Koyama
+Published: 2026-06-02
+Categories: astro-ph.CO, gr-qc
+
+Prepared for submission to JCAP
+Biased tracers, Hybrid Effective Field
+Theory and Modified Gravity
+Guilherme Brando, a,1 Baojiu Li, b Kazuya Koyamac,d,e
+aCBPF - Brazilian Center for Research in Physics,
+Xavier Sigaud st. 150, zip 22290-180, Rio de Janeiro, RJ, Brazil
+bInstitute for Computational Cosmology, Department of Physics,
+Durham University, Durham DH1 3LE, UK
+cInstitute of Cosmology and Gravitation, University of Portsmouth,
+Dennis Sciama Building, Burnaby Road, Portsmouth PO1 3FX, United Kingdom
+dKavli IPMU (WPI), UTIAS, The University of Tokyo, Kashiwa, Chiba 277-8583, Japan
+eYukawa Institute for Theoretical Physics, Kyoto University, Kyoto 606-8502, Japan
+E-mail: gbrando@cbpf.br
+Abstract.The modelling of the power spectrum of biased tracers has become a central
+topic in the analysis of modern cosmological galaxy surveys. Perturbative templates formu-
+lated in both Eulerian and Lagrangian frameworks have been extensively developed over the
+last decades, with their implementation in ΛCDM thoroughly investigated and validated.
+In parallel, approaches combining perturbation theory with the output of dark-matter-only
+simulations have emerged as powerful tools for modelling the nonlinear regime, most no-
+tably the Hybrid Effective Field Theory (HEFT) framework [1]. In this work, we discuss the
+perturbative biased expansion within the local Lagrangian bias scheme and its implementa-
+tion in the HEFT framework for modified gravity cosmologies. We focus onf(R) gravity,
+a theory characterized by scale-dependent growth and chameleon screening, making it one
+of the most challenging scenarios for the computation of Lagrangian Perturbation Theory
+growth functions and for the generation of accurate numerical simulations. We present a
+detailed overview of the ingredients required to compute loop-corrected biased power spectra
+analytically and compare these predictions against fully non-perturbative simulation results.
+Finally, we propose a strategy to extend existing HEFT-based ΛCDM emulators, such as
+baccoandAemulus, to beyond-ΛCDM cosmologies.
+1Corresponding author.
+arXiv:2606.03860v1  [astro-ph.CO]  2 Jun 2026
+
+Contents
+1 Introduction 1
+2 Perturbation Theory in General Relativity 2
+3 Lagrangian Perturbation Theory 5
+4 Modified Gravity 13
+5 Biased tracers 18
+6 Hybrid Effective Field Theory 24
+7 Conclusion 31
+A General Fast Schmitfull Integrals 32
+1 Introduction
+The era of Stage-IV galaxy surveys is now upon us. The Dark Energy Spectroscopic Instru-
+ment (DESI) [2], the Vera Rubin Legacy Survey of Space and Time [3] (LSST), the Nancy
+Grace Roman Space Telescope [4, 5] (Roman), and the Euclid mission [6] will provide un-
+precedented data probing both the geometry and the growth of structure in our Universe.
+From the perspective of structure formation, the nonlinear matter power spectrum, relevant
+for cosmic shear and CMB lensing analyses, together with the biased tracer power spectrum,
+are among the fundamental observables that must be modelled theoretically. As observational
+precision continues to improve, advancing the theoretical description of these observables in
+both ΛCDM and beyond-ΛCDM cosmologies becomes increasingly important.
+One of the key challenges is the computation of the power spectrum of biased tracers,
+such as galaxies. Since galaxies trace the underlying dark matter distribution in a non-
+trivial way, accurate and efficient modelling of the galaxy power spectrum is essential for
+analyses of galaxy clustering and galaxy–galaxy lensing. As in the case of the matter power
+spectrum, there are two main avenues to compute these quantities theoretically: perturba-
+tive methods [7, 8] and cosmological simulations [9]. The former offers greater flexibility
+for exploring different cosmological models and are generally much less computationally ex-
+pensive than running large suites of simulations. The latter, while more computationally
+demanding, also require a nontrivial connection between the simulation output – namely the
+positions and velocities of dark matter particles – and the observed galaxy distribution. Sev-
+eral approaches exist to populate dark-matter-only simulations with galaxies, including Halo
+Occupation Distribution (HOD) [10], SubHalo Abundance Matching (SHAM) [11, 12], and
+semi-analytic models [13–15]. In recent years, hydrodynamical simulations [16] have also be-
+come increasingly common, with GPU-based methods helping to reduce their computational
+cost.
+Broadly speaking, these two approaches represent a trade-off between tractability and
+predictive power: perturbation theory provides a more efficient framework for parameter
+– 1 –
+
+inference and MCMC analyses, while simulations, whether dark-matter-only or hydrody-
+namical, offer a more complete description of nonlinear small-scale physics. Motivated by
+bridging this gap, Ref. [1] proposed an approach that extends the validity of perturbative
+templates by combining a biased tracer expansion in Lagrangian Perturbation Theory with
+the output of dark-matter-only simulations. This method, known as Hybrid Effective Field
+Theory (HEFT), has since been implemented in several emulators [17–19] and widely applied
+in the literature [20–27].
+A common feature of all these works on HEFT and its applications is that they have
+been developed primarily within ΛCDM and mild extensions of it, such asw 0waCDM. In this
+work, we are interested in extending the theoretical predictions of the HEFT basis spectra
+to modified theories of gravity. To do so, we revisit the literature on the Lagrangian local
+biasing scheme, which forms the theoretical foundation of the HEFT approach, in these
+models. While the majority of perturbation theory works have focused on the development
+and computation of observable quantities in the Eulerian frame [28–35], the biased expansion
+in Lagrangian coordinates and fields was first introduced in [36], extending the loop-corrected
+matter power spectrum formalism of [37]. Building on these works, the Lagrangian approach
+has since been significantly developed in [21, 30, 38–45].
+One of the appealing aspects of this framework is its natural extension to generalized
+cosmologies, such as modified gravity theories. In this context, Refs. [46–48] carefully derived
+the equations of motion for a class of modified gravity theories, allowing the computation of
+the displacement field up to third order, which is necessary for evaluating the LPT quanti-
+ties. In the present work, we revisit and extend these results to develop an efficient numerical
+framework for computing LPT quantities with growth factors that are both scale- and time-
+dependent, as well as the associated loop integrals required to ultimately predict the biased
+tracer power spectrum. We compare and validate our implementation against existing codes
+in the literature, and explicitly quantify the limitations of the Einstein–de Sitter approxi-
+mation in generalized cosmologies. Once with the theoretical analytical LPT results we can
+then compute the HEFT results and follow the same strategy as presented in [17–19]
+This paper is structured as follows. In Section 2, we begin with a brief review of pertur-
+bation theory in General Relativity (GR). In Section 3, we review the dynamics of Lagrangian
+Perturbation Theory and describe how the one-loop corrected matter power spectrum is com-
+puted in this framework. We then discuss the modified gravity extension of LPT in Section 4.
+Next, in Section 5, we review the fundamentals of biased tracers in LPT, and in Section 6
+the HEFT formalism and present our results in both modified gravity and GR, considering
+theoretical predictions from CLPT [38] as well as HEFT predictions calibrated onN-body
+simulations. Finally, we summarize and discuss our conclusions in Section 7.
+2 Perturbation Theory in General Relativity
+We begin by briefly reviewing the formulation of cosmological perturbation theory within the
+Eulerian framework. In the Eulerian picture, cold dark matter (CDM) dynamics are treated
+as those of a fluid, where the density contrastδ(x, t) and the velocity fieldv(x, t) are the
+fundamental variables. The equations of motion are obtained by describing how the matter
+fluid flows through a fixed three-dimensional comoving coordinate grid,x, as a function of
+timet.
+It is well known that, during matter domination, CDM dynamics on scales well inside
+the cosmological horizon are accurately described by a Newtonian fluid approach. On such
+– 2 –
+
+scales, relativistic corrections arising from gauge choices and additional relativistic terms
+are subdominant and typically have negligible impact on the dynamics. In the Eulerian
+framework, the equations of motion forδ(x, t) andv(x, t) are given by the continuity, Euler
+and Poisson equation:
+∂δ(x, τ)
+∂τ +∇ ·
+h
+(1 +δ(x, τ))v(x, τ)
+i
+= 0,(2.1)
+∂v(x, τ)
+∂τ +H(τ)v(x, τ) +
+
+v(x, τ)· ∇
+
+v(x, τ) =−∇Φ(x, τ),(2.2)
+∇2Φ(x, τ) = 4πG a2(τ) ¯ρm(τ)δ(x, τ),(2.3)
+whereτis the conformal time, defined throughdt=adτ, andHis the conformal Hubble
+factor,H=aH. In Fourier space, these equations are written as
+∂˜δ(k, τ)
+∂τ + ˜θ(k, τ) =−
+Z
+d3k1 d3k2 δD(k−k 12)α(k 1,k 2) ˜θ(k1, τ) ˜δ(k2, τ),(2.4)
+∂˜θ(k, τ)
+∂τ +H(τ) ˜θ(k, τ) + 3
+2 Ωm(τ)H 2(τ) ˜δ(k, τ) =
+−
+Z
+d3k1 d3k2 δD(k−k 12)β(k1,k 2) ˜θ(k1, τ) ˜θ(k2, τ),(2.5)
+where we have already written the velocity contribution in terms of the velocity divergence
+field,θ(x, τ). 1 The functions
+α(k1,k 2) = (k1 +k 2)·k 1
+k2
+1
+, β(k 1,k 2) = |k1 +k 2|2(k1 ·k 2)
+2k2
+1k2
+2
+,(2.6)
+are the mode-coupling kernels.
+Perturbation theory consists of expanding the full solutions as
+δ(k, τ) =
+∞X
+n=1
+δ(n)(k, τ), θ(k, τ) =
+∞X
+n=1
+θ(n)(k, τ),(2.7)
+which are then inserted into Eqs. (2.4)–(2.5) to obtain
+δ(n)(k, τ) =
+Z
+k1...kn
+δD(k1 +· · ·+k n −k)F n(k1, . . . ,kn;τ) [δ lin(k1, τ). . . δ lin(kn, τ)],(2.8)
+θ(n)(k, τ) =
+Z
+k1...kn
+δD(k1 +· · ·+k n −k)G n(k1, . . . ,kn;t) [δlin(k1, τ). . . δ lin(kn, τ)].(2.9)
+Here, Z
+k1...kn
+= 1
+(2π)3(n−1)
+Z
+d3k1 . . . d3kn,(2.10)
+andF n(k1, . . . ,kn;τ) andG n(k1, . . . ,kn;τ) are the perturbation theory kernels that deter-
+mine the coupling between Fourier modes while respecting the symmetries of the theory.
+Written in this form, the kernels depend both on scale and time. Their explicit evolution
+1The velocity field can be decomposed into longitudinal and transverse components. However, the rota-
+tional (transverse) component decays asa −1, so we retain only the irrotational part, characterized by the
+velocity divergenceθ(x, τ) =∇·v(x, τ).
+– 3 –
+
+can be obtained recursively, order by order, by substituting the perturbative expansions into
+Eqs. (2.4)–(2.5) and deriving the corresponding equations of motion forF n andG n.
+In ΛCDM and in some of its extensions where the growth function is scale indepen-
+dent, one can assume that the time and scale dependence of the perturbation theory kernels
+approximately decouple. In this case, we may write
+δ(k, τ) =
+∞X
+n=1
+Dn
+1 (τ)δ (n)(k), θ(k, τ) =−Hf
+∞X
+n=1
+Dn
+1 (τ)θ (n)(k),(2.11)
+whereD 1(τ) is the linear growth factor andfis the linear growth rate, defined as
+f≡ dlnD 1
+dlna .(2.12)
+It is useful to rewrite Eqs. (2.4)–(2.5) as a single compact equation by introducing the doublet
+Ψa(k, T) =
+
+δ(k, T),− θ(k, T)
+Hf
+
+, T≡lnD 1,(2.13)
+with the equations of motion now reading:
+∂T Ψa(k, T)+Ω abΨb(k, T) =
+Z
+k1,k2
+δ(3)
+D (k1+k2 −k)γ abc(k,k 1,k 2)Ψb(k1, T)Ψ c(k2, T),(2.14)
+with the mixing matrix:
+Ωab =
+ 0−1
+− 3
+2
+Ωm
+f 2
+3
+2
+Ωm
+f 2 −1
+
+.(2.15)
+The non-zero components of the vertex function,γ abc, are
+γ121 =α(k 1,k 2), γ 222 =β(k 1,k 2).(2.16)
+The assumption thatF n andG n are separable in scale and time is exact in an Einstein–
+de Sitter universe, for which Ωm = 1 andf= 1. In this case, Ω ab becomes time independent:
+Ωab =
+ 0−1
+− 3
+2
+1
+2
+
+.(2.17)
+Even though Ωm andfdiffer from unity during dark-energy-dominated era, the ratio Ω m/f 2
+remains close to unity in ΛCDM. This makes the Einstein–de Sitter approximation very
+accurate for ΛCDM.
+Under the EdS approximation, Eqs. (2.8) are written as:
+δ(n)(k, τ) =D n
+1 (τ)
+Z
+k1...kn
+δ(3)
+D (k1 +· · ·+k n −k)F n(k1, . . . ,kn) [δlin(k1). . . δlin(kn)],
+(2.18)
+θ(n)(k, τ) =−aHf D n
+1 (τ)
+Z
+k1...kn
+δ(3)
+D (k1 +· · ·+k n −k)G n(k1, . . . ,kn) [δlin(k1). . . δlin(kn)],
+(2.19)
+– 4 –
+
+and the kernels up to second order are given by:
+F1(k) =G 1(k) = 1,(2.20)
+F2(k1,k 2) = 5
+7 αs(k1,k 2) + 2
+7 β(k1,k 2),(2.21)
+G2(k1,k 2) = 3
+7 αs(k1,k 2) + 4
+7 β(k1,k 2),(2.22)
+whereα s denotes the symmetrized version of theαkernel. The full recursive relations for
+then-th order kernelsF n andG n can be found in Ref. [7].
+This procedure provides a compact way to obtain the equal-time loop-corrected matter
+power spectrum, assuming Gaussian initial conditions, up to any desired perturbative order.
+At one-loop order we have:
+P SPT
+1−loop(k, τ) =D 2
+1(τ)P lin(k) +D 4
+1(τ) [2P13(k) +P 22(k)],(2.23)
+where (2π) 3δD(k−k ′)Pij(k) =⟨δ (i)(k)δ(j)(k′)⟩, andiandjare the respective order of the
+solution. This expression shows the decomposition of the matter power spectrum into the
+linear contribution and the leading nonlinear corrections, which arise from terms up to third
+order in the density field.
+3 Lagrangian Perturbation Theory
+So far we have discussed how to obtain 1-loop corrections to the matter power spectrum in
+the Eulerian description, where the density and velocity divergence fields describe the flow of
+the CDM fluid across fixed spatial coordinates. In this work, however, we follow Refs. [37–
+39, 42] and employ a Lagrangian description of dark matter dynamics. In the Lagrangian
+formulation [49–54], one follows the trajectories of fluid elements through the displacement
+field,Ψ(q, τ). The starting point of this approach is the mapping between the Eulerian
+position of a particle,x(τ), and its initial Lagrangian position,q:
+x(τ) =q+Ψ(q, τ),(3.1)
+where the nonlinear displacement fieldΨ(q, τ) fully determines the evolution from the initial
+to the final particle position. For a non-relativistic self-gravitating fluid element, or particle,
+the geodesic equation governing its trajectory is:
+d2x
+dτ 2 +H dx
+dτ =−∇ xψ(x, τ),(3.2)
+whereψ(x, τ) is the Newtonian gravitational potential and∇ x denotes the gradient operator
+with respect to Eulerian coordinates. Taking the divergence of Eq. (3.2) and combining it
+with Eq. (3.1), we obtain
+∇x ·
+ d2Ψ
+dτ 2 +H dΨ
+dτ
+
+=−4πG¯ρ δ(x, τ).(3.3)
+Mass conservation further implies that
+¯ρ[1 +δ(x, τ)]d3x= ¯ρ d3q,(3.4)
+– 5 –
+
+which introduces the Jacobian of the Lagrangian-to-Eulerian mapping:
+J(q, τ) =
+
+∂x
+∂q
+ .(3.5)
+This leads to a relation between the density field and the Jacobian of the coordinate trans-
+formation:
+1 +δ(x, τ) = 1
+J(q, τ) .(3.6)
+An alternative form of Eq. (3.3) written in Lagrangian coordinates is:
+(J −1)ij∇qj
+ d2Ψi
+dτ 2 +H dΨi
+dτ
+
+=−4πG¯ρ1−J(q, τ)
+J(q, τ) ,(3.7)
+and the Jacobian matrix is:
+Jij =δ ij + Ψi,j(q, τ),(3.8)
+where
+Ψi,j ≡ ∂Ψi
+∂qj
+.(3.9)
+Much like in the Eulerian prescription, we can also develop a perturbative treatment in
+the Lagrangian picture, now in terms of the displacement field,Ψ. To do so, we begin by
+expanding the inverse Jacobian matrix:
+(J −1)ij =δ ij −Ψ i,j + Ψi,kΨk,j +. . .(3.10)
+and by using the identities
+J= 1 +J 1 +J 2 +J 3,(3.11)
+1− 1
+J =J 1 +J 2 −J 2
+1 +J 3 −2J 1J2 +J 3
+1 +. . . ,(3.12)
+we arrive at the fully symmetrized contributions to the Jacobian expansion 2:
+J1 = Ψi,i,
+J2 = 1
+2
+
+(Ψi,i)2 −Ψ i,jΨj,i
+
+,
+J3 = 1
+6(Ψi,i)3 − 1
+2Ψi,iΨj,kΨk,j + 1
+3Ψi,jΨj,kΨk,i.(3.13)
+Using Eq. (3.6), we may also write the matter overdensity in terms of the displacement
+field expansion:
+δ(x) =−Ψ i,i + 1
+2
+
+(Ψi,i)2 −Ψ i,jΨj,i
+
+− 1
+6(Ψi,i)3 − 1
+3Ψi,jΨj,kΨk,i + 1
+2Ψi,iΨj,kΨk,j +O(λ 4).(3.14)
+2To derive these equations, one only needs
+J= 1
+6 ϵijk ϵpqr JipJjq Jkr,
+together with Eq. (3.8).
+– 6 –
+
+Combining Eqs. (3.10), (3.11), and (3.14), we may write the Fourier transform of
+Eq. (3.7) as
+h
+ˆT−κ
+i
+Ψi,i(k) =
+h
+Ψi,j ˆTΨ j,i
+i
+(k)− κ
+2
+
+Ψi,jΨj,i −(Ψ i,i)2
+(k)
+−
+h
+Ψi,kΨk,j ˆTΨ j,i
+i
+(k) + κ
+6
+
+(Ψi,i)3
+(k)
++ κ
+2 [Ψi,jΨj,iΨk,k] (k)− κ
+3 [Ψi,kΨk,jΨj,i] (k).(3.15)
+where
+κ= 4πG¯ρ,(3.16)
+and, for brevity, we defined the differential operator
+ˆT= d2
+dτ 2 +H d
+dτ .(3.17)
+Writing Eq. (3.15) in this form eases the derivation of the equations of motion order by order
+in perturbation theory. The displacement field can then be expanded as
+Ψ=
+∞X
+n=1
+Ψ(n) =Ψ (1) +Ψ (2) +Ψ (3) +. . . .(3.18)
+According to the Helmholtz decomposition theorem, a general vector field can be sep-
+arated into longitudinal and transverse components. The displacement field may thus be
+written as
+Ψ=Ψ L +Ψ T,(3.19)
+with
+∇×Ψ L = 0,∇·Ψ T = 0.(3.20)
+Although vorticity is not generated perturbatively in the Eulerian description of a pressure-
+less fluid prior to shell crossing, in LPT a transverse component naturally emerges in the
+displacement field [49, 51, 55, 56]. In fact, solving the perturbative equations consistently up
+to third order already generates a non-vanishing transverse contribution. This component is
+required to ensure that the Eulerian velocity field remains irrotational before shell crossing.
+Before proceeding to the computation of the Eulerian-space power spectrum, it is impor-
+tant to briefly discuss the role of infrared (IR) resummation in large-scale structure perturba-
+tion theory. The need for infrared resummation arises because long-wavelength perturbations
+with momentap≲k BAO induce coherent large-scale displacements that shift small-scale per-
+turbations withk≫k BAO. As a consequence, a naive perturbative expansion leads to a
+poor description of the BAO feature, since the linear BAO oscillations become progressively
+non-correlated from the higher-order corrected power spectrum. The IR-resummation proce-
+dure is therefore designed to resum only the enhanced long-wavelength displacement modes
+responsible for this effect. In Standard Perturbation Theory (SPT), this limitation of naive
+perturbative expansions has long been recognized and addressed in several works [28–35].
+Obtaining the observable Eulerian-space power spectrum from LPT is, however, not
+straightforward. But, one of the main advantages of the approach developed in Refs. [37, 57]
+is the natural resummation of modes enhanced by long-wavelength displacement effects.
+Within LPT, this issue is naturally alleviated because the formalism is constructed directly
+– 7 –
+
+in terms of Lagrangian coordinates,q. In particular, the Zel’dovich approximation (ZA)
+already captures the leading nonlinear coherent bulk flows of matter, effectively resumming
+the dominant large-scale displacement effects from the outset. Properly accounting for these
+large-scale motions is therefore essential for obtaining accurate predictions beyond linear
+order and for preserving the perturbative description of the BAO feature.
+To compute the loop-corrected two-point statistics of matter in Fourier space, we go
+back to the mass conservation relation, (3.4), but now written as:
+ρ(x, τ)d 3x= ¯ρ(τ)d3q,(3.21)
+which can be recast as:
+1 +δ(x, τ) =
+Z
+d3qδ D(x−q−Ψ(q, τ)),(3.22)
+whereδ D denotes the Dirac delta distribution enforcing the mapping from Lagrangian to
+Eulerian coordinates. In Fourier space 3 Eq. (3.22) becomes
+δ(k, τ) =
+Z
+d3qe −ik·q
+h
+e−ik·Ψ(q,τ) −1
+i
+,(3.23)
+and, assuming statistical homogeneity, the matter power spectrum is:
+(2π)3δD(k) +P LPT(k) =
+Z
+d3qe −ik·q
+D
+e−ik·∆Ψ(q,τ)
+E
+,(3.24)
+where
+∆Ψ(q, τ)≡Ψ(q 1, τ)−Ψ(q 2, τ),(3.25)
+with
+q≡q 1 −q 2.(3.26)
+Using the cumulant theorem [37],
+
+e−iX
+= exp
+" ∞X
+N=1
+(−i)N
+N!
+
+X N
+c
+#
+,(3.27)
+where⟨X N ⟩c denotes theN-th cumulant of the random variableX[7], one rewrites the
+power spectrum as
+(2π)3δD(k) +P LPT(k) =
+Z
+d3qe −ik·q exp
+
+−1
+2 kikjAij(q) + i
+6 kikjkkWijk(q)
+
+,(3.28)
+where
+Aij(q)≡ ⟨∆Ψ i∆Ψj⟩c ,(3.29)
+3Throughout this work, we adopt the Fourier convention
+F(x) =
+Z d3k
+(2π)3 F(k)e ik·x,
+F(k) =
+Z
+d3xF(x)e −ik·x.
+– 8 –
+
+and
+Wijk(q)≡ ⟨∆Ψ i∆Ψj∆Ψk⟩c .(3.30)
+Explicitly [30, 37, 38],
+Aij(q) = 2 [⟨Ψi(0)Ψj(0)⟩ − ⟨Ψi(q1)Ψj(q2)⟩],
+Wijk(q) =
+
+Ψ{i(q1)Ψj(q1)Ψk}(q2)
+
+−
+
+Ψ{i(q2)Ψj(q2)Ψk}(q1)
+
+,(3.31)
+where{· · · }denotes symmetrization over the enclosed indices andq=q 1 −q.
+Perturbation theory in the displacement field, Eq. (3.18), then yields expressions forA
+andWin terms of momentum-dependent integrals. For example,
+Aij =A lin
+ij +A (22)
+ij + 2A(13)
+ij ,(3.32)
+where the linear contribution corresponds to the Zel’dovich approximation, i.e.A lin
+ij ≡A (11)
+ij ,
+and the symmetry relation (13) = (31) has been used.
+More generally, it is useful to define the Lagrangian correlator polyspectra [30, 37, 38,
+46],
+C(m1m2...)
+i1i2... ≡
+D
+∆Ψ(m1)
+i1 ∆Ψ(m2)
+i2 . . .
+E
+,(3.33)
+which, for the pure matter case, depend solely on the displacement fields. Later, we will gen-
+eralize these correlators to the case of biased tracers. At 1-loop order, the relevant correlators
+are
+C(11)
+ij (k) =L (1)
+i (k)L(1)
+j (k)PL(k),
+C(22)
+ij (k) = 1
+2
+Z d3p
+(2π)3 L(2)
+i (p,k−p)L (2)
+j (p,k−p)P L(p)PL(|k−p|),
+C(13)
+ij (k) = 1
+2 L(1)
+i (k)PL(k)
+Z d3p
+(2π)3 L(3,symm.)
+j (k,−p,p)P L(p),
+C(112)
+ijk (k1,k 2,k 3) =−L (1)
+i (k1)L(1)
+j (k2)L(2)
+k (k1,k 2)PL(k1)PL(k2).(3.34)
+Here,L (1),L (2),andL (3,symm.) denote the first-, second-, and symmetrized third-order La-
+grangian kernels, respectively. Recall that the displacement field develops a transverse com-
+ponent at third order. However, at 1-loop order only the symmetric longitudinal contribution
+enters, which considerably simplifies the calculations. Formally, for general cosmologies, the
+Lagrangian kernels may be written in terms of generalized growth functions, which in general
+acquire nontrivial momentum dependence beyond the Einstein–de Sitter (EdS) approxima-
+tion:
+L(1)(k) = k
+k2 ,(3.35)
+L(2)(k1,k 2) = k
+k2
+D(2)(k1,k 2)
+D(1)(k1)D(1)(k2) ,(3.36)
+L(3,symm.)(k1,k 2,k 3) = k
+k2
+D(3),symm.(k1,k 2,k 3)
+D(1)(k1)D(1)(k2)D(1)(k3) .(3.37)
+In beyond EdS, the generalized growth functions depend not only on time but also on the
+momentum configuration, thereby encoding the angular dependence of the kernels.
+– 9 –
+
+For Einstein–de Sitter cosmologies, these kernels assume fixed analytical forms:
+L(1)
+EdS(k) = k
+k2 ,(3.38)
+L(2)
+EdS(k1,k 2) = 3
+7
+k
+k2
+"
+1−
+ k1 ·k 2
+k1k2
+2#
+,(3.39)
+L(3,symm.)
+EdS (k1,k 2,k 3) = 5
+7
+k
+k2
+"
+1−
+ k1 ·k 2
+k1k2
+2#(
+1−
+(k1 +k 2)·k 3
+|k1 +k 2|k 3
+2)
+− 1
+3
+k
+k2
+"
+1−3
+ k1 ·k 2
+k1k2
+2
++ 2(k1 ·k 2)(k2 ·k 3)(k3 ·k 1)
+k2
+1k2
+2k2
+3
+#
+.(3.40)
+These EdS-kernels are fully time independent and possess fixed momentum dependence,
+which allows them to be directly substituted into the perturbative expansion of the displace-
+ment field:
+Ψ(n)
+EdS(k, a) =i D n(a)
+Z d3k1
+(2π)3 · · · d3kn
+(2π)3 (2π)3δD
+ 
+k−
+nX
+i=1
+ki
+!
+×L(n)
+EdS(k1, . . . ,kn)δ 0(k1)· · ·δ 0(kn).(3.41)
+Importantly, the Lagrangian correlators are not restricted to cosmologies well approximated
+by EdS. One may instead compute the generalized growth functions up to the symmetric
+third-order contribution and construct the corresponding 1-loop matter power spectrum for
+more general cosmological models, and Equation (3.41) becomes:
+Ψ(n)(k, a) =i
+Z d3k1
+(2π)3 · · · d3kn
+(2π)3 (2π)3δD
+ 
+k−
+nX
+i=1
+ki
+!
+×L(n)(k1, . . . ,kn;a)δ 0(k1)· · ·δ 0(kn).(3.42)
+From the definition of the Lagrangian correlators, it is useful to define the following scalar
+functions, following Refs. [30, 37, 40, 46]:
+Q1(k) = 98
+9 kikj C(22)
+ij (k),(3.43)
+Q2(k) = 7
+3 kikjkk
+Z d3p
+(2π)3 C(211)
+ijk (k,−p,p−k),(3.44)
+Q3(k) =k ikjkkkl
+Z d3p
+(2π)3 C(11)
+ij (p)C(11)
+kl (k−p),(3.45)
+R1(k) = 21
+5 kikj C(13)
+ij (k),(3.46)
+R2(k) = 7
+3 kikjkk
+Z d3p
+(2π)3 C(112)
+ijk (k,−p,p−k)
+= 7
+3 kikjkk
+Z d3p
+(2π)3 C(121)
+ijk (k,−p,p−k).(3.47)
+Within the Einstein–de Sitter approximation, Eqs. (3.43)–(3.47) simplify considerably.
+In particular, theR n functions may be written as
+REdS
+n (k) = k3
+(2π)2 PL(k)
+Z ∞
+0
+dr PL(kr) eRn(r),(3.48)
+– 10 –
+
+where
+eR1(r) =
+Z 1
+−1
+dµ r2(1−µ 2)2
+1 +r 2 −2rµ ,(3.49)
+eR2(r) =
+Z 1
+−1
+dµ (1−µ 2)rµ(1−rµ)
+1 +r 2 −2rµ .(3.50)
+Similarly, theQ n functions become
+QEdS
+n (k)≡ k3
+(2π)2
+Z ∞
+0
+dr PL(kr)
+Z +1
+−1
+dµ PL
+
+k
+p
+1 +r 2 −2rµ
+
+eQn(r, µ),(3.51)
+with
+eQ1(r, µ) = r2(1−µ 2)2
+(1 +r 2 −2rµ) 2 ,(3.52)
+eQ2(r, µ) = (1−µ 2)rµ(1−rµ)
+(1 +r 2 −2rµ) 2 ,(3.53)
+eQ3(r, µ) = µ2(1−rµ) 2
+(1 +r 2 −2rµ) 2 ,(3.54)
+where these expressions have already been rewritten in spherical coordinates
+r≡ p
+k , µ≡ ˆk· ˆp,(3.55)
+and the generalized form ofR n(k) andQ n(k), is found in [46].
+A straightforward numerical approach consists of performing a Gauss–Legendre quadra-
+ture for the angular integration together with a trapezoidal integration for the radial part.
+Within the EdS approximation, however, these integrals can be computed much more effi-
+ciently, as shown in Ref. [58]. The key observation is that these integrals possess a separable
+angular structure that can be decomposed into Legendre polynomials. In this case, the loop
+integrals may be recast as
+Z
+d3pp n1|k−p| n2Pℓ
+
+ˆp· \(k−p)
+
+PL(p)PL(|k−p|) = (−1) ℓ4π
+Z
+dr r2j0(kr)ξ ℓ
+n1(r)ξ ℓ
+n2(r),
+(3.56)
+whereP ℓ are the Legendre polynomials andξ ℓ
+n(r) denotes the generalized linear correlation
+function:
+ξℓ
+n(r) =i ℓ
+Z d3k
+(2π)3 e−ik·rknPℓ(ˆk· ˆr)PL(k)
+=i ℓ
+Z dk
+2π2 kn+2jℓ(kr)PL(k).(3.57)
+The explicit expressions for theQ n andR n functions in terms ofξ ℓ
+n may be found in Ap-
+pendix B of Ref. [58]. An important remark is that, for cosmologies in which the linear
+growth function becomes scale dependent, a finite-dimensional decomposition in terms of
+Legendre polynomials is generally no longer possible. This occurs because the functions eQn
+and eRn no longer possess fixed analytical dependence on the angular and radial variables.
+– 11 –
+
+Nevertheless, one may still follow the same general strategy introduced in Ref. [58]. We
+present this generalized approach in Appendix A.
+Returning to Eqs. (3.28) and (3.31), we now follow the notation of Refs. [30, 41, 46]
+and decompose the connected correlators of the Lagrangian displacement field into scalar
+functions constructed from ˆq:
+Aij(q) =X(q)δ ij +Y(q)ˆqiˆqj,(3.58)
+Wijk(q) =V(q)ˆq {iδjk} +T(q)ˆqiˆqj ˆqk.(3.59)
+The scalar functions are given by
+X(q) = 1
+π2
+Z ∞
+0
+dk
+
+PL(k) + 9
+98 Q1(k) + 10
+21 R1(k)
+ 1
+3 − j1(kq)
+kq
+
+,(3.60)
+Y(q) = 1
+π2
+Z ∞
+0
+dk
+
+PL(k) + 9
+98 Q1(k) + 10
+21 R1(k)
+
+j2(kq),(3.61)
+T(q) =− 9
+14π2
+Z ∞
+0
+dk
+k [Q1(k) + 2Q2(k) + 2R1(k) + 4R2(k)]j 3(kq),(3.62)
+V(q) =− 1
+7π2
+Z ∞
+0
+dk
+k [Q1(k)−3Q 2(k) + 2R1(k)−6R 2(k)]j 1(kq)− 1
+5 T(q).(3.63)
+As can be seen in Eqs. (3.60-3.61), the functionsX(q) andY(q) naturally separate into
+linear and loop contributions. The linear pieces correspond to the terms containing only the
+linear power spectrumP L(k):
+Xlin(q) = 1
+π2
+Z ∞
+0
+dk PL(k)
+1
+3 − j1(kq)
+kq
+
+,(3.64)
+Y lin(q) = 1
+π2
+Z ∞
+0
+dk PL(k)j2(kq),(3.65)
+with the remaining contributions definingX loop(q) andY loop(q).
+Finally, to construct the 1-loop matter power spectrum, we adopt the convolution La-
+grangian perturbation theory (CLPT) prescription introduced in Ref. [30, 38]. In this ap-
+proach, the linear contribution in Eq. (3.28) is kept exponentiated, while the loop corrections
+are expanded perturbatively:
+P 1−loop
+LPT (k) =
+Z
+d3qe −ik·q− 1
+2 kikj Alin
+ij (q)
+
+1− 1
+2 kikjAloop
+ij (q) + i
+6 kikjkkWijk(q) +. . .
+
+.(3.66)
+Reference [30] emphasizes the advantages of keeping the linear contribution exponenti-
+ated, as originally proposed in Ref. [37]. Within LPT, this procedure properly accounts for
+the advection induced by coherent large-scale bulk flows, effectively resumming infrared dis-
+placements non-perturbatively and improving the description of baryon acoustic oscillation
+features. Furthermore, in the spirit of an effective field theory treatment, perturbatively ex-
+panding the loop corrections avoids the uncontrolled proliferation of higher-order resummed
+counterterms, while maintaining a well-behaved connection between the power spectrum in
+Fourier space and the two-point correlation function in configuration space. This cleaner
+connection between Fourier and configuration space arises because the LPT power spectrum
+is already partially resummed through the exponentiation of displacement correlators, as re-
+flected by the presence of the zero-lag contribution in theAterm of Eq. (3.31). In particular,
+– 12 –
+
+the correlation function depends directly on the relative large-scale displacements between
+particle pairs, whose variance naturally produces the smearing of the BAO feature. As a con-
+sequence, infrared bulk flows are incorporated non-perturbatively from the outset, leading to
+a more stable and physically transparent relation between configuration- and Fourier-space
+observables.
+The formalism developed throughout this section can be straightforwardly generalized
+beyond cosmologies well described by the Einstein–de Sitter approximation. While we have
+presented several expressions explicitly in their EdS form, following the standard treatment
+in the literature, we have also introduced the corresponding generalized formulations valid
+for cosmologies with scale-dependent growth. These generalized expressions are the ones em-
+ployed throughout this work when presenting our numerical results and assessing deviations
+from the EdS approximation.
+In particular, we have developed a numerical implementation capable of solving the
+generalized growth functions up to third order, including the symmetrized contribution
+D(3),symm.(k1,k 2,k 3;a), required to construct the Lagrangian kernels in scale-dependent
+modified gravity theories, as shown in Eq. (3.35).
+4 Modified Gravity
+The equations of motion that we solved have been carefully derived in [46, 59] for scalar
+tensor theories where the scale-dependent growth naturally is endowed with the chameleon
+screening mechanism. The Lagrangian used has the following form:
+L= 1
+16πG
+√−g
+
+φR− ωBD(φ)
+φ ∇µφ∇µφ−V(φ)
+
++L m [ζ, gµν],(4.1)
+whereζare the matter fields minimally coupled to the metric. The Lagrangian (4.1) is known
+as a generalized formulation of the Brans-Dicke theory, where the coupling functionω BD(ϕ)
+is a function of the scalar field, instead of a constant as in the original BD theory. This
+theory has long been studied, with many exact cosmological solutions being derived, as well
+as constrained using cosmological and astrophysical data.
+Our interest here is not to pursue this theory as a viable candidate to a beyond-ΛCDM
+model, but to rather work out the details when computing the computing 1-loop corrections
+in a theory that its growth of structure is scale-dependent. To better understand this, we will
+show some of the equations of motion derived in [46] to get the third order growth factor in
+such theory, as well as shown intermediate definitions and derivations of a subclass of these
+theories, called Hu-Sawickif(R) model, that have also been studied in detail within SPT
+and 2LPT in [46, 60–63].
+Using the perturbed FLRW metric:
+ds2 =−(1 + 2ψ)dt 2 +a 2(t)(1−2ϕ)δ ijdxidxj,(4.2)
+and considering fluctuations of the scalar field:φ(x, t)→¯φ(t) +δφ(x, t) we arrive at [60]:
+1
+a2 ∇2ψ= 4πG¯ρδ− 1
+2a2 ∇2δφ,(4.3)
+(3 + 2ωBD(φ))∇ 2δφ=−8πG¯ρδ−I(δφ),(4.4)
+– 13 –
+
+where
+I(δφ) = 1
+2
+Z d3k1 d3k2
+(2π)3 δD(k−k 12)M 2(k1,k 2)φ(k 1)φ(k2)
++ 1
+6
+Z d3k1 d3k2 d3k3
+(2π)6 δD(k−k 123)M 3(k1,k 2,k 3)φ(k 1)φ(k2)φ(k3) +· · ·(4.5)
+and to make the notation more compact we treatφnow asδφ. The mass functionsM i
+are in full generality time and scale-dependent, and are intended to incorporate screening
+mechanism corrections that shield the fictitious fifth force introduced by the scalar field in
+small scales. One can see from (4.3) and (4.4) that nonlinearities coming from the matter
+density field will source the fluctuations of the scalar field, and theI(φ) function is the term
+that will be screening the presence of the scalar field correction to the gravitational force
+from appearing.
+However, in perturbation theory, as we solve the continuity, Euler and now the Klein-
+Gordon equation iteratively starting from the linear solution,δ(1)(x, t), it has been shown that
+this screening terms in not as “effective”, in the sense that its corrections are subdominant
+when compared to first term [61, 64]. Alternatively, one can check this by noting that the
+linearized Klein-Gordon equation:
+∇2φ(1) =− 1
+2ωBD + 3κ¯ρδ(1) (4.6)
+where we introducedκ= 8πG, is already order unity inκ. Therefore, each time aφappears
+inside the integral in Eq. (4.5), we get an additional order inκ, making it smaller. While
+in modified gravity simulations nonlinear terms in the Klein-Gordon equation, such asI(φ),
+would also appear, and the scalar field will already contain aκfactor in each term, the matter
+density field has no restriction in being linear, therefore, such nonlinear terms can always be
+of the same order as the first linear term in Eq. (4.4).
+We will now consider the Hu-Sawicki model, a special case off(R) theories of gravity.
+As it was shown [65, 66],f(R) theories in the metric formalism, i.e., when one varies the
+action with respect to the metric,g µν, and not the connection term, can be mapped directly
+to the Brans-Dicke theory withω BD = 0, therefore, the BD parameter drops out of the
+equations of motion. At the same time, at the background level we have that if:
+|f(R)| ≪1,
+
+f(R)
+¯R
+ ≪1 (4.7)
+withf R =d f /dRone has an expansion history close to ΛCDM, thence, in this work the mod-
+ified gravity results will always have a ΛCDM cosmology in the background. Furthermore,
+we have that the mass functionsM 1,M 2 andM 3 are only time dependent:
+M1(a) = 3
+2
+H2
+0
+|fR0|
+ 
+Ωm0a−3 + 4ΩΛ
+3
+(Ωm0 + 4ΩΛ)2 ,(4.8)
+M2(a) = 9
+4
+H2
+0
+|fR0|2
+ 
+Ωm0a−3 + 4ΩΛ
+5
+(Ωm0 + 4ΩΛ)4 ,(4.9)
+M3(a) = 45
+8
+H2
+0
+|fR0|3
+ 
+Ωm0a−3 + 4ΩΛ
+7
+(Ωm0 + 4ΩΛ)6 .(4.10)
+– 14 –
+
+The full treatment and development of SPT inf(R) gravity is presented in detail in [60,
+61]. Rather than reproducing the derivation here, we will present the form of the mixing
+matrix Ω ab, the same as Equation (2.15 ), obtained when using the doublet representation
+of Equation (2.13) in order to make a pedagogical remark regarding the EdS approximation
+and generalized cosmologies:
+Ωab(k, T) =
+
+
+0−1
+−3
+2
+Ωm(a)
+f 2(a) µ(k, a) 1 +∂ T ln
+
+H(a)f(a)
+
+
+ ,(4.11)
+where
+µ(k, a) = 1 + 1
+3
+(k/a)2
+Π(k, a) .(4.12)
+Unlike the ΛCDM case, in generalized cosmologies in the EdS limit, where Ω m/f 2 →1, the
+modified gravity contributionµ(k, a) remains present in the component Ω 21. This function
+enters directly in the Poisson equation, encoding the scale- and time-dependent modifications
+to gravity.
+Returning to the Lagrangian Perturbation Theory approach, as in the ΛCDM case, the
+perturbative expansion of the displacement field yields the solution order by order. We begin
+by rewriting Equation (4.13), keeping the right-hand side explicitly in terms of the metric
+potential:
+∇x ·
+ d2Ψ
+dτ 2 +H dΨ
+dτ
+
+=− 1
+a2 ∇2
+xψ.(4.13)
+The Poisson equation now receives an additional contribution sourced by scalar-field
+fluctuations, which are coupled to the Klein–Gordon equation (4.4). Since the Klein–Gordon
+equation is naturally written in Eulerian coordinates, we rewrite it in terms of Lagrangian
+coordinates by adding and subtracting the term∇ 2
+qφ:
+(J −1)ij∇q ·
+h
+ˆTΨ(q, t)
+i
+=− κ
+2 ¯ρ1−J(q, t)
+J(q, t) + 1
+2 ∇2
+qφ+ 1
+2
+
+∇2
+xφ− ∇ 2
+qφ
+
+(q, t),(4.14)
+where the final contribution is a geometrical correction arising from the transformation be-
+tween Eulerian and Lagrangian coordinates. This term is commonly referred to as theframe-
+laggingterm [46]. Fourier transforming (4.4), whereknow is with respect toq, one gets:
+− k2
+2a2 φ(k) =−(A(k)−A 0) ˜δ(k) + k2/a2
+6Π(k) δI(k) (4.15)
+− (3 + 2ωBD)k 2/a2
+3Π(k)
+1
+2a2
+ 
+∇2
+xφ− ∇ 2φ
+
+(k),(4.16)
+with the following definitions:
+A(k) = 4πG¯ρ
+
+1 + k2/a2
+3Π(k)
+
+,(4.17)
+Π(k) = 1
+3a2
+ 
+(3 + 2ωBD)k 2 +M 1a2
+,(4.18)
+A0 =A(k= 0, t) = 4πG¯ρ.(4.19)
+– 15 –
+
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h/Mpc]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Squeezed ( = 1.0)
+Da
+2
+Db
+2
+DFL
+2
+DScr
+2
+D3
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h/Mpc]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Orthogonal ( = 0.0)
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h/Mpc]
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Equilateral ( = 0.5)
+Figure 1.f(R) gravity scale dependence of the normalized second- and third-order Lagrangian
+growth factors for different triangle configurations in Fourier space: squeezed (µ=−1), orthogonal
+(µ= 0), and equilateral (µ=−0.5). The quantities displayed are the second-order growth factors
+Da
+2,D b
+2, the frame-lagging contributionD FL
+2 , the screening contributionD Scr
+2 , and the third-order
+growth factorD 3. The strongest scale dependence appears in the squeezed configuration.
+These equations are the same ones presented in [46], and we have decided to follow their
+definition to make it easier to compare step by step with their previously found results.
+Therefore, we point the reader to the full equations of motion ofD (1)(k),D (2)(k1,k 2) and
+D(3,symm.)(k1,k 2,k 3) in their paper, with the missing term of the third order screening having
+its full expression shown in [59].
+We have implemented a code that solves these equations of motion in 3.43 seconds 4 in
+a grid of 41×41×50 (|k 1|,|k 2|,µ), whereµ= ˆk1 · ˆk2. Even though the third order growth
+factor depends on three momenta, only the so-called double squeezed configuration of these
+quadrilaterals contribute, leaving only three degrees of freedom, making them possible to
+compute in the same loop as the second order growth factor. We show the solutions of the
+4The computation was performed on a local machine equipped with a 12th Gen Intel Core i5-12450HX CPU
+(8 cores, 12 threads), compiled with GCC 12.2.0. The code is written C++, parallelized with OpenMPI, and
+uses a Runge–Kutta (RK4) integrator fromboost(https://www.boost.org/). Reported runtimes correspond
+to wall-clock time.
+– 16 –
+
+0.90
+0.95
+1.00
+1.05
+1.10QEdS
+1 (k)/Qfull
+1 (k)
+CDM
+f(R)
+±1%
+0.90
+0.95
+1.00
+1.05
+1.10QEdS
+2 (k)/Qfull
+2 (k)
+CDM
+f(R)
+±1%
+10 3
+ 10 2
+ 10 1
+ 100 101 102
+k [h/Mpc]
+0.90
+0.95
+1.00
+1.05
+1.10REdS
+1 (k)/Rfull
+1 (k)
+CDM
+f(R)
+±1%
+10 3
+ 10 2
+ 10 1
+ 100 101 102
+k [h/Mpc]
+0.90
+0.95
+1.00
+1.05
+1.10REdS
+2 (k)/Rfull
+2 (k)
+CDM
+f(R)
+±1%
+Figure 2. Ratios between the Einstein–de Sitter approximation and the exact time-dependent
+solutions for the loop functionsQ 1(k),Q 2(k),R 1(k), andR 2(k) in both ΛCDM andf(R) gravity.
+Dashed blue lines correspond to ΛCDM, while solid orange lines denote thef(R) model. In the
+ΛCDM case, the EdS approximation reproduces the exact solutions with sub-percent accuracy over
+the full range of scales shown. In contrast, the modified-gravity case exhibits visible departures from
+unity, reflecting the failure of the EdS approximation in the presence of scale-dependent growth and
+screening effects. These deviations become more pronounced at mildly nonlinear scales, where mode
+coupling is strongest and the modified gravitational dynamics most strongly affect the higher-order
+kernels. Some of the wiggling in the curves are simply due to the numerical integration.
+growth factors in Figure 1.
+The strongest scale dependence in the modified gravity solutions appears in the squeezed
+configuration, consistent with the enhanced mode coupling typically exhibited by LPT/SPT
+kernels in the squeezed limit, where long and short wavelength modes interact most efficiently.
+From the growth functions, we can compute the full Lagrangian kernels, Eq. (3.35), and use
+them to evaluate the scalar functions defined in Eqs. (3.43)–(3.47), which are constructed
+from the Lagrangian correlators. In Fig. 2, we compare the full-kernel solutions forf(R) and
+ΛCDM with their corresponding EdS approximations. As can be seen, the EdS approximation
+in modified gravity fails to capture the full scale-dependent physics encoded in the growth
+functions, making it a poor approximation in this case. Thesek-dependent functions can then
+be Fourier transformed to Lagrangian coordinates,q, from which we extract the quantities
+defined in Eqs. (3.60)–(3.63).
+To conclude this section, we show in Fig. 3 the matter power spectrum computed in
+LPT with and without loop corrections. We compare the EdS prediction obtained with
+velocileptorsagainst the ΛCDM andf(R) full-kernel results computed in this work. As
+discussed above, keeping only the linear displacement correlatorA linear exponentiated corre-
+– 17 –
+
+10 3
+ 10 2
+ 10 1
+k [h Mpc 1]
+103
+104
+P(k) [(Mpc/h)3]
+PZA(k)
+10 3
+ 10 2
+ 10 1
+k [h Mpc 1]
+103
+104
+PZA + loop(k)
+Velocileptors (EdS) CDM
+ f(R)
+Figure 3. Matter power spectrum computed in LPT with and without loop corrections. We compare
+the EdS result obtained withvelocileptorswith the ΛCDM andf(R) full-kernel predictions devel-
+oped in this work. The exponential suppresion present in all LPT predictions is more accetuanted in
+the case off(R) as we haveσ 2
+L,f(R) > σ 2
+L,ΛCDM
+sponds to the fully non-perturbative Zel’dovich contribution. The inclusion of the remaining
+loop contributions then gives the one-loop LPT correction to this result.
+5 Biased tracers
+The same LPT-based approach can be used to compute the one-loop corrected matter power
+spectrum for biased tracers. As shown in Ref. [36], the starting point is the analogue of mass
+conservation for tracers:
+[1 +δ X(x, t)]d 3x= [1 +δ X(q, t0)]d 3q,(5.1)
+whereδ X denotes the overdensity field of a given tracer population. Contrary to the matter
+case, however, Eq. (5.1) should not be interpreted as an exact conservation law, since the
+number density of tracers is generally not conserved during the evolution of the Universe.
+For example, dark matter haloes undergo mergers and other nonlinear processes that modify
+their abundance over time.
+Nevertheless, within the framework of a local Lagrangian bias model, the term on the
+right-hand side of Eq. (5.1) is written as [30, 36, 42, 67]
+1 +δ X(q, t0) =F[δ L(q)],(5.2)
+whereδ L(q) is the linear Gaussian initial matter density field. One then obtains
+1 +δ X(x, t) =
+
+∂x
+∂q
+
+−1
+F[δ L(q)]
+=
+Z
+d3q F[δ L(q)]δD (x−q−Ψ(q, t)),(5.3)
+– 18 –
+
+whereΨ(q, t) is the Lagrangian displacement field.
+The general expression for the LPT power spectrum of biased tracers is then given by
+(2π)3δD(k)+PLPT(k) =
+Z
+d3q eik·q
+Z dλ1
+2π
+dλ2
+2π
+˜F(λ 1) ˜F(λ 2)
+D
+ei[λ1δL(q1)+λ2δL(q2)]−ik·[Ψ(q1)−Ψ(q2)]
+E
+,
+(5.4)
+where ˜F(λ i) denotes the Fourier transform of the functionalF[δ L(qi)], andq=q 1 −q 2. In
+this framework, Eq. (5.4) should be interpreted as the power spectrum of discrete tracers
+whose statistical properties are determined by fields constructed from the initial density field
+δL(q). The bias expansion is written as
+F[δ L(q)] = 1 +δ X(q, t0)
+= 1 +b 1δL(q) +b 2
+ 
+δ2
+L(q)− ⟨δ 2
+L(q)⟩
+
++b s2
+ 
+s2(q)− ⟨s 2⟩
+
++b 3O3(q) +. . . ,(5.5)
+where
+s2(q) =s ij(q)sij(q),(5.6)
+and
+sij(q) =
+ ∂i∂j
+∂2 − δij
+3
+
+δL(q),(5.7)
+is the tidal shear tensor, and the derivatives are taken with respect to the Lagrangian coor-
+dinates,q.
+In this work, we consider the bias expansion only up to the tidal shear operator. How-
+ever, many other works and numerical implementations also include third-order bias operators
+and curvature bias terms [20–27]. From (5.5) we can see that now we will be interested in
+dealing with Lagrangian correlators that are not only functions of the displacement field, but
+also of the initial density field, in this way [38, 68] introduced a more general way of writing
+these correlators:
+Cn1n2(m1m2...)
+i1i2... =⟨δ n1
+1 δn2
+2 ∆Ψ(m1)
+i1 ∆Ψ(m2)
+i2 . . .⟩,(5.8)
+where the term in parentheses are the order of the Lagrangian solution, and the dots are
+further powers of the difference between displacement fields, note also that quantities with
+parentheses omitted imply the sums to all orders,C 00
+ij =C 00(11)
+ij +C 00(22)
+ij +C 00(13)
+ij +C 00(31)
+ij +
+. . ., up to quadratic order.
+Similarly to the one-loop corrected matter power spectrum case, Appendix B of Ref. [38]
+shows that the computation of the Lagrangian correlators can ultimately be reduced to the
+evaluation of a set of scalar functions inq-space. Since we are working within a modified
+theory of gravity, however, theQ i andR i functions derived in their Appendix B cannot be
+directly applied. Instead, we evaluate the corresponding integrals following the expressions
+presented in Refs. [47, 48] 5, which we have also independently verified in this work. 6
+As shown in Refs. [47, 48], generalized cosmologies introduce additionalk-dependent
+functions which, in the EdS limit, reduce to simple combinations of the standard EdS quan-
+tities, namely
+REdS
+I =R EdS
+1 , Q EdS
+I =Q EdS
+1 , R EdS
+1+2 =R EdS
+1 +R EdS
+2 .(5.9)
+5Specifically, theQ i(k) andR i(k) implemented in Appendix D of [47].
+6TheQ i(k) andR i(k) functions are evaluated using trapezoidal radial integration and Gauss–Legendre
+angular quadrature on a 1750×512 grid.
+– 19 –
+
+To better understand the impact of using and not using the EdS Lagrangian kernels in ΛCDM
+andf(R), we show in Fig. 4 the functionsR 1+2(k) andR I(k) computed from Eq. (C.24)
+of Ref. [47], and compare them against their corresponding EdS combinations,R 1(k) +
+R2(k) andR 1(k), respectively. Once again, we find that the EdS approximation provides an
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h/Mpc]
+0
+250
+500
+750
+1000
+1250
+1500
+1750Function value
+R1 + 2(k)
+LCDM: R1 + 2
+EdS (LCDM): R1 + R2
+f(R): R1 + 2
+EdS (f(R)): R1 + R2
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h/Mpc]
+0
+500
+1000
+1500
+2000
+RI(k)
+LCDM: RI
+EdS (LCDM): R1
+f(R): RI
+EdS (f(R)): R1
+Figure 4. Comparison between the exact one-loop Lagrangian perturbation theory integrals
+R1+2(k)≡R 1(k) +R 2(k) andR I(k), and their Einstein–de Sitter (EdS) approximations, computed
+for both ΛCDM andf(R) gravity. Solid lines correspond to the full generalized calculation, while
+markers denote the EdS approximation. For the ΛCDM case, the EdS approximation reproduces the
+exact result remarkably well across the fullkrange considered. In contrast, noticeable deviations ap-
+pear in thef(R) model, particularly around the mildly nonlinear regime where the loop integrals peak,
+indicating that the EdS relations become less accurate in the presence of scale-dependent modified-
+gravity effects.
+excellent description for the ΛCDM case, as indicated by the near-perfect overlap between
+the blue square markers and the dashed blue line. However, the same does not hold for
+f(R) gravity, where the dark-orange square markers exhibit significant deviations from the
+full-kernel computation, particularly in the mildly nonlinear regime,k∼0.1–0.4hMpc −1.
+In order to further validate the robustness of our implementation, we compare our
+results against themgptcode 7, presented in Ref. [47], which is also capable of computing the
+same integrals in bothk- andq-space employed throughout this work. In Fig. 5, we show the
+comparison for four representative functions in both ΛCDM and the F5 model.8 As shown in
+Fig. 5, our results are in excellent agreement withmgpt, providing an important consistency
+check of our implementation and numerical pipeline.
+As in the one-loop matter power spectrum case, (3.28), the real-space biased-tracer
+power spectrum is computed from the Fourier transform of thesek-space scalar functions.
+We then write here the definition of the biased-tracer power spectrum as introduced in
+7https://github.com/alejandroaviles/mgpt.git
+8The F5 model corresponds to the parameter choice log 10 | ¯fR|=−5.
+– 20 –
+
+10 3
+10 2
+10 1
+100
+101
+102
+103
+Q1(k)
+Q1
+Quantity
+Q1
+R1
+Q5
+R2
+10 3
+10 2
+10 1
+100
+101
+102
+103
+R1(k)
+R1
+Model / Method
+F5 mgpt
+CDM mgpt
+F5 this work
+CDM this work
+Model / Method
+F5 mgpt
+CDM mgpt
+F5 this work
+CDM this work
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h Mpc 1]
+10 3
+10 2
+10 1
+100
+101
+102
+103
+Q5(k)
+Q5
+10 3
+ 10 2
+ 10 1
+ 100 101
+k [h Mpc 1]
+10 3
+10 2
+10 1
+100
+101
+102
+103
+|R2(k)|
+|R2|
+Figure 5. Comparison between integrals computed in this work and the predictions from themgpt
+code for both ΛCDM andf(R) gravity. The panels show the quantitiesQ 1(k),R 1(k),Q 5(k), and
+|R2(k)|as functions of wavenumberk. Solid and dashed lines correspond to themgptpredictions
+for thef(R) and ΛCDM models, respectively, while square and triangular markers denote the results
+obtained in this work. Overall, excellent agreement is observed over the full range of scales considered,
+validating the numerical implementation of the generalized LPT kernels and loop integrals in modified
+gravity cosmologies in this work.
+Appendix B of Ref. [40]:
+P(k) =
+Z
+d3qe ikµqe− 1
+2 kikj Alin
+ij
+(
+1− 1
+2 k2
+
+Xloop +Y loopµ2
+
+− i
+6 k3
+
+˜V µ+ ˜T µ3
+
++b 1
+ 
+2ikU µ−k 2 
+X10 +Y 10µ2
++b 2
+1
+ 
+ξ2
+lin −k 2U 2
+linµ2 +ikU 11µ
+
++b 2
+ 
+−k2U 2
+linµ2 +ikU 20µ
+
++ 2ib1b2kξlinUlinµ+ b2
+2
+2 ξ2
+lin
++b s
+ 
+−k2(Xs +Y sµ2) + 2ikV 10µ
+
++ 2ib1bskV 12µ+b 2bsχ+b 2
+sζ
+)
+.(5.10)
+All functions appearing in the integrand are scalar functions ofq, and their definitions can
+be found in Refs. [38, 40, 68] in EdS, and in [47, 48] for the modified gravity counterpart. To
+compute these quantities, we follow the same strategy implemented invelocileptorsand
+described in several references [58, 69–72], based on Hankel transforms.
+– 21 –
+
+Inspecting the integral form of theq-space functions entering Eq. (5.10), these terms
+can be cast into a generic form:
+Z
+d3q e ikqµ− 1
+2 kikj Alin
+ij µm f(q) =
+∞X
+n=0
+4π
+Z
+dq q2 e− 1
+2 k2(X lin+Y lin)f m
+n
+ 
+k2Ylin
+ kYlin
+q
+n
+f(q)j n(kq),(5.11)
+where the angular dependence has been reorganized into a sum over spherical Bessel functions
+jn(kq). This representation makes the remaining radial integrals suitable for fast evaluation
+through Hankel transforms.
+10 3
+10 2
+10 1
+100
+101
+102
+103
+104
+Pij(k)
+11
+1
+1 2
+1s2
+velocileptors
+This work
+100
+101
+102
+103
+104
+2
+s2
+velocileptors
+This work
+10 3
+ 10 2
+ 10 1
+ 100
+k [h Mpc 1]
+101
+102
+103
+Pij(k)
+2 2
+2s2
+velocileptors
+This work
+10 3
+ 10 2
+ 10 1
+ 100
+k [h Mpc 1]
+102
+103
+s2s2
+velocileptors
+This work
+Figure 6. Comparison between the one-loop LPT operator spectra computed in this work and
+the predictions from thevelocileptorsimplementation for ΛCDM using the EdS approximation.
+Solid lines denote thevelocileptorsresults, while square markers correspond to the calculations
+performed in this work. The panels display the auto- and cross-spectra associated with the HEFT
+operatorsδ,δ 2, ands 2. Excellent agreement is observed across the full range of scales considered,
+validating the implementation of the generalized Lagrangian kernels and the numerical evaluation of
+the loop contributions.
+In practice, we apply this procedure term by term to all contributions entering Eq. (5.10).
+In the EdS case, part of this structure can be pretabulated in terms of fixed kernels. In the
+presentf(R) case, however, these kernels are replaced by scale- and time-dependent functions,
+implying that thek-dependent coefficients entering the Hankel integrals must be recomputed
+– 22 –
+
+for each model evaluation. Nevertheless, the FFTLog infrastructure itself, including the log-
+arithmicq-grid and the Hankel-transform setup, can still be reused, keeping the calculation
+computationally efficient.
+Using FFTLog-based integration methods, the computation of theq-space functions
+requires only approximately 0.17 s, while the full evaluation of Eq. (5.10) takes 10.8 s. In this
+work we usen max = 5, which already provides excellent agreement withvelocileptors, at
+the level of better than 2% up tok= 0.3hMpc −1, and the differences between the two at high
+kis seen due to the heavy exponential suppression. We show a comparison between the two
+codes in Fig. 6, noting that we are comparing our ΛCDM kernels with their EdS kernels, as
+we have already stated that the level of agreement between the two are excellent. The direct
+comparison between the code developed in this work with the estabilishedvelocileptors
+one provides a strong argument for the consistency of our pipeline.
+10 3
+10 2
+10 1
+100
+101
+102
+103
+104
+Pij(k)
+11
+1
+1 2
+1s2
+GR
+F5
+100
+101
+102
+103
+104
+2
+s2
+GR
+F5
+10 2
+ 10 1
+ 100
+k [h Mpc 1]
+101
+102
+103
+Pij(k)
+2 2
+ 2s2
+GR
+F5
+10 2
+ 10 1
+ 100
+k [h Mpc 1]
+102
+103
+s2s2
+GR
+F5
+Figure 7. Same as Figure 6 but showing ΛCDM and F5.
+We conclude this section by presenting the CLPT basis power spectra in GR and in
+the F5 modified gravity model. The results largely follow the expected behaviour, especially
+for basis spectra involving either the usual matter power spectrum and the one from the
+linear density field, denoted by the subscript “1” and theδ L(q) operator, respectively. In
+these cases, modified gravity generally enhances clustering on small scales relative to the
+GR prediction. In contrast, spectra involving theδ 2
+L(q) ands 2(q) Lagrangian fields exhibit
+a more intricate scale dependence, as these operators are more sensitive to the coupling
+between long- and short-wavelength modes. This leads to a stronger enhancement in their
+– 23 –
+
+amplitudes relative to GR, as illustrated in the lower panels of Fig. 11 and Fig. 12.
+One final comment concerns the usual addition of counterterms that promote the CLPT
+approach into an EFT description, an issue discussed in [64, 73] in the Eulerian framework.
+In particular, Ref. [64] argues that the screening contributions appearing in the Lagrangian
+kernels are highly degenerate with the usual EFT counterterms. For the case off(R) gravity,
+which naturally exhibits chameleon screening, the impact of these screening corrections on the
+power spectrum multipoles can be effectively absorbed by counterterms of the standard EFT
+form, proportional tok 2PL(k). This suggests that, rather than explicitly including screening
+contributions in the perturbative kernels, their net effect can be accounted for through a
+redefinition of the EFT coefficients. In that sense, their analysis motivates neglecting explicit
+screening terms and absorbing their contribution into the EFT counterterms.
+Therefore, the inclusion of the standard EFT counterterms may ultimately provide a
+computationally efficient alternative to the explicit treatment of screening corrections in the
+kernels presented in this work, since the evaluation of the third-order screening contributions
+enteringD (3,symm.) constitutes one of the main numerical bottlenecks in our implementation.
+We further speculate that, for theories in which Vainshtein screening is the dominant mech-
+anism, a similar degeneracy may arise involving the shear-bias operators and the additional
+higher-derivative curvature terms that characterize these theories and suppress the fifth force
+in dense environments. Exploring this possibility in detail is beyond the scope of the present
+work and is left for future investigation.
+6 Hybrid Effective Field Theory
+Having presented the analytical derivation and numerical implementation of the LPT frame-
+work for computing the matter and biased-tracer power spectra, we now turn to the Hybrid
+Effective Field Theory (HEFT) approach and our simulation results. As first proposed in
+Ref. [1], there exists a remarkable correspondence between the functional approach to biased
+tracers in LPT introduced in Ref. [36] and the evolution of dark matter particles inN-body
+simulations.
+In the analytical formalism, the smoothed initial density field,δ L, is obtained from
+standard Einstein–Boltzmann solvers. This same field also serves as the starting point for
+generating the initial conditions ofN-body simulations, which are now capable of describing
+the clustering of dark matter on small scales with high precision. The generation of simulation
+initial conditions begins by constructing a three-dimensional Gaussian random field,δ L(q),
+sampled on a regular Lagrangian grid. In this setup, each Lagrangian coordinateqis uniquely
+associated with a simulation particle through its particle ID.
+The standard procedure for estimating the matter power spectrum from a simulation
+consists of depositing particles onto a fixed grid using a mass-assignment scheme and subse-
+quently Fourier transforming the density field using FFTs. In the matter case, each particle
+contributes equally, corresponding to a uniform weighting. In the functional-bias approach,
+however, each particle is instead weighted by the value of a given Lagrangian operator eval-
+uated at its initial position, such asδ L(q),δ 2
+L(q), ors 2(q). Following this procedure, one can
+estimate the basis spectra associated with the theoretical predictions derived in the previous
+section,
+Pij(k) =
+X
+i,j=δL, δ2
+L, s2
+bibj OiOj.(6.1)
+– 24 –
+
+102
+103
+104
+105
+Pij(k)
+11
+1
+1 2
+ ZA pair-fix
+Theory
+102
+103
+104
+2
+s2
+ ZA pair-fix
+Theory
+10 1
+ 100
+k [h Mpc 1]
+102
+103
+Pij(k)
+2 2
+ 2s2
+ ZA pair-fix
+Theory
+10 1
+ 100
+k [h Mpc 1]
+102
+103
+s2s2 1s2 ZA pair-fix
+Theory
+Figure 8. Comparison between the HEFT operator spectra measured from Zel’dovich approximation
+(ZA) particle snapshots and the corresponding theoretical predictions obtained from the generalized
+Lagrangian framework inf(R) gravity. The ZA measurements are constructed from particle grids
+evolved according to the Zel’dovich approximation using pair-fixed initial conditions. Solid lines
+denote the measured ZA spectra, while dotted lines show the theoretical calculations. The panels
+display the auto- and cross-spectra associated with the HEFT operatorsδ,δ 2, ands 2. Overall, the
+theoretical predictions reproduce the broadband behaviour and relative amplitudes of the measured
+ZA spectra over the full range of scales considered, with the largest deviations appearing in spectra
+involving higher-order operators at nonlinear scales.
+While this procedure has already been extensively explored for ΛCDM,wCDM, and
+w0waCDM cosmologies, leading to the construction of several emulators [17–19], here we
+present the corresponding basis-spectrum computations for F5 gravity and compare them
+against their theoretical predictions. Furthermore, it is also instructive to compute the same
+basis spectra from a Zel’dovich realization,i.e., a particle snapshot generated using the
+Zel’dovich approximation.
+We compare our theoretical predictions obtained with the code developed in this work
+against the spectra measured from the Zel’dovich particle realization in Fig. 8. To reduce
+sample variance, we generated Zel’dovich realizations using paired-fixed initial conditions.
+We find good agreement between the theoretical predictions and the grid-based measure-
+ments. The agreement is generally better for the auto-spectra,P ii(k), which is expected since
+auto-power spectra are positive-definite quantities and therefore less sensitive to fractional
+fluctuations induced by sample variance and finite-volume effects. In contrast, cross-spectra
+– 25 –
+
+are not positive-definite and can exhibit larger relative deviations, particularly on large scales
+where cancellations and noise become more important. This effect is especially pronounced
+for composite Lagrangian operators such asδ 2
+L(q) ands 2(q), whose cross-correlations can be
+partially suppressed by renormalization or subtraction terms, resulting in small net signals
+and consequently larger apparent discrepancies in relative comparisons. Such numerical arti-
+facts can be reduced by increasing the mass resolution of the simulations, thereby improving
+the sampling of the density field on the grid and producing more stable estimates of these
+quantities.
+OurN-body simulations were generated using the Adaptive Mesh Refinement (AMR)
+codeECOSMOG[74], which is itself based on the AMR codeRAMSES[75]. We used a simu-
+lation box of sizeL= 1024 Mpch −1 withN p = 1024 3 particles, a domain grid of 1024 3
+cells, and a refinement criterion of 8. The simulations were initialized atz ini = 49 using
+second-order Lagrangian perturbation theory (2LPT) initial conditions generated with the
+code2LPTic[76, 77]. To compute the Lagrangian fields, we generated Gaussian random fields
+using theFMLpackage 9, employing the same GSL random-number generator used by2LPTic,
+namelygsl rng ranlxd1. We ran both ΛCDM and F5 simulations using identical cosmo-
+logical parameters and matched initial conditions. We further employed the paired-fixed ap-
+proach of Ref. [78] in order to reduce sample variance. The basis spectra computed from both
+theN-body simulations and the Zel’dovich realizations were evaluated after applying a Gaus-
+sian smoothing to the initial density fieldδL(q), with smoothing scalek smooth = 3.14hMpc −1.
+In Fig. 9, we compare the LPT predictions against their correspondingN-body measure-
+ments. The level of residual discrepancies at small wavenumbers is comparable to that found
+in previous implementations of the HEFT approach in ΛCDM [1, 17–19].
+As can be seen from Figs. 8 and 9, some spectra still exhibit noticeable scatter on
+large scales. Since we have a direct theoretical implementation for each LPT basis spectrum,
+this does not represent a limitation of the modeling itself, as the large-scale behaviour is
+analytically controlled and accurately described. Previous works [18, 19] have shown that
+these fluctuations can be substantially reduced through control-variate techniques [43, 79].
+In this work, however, we will instead adopt a different strategy. In beyond-ΛCDM nonlinear
+modelling of the matter power spectrum, it is customary to emulate theboostrather than
+the power spectrum itself,
+B(k, z) = P NL,MG
+mm (k, z|θ)
+P NL,GR
+mm (k, z|θ)
+,(6.2)
+whereθrepresents a set of cosmological and model parameters. This quantity captures the
+relative modification of the nonlinear matter spectrum with respect to GR. The modified-
+gravity prediction can then be reconstructed by multiplying the boost by the corresponding
+GR nonlinear spectrum. Since the GR and MG simulations are generated from matched
+initial conditions and identical random seeds, this ratio also strongly suppresses cosmic vari-
+ance. Motivated by this idea, we generalize the same response-ratio strategy to all HEFT
+operator spectra. For each operator pairα, we define the modified-gravity response
+Rα(k, z|θ) = P α
+MG(k, z|θ)
+P α
+GR(k, z|θ) ,(6.3)
+this construction substantially reduces the variance of the measured spectra.
+9https://github.com/HAWinther/FML/tree/master/FML/RandomFields
+– 26 –
+
+102
+103
+104
+105
+Pij(k)
+11
+1
+1 2
+ N-body pair-fix
+Theory
+102
+103
+104
+2
+s2
+ N-body pair-fix
+Theory
+10 1
+ 100
+k [h Mpc 1]
+102
+103
+Pij(k)
+2 2
+ 2s2
+ N-body pair-fix
+Theory
+10 1
+ 100
+k [h Mpc 1]
+102
+103
+s2s2 1s2 N-body pair-fix
+Theory
+Figure 9. Comparison between the HEFT operator spectra measured from pair-fixedN-body
+simulations and the corresponding theoretical predictions obtained from the generalized Lagrangian
+framework inf(R) gravity. Solid lines denote the spectra measured from the simulations, while dotted
+lines show the theoretical calculations. The panels display the auto- and cross-spectra associated with
+the HEFT operatorsδ,δ 2, ands 2. The pair-fixed simulations substantially suppress cosmic variance
+on large scales, allowing for a cleaner comparison between theory and measurements.
+The improvement is particularly noticeable for the auto spectra, which remain positive
+definite and comparatively smooth on large scales. The cross spectra, however, still exhibit
+residual fluctuations, as they are significantly more sensitive to cancellations and sign changes,
+see the solid curves in Fig. 10.
+We found that filtering the nonlinear correction relative to the ZA response substantially
+reduces the noise when compared to filtering the full modified-gravity response directly. Our
+procedure is organized in the following steps. First, we compute the directN-body response
+from the ratio between the F5 and GR spectra measured in the simulations. Second, we
+compute the corresponding ZA response using matched Zel’dovich realizations. We then
+isolate the nonlinear correction beyond the ZA approximation through the ratio
+Cα(k, z|θ) = Rα
+NB(k, z|θ)
+Rα
+ZA(k, z|θ) .(6.4)
+This quantity captures the residual nonlinear modification relative to the ZA prediction. In
+practice,C α(k, z|θ) is considerably smoother than the full response itself, particularly for
+– 27 –
+
+the auto spectra, which allows the filtering procedure to be applied more robustly to the
+correction factor rather than directly to the full modified-gravity response.
+For the auto spectra, the correction factor is sufficiently stable. The cross spectra, on
+the other hand, require an additional low-ksmoothing step due to their stronger sensitivity
+to noise and sign changes. In practice, we fit the large-scale behaviour of the correction factor
+using a low-order polynomial and smoothly blend this fit into the measured correction over
+an intermediate transition region. The final filtered correction factor, denoted byC α
+filt(k, z|θ),
+is therefore constructed by combining the measured correction with its smooth large-scale
+fit. This filtering is applied only where necessary: the auto spectra use the direct correction
+factor, while the cross spectra use the smoothed version at lowk. The filtered correction is
+then interpolated onto the Fourier grid used for the HEFT predictions.
+Next, we compute the perturbative response using the HEFT basis spectra. Finally, we
+construct a stitched response that follows the perturbative prediction on very large scales and
+smoothly transitions to the ZA response towards intermediate and mildly nonlinear scales.
+Schematically, the stitched response is written as
+Rα
+stitch(k, z|θ) = [1−W(k)]R α
+theory(k, z|θ) +W(k)R α
+ZA(k, z|θ),(6.5)
+whereW(k) is a smooth transition function. This construction preserves the reliable large-
+scale behaviour of perturbation theory while simultaneously taking advantage of the lower-
+noise ZA response at intermediate scales.
+10 1
+ 100
+k [h Mpc 1]
+1
+2
+3
+4R (k)
+Auto spectra
+P11
+P
+P 2 2
+Ps2s2
+RNB
+Rcorr
+10 1
+ 100
+k [h Mpc 1]
+Cross spectra
+P1
+P1 2
+P1s2
+P 2
+P s2
+P 2s2
+RNB
+Rcorr
+Figure 10. Comparison between the directN-body responseR α
+NB and the corrected responseR α
+corr
+obtained through the stitching and filtering procedure described in the text. The left panel shows the
+auto spectra, while the right panel displays the cross spectra. The correction procedure significantly
+reduces the large-scale fluctuations, particularly for the cross spectra, while preserving the nonlinear
+behaviour at intermediate and mildly nonlinear scales.
+The final corrected response is reconstructed as
+Rα
+corr(k, z|θ) =C α
+filt(k, z|θ)R α
+stitch(k, z|θ).(6.6)
+In this way, the end response retains the nonlinear information measured from theN-body
+simulations, while its large-scale and mildly nonlinear behaviour are regularized using the
+– 28 –
+
+smoother perturbative and ZA estimates. Finally, the modified-gravity HEFT spectra are
+reconstructed by applying the corrected response to the corresponding GR spectra,
+P α
+MG(k, z|θ) =R α
+corr(k, z|θ)P α
+GR(k, z|θ).(6.7)
+We illustrate the impact of this procedure in Fig. 10, where we compare the originalN-body
+response with the corrected response obtained after applying the filtering and stitching pro-
+cedure. This procedure provides stable operator-by-operator predictions for the HEFT basis
+spectra in modified gravity, while simultaneously retaining the variance-reduction benefits of
+matched GR and MG simulations.
+103
+104
+P(k)
+P11
+103
+104
+P
+10 1
+k [h Mpc 1]
+103
+P(k)
+P 2 2
+10 1
+k [h Mpc 1]
+102
+103
+Ps2s2
+GR Bacco
+GR Aemulus
+F5 Bacco-based (this work)
+F5 Aemulus-based (this work)
+Figure 11. Auto-spectrum HEFT basis predictions for F5 gravity obtained using the corrected re-
+sponse procedure of Eq. (6.6). The modified-gravity spectra are reconstructed from the corresponding
+GR predictions generated using thebaccoandAemulusemulators.
+In Fig. 11 we show the auto-spectra, while Fig. 12 displays the cross-spectra obtained
+by applying the reconstructed F5 response functions (6.6) to the ΛCDM HEFT basis spectra
+predicted by theaemulusandbaccoemulators, evaluated at the same cosmological parame-
+ters used in our F5 simulations. Figures 11 and 12 illustrate how scale-dependent growth in
+modified gravity alters the HEFT basis spectra relative to the ΛCDM case. The modifica-
+tions observed inP 11,P δδ, andP 1δ are relatively straightforward to interpret, as they exhibit
+the familiar enhancement of clustering at small scales already well known in the literature.
+In contrast, spectra involving the operatorsδ 2
+L(q) ands 2(q) display a more intricate scale
+– 29 –
+
+103
+104
+P(k)
+P1
+102
+P1 2
+102
+P(k)
+P1s2
+102
+103
+P 2
+10 1
+k [h Mpc 1]
+101
+102
+P(k)
+P s2
+10 1
+k [h Mpc 1]
+101
+102
+103
+P 2s2
+GR Bacco
+GR Aemulus
+F5 Bacco-based (this work)
+F5 Aemulus-based (this work)
+Figure 12. Cross-spectrum HEFT basis predictions for F5 gravity reconstructed using the cor-
+rected response procedure of Eq. (6.6). The modified-gravity spectra are obtained by applying the
+reconstructed response functions to the corresponding GR predictions generated using thebaccoand
+Aemulusemulators.
+dependence, since these fields are intrinsically sensitive to mode-coupling effects and corre-
+– 30 –
+
+lations between long and short wavelength perturbations already at these scales. It is worth
+noting in the Figures the presence of mild discontinuities visible in some of the spectra. These
+discontinuities originate from thebaccoandAemulusemulators in ΛCDM. These features
+are not particularly relevant for practical applications, as they appear at large scales (small
+wavenumbers), where they remain several orders of magnitude smaller than the dominant
+HEFT basis contributions that govern the total signal in this regime.
+7 Conclusion
+In this work, we have presented a complete framework for computing both the matter power
+spectrum and the biased tracer power spectrum within the local Lagrangian bias expansion
+in modified gravity. We have highlighted the fundamental differences between employing the
+usual Einstein–de Sitter approximation, commonly adopted in ΛCDM and mild extensions
+of it, and performing the full calculation in a generalized cosmology, such asf(R) gravity.
+The proper derivation of the first-, second-, and symmetrized third-order growth factors
+allows us to construct the Lagrangian kernels while consistently accounting for the scale- and
+time-dependent effects characteristic of these theories.
+We have also presented, for the first time, the computation of the Hybrid Effective
+Field Theory basis spectra inf(R) gravity. With this careful derivation of both the ana-
+lytical predictions and their simulation counterparts, this work lays the foundation for the
+construction of novel emulators in extensions of ΛCDM, which we leave for future work.
+Another important extension of this framework is to investigate how the bias parameters in
+generalized cosmologies correlate with galaxy formation models [21, 80]. For this purpose, a
+careful analysis of hydrodynamical simulations, such as those in [81], will be of great interest.
+Furthermore, in this work we have focused exclusively on real-space spectra. How-
+ever, galaxy observations are fundamentally performed in redshift space, making an accurate
+extension of this modelling essential for future analyses. Fortunately, the LPT formalism de-
+veloped here provides a natural and straightforward connection to redshift-space modelling,
+as shown in [36].
+Acknowledgments
+This work used the DiRAC@Durham facility managed by the Institute for Computational
+Cosmology on behalf of the STFC DiRAC HPC Facility (https://www.dirac.ac.uk). The
+equipment was funded by BEIS capital funding via STFC capital grants ST/K00042X/1,
+ST/P002293/1, ST/R002371/1, and ST/S002502/1, Durham University, and STFC opera-
+tions grant ST/R000832/1. DiRAC is part of the UK National e-Infrastructure. This work
+also made use of the CHE cluster, managed and funded by COSMO/CBPF/MCTI, with
+financial support from CNPq, FINEP and FAPERJ. BL is supported by the ERC Advanced
+Grant ‘UNCA’ (UKRI Frontiers Research Guarantee No. EP/Z533877/1) and the UK STFC
+Consolidated Grant ST/X001075/1. KK is supported by STFC grant number ST/B001175/1.
+For the purpose of open access, we have applied a Creative Commons Attribution (CC
+BY) licence to any Author Accepted Manuscript version arising. Supporting research data
+are available on reasonable request from the authors.
+Data availabilitySupporting research data are available on reasonable request from the
+corresponding author.
+– 31 –
+
+A General Fast Schmitfull Integrals
+In this Appendix we present a way to apply the same strategy devised in [58] but for the
+case of kernels that can be expresend in analytical terms. We begin by expanding the full
+three-dimensional integrand:
+Q(k) =
+Z d3p
+(2π)3 V
+
+p,|k−p|,ˆp· \k−p
+
+PL(p)PL(|k−p|),(A.1)
+whereV
+
+p,|k−p|,ˆp· \k−p
+
+is the corresponding kernel appearing inQn orR n for a general
+cosmology. This function can be expressed as an infinite sum of Legendre polynomials:
+V(p,|k−p|, µ) =
+∞X
+ℓ=0
+Vℓ(k, p)P ℓ(µ),(A.2)
+whereµ=ˆp· \k−p, and the coefficients are given by the projection onto the Legendre basis:
+Vℓ(k, p) = 2ℓ+ 1
+2
+Z 1
+−1
+dµV
+
+p,
+p
+k2 +p 2 −2kp µ, µ
+
+Pℓ(µ).(A.3)
+Substituting this expansion into the full integral, we obtain
+Q(k) =
+∞X
+ℓ=0
+Z d3p
+(2π)3 Vℓ(k, p)P ℓ(µ)PL(p)PL(|k−p|).(A.4)
+Therefore, even though a finite Legendre decomposition is not available, the integrand can
+still be expanded as an infinite series of Legendre polynomials.
+To proceed further, one must additionally represent each multipole coefficientV ℓ(k, p)
+in a separable radial form. In full generality, this can be written as
+Vℓ(k, p)≈
+X
+α
+λ(ℓ)
+α (k)f α(p),(A.5)
+or more generally, at the level of the full kernel,
+V(p,|k−p|, µ)≈
+∞X
+ℓ=0
+X
+α
+λ(ℓ)
+α (k)f α(p)g α(|k−p|)P ℓ(µ),(A.6)
+where{f α, gα}define a chosen separable radial basis, and the coefficientsλ (ℓ)
+α (k) are obtained
+by numerical projection or interpolation.
+Substituting this expansion into Eq. (A.4) gives
+Q(k) =
+∞X
+ℓ=0
+X
+α
+λ(ℓ)
+α (k)
+Z d3p
+(2π)3 fα(p)g α(|k−p|)P ℓ(µ)PL(p)PL(|k−p|).(A.7)
+Each term in the sum can then be written in configuration space by defining generalized
+correlation functions associated with the basis functionsf α andg α:
+Ξ ℓ
+fα(r) =i ℓ
+Z d3p
+(2π)3 e−ip·rfα(p)P ℓ(ˆp·ˆr)PL(p),(A.8)
+– 32 –
+
+and analogously for Ξ ℓ
+gα(r). One then obtains
+Q(k) =
+∞X
+ℓ=0
+X
+α
+λ(ℓ)
+α (k) (−1)ℓ4π
+(2π)3
+Z
+dr r2j0(kr) Ξ ℓ
+fα(r) Ξℓ
+gα(r).(A.9)
+A particularly convenient and widely used choice of separable basis is provided by the
+FFTLog decomposition, in which the radial dependence is expanded in complex power laws,
+fα(p) =p να, g α(p) =p να, ν α ∈C.(A.10)
+In this case, the generalized correlation functions reduce to
+ξℓ
+ν(r) =
+Z dk
+2π2 kν+2jℓ(kr)PL(k),(A.11)
+that correspond to Hankel transforms of orderℓ. The final expression becomes
+Q(k) =
+∞X
+ℓ=0
+X
+α,β
+c(ℓ)
+αβ(k) (−1)ℓ4π
+(2π)3
+Z
+dr r2j0(kr)ξ ℓ
+να(r)ξ ℓ
+νβ(r).(A.12)
+The generalized correlation functions arise once each multipole component of the kernel
+is decomposed into separable radial factors inpand|k−p|. The standardξ ℓ
+n(r) representation
+corresponds to the particular choicefα(p) =p n1 andg α(p) =p n2, while an FFTLog expansion
+provides a natural and efficient implementation in terms of Hankel transforms.
+References
+[1] C. Modi, S.-F. Chen and M. White,Simulations and symmetries,Mon. Not. Roy. Astron. Soc.
+492(2020) 5754 [1910.07097].
+[2]DESIcollaboration,The DESI Experiment Part I: Science,Targeting, and Survey Design,
+1611.00036.
+[3]LSST Science, LSST Projectcollaboration,LSST Science Book, Version 2.0,0912.0201.
+[4] O. Dor´ e et al.,WFIRST: The Essential Cosmology Space Observatory for the Coming Decade,
+1904.01174.
+[5] R. Akeson, L. Armus, E. Bachelet, V. Bailey, L. Bartusek, A. Bellini et al.,The Wide Field
+Infrared Survey Telescope: 100 Hubbles for the 2020s,arXiv e-prints(2019) arXiv:1902.05569
+[1902.05569].
+[6]EUCLIDcollaboration,Euclid Definition Study Report,1110.3193.
+[7] F. Bernardeau, S. Colombi, E. Gaztanaga and R. Scoccimarro,Large scale structure of the
+universe and cosmological perturbation theory,Phys. Rept.367(2002) 1 [astro-ph/0112551].
+[8] V. Desjacques, D. Jeong and F. Schmidt,Large-Scale Galaxy Bias,Phys. Rept.733(2018) 1
+[1611.09787].
+[9] R.H. Wechsler and J.L. Tinker,The Connection between Galaxies and their Dark Matter Halos,
+Ann. Rev. Astron. Astrophys.56(2018) 435 [1804.03097].
+[10] Z. Zheng, A.A. Berlind, D.H. Weinberg, A.J. Benson, C.M. Baugh, S. Cole et al.,Theoretical
+models of the halo occupation distribution: Separating central and satellite galaxies,Astrophys.
+J.633(2005) 791 [astro-ph/0408564].
+– 33 –
+
+[11] A.V. Kravtsov, A.A. Berlind, R.H. Wechsler, A.A. Klypin, S. Gottloeber, B. Allgood et al.,The
+Dark side of the halo occupation distribution,Astrophys. J.609(2004) 35 [astro-ph/0308519].
+[12] A. Tasitsiomi, A.V. Kravtsov, R.H. Wechsler and J.R. Primack,Modeling galaxy - mass
+correlations in dissipationless simulations,Astrophys. J.614(2004) 533 [astro-ph/0404168].
+[13] S.D.M. White and C.S. Frenk,Galaxy formation through hierarchical clustering,Astrophys. J.
+379(1991) 52.
+[14] G. Kauffmann, S.D.M. White and B. Guiderdoni,The formation and evolution of galaxies
+within merging dark matter haloes,Mon. Not. Roy. Astron. Soc.264(1993) 201.
+[15] S. Cole, C.G. Lacey, C.M. Baugh and C.S. Frenk,Hierarchical galaxy formation,Mon. Not.
+Roy. Astron. Soc.319(2000) 168 [astro-ph/0007281].
+[16] R.A. Crain and F. van de Voort,Hydrodynamical Simulations of the Galaxy Population:
+Enduring Successes and Outstanding Challenges,Ann. Rev. Astron. Astrophys.61(2023) 473
+[2309.17075].
+[17] M. Zennaro, R.E. Angulo, M. Pellejero-Ib´ a˜ nez, J. St¨ ucker, S. Contreras and G. Aric` o,The
+BACCO simulation project: biased tracers in real space,Mon. Not. Roy. Astron. Soc.524
+(2023) 2407 [2101.12187].
+[18] J. DeRose, R.H. Wechsler, J.L. Tinker, M.R. Becker, Y.-Y. Mao, T. McClintock et al.,The
+Aemulus Project I: Numerical Simulations for Precision Cosmology,Astrophys. J.875(2019)
+69 [1804.05865].
+[19] S. Zhou, Z. Chen and Y. Yu,CSST cosmological emulator III: Hybrid lagrangian bias expansion
+emulation of galaxy clustering,Sci. China Phys. Mech. Astron.68(2025) 129512 [2506.04671].
+[20]LSST Dark Energy Sciencecollaboration,Galaxy bias in the era of LSST: perturbative
+bias expansions,JCAP02(2024) 015 [2307.03226].
+[21] N. Kokron, J. DeRose, S.-F. Chen, M. White and R.H. Wechsler,Priors on red galaxy
+stochasticity from hybrid effective field theory,Mon. Not. Roy. Astron. Soc.514(2022) 2198
+[2112.00012].
+[22] R. de Belsunce, B. Hadzhiyska and M.M. Ivanov,Bridging simulations and EFT: A hybrid
+model of the Lyman-αforest field,Phys. Rev. D113(2026) 083529 [2512.13681].
+[23] B. Hadzhiyska, C. Garc´ ıa-Garc´ ıa, D. Alonso, A. Nicola and A. Slosar,Hefty enhancement of
+cosmological constraints from the DES Y1 data using a hybrid effective field theory approach to
+galaxy bias,JCAP09(2021) 020 [2103.09820].
+[24] A. Banerjee, N. Kokron and T. Abel,Modelling nearest neighbour distributions of biased tracers
+using hybrid effective field theory,Mon. Not. Roy. Astron. Soc.511(2022) 2765 [2107.10287].
+[25] A. Rubiola, M. Zennaro, C. Garc´ ıa-Garc´ ıa and D. Alonso,Low-redshift constraints on structure
+growth from CMB lensing tomography,2510.09563.
+[26] M. Pellejero-Ibanez, R.E. Angulo, M. Zennaro, J. Stuecker, S. Contreras, G. Arico et al.,The
+bacco simulation project: bacco hybrid Lagrangian bias expansion model in redshift space,Mon.
+Not. Roy. Astron. Soc.520(2023) 3725 [2207.06437].
+[27] C. Garc´ ıa-Garc´ ıa, M. Zennaro, G. Aric` o, D. Alonso and R.E. Angulo,Cosmic shear with small
+scales: DES-Y3, KiDS-1000 and HSC-DR1,JCAP08(2024) 024 [2403.13794].
+[28] L. Senatore and M. Zaldarriaga,The IR-resummed Effective Field Theory of Large Scale
+Structures,JCAP02(2015) 013 [1404.5954].
+[29] L. Senatore and G. Trevisan,On the IR-Resummation in the EFTofLSS,JCAP05(2018) 019
+[1710.02178].
+[30] Z. Vlah, M. White and A. Aviles,A Lagrangian effective field theory,JCAP09(2015) 014
+[1506.05264].
+– 34 –
+
+[31] T. Baldauf, M. Mirbabayi, M. Simonovi´ c and M. Zaldarriaga,Equivalence Principle and the
+Baryon Acoustic Peak,Phys. Rev. D92(2015) 043514 [1504.04366].
+[32] Z. Vlah, U. Seljak, M.Y. Chu and Y. Feng,Perturbation theory, effective field theory, and
+oscillations in the power spectrum,JCAP03(2016) 057 [1509.02120].
+[33] D. Blas, M. Garny, M.M. Ivanov and S. Sibiryakov,Time-Sliced Perturbation Theory II:
+Baryon Acoustic Oscillations and Infrared Resummation,JCAP07(2016) 028 [1605.02149].
+[34] Z. Ding, H.-J. Seo, Z. Vlah, Y. Feng, M. Schmittfull and F. Beutler,Theoretical Systematics of
+Future Baryon Acoustic Oscillation Surveys,Mon. Not. Roy. Astron. Soc.479(2018) 1021
+[1708.01297].
+[35] M.M. Ivanov and S. Sibiryakov,Infrared Resummation for Biased Tracers in Redshift Space,
+JCAP07(2018) 053 [1804.05080].
+[36] T. Matsubara,Nonlinear perturbation theory with halo bias and redshift-space distortions via
+the Lagrangian picture,Phys. Rev. D78(2008) 083519 [0807.1733].
+[37] T. Matsubara,Resumming Cosmological Perturbations via the Lagrangian Picture: One-loop
+Results in Real Space and in Redshift Space,Phys. Rev. D77(2008) 063530 [0711.2521].
+[38] J. Carlson, B. Reid and M. White,Convolution Lagrangian perturbation theory for biased
+tracers,Mon. Not. Roy. Astron. Soc.429(2013) 1674 [1209.0780].
+[39] Z. Vlah, U. Seljak and T. Baldauf,Lagrangian perturbation theory at one loop order: successes,
+failures, and improvements,Phys. Rev. D91(2015) 023508 [1410.1617].
+[40] Z. Vlah, E. Castorina and M. White,The Gaussian streaming model and convolution
+Lagrangian effective field theory,JCAP12(2016) 007 [1609.02908].
+[41] S.-F. Chen, Z. Vlah and M. White,Consistent Modeling of Velocity Statistics and
+Redshift-Space Distortions in One-Loop Perturbation Theory,JCAP07(2020) 062
+[2005.00523].
+[42] M. White,The Zel’dovich approximation,Mon. Not. Roy. Astron. Soc.439(2014) 3630
+[1401.5466].
+[43] J. DeRose, S.-F. Chen, N. Kokron and M. White,Precision redshift-space galaxy power spectra
+using Zel’dovich control variates,JCAP02(2023) 008 [2210.14239].
+[44] A. Chudaykin, M.M. Ivanov, O.H.E. Philcox and M. Simonovi´ c,Nonlinear perturbation theory
+extension of the Boltzmann code CLASS,Phys. Rev. D102(2020) 063533 [2004.10607].
+[45] T. Nishimichi, G. D’Amico, M.M. Ivanov, L. Senatore, M. Simonovi´ c, M. Takada et al.,Blinded
+challenge for precision cosmology with large-scale structure: results from effective field theory
+for the redshift-space galaxy power spectrum,Phys. Rev. D102(2020) 123541 [2003.08277].
+[46] A. Aviles and J.L. Cervantes-Cota,Lagrangian perturbation theory for modified gravity,Phys.
+Rev. D96(2017) 123526 [1705.10719].
+[47] A. Aviles, M.A. Rodriguez-Meza, J. De-Santiago and J.L. Cervantes-Cota,Nonlinear evolution
+of initially biased tracers in modified gravity,JCAP11(2018) 013 [1809.07713].
+[48] G. Valogiannis and R. Bean,Convolution Lagrangian perturbation theory for biased tracers
+beyond general relativity,Phys. Rev. D99(2019) 063526 [1901.03763].
+[49] F.R. Bouchet, S. Colombi, E. Hivon and R. Juszkiewicz,Perturbative Lagrangian approach to
+gravitational instability,Astron. Astrophys.296(1995) 575 [astro-ph/9406013].
+[50] Y.B. Zeldovich,Gravitational instability: An Approximate theory for large density
+perturbations,Astron. Astrophys.5(1970) 84.
+[51] T. Matsubara,Recursive Solutions of Lagrangian Perturbation Theory,Phys. Rev. D92(2015)
+023534 [1505.01481].
+– 35 –
+
+[52] T. Buchert,A class of solutions in Newtonian cosmology and the pancake theory,Astron.
+Astrophys.223(1989) 9.
+[53] F. Moutarde, J.M. Alimi, F.R. Bouchet, R. Pellat and A. Ramani,Precollapse scale invariance
+in gravitational instability,Astrophys. J.382(1991) .
+[54] E. Hivon, F.R. Bouchet, S. Colombi and R. Juszkiewicz,Redshift distortions of clustering: A
+Lagrangian approach,Astron. Astrophys.298(1995) 643 [astro-ph/9407049].
+[55] C. Rampf,The recursion relation in Lagrangian perturbation theory,JCAP12(2012) 004
+[1205.5274].
+[56] T. Buchert and G. Goetz,A class of solutions for selfgravitating dust in Newtonian gravity,J.
+Math. Phys.28(1987) 2714.
+[57] A.N. Taylor and A.J.S. Hamilton,Nonlinear cosmological power spectra in real and redshift
+space,Mon. Not. Roy. Astron. Soc.282(1996) 767 [astro-ph/9604020].
+[58] M. Schmittfull, Z. Vlah and P. McDonald,Fast large scale structure perturbation theory using
+one-dimensional fast Fourier transforms,Phys. Rev. D93(2016) 103528 [1603.04405].
+[59] A. Aviles, J.L. Cervantes-Cota and D.F. Mota,Screenings in Modified Gravity: a perturbative
+approach,Astron. Astrophys.622(2019) A62 [1810.02652].
+[60] K. Koyama, A. Taruya and T. Hiramatsu,Non-linear Evolution of Matter Power Spectrum in
+Modified Theory of Gravity,Phys. Rev. D79(2009) 123512 [0902.0618].
+[61] B. Bose and K. Koyama,A Perturbative Approach to the Redshift Space Power Spectrum:
+Beyond the Standard Model,JCAP08(2016) 032 [1606.02520].
+[62] H.A. Winther, K. Koyama, M. Manera, B.S. Wright and G.-B. Zhao,COLA with
+scale-dependent growth: applications to screened modified gravity models,JCAP08(2017) 006
+[1703.00879].
+[63] G. Brando, K. Koyama and H.A. Winther,Revisiting Vainshtein screening for fast N-body
+simulations,JCAP06(2023) 045 [2303.09549].
+[64] M.A. Rodriguez-Meza, A. Aviles, H.E. Noriega, C.-Z. Ruan, B. Li, M. Vargas-Maga˜ na et al.,
+fkPT: constraining scale-dependent modified gravity with the full-shape galaxy power spectrum,
+JCAP03(2024) 049 [2312.10510].
+[65] T.P. Sotiriou and V. Faraoni,f(R) Theories Of Gravity,Rev. Mod. Phys.82(2010) 451
+[0805.1726].
+[66] A. De Felice and S. Tsujikawa,f(R) theories,Living Rev. Rel.13(2010) 3 [1002.4928].
+[67] A. Aviles,Renormalization of Lagrangian bias via spectral parameters,Phys. Rev. D98(2018)
+083541 [1805.05304].
+[68] S.-F.S. Chen,Perturbation Theory Models for Precision Cosmology with Large-Scale Structure
+Surveys, Ph.D. thesis, UC, Berkeley (main), 2022.
+[69] M. Schmittfull and Z. Vlah,FFT-PT: Reducing the two-loop large-scale structure power
+spectrum to low-dimensional radial integrals,Phys. Rev. D94(2016) 103530 [1609.00349].
+[70] X. Fang, J.A. Blazek, J.E. McEwen and C.M. Hirata,FAST-PT II: an algorithm to calculate
+convolution integrals of general tensor quantities in cosmological perturbation theory,JCAP02
+(2017) 030 [1609.05978].
+[71] M. Simonovi´ c, T. Baldauf, M. Zaldarriaga, J.J. Carrasco and J.A. Kollmeier,Cosmological
+perturbation theory using the FFTLog: formalism and connection to QFT loop integrals,JCAP
+04(2018) 030 [1708.08130].
+[72] J. Tomlinson, H.S.G. Gebhardt and D. Jeong,Fast calculation of the nonlinear redshift-space
+galaxy power spectrum including selection bias,Phys. Rev. D101(2020) 103528 [2004.03629].
+– 36 –
+
+[73]Euclidcollaboration,Euclid preparation - XLIV. Modelling spectroscopic clustering on mildly
+nonlinear scales in beyond-ΛCDM models,Astron. Astrophys.689(2024) A275 [2311.13529].
+[74] B. Li, G.-B. Zhao, R. Teyssier and K. Koyama,ECOSMOG: An Efficient Code for Simulating
+Modified Gravity,JCAP01(2012) 051 [1110.1379].
+[75] R. Teyssier,Cosmological hydrodynamics with adaptive mesh refinement: a new high resolution
+code called ramses,Astron. Astrophys.385(2002) 337 [astro-ph/0111367].
+[76] R. Scoccimarro,Transients from initial conditions: a perturbative analysis,Mon. Not. Roy.
+Astron. Soc.299(1998) 1097 [astro-ph/9711187].
+[77] M. Crocce, S. Pueblas and R. Scoccimarro,Transients from Initial Conditions in Cosmological
+Simulations,Mon. Not. Roy. Astron. Soc.373(2006) 369 [astro-ph/0606505].
+[78] R.E. Angulo and A. Pontzen,CosmologicalN-body simulations with suppressed variance,Mon.
+Not. Roy. Astron. Soc.462(2016) L1 [1603.05253].
+[79] N. Chartier, B. Wandelt, Y. Akrami and F. Villaescusa-Navarro,CARPool: fast, accurate
+computation of large-scale structure statistics by pairing costly and cheap cosmological
+simulations,Mon. Not. Roy. Astron. Soc.503(2021) 1897 [2009.08970].
+[80] M. Zennaro, R.E. Angulo, S. Contreras, M. Pellejero-Ib´ a˜ nez and F. Maion,Priors on
+Lagrangian bias parameters from galaxy formation modelling,Mon. Not. Roy. Astron. Soc.514
+(2022) 5443 [2110.05408].
+[81] C. Arnold, M. Leo and B. Li,Realistic simulations of galaxy formation inf(R)modified
+gravity,Nature Astron.3(2019) 945 [1907.02977].
+– 37 –

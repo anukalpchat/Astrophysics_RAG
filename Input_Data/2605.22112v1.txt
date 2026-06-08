@@ -1,0 +1,659 @@
+Title: Self-Supervised ConvLSTM for Fermi Large Area Telescope Transient Detection
+Authors: Alberto Garinei, Stefano Speziali, Alessandro Vispa, Andrea Marini, Sara Cutini, Emanuele Piccioni, Marcello Marconi, Francesco Longo, Matteo Martini, Francesca Fallucchi, Romeo Giuliano, Ernesto William De Luca, Umberto Di Matteo, Sabino Meola
+Published: 2026-05-21
+Categories: astro-ph.HE, astro-ph.IM, cs.LG
+
+Self-Supervised ConvLSTM for Fermi Large Area Telescope
+Transient Detection⋆,⋆⋆
+Alberto Garineia,b, Stefano Spezialia,∗, Alessandro Vispaa, Andrea Marinia, Sara Cutinic,
+Emanuele Piccionia, Marcello Marconia,b, Francesco Longod,e, Matteo Martinib, Francesca
+Fallucchib, Romeo Giulianob, Ernesto William De Lucab, Umberto Di Matteob, Sabino Meolab
+aIdea-Re S.r .l., 06125, Perugia, Italy
+bDipartimento Scienze Ingegneristiche, Università Guglielmo Marconi, 00193, Rome, Italy
+cIstituto Nazionale Fisica Nucleare, sezione di Perugia, 06123, Perugia, Italy
+dDipartimento di Fisica, Università di Trieste, I-34127, Trieste, Italy
+eUniversità di Udine and INFN Trieste, I-33100, Udine, Italy
+Abstract
+We present a framework for detecting transientγ-ray phenomena in a controlled environment by
+combining end-to-end simulations of the Fermi-LAT sky with self-supervised spatio-temporal
+deep learning. We generate a ten-year synthetic Universe withgtobssimand process the simu-
+lated events into daily all-sky maps of counts and exposure, obtaining a time-ordered sequence
+that mirrors the structure of Fermi-LAT observations. To model the nominal evolution of the sky,
+we employ a Convolutional Long Short-Term Memory (ConvLSTM) network that operates di-
+rectly on map sequences, preserving spatial locality while learning temporal dependencies. The
+model is trained to reconstruct expected emission, and departures from the learned baseline are
+quantified through pixel-wise mean-squared residual maps. We then define statistically motivated
+anomaly criteria by estimating per-pixel thresholds from the residual distribution on the training
+set, and we enforce spatial coherence via local filtering to suppress isolated fluctuations. The
+ConvLSTM is then deployed as trained predictor on Fermi-LAT daily maps, where the sky can
+depart from the nominal behavior because of genuine astrophysical variability and instrumen-
+tal non-stationarities. The resulting pipeline flags localized, time-dependent excesses consistent
+with high-variable sources or transient events (e.g., flares or GRBs) and provides a benchmark
+for evaluating anomaly-detection strategies on long-duration, Fermi-LAT-like datasets.
+Keywords:Transient sources, Gamma-ray astronomy, ConvLSTM, Anomaly detection,
+Spatio-temporal analysis
+⋆©2026. This manuscript version is made available under the CC BY-NC-ND 4.0 license https://creativecommons.
+org/licenses/by-nc-nd/4.0/.
+⋆⋆This is the accepted manuscript version of an article published inAstronomy and Computing, vol. 56, p. 101128,
+2026. The version of record is available at https://doi.org/10.1016/j.ascom.2026.101128. Please cite the published ver-
+sion: Garinei et al.,Astronomy and Computing, 56, 101128 (2026), https://doi.org/10.1016/j.ascom.2026.101128.
+∗Corresponding author.
+Email address:sspeziali@idea-re.eu(Stefano Speziali)
+arXiv:2605.22112v1  [astro-ph.HE]  21 May 2026
+
+1. Introduction
+The detection and characterization of transient gamma–ray activity is a central challenge in
+high–energy astrophysics. Localized flares, bursts, and episodes of rapid variability can develop
+on timescales ranging from hours to days, and their signatures are often superimposed on struc-
+tured diffuse emission and on a photon–limited, energy–dependent background. In this regime,
+robust transient identification requires methods that can separate genuinely significant deviations
+from fluctuations driven by limited counting statistics, exposure variations, and background mis-
+modeling.
+TheFermiLarge Area Telescope (Fermi-LAT) has enabled continuous monitoring of the
+gamma–ray sky since 2008, supporting repeated all-sky coverage and systematic variability stud-
+ies on short cadences (Atwood et al., 2009; Ackermann et al., 2013). This observational capa-
+bility, combined with the volume and diversity of the accumulated dataset, motivates automated,
+data-driven approaches for identifying statistically significant departures from nominal emission.
+In many realistic settings, fully supervised classification is hindered by the scarcity of com-
+prehensive labels for transient phenomena, while the very definition of “anomaly” is intrinsically
+contextual, depending on timescale, sky location, and expected background conditions (Chan-
+dola et al., 2009). This has stimulated broad interest in unsupervised and weakly supervised
+anomaly detection, including reconstruction–based methods that learn typical patterns and flag
+departures from them (Ruffet al., 2021).
+In this work, we adopt a controlled strategy to study transient detection by building a long-
+term synthetic gamma–ray sky observed with Fermi-LAT-like survey geometry. Starting from
+gtobssimsimulations within the Fermitools ecosystem (Fermi Science Support Center, 2019),
+and interfacing higher-level analysis workflows when relevant through community tools such as
+fermipy(Wood et al., 2018), we produce daily full-sky maps of counts and exposure and use
+them to train convolutional recurrent neural networks, focusing on ConvLSTM architectures (Shi
+et al., 2015). The networks are trained to reconstruct sequences of daily sky maps, effectively
+learning the nominal spatio-temporal evolution of the simulated universe. Reconstruction resid-
+uals between predicted and true frames—quantified via pixel–wise mean–squared errors—are
+then interpreted as anomaly scores, designed to be sensitive to localized excess emission.
+Building on this reconstruction–based perspective, we introduce a statistically grounded
+anomaly–detection pipeline. Residual distributions estimated on the training set are used to
+derive adaptive decision thresholds on a pixel-wise basis, intended to reflect the expected re-
+construction error under nominal conditions. Candidate anomalies in the test set are identified
+as statistically unlikely excursions above these thresholds; spatial coherence criteria are then
+applied to suppress isolated noise fluctuations and emphasize clustered residual structures.
+Because the ConvLSTM network is trained ongtobssimsimulations to learn an average
+nominal spatio-temporal baseline of the gamma–ray sky, we finally apply the trained model to
+Fermi-LAT daily maps, where the observed emission may deviate from the learned baseline due
+to both genuine astrophysical variability and instrumental or operational non-stationarities.
+The main contributions of this study are:
+•the construction of a realistic, long-term synthetic dataset in Fermi-LAT observation for-
+mat for reproducible anomaly-detection experiments;
+•the use of ConvLSTM networks to learn the nominal spatiotemporal behavior of daily
+gamma–ray sky maps via sequence reconstruction;
+2
+
+•a residual–based anomaly detection framework combining statistically motivated thresh-
+olding with spatial coherence filtering;
+•an evaluation of the method’s ability to recover localized transient phenomena within a
+fully controlled simulation environment.
+The remainder of this paper is organized as follows. Section 2 introduces the Fermi-LAT
+data products and the simulation pipeline adopted in this work. Section 3 details the neural-
+network methodology used to carry out anomaly detection. Section 4 discusses the performance
+and limitations of the method. Finally, Section 5 outlines conclusions and directions for future
+research.
+2. Fermi-LAT Data and Simulation Pipeline
+2.1. Fermi-LAT data products and analysis context
+Since its launch in 2008, theFermiGamma-ray Space Telescope has provided long-term
+monitoring of the high-energy sky. Its primary instrument, the Large Area Telescope (LAT),
+is a wide field–of–view pair–conversion telescope sensitive from below∼20 MeV to beyond
+∼300 GeV , designed to support long-term surveys, source catalogs, and time-domain studies
+(Atwood et al., 2009). Over the mission lifetime, the publicly distributed Fermi-LAT event re-
+construction and classification have undergone major upgrades—most notably the Pass 8 event-
+level analysis—which improved effective area, background rejection, and angular/energy recon-
+struction (Atwood et al., 2013; Bruel et al., 2018). These developments underpin the modern
+Fermi-LAT data products and catalogs, including the 3FGL and 4FGL generations and their in-
+cremental updates (Acero et al., 2015; Abdollahi et al., 2020, 2022). At the same time, dedicated
+efforts such as the Fermi All–sky Variability Analysis (FA V A) illustrate the value of automated
+variability searches at the all-sky level (Ackermann et al., 2013).
+From the user perspective, Fermi-LAT science analyses typically start from a small set of
+standardized data products distributed by theFermiScience Support Center (FSSC). In particular,
+Fermi-LAT observations are provided as FITS files (Pence et al., 2010) whose structure is tailored
+to support reproducible filtering, exposure computation, and likelihood-based modeling. The
+core Fermi-LAT products relevant to this work can be summarized as follows:
+Event (FT1) files.Event files (often referred to as FT1) store reconstructed photon candidates
+and their per-event attributes, including arrival time, reconstructed energy, and recon-
+structed direction. They also include analysis-relevant classifications (e.g., event class and
+event type) and quality-related metadata that enable standardized selections and down-
+stream modeling (Fermi Science Support Center, 2019). Because the event reconstruction
+evolves across data releases, the interpretation of these fields is tied to the adopted Pass
+and IRF set (Atwood et al., 2013; Bruel et al., 2018).
+Spacecraft (FT2) files.Spacecraft files (FT2) describe the observatory state as a function of
+time, including position and attitude, as well as quantities used to derive livetime and
+good-time intervals. These products are essential to translate event counts into exposure-
+corrected measurements and to account for periods of reduced data quality (e.g., passages
+through the South Atlantic Anomaly) (Fermi Science Support Center, 2019). In practice,
+consistent temporal coverage between FT1 and FT2 is required for reliable exposure cal-
+culations and time selections.
+3
+
+Instrument Response Functions (IRFs).IRFs provide the mapping between incident photons
+and reconstructed events, typically factorized into effective area, point spread function
+(PSF), and energy dispersion (SLAC National Accelerator Laboratory and Fermi-LAT
+Collaboration, 2026). The IRFs are defined for each event class and event type parti-
+tion, reflecting analysis choices that trade acceptance against residual background and re-
+construction quality. Throughout this work we adopt the Pass 8 Release 3 IRF family
+(P8R3_V3), consistent with the SOURCE-class analysis configuration commonly used for
+survey and catalog-style studies.
+Source catalogs.Fermi-LAT catalogs provide curated lists of detected sources with positions,
+spectra, and variability characterizations, serving both as astrophysical references and as
+practical inputs for model construction. In this work we refer to the third and fourth Fermi-
+LAT catalog generations (3FGL and 4FGL) and to the incremental 4FGL data releases
+that extend the temporal baseline and refine modeling (Acero et al., 2015; Abdollahi et al.,
+2020, 2022; Ballet et al., 2023).
+Taken together, these datasets enable analyses that range from all-sky population studies to
+targeted investigations of individual sources and transient activity. Importantly, the separation be-
+tween photon events (FT1), pointing/livetime information (FT2), and response modeling (IRFs)
+makes it possible to propagate instrumental effects transparently and to reproduce selections and
+exposures across independent studies (SLAC National Accelerator Laboratory and Fermi-LAT
+Collaboration, 2026).
+2.2. Fermi tools andfermipy
+The Fermi mission provides a dedicated software suite—historically referred to as theFermi
+Science Toolsand currently distributed as theFermitools—to perform standard Fermi-LAT
+analyses, including event filtering, map binning, exposure calculation, and likelihood fitting
+(Fermi Science Support Center, 2019). The FSSC maintains extensive online documentation
+and analysis threads describing recommended workflows and best practices for common analy-
+sis tasks. Higher-level analysis workflows can be interfaced through community-developed tools
+such asfermipy(Wood et al., 2018).
+A typical Fermi-LAT workflow begins with the definition of a valid event sample through
+spatial, temporal, and quality selections (e.g., energy range, zenith-angle cuts, event class/type,
+and good-time intervals). These steps are implemented through command-line tools that operate
+directly on FITS products and are designed to compose into reproducible pipelines (Fermi Sci-
+ence Support Center, 2019). Higher-level products such as binned counts maps, exposure cubes,
+and source maps can then be generated and used in model fitting.
+Model fitting in Fermi-LAT analyses is commonly carried out within a maximum-likelihood
+framework, where the predicted sky model (sources plus diffuse components, folded with expo-
+sure and IRFs) is compared to the observed data; likelihood-ratio based test statistics provide a
+standard measure of source significance and model comparison (Mattox et al., 1996). While
+our work focuses on map-based learning and residual-based detection, the same conceptual
+ingredients—data selection, IRFs, and exposure modeling—underpin both classical likelihood
+analyses and data-driven approaches.
+2.3.gtobssimsimulation setup
+To develop and validate transient-search strategies in a controlled environment, we generated
+a long-duration synthetic dataset in Fermi-LAT format withgtobssim, the Monte Carlo observa-
+4
+
+tion simulator distributed within the Fermi Science Tools (Fermitools) (Fermi Science Support
+Center, 2019). Ingtobssim, photons are sampled from a user-defined sky model—specified
+through an XML description that may include point-like and extended sources as well as diffuse
+components—and are then propagated through the instrument response. For this, we contributed
+to thefermimodelPython package 1 for use with the Fermitools. Instrumental effects are incor-
+porated via the chosen Instrument Response Functions (IRFs), which encode the effective area,
+point-spread function, and energy dispersion, thereby producing event lists with realistic energy
+and directional uncertainties (SLAC National Accelerator Laboratory and Fermi-LAT Collabo-
+ration, 2026).
+A key input togtobssimis the observing history (spacecraft pointing and livetime), which
+determines the time-dependent exposure pattern. In this work we anchored the simulation time-
+line to the beginning of the mission’s nominal survey operations, following the completion of
+the initial on-orbit checkout on 2008-08-04. We simulated 3649 daily time bins, i.e. approxi-
+mately ten years of survey observations, consistent with the cadence adopted by the downstream
+pipeline.
+We adopted the IRFsP8R3_SOURCE_V3throughout the analysis (SLAC National Accelerator
+Laboratory and Fermi-LAT Collaboration, 2026). The input XML model included the standard
+diffuse components recommended for Pass 8 SOURCE-class analyses, namely the Galactic inter-
+stellar emission templategll_iem_v07.fitsand the isotropic templateiso_P8R3_SOURCE_V3_v1.txt
+(Fermi Science Support Center, 2026), together with a population of catalogued sources defining
+our synthetic sky.
+A practical limitation is that a monolithic, all-sky simulation over∼10 years can be pro-
+hibitively demanding in memory and wall time, since the computational cost scales with both
+the number of model components and the simulated duration. To make production tractable, we
+adopted a tiling and chunking strategy. The celestial sphere was partitioned into a set of 192
+sky tiles. For sky tiling we adopt the equal-area HEALPix discretization (Górski et al., 2005).
+Each tile was simulated using an XML model that included all sources within the tile plus an
+angular buffer region (overlap) to mitigate boundary effects associated with the finite PSF. The
+full temporal interval was further split into consecutive segments of duration∆t≃90 days, such
+that eachgtobssimjob simulated one tile over one temporal chunk. These jobs were executed in
+parallel across multiple CPU cores. In a final aggregation step, events were geometrically filtered
+to the nominal (non-overlapping) tile footprints and then merged across tiles and time chunks to
+reconstruct a continuous, ten-year, all-sky event dataset suitable for standard Fermi-LAT binning
+and exposure calculations. In Figure 1 we show our full sky simulation using thegtobssimtool.
+2.4. Generated dataset
+The output of our simulation and binning pipeline is a five-dimensional tensor of shape
+(3649,2,10,360,180),
+representing a daily synthetic dataset of the gamma-ray sky as observed by the Fermi-LAT over
+∼10 years2. The first axis (3649) corresponds to one full-sky frame per day. The second axis con-
+tains the two map products used as input channels in the learning task: counts and exposure. The
+1The main function of this package is to produce model files for use in analysis with gtlike and simulations with
+gtobssim. See https://fermi.gsfc.nasa.gov/ssc/data/analysis/user/and https://github.com/ideare-ds/fermimodel.
+2The dataset can be downloaded at https://huggingface.co/datasets/Idea-re/fermi-lat-synthetic-daily-sky-maps.
+5
+
+Figure 1: All-sky counts map integrated over the full simulated period (∼10 years) in Galactic coordinates (Mollweide
+projection). The bright band traces the Galactic diffuse emission, while localized enhancements correspond to simulated
+point sources.
+third axis (10) corresponds to logarithmically spaced energy bins covering 100 MeV–500 GeV ,
+while the last two axes (360×180) encode an all-sky map in celestial coordinates with a spatial
+resolution of one degree per pixel. Of course, a more refined spatial resolution is possible and,
+in some sense, needed at the expense of more expensive calculations. We discuss this further at
+the end of the paper.
+Count maps were produced withgtbinusing theCCUBEalgorithm (Fermi Science Support
+Center, 2019), where we adopted a Cartesian (CAR) projection in celestial coordinates with a
+360×180 pixel grid (1 ◦/pixel).
+Exposure maps were computed on the same spatial and spectral grid by first generating live-
+time cubes withgtltcubeand then runninggtexpcube2(Fermi Science Support Center, 2019).
+We usedcoordsys=CELand the IRFsP8R3_SOURCE_V3(SLAC National Accelerator Labora-
+tory and Fermi-LAT Collaboration, 2026). This ensures that exposure is fully consistent with the
+response assumptions adopted during event generation and that the two channels can be com-
+bined coherently in downstream analyses. The simulated event lists and the resulting binned
+products are written in FITS format, mirroring standard Fermi-LAT analysis inputs.
+To keep this first study focused and computationally tractable, we also consider an energy-
+integrated version of the dataset obtained by summing over the energy axis. This produces a
+tensor of shape
+(3649,2,360,180),
+which is the representation used in the remainder of the paper. The motivation for this choice
+is twofold. First, it allows us to isolate the spatio-temporal anomaly-detection problem and es-
+tablish a baseline end-to-end pipeline without introducing the additional complexity of modeling
+spectral variability across multiple sparse energy bins. Second, it reduces the dimensionality of
+the learning task, making training and model selection more manageable in this initial study. We
+stress, however, that this simplification does not alter the general ConvLSTM framework adopted
+here; rather, it defines the scope of the present work. Extending the method to energy-resolved
+inputs is a natural and important next step, since spectral information may further improve sen-
+sitivity to classes of transients characterized by energy-dependent variability.
+6
+
+3. Neural Network Methodology
+3.1. ConvLSTM for spatio-temporal sky modeling and sequence construction
+To model the spatio-temporal evolution of daily gamma-ray sky maps we adopt Convolu-
+tional Long Short-Term Memory (ConvLSTM) networks (Shi et al., 2015), a recurrent archi-
+tecture that replaces the fully-connected transformations of standard LSTMs (Hochreiter and
+Schmidhuber, 1997) with convolutional operators. This choice preserves the 2D structure of the
+maps while learning temporal dependencies, which is particularly suitable for transient searches
+where anomalies appear as localized, time-dependent excesses.
+In the following, we use ConvLSTM in a self-supervisednext-frame predictionsetting: given
+a short history of consecutive daily maps, the model predicts the subsequent map. Transient ac-
+tivity not explained by the learned nominal dynamics is expected to produce localized prediction
+residuals, which we later convert into anomaly scores.
+Let the full time series of maps be represented as
+X∈R N×C×H×W ,
+whereNis the number of daily frames,Cthe number of channels, andH,Wthe spatial dimen-
+sions. For a chosen window lengthseq_len, we build overlapping sequences, yielding
+Nwin =N−seq_len+1
+training windows. Each windowi=0, . . . ,N win −1 is split into
+x(i) ∈R (seq_len−1)×C×H×W (input frames)
+y(i) ∈R C×H×W (target frame)
+with
+x(i) = X[i], . . . ,X[i+seq_len−2] ,y (i) =X[i+seq_len−1].
+The ConvLSTM receivesx (i) and outputs a prediction ˆy(i) for the next frame. Of course, in our
+caseC=2, (H,W)=(180,360), whereasseq_lenhas been chosen to be equal to 5. We set
+seq_len=5 as a practical compromise between temporal context and computational cost. This
+choice provides a multi-day context for prediction while keeping memory usage and training
+time within a manageable range for the present study.
+3.2. ConvLSTM architecture and hyperparameter search
+The model consists ofLConvLSTM layers withC h hidden channels and convolutional kernel
+sizek×k. The final hidden representation is mapped to the output space through a lightweight
+convolutional head, implemented as a sequence of 1×1 or 3×3 convolutions with channel
+widths specified byfinal_conv_channels, ending withCoutput channels. The architectural
+hyperparameters explored are therefore
+{Ch,k,L,final_conv_channels}.
+We performed a grid search over the learning rate and a discrete set of ConvLSTM configu-
+rations. Specifically, we tested
+learning_rate∈ {10 −3,10 −4,10 −5},
+and the following five architecture variants:
+7
+
+•Config A:input_channels=2,hidden_channels=32,kernel_size=3,num_layers=1,
+final_conv_channels=[16, 2].
+•Config B:input_channels=2,hidden_channels=32,kernel_size=3,num_layers=2,
+final_conv_channels=[16, 2].
+•Config C:input_channels=2,hidden_channels=64,kernel_size=3,num_layers=1,
+final_conv_channels=[32, 2].
+•Config D:input_channels=2,hidden_channels=64,kernel_size=5,num_layers=2,
+final_conv_channels=[32, 16, 2].
+•Config E:input_channels=2,hidden_channels=32,kernel_size=5,num_layers=3,
+final_conv_channels=[16, 8, 2].
+For each combination of architecture and learning rate, we trained the network on the training
+split and selected the best-performing model on the validation set.
+The optimal setup across the explored grid was obtained with
+learning_rate=10 −3
+andConfig C:
+{input_channels: 2, hidden_channels: 64, kernel_size: 3, num_layers:
+1, final_conv_channels: [32, 2]}.
+Model selection was based on validation performance. We defined the best-performing setup
+as the one achieving the most favorable validation-loss behavior while maintaining a reasonable
+computational cost. Under this criterion,learning_rate=10 −3 was retained for the subsequent
+comparison of model configurations, while Config C was selected as the most balanced solution
+in terms of reconstruction quality, model complexity, and training time, as discussed in Section 4.
+3.3. Threshold estimation and anomaly detection
+Given an input window of lengthseq_len, the model predicts the next frame ˆy(i) ∈R C×H×W ,
+which is compared to the true targety (i). We compute the pixel-wise squared error
+e(i)
+c,h,w =  ˆy(i)
+c,h,w −y (i)
+c,h,w
+2,c=1, . . . ,C,h=1, . . . ,H,w=1, . . . ,W.
+A 2D residual map is then obtained by averaging over channels in the usual manner:
+m(i)
+h,w = 1
+C
+CX
+c=1
+e(i)
+c,h,w.
+Residual statistics are heterogeneous across the sky because both count statistics and expo-
+sure vary spatially. For this reason, anomaly thresholds are estimated separately for each pixel
+using training residuals only. LetT train denote the number of frames assigned to the training set,
+and letseq_lenbe the window length. Since the dataset is split into training and validation
+subsets with an 80:20 ratio, the number of residual maps available for threshold calibration is
+Ntrain,win =T train −seq_len+1.
+8
+
+Collecting the training residual maps{m (i)}Ntrain,win
+i=1 yields, for each pixel (h,w), an empirical dis-
+tribution
+E(h,w)= m(i)
+h,w |i=1, . . . ,N train,win
+	.
+We define a per-pixel threshold map as thep-th empirical quantile:
+Tperc(h,w)=percentile  E(h,w),p ,p=95%.
+We setp=95% as a conservative per-pixel quantile calibrated on nominal training residuals,
+which fixes the expected pixel-wise exceedance rate to 5% under the null; the subsequent spatial-
+coherence filter then suppresses isolated exceedances and controls the overall candidate rate. At
+inference time, a pixel is flagged as anomalous whenever
+mh,w >T perc(h,w),
+yielding a binary anomaly mask
+Mh,w =
+
+1,m h,w >T perc(h,w),
+0,otherwise.
+To suppress isolated fluctuations and emphasise spatially coherent structures, we optionally
+apply a local density filter to the mask: for each pixel, a window of sizeW×W=8×8 is
+examined, and the pixel is retained as anomalous only if at leastK=4 pixels within the window
+are above threshold. We set the spatial-coherence filter to aW×W=8×8 neighborhood
+withK=4 in order to suppress isolated pixel-level excursions while retaining compact multi-
+pixel structures: requiring at least four suprathreshold pixels within an 8×8 vicinity provides
+a lightweight morphological prior that favors spatially coherent residual patterns without being
+overly restrictive on their shape. This enforces spatial coherence, ensuring that only compact
+“blobs” of elevated residuals survive. If the filtered mask contains one or more anomalous pixels
+(or connected components), the corresponding frame is labeled as anomalous and regions are
+highlighted for inspection.
+4. Results and Discussion
+In this section we report the performance of the ConvLSTM model selected through the grid
+search described in Section 3.2, namelyConfig Cwithlearning_rate=10 −3. The network
+is trained in a self-supervised setting to predict the next daily all-sky frame from the preced-
+ingseq_len−1 frames, minimizing a pixel-wise mean squared error (MSE). After training,
+the prediction residuals provide the anomaly score maps employed by the statistical detection
+procedures introduced in Section 3.3.
+4.1. Neural Network Performance
+Figure 2 shows the learning curves for the selected model. The training loss decreases
+steadily as a function of epoch, indicating that the ConvLSTM converges to a stable solution
+and is able to extract non-trivial temporal regularities from the input sequences. The validation
+loss follows a broadly consistent trend, supporting the interpretation that the learned dynamics
+generalize to held-out windows rather than reflecting pure memorization of the training set. At
+9
+
+Figure 2: Training loss (left) and validation loss (right) as a function of epoch. The decreasing trends indicate convergence
+and generalization, while the non-zero floor reflects irreducible counting noise in the counts channel and non-stationary
+observing conditions encoded in the exposure channel.
+the best validation epoch, the final losses reach MSE train ≃0.265 and MSE val ≃0.238 (values
+reported for the best validation epoch).
+The model output can be interpreted as apredictive baselinefor the nominal evolution of
+the daily sky maps: for the bulk of windows—i.e., away from abrupt changes in observing
+conditions—the prediction captures the large-scale morphology and the smooth day-to-day vari-
+ability, and the residual field is dominated by low-amplitude fluctuations.
+The learning curves do not indicate perfect prediction, and a structured residual component
+persists. As already noted from the best-epoch training and validation losses discussed above,
+both curves approach a non-zero plateau. The fact that the validation loss remains of the same
+order as the training loss, rather than diverging from it, suggests that the residual floor is not
+primarily a consequence of overfitting, but reflects limitations intrinsic to the data and to the
+predictive task itself. This behavior is expected given both (i) the intrinsic stochasticity of the
+photon counts and (ii) the heterogeneous nature of the two input channels. Count maps are
+subject to Poisson fluctuations whose variance depends on local intensity and exposure, implying
+an irreducible prediction error even under a perfectly specified generative model. In addition, our
+pipeline combines simulated photon counts (gtobssim) with exposure maps derived from real
+spacecraft pointing and livetime. While this choice increases realism, it also introduces non-
+stationarities unrelated to astrophysical variability: pointed observations, repointings, departures
+from standard survey mode, and operational constraints can induce sharp day-to-day exposure
+modulations that locally break the smooth temporal correlations that recurrent models such as
+ConvLSTMs are biased to exploit.
+This has direct implications for anomaly detection. Without calibration, exposure-driven
+prediction errors could be misinterpreted as candidate transients. For this reason, the learning
+curves must be interpreted together with the downstream statistical treatment of residual maps.
+In our framework, detection thresholds are derived empirically from training residuals on a per-
+pixel basis (Section 3.3), so that regions that are systematically harder to predict naturally receive
+higher thresholds. Finally, spatial coherence is enforced through local-density or connected-
+component filtering, suppressing isolated supra-threshold pixels while retaining compact residual
+“blobs” consistent with localized transient emission.
+In the next subsection, we quantify how these calibrated residual maps translate into frame-
+level and pixel-level detections, and we illustrate representative examples of localized anomalies
+recovered by the full pipeline.
+10
+
+4.2. Characterization of the source population from the anomaly detection procedure
+To test and validate the proposed procedure, and to assess the performance of the ConvL-
+STM architecture, we cross-correlated the anomaly-detection source list obtained from the first
+16 days of operation with the 4FGL−DR4 general source catalog (Ballet et al., 2023). We then
+compared variability-related properties of the cross-matched sample with those of the full cat-
+alog. We adopted cross-correlation radii of 1 ◦ and 2 ◦, since the localization accuracy of the
+anomaly-detection output is relatively poor. As a consequence, unique associations cannot gen-
+erally be established: for each detected anomaly, multiple 4FGL−DR4 sources may fall within
+the matching radius. Nevertheless, the ensemble of associated sources can be compared statisti-
+cally with the full catalog.
+10⁻⁴
+10⁻⁵
+10⁻⁶
+10⁻⁷
+0
+5000
+10000
+15000
+20000
+25000
+30000
+35000
+Variability_Index
+Probability density
+10⁻⁴
+10⁻⁵
+10⁻⁶
+10⁻⁷
+0
+5000
+10000
+15000
+20000
+25000
+30000
+35000
+Variability_Index
+Probability density
+Figure 3: Normalized histograms of Variability_Index variable for sources associated to the output of anomalies showed
+in step-filled blue superimposed with all 4FGL−DR4 catalog sources showed in orange. Top panel: cross correlation
+radius of 2 degrees; bottom panel: cross correlation radius of 1 degrees
+We investigated differences in terms of the variability index (Ballet et al., 2023), which quan-
+tifies the degree of flux variability of a source as a function of time. The resulting distributions
+are significantly different: a Kolmogorov–Smirnov test yields ap-value below 0.05 in both cases,
+indicating that the two samples are unlikely to originate from the same parent population. This
+result suggests that the anomaly-detection procedure preferentially selects variable sources, as
+expected. The two populations are shown in Figure 3.
+Overall, this provides a validation of the method, demonstrating its ability to register flux
+variations as anomalies with respect to the averaged reconstructed skies.
+11
+
+4.3. Discussion of two particular cases
+We tested our procedure on a few representative cases, such as transient sources (e.g., GRBs)
+and exceptionally bright flaring activity from well-known sources (e.g., blazars). We then ex-
+amined the anomaly maps produced by the ConvLSTM pipeline over time windows containing
+known transient events. We use the termdetectionin an operational sense consistent with the
+anomaly criterion defined in Section 3.3. In particular, we detected GRB 080916A on the day
+of the GRB prompt emission and Fermi-LAT detection (Bissaldi et al., 2008) (Mission Elapsed
+Time interval from 243216766 s to 243303168 s), as well as apost-transient over-predictionon
+the following day, i.e., a lagged predictive artifact in which the model continues to predict an
+excess after the transient has disappeared. Figure 4 shows the true-sky maps with the detected
+anomalies highlighted as red circles.
+Figure 4: True-sky maps showing the list of anomalies indicated by red circles, while the GRB localization is highlighted
+by a blue square superimposed on them. Top panel: 2008-09-16 time frame; bottom panel: 2008-09-17 time frame.
+Furthermore, our procedure is able to detect strong flaring activity from well-known sources
+such as blazars. In particular, we detected a strong outburst from the FSRQ 3C 279 on 2015-
+06-14, as shown in Figure 5 (Mission Elapsed Time interval from 455934465 s to 456193665 s).
+This flare has been reported by both Fermi-LAT and AGILE in gamma rays, as well as at other
+wavelengths (see Cutini and Fermi-LAT Collaboration 2015, Lucarelli et al. 2015, and Pittori
+et al. 2015; see also Ackermann et al. 2016).
+12
+
+Figure 5: Top panel: True sky with indicated the list of anomalies as red circles with the detection of an anomaly
+associated to 3C 279 (red circle above the galactic plane). Lower panel: 3C 279 weekly time bin light curve, the vertical
+red line indicates the time frame relative to the sky analyzed in the top panel.
+5. Conclusions and Future Work
+In this work we presented an end-to-end, fully reproducible framework to study transient
+detection in a wide–field-of-view gamma-ray monitoring scenario, by combining long-duration
+sky simulations with self-supervised spatio-temporal deep learning. Starting from a ten-year
+gtobssimsimulation, we constructed daily all-sky maps of counts and exposure and used them
+as a two-channel time series of images. We trained a ConvLSTM-based model to learn the
+nominal evolution of the sky and to provide next-frame predictions (equivalently, reconstructions
+in a predictive setting). Departures from this learned baseline were quantified through pixel-
+wise mean-squared residual maps, which were then converted into anomaly candidates through
+statistically motivated thresholds and spatial-coherence filtering.
+We found that the ConvLSTM is able to learn non-trivial temporal regularities in the simu-
+lated dataset, yielding stable learning curves and residual maps whose structure can be calibrated
+empirically from the training distribution. The downstream anomaly-detection stage produces
+candidates that are consistent with variability-driven phenomena: when cross-correlating the
+first days of detections with the 4FGL–DR4 catalog, the associated population shows a statisti-
+cally significant shift toward higher variability indices with respect to the full catalog, supporting
+the interpretation that the procedure preferentially highlights variable sources. In addition, tar-
+geted checks on specific events demonstrate that the pipeline can flag both fast transients (e.g.,
+13
+
+GRB 080916A) and strong flaring activity from bright blazars (e.g., the 2015 outburst of 3C 279),
+illustrating the practical sensitivity of the residual-based approach to localized, time-dependent
+excesses.
+A key methodological takeaway is that realistic observing conditions matter: using real
+spacecraft-derived exposure increases fidelity but also introduces non-stationarities that can limit
+purely autoregressive predictability at daily cadence. Within our framework, this motivates (and
+partially justifies) the combination of a learned predictive baseline with adaptive, data-driven
+residual calibration and spatial post-processing, rather than relying on raw reconstruction errors
+alone.
+Several extensions naturally follow from this first study. A first, straightforward improvement
+is to move beyond the energy-integrated representation adopted here and train the ConvLSTM
+on energy-resolved sequences, so as to leverage the spectral signatures of transients and mitigate
+confusion between genuine astrophysical variability and background- or exposure-driven effects.
+In the same spirit, the predictive model could be explicitly conditioned on observing-state
+information—e.g., survey-mode indicators, livetime, rocking angle, or compact summaries of
+the recent pointing history—to better disentangle operational discontinuities from genuine sky
+variability. Additional improvements are likely to come from increasing the spatial and tempo-
+ral adaptivity of the analysis pipeline. On the spatial side, adopting a finer pixelization (where
+computationally feasible) would reduce source confusion and localize excesses more precisely,
+facilitating the association of a detected gamma-ray transient with plausible multiwavelength
+counterparts. On the temporal side, enabling flexible (and potentially adaptive) time binning
+would make the framework effective across a wide dynamic range of transient timescales, from
+fast events such as GRBs to slower phenomena evolving over days to months. Further gains are
+also expected from a more principled treatment of uncertainty: replacing deterministic predic-
+tions with probabilistic outputs, or explicitly modeling count statistics conditional on exposure,
+would yield better-calibrated anomaly scores and decision thresholds with a clearer statistical
+interpretation.
+A complementary direction is systematic benchmarking through controlled injections of syn-
+thetic transients with known properties into the simulated dataset, enabling quantitative mea-
+surements of detection efficiency and false-positive rates as functions of flux, duration, and sky
+location, and allowing direct comparison with alternative architectures such as convolutional au-
+toencoders or attention-based sequence models. Finally, once thoroughly validated in simulation,
+the same pipeline can be transferred to Fermi-LAT daily maps to assess robustness under fully
+realistic conditions and to explore applications closer to near-real-time transient alerting.
+Overall, the proposed simulation-to-inference chain provides a controlled testbed for devel-
+oping and evaluating anomaly-detection strategies on long-duration datasets, while remaining
+close enough to real observing conditions to expose the main practical challenges faced by auto-
+mated transient searches.
+CRediT authorship contribution statement
+Conceptualization: A.G., S. S., A.V ., S.C., M.M. (Marcello Marconi), F.L. and E.P.; method-
+ology, A.G, S.S., A.V ., A.M., S.C., M.M. (Matteo Martini), F.F., R.G., E.W.D.L., U.D.M. and
+S.M.; software, S.S., A.V . and A.M.; validation, S.S., A.V ., S.C., M.M. (Matteo Martini), F.F.,
+R.G., E.W.D.L., U.D.M. and S.M.; writing—original draft preparation, S.S., S.C.; writing—
+review and editing, S.S.; project administration, A.G., M.M. (Marcello Marconi), E.P., S.C., F.F.
+14
+
+and R.G.; funding acquisition, A.G., M.M. (Marcello Marconi) and E.P. All authors have read
+and agreed to the published version of the manuscript.
+Funding
+This paper is supported by the Fondazione ICSC, Spoke 3 Astrophysics and Cosmos Ob-
+servations. National Recovery and Resilience Plan (Piano Nazionale di Ripresa e Resilienza,
+PNRR) Project ID CN00000013 “Italian Research Center on High-Performance Computing, Big
+Data and Quantum Computing” funded by MUR Missione 4 Componente 2 Investimento 1.4:
+Potenziamento strutture di ricerca e creazione di “campioni nazionali di R&S (M4C2-19)” - Next
+Generation EU (NGEU)
+Data Availability
+The simulated dataset generated in this study is publicly available on Hugging Face at https://
+huggingface.co/datasets/Idea-re/fermi-lat-synthetic-daily-sky-maps. The public release includes
+the original energy-resolved tensor used in this work, with shape (3649,2,10,360,180), split into
+four NumPy files to facilitate download and reuse. The repository also provides accompanying
+documentation and metadata, including a README file, a machine-readable metadata descrip-
+tion, and an example Python script for loading the data.
+Declaration of competing interests
+The authors declare that they have no known competing financial interests or personal rela-
+tionships that could have appeared to influence the work reported in this paper.
+Declaration of Generative AI and AI-assisted technologies in the writing process
+During the preparation of this work the authors used ChatGPT to improve language, style,
+and readability. The scientific content, structure, and conclusions were determined by the au-
+thors. After using this tool, the authors reviewed and edited the manuscript as needed and take
+full responsibility for the content of the publication.
+References
+Abdollahi, S., et al., 2020. Fermi large area telescope fourth source catalog. The Astrophysical
+Journal Supplement Series 247, 33. doi:10.3847/1538-4365/ab6bcb.
+Abdollahi, S., et al., 2022. The third data release of the fourth Fermi large area telescope source
+catalog (4FGL-DR3). The Astrophysical Journal Supplement Series 260, 53. doi:10.3847/
+1538-4365/ac6756,arXiv:2201.11184.
+Acero, F., et al., 2015. Fermi large area telescope third source catalog. The Astrophysical Journal
+Supplement Series 218, 23. doi:10.1088/0067-0049/218/2/23,arXiv:1501.02003.
+15
+
+Ackermann, M., et al., 2013. The Fermi all-sky variability analysis: A list of flaringγ-ray sources
+and the search for transients in our galaxy. The Astrophysical Journal 771, 57. doi:10.1088/
+0004-637X/771/1/57,arXiv:1304.6082.
+Ackermann, M., et al., 2016. Minute-timescale>100 mevγ-ray variability during the giant
+outburst of 3c 279 in 2015 june. The Astrophysical Journal Letters 824, L20. doi:10.3847/
+2041-8205/824/2/L20,arXiv:1605.05324.
+Atwood, W., et al., 2013. Pass 8: Toward the full realization of the Fermi-LAT scientific potential.
+arXiv:1303.3514.
+Atwood, W.B., et al., 2009. The large area telescope on the Fermi gamma-ray space telescope
+mission. The Astrophysical Journal 697, 1071–1102. doi:10.1088/0004-637X/697/2/
+1071,arXiv:0902.1089.
+Ballet, J., Bruel, P., Burnett, T.H., Lott, B., Fermi-LAT Collaboration, 2023. Fermi large area
+telescope fourth source catalog data release 4 (4FGL-DR4).arXiv:2307.12546.
+Bissaldi, E., McBreen, S., Wilson-Hodge, C.A., von Kienlin, A., 2008. GRB 080916A: Fermi
+GBM detection. GCN Circular 8263. URL: https://gcn.nasa.gov/circulars/8263. accessed:
+2026-02-17.
+Bruel, P., Burnett, T.H., Digel, S.W., Johannesson, G., Omodei, N., Wood, M., 2018. Fermi-LAT
+improved pass 8 event selection.arXiv:1810.11394.
+Chandola, V ., Banerjee, A., Kumar, V ., 2009. Anomaly detection: A survey. ACM Computing
+Surveys 41. doi:10.1145/1541880.1541882.
+Cutini, S., Fermi-LAT Collaboration, 2015. Fermi LAT detection of renewed and strong
+GeV activity from blazar 3c 279. The Astronomer’s Telegram 7633. URL: https://www.
+astronomerstelegram.org/?read=7633. accessed: 2026-02-17.
+Fermi Science Support Center, 2019. Fermitools: Fermi gamma-ray space telescope science
+tools. Astrophysics Source Code Library, ascl:1905.011. URL: https://ascl.net/1905.011.
+accessed: 2026-02-17.
+Fermi Science Support Center, 2026. LAT background models (galactic and isotropic diffuse
+emission). URL: https://fermi.gsfc.nasa.gov/ssc/data/access/lat/BackgroundModels.html. ac-
+cessed: 2026-02-17.
+Górski, K.M., Hivon, E., Banday, A.J., et al., 2005. HEALPix: A framework for high-resolution
+discretization and fast analysis of data distributed on the sphere. The Astrophysical Journal
+622, 759–771. doi:10.1086/427976.
+Hochreiter, S., Schmidhuber, J., 1997. Long short-term memory. Neural Computation 9, 1735–
+1780. doi:10.1162/neco.1997.9.8.1735.
+Lucarelli, F., et al., 2015. AGILE detection of a bright gamma-ray flare from the blazar 3c 279.
+The Astronomer’s Telegram 7631. URL: https://www.astronomerstelegram.org/?read=7631.
+accessed: 2026-02-17.
+16
+
+Mattox, J.R., et al., 1996. The likelihood analysis of EGRET data. The Astrophysical Journal
+461, 396–407. doi:10.1086/177068.
+Pence, W.D., Chiappetti, L., Page, C.G., Shaw, R.A., Stobie, E., 2010. Definition of the flexible
+image transport system (FITS), version 3.0. Astronomy & Astrophysics 524, A42. doi:10.
+1051/0004-6361/201015362.
+Pittori, C., Verrecchia, F., Puccetti, S., Donnarumma, I., Tavani, M., 2015. Swift first follow-
+up observation of the GeV flaring blazar 3c 279. The Astronomer’s Telegram 7639. URL:
+https://www.astronomerstelegram.org/?read=7639. accessed: 2026-02-17.
+Ruff, L., Kauffmann, J.R., Vandermeulen, R.A., Montavon, G., Samek, W., Kloft, M., Dietterich,
+T.G., Müller, K.R., 2021. A unifying review of deep and shallow anomaly detection. Proceed-
+ings of the IEEE 109, 756–795. doi:10.1109/JPROC.2021.3052449,arXiv:2009.11732.
+Shi, X., Chen, Z., Wang, H., Yeung, D.Y ., Wong, W.k., Woo, W.c., 2015. Convolutional LSTM
+network: A machine learning approach for precipitation nowcasting, in: Advances in Neural
+Information Processing Systems.arXiv:1506.04214.
+SLAC National Accelerator Laboratory and Fermi-LAT Collaboration, 2026. Fermi LAT Perfor-
+mance (includes Pass 8 P8R3_V3 performance/irf context). URL: https://www.slac.stanford.
+edu/exp/glast/groups/canda/lat_Performance.htm. accessed: 2026-02-17.
+Wood, M., Caputo, R., Charles, E., Di Mauro, M., Magill, J., Perkins, J.S., 2018. Fermipy: An
+open-source python package for analysis of Fermi-LAT data, in: Proceedings of Science, p.
+824. doi:10.22323/1.301.0824,arXiv:1707.09551.
+17

@@ -1,0 +1,1515 @@
+Title: \texttt{calypso}: a Parameter-Conditioned Stochastic Surrogate Model for Circumbinary Accretion Time-Series
+Authors: Magdalena Siwek, Matt Ho, Earl Bellinger
+Published: 2026-05-21
+Categories: astro-ph.HE
+
+MNRAS000, 1–??(2026) Preprint 25 May 2026 Compiled using MNRAS L ATEX style file v3.2
+calypso: a Parameter-Conditioned Stochastic Surrogate Model for
+Circumbinary Accretion Time-Series
+Magdalena Siwek ,1,2⋆, Matt Ho 1, Earl Bellinger 3,4
+1New York University, Center for Cosmology and Particle Physics, 726 Broadway, New York, NY 10003, USA
+2Columbia University, Pupin Hall, 538 W 120th St, New York, NY 10027, USA
+3Department of Astronomy, Yale University, New Haven, CT 06511, USA
+4Institute for Foundations of Data Science, Yale University, New Haven, CT 06511, USA
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+We presentcalypso, a parameter-conditioned stochastic surrogate model for circumbinary accretion flows. We repre-
+sent the total and individual accretion time series in a PCA basis and model the resulting coefficients as draws from a
+multivariate Gaussian distribution over the latent PCA coefficients. We specifically include the aleatoric uncertainty
+of the time series in the model, enabling the emulator to capture the inherent stochasticity of the accretion process
+and the long-term modulation due to disk precession. We further explore the epistemic uncertainty in the model due
+to limited training data and interpolation in the (e b,qb) parameter space and find that the data does not support in-
+clusion of this added variance term. We present the properties of existing simulation suites of circumbinary accretion,
+and run new simulations to fill in gaps in the parameter space, as well as a set of 13 test simulations for validation of
+the emulator. We publishcalypsoas a pip-installable Python package with an open-source codebase and comprehen-
+sive documentation, and demonstrate use-cases for current and upcoming transient surveys. We additionally derive a
+closed-form Gaussian likelihood that enables direct inference of (e b,q b) from observed accretion-rate time series.
+Key words:methods: statistical, methods: data analysis, black holes, accretion, accretion disks, binaries, hydrody-
+namics, transients
+1 INTRODUCTION
+A growing body of evidence from multi-messenger observa-
+tions suggests that (super-)massive black hole binaries (MB-
+HBs) form binary systems in post-merger galaxies. Although
+none are observationally confirmed, recent results from Pul-
+sar Timing Array (PTA) collaborations indicate tantalizing
+evidence for a gravitational wave background (GWB) signal
+(Agazie et al. 2023a; Antoniadis et al. 2023; Reardon et al.
+2023; Xu et al. 2023), likely originating from the continuous
+inspiral of MBHBs across cosmic time (Agazie et al. 2023b).
+Additionally, a growing number of candidate MBHBs are
+identified in transient surveys (e.g., Graham et al. 2015b,a;
+Charisi et al. 2016; Liu et al. 2019), though identifying false
+positives remains a challenge due to intrinsic quasi-periodic
+variability in active galactic nuclei (AGN). Most promising is
+the Vera C. Rubin Observatory Legacy Survey of Space and
+Time (LSST; Ivezi´ c et al. 2019), which will provide a wealth
+of data on the optical and near-infrared sky, and result in the
+most comprehensive survey of the MBHB population.
+The identification of MBHBs in transient surveys, such as
+LSST, relies on the detection of periodic variability in the
+light curves of AGN. The variability is thought to arise from
+⋆ E-mail: mss931@nyu.edu
+the modulation of the accretion rates onto the binary com-
+ponents by the circumbinary disk (CBD) surrounding the
+binary. Hydrodynamic simulations of circumbinary accretion
+have shown that the accretion rates onto the binary com-
+ponents exhibit variability on timescales comparable to the
+binary orbital period (e.g., MacFadyen & Milosavljevi´ c 2008;
+Farris et al. 2014; Shi et al. 2012; Moody et al. 2019; Coc-
+chiararo et al. 2024), as well as long-term modulation on
+timescales much longer than the binary orbital period due
+to the precession of the CBD (Mu˜ noz & Lai 2016; Miranda
+et al. 2016; Mu˜ noz et al. 2020; Ragusa et al. 2020; Siwek et al.
+2023a).
+So far, however, searches for periodic variability in AGN
+lightcurves have mostly assumed that this variability is pe-
+riodic and quasi-sinusoidal (e.g., Graham et al. 2015a; Xin
+et al. 2026; El-Badry et al. 2026). This is a significant simpli-
+fication, as hydrodynamic simulations have shown that the
+accretion variability is highly non-sinusoidal, and exhibits a
+range of morphologies across the binary parameter space.
+Specifically, eccentric binaries tend to exhibit more bursty,
+non-sinusoidal variability (e.g., Zrake et al. 2021; D’Orazio
+et al. 2024). It is possible that this simplification has led to
+the non-detection of MBHB candidates in transient surveys
+(e.g., Lin et al. 2026; Park et al. 2026), or the misclassification
+of true MBHB candidates as false positives due to their non-
+©2026 The Authors
+arXiv:2605.23006v1  [astro-ph.HE]  21 May 2026
+
+2Magdalena Siwek et al.
+sinusoidal variability signatures. Future searches for MBHB
+candidates in transient surveys will therefore require more re-
+alistic models of the accretion variability, which can capture
+the non-sinusoidal nature of the variability and its depen-
+dence on the binary parameters.
+Here we present a systematic study of the accretion vari-
+ability across the eccentricity (e b) and mass ratio (q b)
+parameter space, and introducecalypso, a parameter-
+conditioned stochastic surrogate model for circumbinary ac-
+cretion time series.calypsostands for ‘Circumbinary Accre-
+tion Lightcurves Yielded via Probabilistic Spectral Opera-
+tors’, and is designed to predict the total, primary and sec-
+ondary accretion rates of an accreting binary system with
+arbitrary eccentricitye b and mass ratioq b. We trainca-
+lypsoon a suite of hydrodynamic simulations of circumbi-
+nary accretion, and show that it can capture the variability of
+the accretion rates across the parameter space, showing that
+accretion is largely dominated by non-sinusoidal variability,
+particularly for eccentric binaries. We find that many binaries
+in the (eb,qb) parameter space exhibit double-peaked, bursty,
+and saw-toothed variability, in contrast with sinusoidal vari-
+ability.calypsois fully stochastic, returning samples from a
+multivariate Gaussian distribution over the latent model co-
+efficients, thus providing a principled way to capture the un-
+certainty in the accretion variability. The stochastic nature
+ofcalypsowill also be useful for inference of binary parame-
+ters from observed light curves, and therefore for population
+studies of MBHBs in the era of LSST and PTA detections.
+This paper is structured as follows. In§2, we describe our
+methods, beginning with the hydrodynamic simulations of
+circumbinary accretion and the properties of the resulting
+accretion time series. We provide an in-depth description of
+the data pre-processing and training ofcalypsovia Princi-
+pal Component Analysis (PCA) on the accretion time series,
+and the variance model we employ to capture the aleatoric
+and epistemic uncertainty of the emulator. We also describe
+the interpolation scheme we use to enable predictions for ar-
+bitrary (eb,qb) pairs within the parameter space covered by
+our training data. In§3, we present the validation ofcalypso
+on a set of 13 test simulations, and use the validation results
+to determine the optimal number of PCA components to re-
+tain in the final emulator. We also assess the performance
+of the emulator when including the epistemic variance term,
+showing that the data does not support the inclusion of this
+added variance term. In§4, we specifically evaluate the per-
+formance ofcalypsoin the (e b,qb) parameter space, showing
+the emulator performance directly by comparing time series
+generated bycalypsoto the corresponding hydrodynamic
+simulations, and compare the variance estimates from the em-
+ulator to the true variance in the test simulations. We show
+our method to convertcalypsoaccretion rates into luminosi-
+ties and apparent magnitudes in LSST bands, and present
+example light curves for a subset of test simulations in§5. In
+§6, we summarize and discuss our results, the limitations of
+our current model, and outline future directions for improving
+calypso. In§7 we provide instructions for installation and use
+ofcalypso. In Appendix A we derive a closed-form Gaussian
+likelihood for (e b,q b) inference from observed accretion-rate
+time series.
+2 METHODS
+2.1 Hydrodynamic Simulations of Circumbinary Accretion
+This work is based on a suite of hydrodynamic simulations
+of circumbinary accretion disks described in Siwek et al.
+(2023a,b), as well as new simulations to fill in the param-
+eter space, run with the same methods. We refer the reader
+to these papers for an in-depth description of the simulation
+setup, but briefly summarize the key points here. The simu-
+lations were performed using theArepocode (Springel 2010;
+Pakmor et al. 2016) in its Navier-Stokes version (Mu˜ noz et al.
+2013). The simulations include a central binary represented
+by two sink particles, which move on fixed Keplerian orbits
+with eccentricitye b and mass ratioq b. The sink particles ac-
+crete gas from the surrounding disk, and the accretion rates
+onto each sink are recorded on-the-fly. The system is scale-
+free, with the binary mass and semimajor axis set to unity,
+and the binary orbital periodP b = 2π. The accretion disk
+is modeled as a viscous, locally isothermal fluid with anα-
+disk viscosity prescription, similar to previous work in the
+literature (e.g., Farris et al. 2014, Mu˜ noz et al. 2019, Tiede
+et al. 2020). The hydrodynamic parameters of the disk in-
+cludeα= 0.1 and a disk aspect ratio ofH/R= 0.1. While
+keeping these parameters constant, a large parameter study
+over binary mass ratioq b and eccentricitye b was performed
+and run for 10,000P b to ensure that the accretion rates have
+reached a quasi-steady state. The accretion time series is then
+extracted for the last 5000 binary orbits, yielding a total of
+5000 data points per time series at a cadence of 100 points
+per binary orbit, forming the basis of our training dataset for
+calypso.
+This work contains previously published data from Si-
+wek et al. (2023a,b) covering the original parameter space,
+with some additional simulations to fill in gaps, most no-
+tably fore b= 0.7. In total, that brings the number of
+simulations used for training to 100, with eccentricities
+eb ∈[0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8] and mass ratios
+qb ∈[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]. Additionally,
+13 test cases were produced for validation and testing of the
+emulator. The distribution of the test cases in the parameter
+space is shown in Figure 4.
+2.1.1 Properties of the accretion time series
+Here we discuss the properties of the accretion time series ob-
+tained from the simulations. The accretion rates for each sink
+are obtained by summing the mass flux onto each sink par-
+ticle in the simulation on-the-fly, and written into an output
+file at a cadence of 100 points per binary orbit. In this work
+we analyze the accretion time series over 5000 binary orbits,
+yielding enough data to assess the long-term variability and
+stability of the accretion rates.
+Simulations have long shown that accretion rates exhibit
+variability on timescales comparable to the binary orbital
+period (e.g., MacFadyen & Milosavljevi´ c 2008; Farris et al.
+2014). Here, we analyze this short-term variability for our
+entire simulation suite over eccentricitye b and mass ratio
+qb. We characterize the accretion variability frequency across
+our simulation suite using Gaussian Process regression on the
+power spectrum of each window. Specifically, we slice the 5000
+binary orbit time series per binary into 500 windows, yielding
+MNRAS000, 1–??(2026)
+
+calypso3
+10 binary orbits per window. We then interpolate each win-
+dow to ensure even time-spacing, and perform a fast Fourier
+transform to obtain the power spectrum of the accretion vari-
+ability in each window. We note that the interpolation does
+not affect the variability signature, as the original time-series
+data is largely evenly spaced, with only occasional binning
+irregularities due to the tree-based nature of theArepocode.
+Our interpolation scheme corrects for these irregularities, en-
+suring that the time-series data is uniformly spaced across
+all windows, but does not meaningfully change the number
+of bins per binary orbit or the underlying variability signa-
+ture.
+We model the log10 of the power spectrum with a Gaussian
+Process (GP). We choose a Mat´ ernν= 0.5 covariance kernel
+for its ability to capture sharp peaks in power spectra, and
+a prior mean function centered at a frequency Ω/Ω b = 1
+motivated by the fundamental frequency of the binary.
+For each window, we collect the peak frequency of the
+power spectrum from the GP posterior, along with the full-
+width at half max (FWHM) of the peak as a measure of
+uncertainty. The FWHM is then converted into a standard
+deviation by dividing by 2
+√
+2 ln 2, assuming a Gaussian shape
+for the peak. Each window therefore contributes a Gaussian
+distribution over the peak frequency,
+p(Ω) = 1√
+2πσ2
+exp
+ 
+−(Ω−µ) 2
+2σ2
+!
+.(1)
+The mean PDF over all windows is then given by the mixture
+of Gaussians,
+pmixture(Ω) = 1
+N
+NX
+i=1
+pi(Ω),(2)
+whereN= 500 is the number of windows. The highest peak
+of the mixture probability density function (PDF) is iden-
+tified as the dominant mode of the distribution. Each cell
+in Figure 1 shows the dominant mode we identify. In most
+cases, the distribution of peak frequencies is unimodal and
+well-constrained, and the peak frequency is close to the fun-
+damental frequency of the binary, Ω b. In cases where there
+is clear multi-modality in the distribution of peak frequen-
+cies across the 500 windows, we indicate this by adding an
+asterisk (*) to the cell.
+In Figure 2, we show the mixture PDFs of some binaries
+with either clear multimodality or an outlier peak (e.g., ˙M2
+withe b=0.6,q b=0.1) for all three components ˙Mb, ˙M1, and
+˙M2. Typically, the primary peak is at the fundamental fre-
+quency of the binary, Ω b, with an accompanying secondary
+peak at Ω = 0.2. This is related to the orbital frequency of
+an overdensity (“lump”) at the inner edge of the circumbi-
+nary disk, which is a well-known feature of near-equal mass,
+near-circular binaries (e.g., Farris et al. 2014), and has also
+been observed in MHD simulations (e.g., Shi et al. 2012).
+More recently, hydrodynamic simulations have also indi-
+cated that there is a long-term modulation of the accretion
+rates on timescales much longer than the binary orbital pe-
+riod (e.g., D’Orazio et al. 2013; Mu˜ noz et al. 2019; Siwek
+et al. 2023a). The long-term modulations are typically on
+timescales of several hundreds of binary orbits, and associ-
+ated with the precession timescale of the CBD (Siwek et al.
+2023a). However, the existence, strength and period of this
+modulation all depend on the binary parameterse b andq b,
+with some CBDs ‘locking’ at a fixed pericenter angle rather
+than precessing. These systems show little to no long-term
+modulation (Siwek et al. 2023a).
+Precession and long-term modulation complicate the mod-
+eling of short-term variability in the accretion rates by intro-
+ducing uncertainty in the short-timescale variability signa-
+ture. This effect is particularly pronounced for binaries with
+high mass ratios and eccentricities, which exhibit both higher-
+amplitude variability and more pronounced CBD precession.
+We interpret the precession-driven modulation as a signifi-
+cant additional source of stochasticity in the accretion signal,
+which can in some regimes dominate over the intrinsic vari-
+ability of the flow. The intrinsic stochasticity of the accre-
+tion flow—arising from intermittent stream penetration into
+the cavity due to perturbations in the viscous-gravitational
+torque balance at the cavity’s inner edge—provides a baseline
+level of variability upon which this precession-driven modula-
+tion is superimposed. The quantification of these two sources
+of uncertainty in the characteristic accretion variability for
+any binary in our parameter space is a central feature ofca-
+lypso, the fundamental methods of which we describe in the
+following sections.
+Building on the simulation suite described above,calypso
+emulates the total, primary, and secondary accretion rates of
+a binary at arbitrary (e b,qb) within the trained box. The re-
+mainder of this section describes the pre-processing applied
+to the raw accretion time series (§2.2), the PCA-based train-
+ing of the emulator (§2.3), the (e b,qb) interpolation scheme
+(§2.4), and the variance model used to capture the aleatoric
+and epistemic uncertainty (§2.5).
+2.2 Data Pre-processing
+Specifically, we create a training dataset that consists of
+500 time-series examples (‘windows’) showing 10P b for each
+(eb,qb) pair in our training dataset. Each time series is inter-
+polated prior to training to ensure that timesteps are uniform
+across all windows, with negligible effect on the underlying
+variability.
+Due to the long-term precession of the circumbinary disk,
+the accretion variability exhibits a long-timescale drift. Since
+we are training on relatively short windows of 10Pb, the long-
+timescale drift due to disk precession is not captured in each
+individual window. However, stacking the entire set of raw 10
+Pb windows for each (e b,qb) pair would average out some of
+the short-term signals due to the long-timescale drift. This is
+particularly noticeable for binaries with high mass ratios and
+near-circular orbits, which exhibit lower-amplitude variability
+and peak variability frequencies corresponding to∼5P b (see
+Figure 1).
+We therefore pre-process the time-series data so that each
+window is detrended, removing the long-timescale drift due
+to disk precession in each window. Specifically, we find the
+peak frequency of each binary (shown in Figure 1), and find
+the associated phaseϕ peak of the Fourier component at that
+frequency,
+ϕpeak = arctan
+ 
+Im( ˜X(Ωpeak))
+Re( ˜X(Ωpeak))
+!
+.(3)
+We then shift the time-series data in each window by the
+corresponding phase, so that the variability peaks are aligned
+MNRAS000, 1–??(2026)
+
+4Magdalena Siwek et al.
+Figure 1.Peak frequency of the accretion-variability power spectrum across the training grid, shown for the binary-total ˙Mb (left), the
+primary ˙M1 (centre), and the secondary ˙M2 (right). Each cell corresponds to one (e b, qb) training pair; the colour and the in-cell number
+give the dominant mixture-posterior peak in units of the binary orbital frequency Ω b (log colour scale centred on Ω peak/Ωb = 1). Cells
+whose mixture posterior across the 500 windows is multimodal are marked with an asterisk and shown in detail in Figure 2. Most binaries
+peak at the fundamental Ω b. Some components show slightly higher peak frequencies, while higher-q b, near-circular binaries show a peak
+near Ω/Ωb ≃0.2 corresponding to the well-known∼5P b “lump” oscillation (e.g., Farris et al. 2014).
+Figure 2.Mixture-posterior peak-frequency distributions (equation 2, withN= 500 windows per binary) for representative multimodal
+training cases. Columns correspond to the binary-total ˙Mb (left), primary ˙M1 (centre), and secondary ˙M2 (right). For ˙Mb and ˙M1, the
+three rows are the multimodal cases with the largest secondary-to-primary posterior peak-height ratio. For ˙M2, the first row is the outlier
+case (eb, qb) = (0.6,0.1), whose dominant peak lies far from Ω b, and the next two rows are the top two by secondary-to-primary ratio.
+Within each panel, the solid curve is the GP-smoothed mixture PDF; the dashed and dotted vertical lines mark the locations of the
+dominant (Ω1) and secondary (Ω 2) peaks; the red shading indicates the full-width at half-maximum of the dominant peak. The (e b, qb)
+pair labels each panel. Both axes are logarithmic.
+MNRAS000, 1–??(2026)
+
+calypso5
+across all windows for each (eb,qb) pair. Specifically, the time
+series becomes,
+˙M(t)→ ˙M(t+ϕ peak/Ωpeak),(4)
+whereϕis the phase of the Fourier component at the peak
+frequency Ω peak. This allows us to capture the short-term
+variability in each window without averaging out the signal
+due to the long-term drift. We point out that transient sur-
+veys are phase-agnostic to the long-term variability of the
+CBD, since they will only observe a small fraction of the pre-
+cession period.
+The interpolated, de-trended time series of ˙Mb, ˙M1 and
+˙M2 are concatenated to form a single feature vector for each
+window. This dataset forms a matrix where each row corre-
+sponds to a single window and each column corresponds to a
+time point in the concatenated ˙Mb, ˙M1 and ˙M2 time series.
+Specifically, we end up with a matrix of shape (N×m,3×T),
+whereN= 500 is the number of windows per (e b,qb) pair and
+m= 100 is the number of (e b,qb) pairs in the training set.
+T=n bins ×n orb is the number of timesteps in each window.
+2.3 Training
+Following data pre-processing described in§2.2, we obtain
+a global PCA basis that captures the variability across the
+accretion time series over our entire (eb,qb) parameter space.
+The matrixX∈R M×3T is the training data matrix, with
+the number of rows corresponding to the number of samples
+(M=N×m) and the number of columns corresponding to
+the number of timesteps in the concatenated ˙Mb, ˙M1, and
+˙M2 time series (number of ‘features’). We first mean-center
+the data by subtracting the mean of each column from the
+corresponding entries in that column, ensuring that the PCA
+optimally captures the variance in the data.
+We perform a singular value decomposition (SVD) of the
+mean-centered data matrixX,
+X=UΣV T ,(5)
+where the columns ofVare the PCA basis vectors, the
+columns ofUΣ are the PCA coefficients for each window,
+and Σ is a diagonal matrix containing the singular values,
+which are related to the explained variance of the correspond-
+ing PCA components. Specifically, Σ is diagonal and ordered,
+such that
+Σ11 ≥Σ 22 ≥...≥Σ kk ≥0,(6)
+and related to the eigenvalues of the covariance matrix ofX
+by
+λk = Σ2
+kk
+(N m−1) .(7)
+The explained variance ratio of thek-th PCA component
+is then given by
+˜λk = λk
+P3×T
+j=1 λj
+,(8)
+which represents the proportion of the total variance in the
+data that is captured by thek-th PCA component.
+Figure 3.Cumulative explained variance of the joint PCA basis
+(over ˙Mb, ˙M1, ˙M2) as a function of the number of retained princi-
+pal componentsk, on log-log axes. The dotted horizontal lines
+mark the 90% (red), 95% (orange), and 99% (green) variance-
+retained levels; the dashed vertical lines and annotated markers
+indicate thekat which each threshold is reached. This conver-
+gence behaviour motivates the search range overkperformed in
+Figure 5, where the final valuek final = 142 is selected from the
+test-set zMSE.
+In Figure 3, we show the convergence of the explained vari-
+ance as a function of the number of PCA components. Specif-
+ically, we plot the cumulative explained variance ratio,
+˜λcumulative(k) =
+kX
+j=1
+˜λj,(9)
+which represents the total proportion of variance captured
+by the firstkPCA components. We note that the cumulative
+variance retained scales approximately as∝log(k) γ withγ
+between 1 and 2, indicating that much of the variance in the
+data can be captured by a relatively small number of PCA
+components. We find that the explained variance converges to
+≳95% with≳500 PCA components, which is a significant
+dimensionality reduction from the original feature space of
+3×T(= 3000) dimensions. In§3, we explain how our test
+dataset of 13 (eb,qb) pairs, which was not included in training,
+is used to determine the precise number of PCA components
+to retain in the final emulator, and to validate its performance
+in the (eb,qb) parameter space.
+After performing PCA, we obtain a set of PCA basis vec-
+tors (the columns ofV) and the corresponding PCA coeffi-
+cients (the columns ofUΣ) for each window in our training
+dataset. By including multiple time windows for each (e b,qb)
+pair in the training dataset, we capture the stochasticity in
+the accretion variability. Specifically, for each (eb,qb) pair, we
+haveNwindows, each withkPCA coefficients correspond-
+ing to the firstkPCA components. This gives us a matrix of
+PCA coefficients for each (e b,qb) pair,
+C(eb,qb) =
+
+
+c11 c12 · · ·c 1k
+c21 c22 · · ·c 2k
+...
+... ... ...
+cM1 cM2 · · ·c M k
+
+
+∈R N×k .(10)
+For each (e b,qb) pair, we model the distribution of these
+coefficient vectors across the N windows by estimating a mean
+MNRAS000, 1–??(2026)
+
+6Magdalena Siwek et al.
+vector and covariance matrix,
+µ= 1
+N
+NX
+i=1
+ci,(11)
+Σ = 1
+N−1
+NX
+i=1
+(ci −µ)(c i −µ) ⊤.(12)
+We note that the covariance matrix in our model is dense,
+but weak except for the firstk= 20 terms, which show strong
+covariance between the PCA coefficients. Further versions of
+calypsomay want to improve the speed of the interpolation
+by using a low-rank approximation of the covariance matrix.
+Using these estimated means and covariances, we model the
+PCA coefficient vector for each (eb,qb) pair as a draw from a
+k-dimensional multivariate Gaussian distribution,
+p(c|e b, qb) = 1
+(2π)k/2|Σ|1/2 exp
+
+−1
+2(c−µ) ⊤Σ−1(c−µ)
+
+,
+(13)
+whereµand Σ are the mean vector and covariance matrix of
+the PCA coefficients estimated from the M training windows
+at fixed (eb,qb).
+2.4 Interpolation in the (e b,qb) parameter space
+To enable predictions for arbitrary (e b,qb) pairs within the
+parameter space covered by our training data, we perform
+interpolation of the mean vectors and covariance matrices of
+the PCA coefficients across the (eb,qb) parameter space. How-
+ever, the interpolation of covariance matrices is non-trivial
+due to the requirement that they must be positive semi-
+definite. To address this, we first perform the Cholesky de-
+composition of the covariance matrices. Specifically, for each
+(eb,qb) pair, we perform a Cholesky decomposition of the co-
+variance matrix,
+Σ =LL T ,(14)
+whereLis a lower triangular matrix. We then interpolate the
+mean vectorsµand the Cholesky factors instead of the covari-
+ance matrices directly, before reconstructing the covariance
+matrices from the interpolated Cholesky factors. This yields
+a new multivariate Gaussian distribution at the target (eb,qb)
+parameter point. We choose to use a simple linear interpo-
+lation scheme for both the mean vectors and the Cholesky
+factors to preserve numerical stability.
+2.5 Aleatoric and Epistemic Uncertainty
+In our model, the aleatoric uncertainty is captured by the
+covariance matrix Σ of the multivariate Gaussian distribu-
+tion over the PCA coefficients. This covariance matrix cap-
+tures the intrinsic variability in the accretion time series for
+a given (e b,qb) pair, which arises from the stochastic nature
+of the accretion process and the long-term modulation due
+to disk precession. The epistemic uncertainty, on the other
+hand, arises from the limited number of training samples and
+the interpolation process in the (e b,qb) parameter space. We
+capture the epistemic uncertainty as follows. For each (eb,qb)
+pair in the training dataset, we compute a mean vector of the
+PCA coefficients across the N windows. When a new (e b,qb)
+pair is requested through the emulator, we perform interpo-
+lation of the mean vectors and covariance matrices across the
+training dataset to obtain the mean vector and covariance
+matrix for the new (e b,qb) pair.
+The epistemic variance measures the spatial variation of
+the first moment (i.e., the mean PCA coefficient vector) as
+a function of (e b,qb). To do so, we first define a distance-
+weighted mean PCA coefficient vector, with weights between
+the sampling point and the i-th training point defined as fol-
+lows,
+wi = 1
+(di +ϵ) α ,(15)
+whered i is the distance in the (e b,qb) parameter space be-
+tween the new point and thei-th training point,ϵis a small
+constant to prevent division by zero, andαis a hyperpa-
+rameter that controls the rate of decay of the weights with
+distance. We fiducially setϵ= 10 −8 andα= 2, which gives
+more weight to training points that are closer in the param-
+eter space. The weights are then normalized to sum to unity,
+˜wi = wiPm
+j=1 wj
+.(16)
+The distance-weighted mean PCA coefficient vector is then
+given by
+µweighted =
+mX
+i=1
+˜wiµi,(17)
+whereµ i is the mean PCA coefficient vector for thei-th
+training point. The epistemic variance is then defined as the
+weighted variance of the mean PCA coefficient vectors across
+the training dataset,
+Σepistemic =
+mX
+i=1
+˜wi(µi −µ weighted)(µi −µ weighted)⊤,(18)
+which captures the uncertainty in the mean PCA coefficient
+vector due to interpolation in the parameter space and quan-
+tifies the spatial variation of the mean PCA coefficient vector
+as a function of (e b,qb). We note that this formulation is a
+first-order approximation that captures uncertainty in the in-
+terpolated mean coefficient vector due to spatial variation in
+the mean coefficient vector across the training dataset; uncer-
+tainty in the interpolated covariance matrix is not separately
+modeled. Since aleatoric and epistemic variances are inde-
+pendent, the final variance used in our emulator is their sum,
+Σtotal = Σaleatoric + Σepistemic,(19)
+where Σaleatoric is the covariance matrix of the multivariate
+Gaussian distribution over the PCA coefficients for a given
+(eb,qb) pair (see equation 12), and Σ epistemic is the epistemic
+variance defined above (equation 18). In§3, we show the effect
+of including the epistemic uncertainty on the emulator fidelity
+on the test set.
+3 MODEL SELECTION AND V ALIDATION
+Following the training and interpolation steps described in
+§2.3 and§2.4, we validate the performance ofcalypsousing
+a test dataset of 13 (eb,qb) pairs that were not included in the
+MNRAS000, 1–??(2026)
+
+calypso7
+Figure 4.Distribution of the training and test sets in the (e b,qb)
+parameter space. The training set consists of 100 (e b,qb) pairs
+shown in grey full circles, while the test set consists of 13 (e b,qb)
+pairs shown in orange stars. The test set is designed to evenly cover
+the parameter space of the training data, enabling us to validate
+the performance ofcalypsoacross the entire parameter space.
+training process. In Figure 4, we show the distribution of the
+test set in the (e b,qb) parameter space. Due to the computa-
+tional cost of the hydrodynamic simulations, we are limited
+in the number of test cases we can produce, and therefore we
+strategically select test cases that evenly cover the parameter
+space of the training data. Our test cases were picked by hand
+to ensure that they are evenly distributed across the parame-
+ter space, rather than using a random sampling method (such
+as Latin hypercube sampling), since this is unlikely to yield a
+well-distributed test set given the small number of test cases
+we can produce.
+First, we derive the number of PCA components required
+to maximize the performance of the emulator on the test
+set, while minimizing the dimensionality of the model (kfinal).
+Figure 5 shows the z-scored mean squared error (zMSE) of
+calypsopredictions on the test set as a function of the num-
+ber of PCA components retained in the model. Specifically,
+the zMSE is computed as follows. For each component of the
+time-series data, the residuals between the emulator predic-
+tions ˆyand the true valuesyare computed for each time
+pointiin the test set, yielding a vector of raw residuals,
+r(eb,qb),i = ˆyi −y i.(20)
+The standard deviation of the true values across windows for
+each test case and each time bin is then computed,
+σi =
+vuut 1
+N−1
+NX
+j=1
+(yj,i −¯yi)2,(21)
+whereNis the number of windows for the given test binary
+and ¯yi is the mean of the true values across those windows
+for time bini. The z-scored residuals are then computed by
+dividing the raw residuals by the standard deviation of the
+true values for each time bin,
+z(eb,qb),i = r(eb,qb),i
+σi
+.(22)
+Finally, the zMSE for each test case is computed as the mean
+of the squared z-scored residuals over all time bins,
+zMSE(eb,qb) = 1
+T
+TX
+i=1
+z2
+(eb,qb),i,(23)
+and the reported zMSE is the median across all test cases,
+zMSE = median
+ 
+zMSE(eb,qb)
+
+.(24)
+˙Mb, ˙M1, and ˙M2 are shown separately, with ˙Mb in blue, ˙M1
+in orange, and ˙M2 in green (a convention we use throughout
+the rest of the paper). The MSE is computed as follows. For
+each test binary, we draw coefficient vectors from the interpo-
+lator at truncation orderkand reconstructN synth = 500 full
+time series via the PCA basis. We then compare themeanof
+these synthetic realisations to the mean of the held-out test
+windows. This choice is deliberate: at a givenk, each realisa-
+tion is reconstructed from ak-dimensional coefficient sample,
+and every additional PCA component introduces an indepen-
+dent source of stochastic variation in the reconstructed time
+series. The total reconstruction variance of a single realisa-
+tion therefore grows withk. Averaging overN synth realiza-
+tions suppresses the variance contribution, isolating the bias
+and providing a cleaner diagnostic of how emulator fidelity
+depends on the truncation order.
+We then proceed to finding the optimal number of PCA
+components to retain in the final model,kfinal, across all three
+components. For each component, we find the global mini-
+mum of the zMSE across the values of k tested, and store
+the corresponding number of PCA components at which the
+zMSE is within 10% of the global minimum. We then take
+the intersection of these sets across the three components,
+and find the minimum number of PCA components in this
+intersection, which gives usk final. If no intersection exists, we
+take the smallest acceptablekfor each component individ-
+ually and adopt the largest of the three ask final, ensuring
+that even the most demanding component is adequately re-
+solved. Throughout the rest of the paper, we usek final PCA
+components in the model.
+We note that the zMSE scores in Figure 5 differ signif-
+icantly across the three components, with ˙M1 having the
+lowest zMSE and ˙M2 and ˙Mb having higher, comparable
+zMSEs. To diagnose where this per-component discrepancy
+originates, we isolate the contribution of the PCA basis from
+that of the (e b,qb) interpolator. In Figure 6, each test time
+series is projected directly onto the firstkbasis vectors and
+reconstructed, with no interpolation step involved, and the
+zMSE is computed between the reconstructed and original
+time series at eachk. This ‘basis-only’ diagnostic measures
+how efficiently the PCA basis itself captures variance in each
+component, independent of the emulator’s parameter-space
+interpolation, and is shown alongside the end-to-end zMSE
+of Figure 5 to disentangle the two error contributions. We
+find that the PCA basis captures the variance in ˙M1 more
+efficiently than in ˙Mb and ˙M2, which is consistent with the
+lower zMSE of ˙M1 in Figure 5. This indicates that the PCA
+basis itself is more efficient at capturing the variations in
+time-series properties of ˙M1 than ˙Mb and ˙M2, which is likely
+related to the fact that ˙M1 has lower variability amplitude
+and a more regular variability pattern across the parameter
+space than ˙Mb and ˙M2.
+In Figure 7, we show the effect of including the epistemic
+uncertainty on the emulator performance on the test set. For
+MNRAS000, 1–??(2026)
+
+8Magdalena Siwek et al.
+Figure 5.End-to-end zMSE of the fullcalypsopipeline ((e b,qb)
+interpolation followed by PCA reconstruction) on the test set, as a
+function of the number of PCA componentskretained, shown for
+each component of the time-series data: ˙Mb in blue, ˙M1 in orange,
+and ˙M2 in green. The zMSE is computed by drawing synthetic
+realisations from the emulator at each test (e b,qb) and comparing
+the mean of these realisations to the mean of the held-out test
+windows. The colored shaded regions indicate the RMS bias for
+a given range of zMSE values, with a RMS bias of 0 indicating a
+perfect emulator. A Pareto criterion across the three components
+is used to determine the optimal number of PCA components to
+retain in the final model,k final, which is indicated by the vertical
+dashed line and annotated marker.
+Figure 6.Basis-only zMSE on the test set as a function of the
+number of PCA componentsk, isolating the PCA basis from the
+(eb,qb) interpolator. Each test time series is projected directly onto
+the firstkbasis vectors and reconstructed; the zMSE is then com-
+puted against the original time series, with no interpolation step
+involved. Comparison with Figure 5 therefore disentangles how
+much of the end-to-end error originates from basis truncation ver-
+sus from the (eb,qb) interpolation. As in Figure 5, ˙M1 outperforms
+˙M2 and ˙Mb, indicating that the PCA basis captures the variance
+in ˙M1 more efficiently than in ˙Mb and ˙M2.
+this plot, we choose an extended metric over the zMSE uti-
+lized in the previous Figures 5 and 6. Instead of the zMSE of
+the mean of the synthetic realisations compared to the mean
+of the test windows, which captures the absolute bias of the
+emulator, we compute thez RMS error, which captures both
+bias and variance of the emulator predictions compared to
+the test set. We first compute the z-scorez i in each timebin
+of each window for each test case,
+zi = ˆyw,i −y i
+σi
+,(25)
+whereσ i is the standard deviation of the true values across
+windows for each test case and each time bin, ˆyw,i is the value
+of the emulator prediction for a single synthetic realisation in
+time bini, andy i is the mean of the true values of the held-
+out test case across windows for time bini.
+The distribution of these z-scores across all timebins and
+windows for each test case is then summarized by the root
+mean square (RMS) of the z-scores,
+zRMS =
+p
+⟨z2⟩=
+p
+⟨z⟩2 +σ 2z ,(26)
+where⟨z⟩is the mean of the z-scores across all timebins and
+windows for a given test case, andσz is the standard deviation
+of the z-scores across all timebins and windows for that test
+case. Thus,⟨z⟩isolates the bias of the emulator predictions
+compared to the test set, whileσ z isolates the variance of the
+emulator predictions compared to the test set. In a perfect
+emulator, we would expect the z-scores to be distributed as
+a standard normal distribution, with⟨z⟩= 0 andσ z = 1,
+yieldingz RMS = 1 as the ideal value.
+In Figure 7, where we compare the performance of the emu-
+lator with and without epistemic uncertainty, the realizations
+ˆyw,i are drawn from the multivariate Gaussian distribution
+over the PCA coefficients with and without the epistemic
+variance term, respectively. In the left panel of Figure 7, we
+show the⟨z⟩term of thez RMS error, which measures the bias
+of the emulator predictions compared to the test set. We find
+that including the epistemic uncertainty causes the bias to in-
+crease for all three components, indicating that drawing from
+a distribution with a larger variance leads to a worse match
+between the emulator predictions and the test set, and there-
+fore a larger bias. The right hand side of Figure 7 shows the
+σz term of thez RMS error, which measures the variance of
+the emulator predictions compared to the test set. We find
+that including the epistemic uncertainty causes the variance
+to increase for all three components. Specifically, the variance
+increase to values above 1 for all three components, indicating
+that the emulator predictions draw from a too-wide distribu-
+tion compared to the test set. We therefore do not include
+the epistemic uncertainty going forward, or in the default
+settings of the final public release ofcalypso, since it does
+not improve the performance of the emulator on the test set.
+4 EV ALUATION OF EMULATOR PERFORMANCE
+ACROSS THE PARAMETER SPACE
+In the following section we evaluate the performance ofca-
+lypsoacross the (e b,qb) parameter space. While the previous
+section focused on validating the performance ofcalypsoon
+the test set as a whole, this section focuses on investigating
+how the emulator performance varies across the parameter
+MNRAS000, 1–??(2026)
+
+calypso9
+Figure 7.Effect of including the epistemic uncertainty on the calibration ofcalypsopredictions on the test set, plotted as scatter of the
+metric value with epistemic OFF (x-axis) versus the same metric with epistemic ON (y-axis); each point is one of the 13 held-out test
+binaries, coloured by component ( ˙Mb, ˙M1, ˙M2). The dashed black line marksy=x(no change between settings); the dotted lines mark
+the perfectly-calibrated values. Left: mean of the per-time-bin z-score,⟨z⟩, which captures the bias of the emulator predictions relative
+to the test set; the ideal value is⟨z⟩= 0. The bias is systematically larger (in absolute value) when epistemic uncertainty is included.
+Right: standard deviation of the per-time-bin z-score,σ z, which captures the dispersion of the predictions relative to the test scatter; the
+ideal value isσ z = 1. With epistemic uncertainty on,σ z shifts above unity for all three components, indicating that the emulator draws
+from a distribution that is too wide compared to the test data.⟨z⟩andσ z together define the bias–dispersion decomposition ofz RMS
+(equation 26).
+space, and whether there are specific regions of the parame-
+ter space where the emulator performs better or worse.
+In Figure 8, we show the time-series data for the test set,
+with primary accretion rates on the top (green), and sec-
+ondary accretion rates on the bottom (orange). We again
+distribute the test cases across the parameter space with ec-
+centricity increasing from bottom to top and mass ratio in-
+creasing from left to right, as in Figure 4. The lighter green
+and orange lines and shaded regions show the mean and stan-
+dard deviation of the test windows, respectively, while the
+darker green and orange lines show the mean of the emu-
+lator predictions acrossN synth = 500 synthetic realisations.
+We find that the emulator performs well in capturing the
+variability patterns in the test set, noting that the most sig-
+nificant biases are in the primary variability of the binaries
+withe b=0.4,q b=0.25 ande b=0.2,q b=0.35. However, in most
+other cases, the emulator predictions are well within the stan-
+dard deviation of the test windows. The variability patterns
+of all binaries are well captured, in particular the periodicity
+and amplitude of the variability.
+In Figure 9, we show the distribution of the z-scores of the
+emulator predictions compared to the test set for all time bins
+and windows. Specifically, we aggregate the z-scores across all
+time bins and windows, forming a distribution of z-scores for
+each test case and each component of the time-series data.
+For each distribution, we compute the mean and standard
+deviation of the z-scores, which are shown in a text box in
+the upper-left of each panel. As in Figure 8, each test case
+and binary component is shown in a separate panel, follow-
+ing the same color scheme as in Figure 8. The test cases are
+distributed across the parameter space with eccentricity in-
+creasing from bottom to top and mass ratio increasing from
+left to right. We further plot the 1 and 2σintervals of a
+standard normal distribution as vertical dashed lines for ref-
+erence.
+In Figure 10, we investigate the performance of the emula-
+tor across the (e b,qb) parameter space by plotting thez RMS
+error of the emulator predictions for each test case. Around
+the set of test cases in the parameter space, we construct a
+Voronoi tessellation and color each Voronoi cell by thez RMS
+error of the corresponding test case. As explained in§3, the
+zRMS error captures both the bias and variance of the emu-
+lator predictions compared to the test set, with a value of 1
+indicating a perfect emulator. The choice of colormap is such
+that values close to 1 are shown in white, while values signif-
+icantly above 1 are shown in red, indicating a worse match
+between the emulator predictions and the test set. Blue val-
+ues have lowerz RMS than 1, indicating that the variance of
+the emulator predictions is smaller than the variance of the
+test set.
+We find that the binary withe b=0.8 andq b=0.15 has the
+highestz RMS, which is likely related to the fact that this bi-
+nary has a high variability amplitude and a complex variabil-
+ity pattern across the parameter space, (see Figure 8), making
+it more difficult for the PCA basis to capture its variability
+efficiently (see Figure 6). This binary is also near the edge of
+the parameter space covered by the training data, which may
+contribute to the higherz RMS due to the interpolation step
+of the emulator.
+MNRAS000, 1–??(2026)
+
+10Magdalena Siwek et al.
+Figure 8.calypsopredictions versus held-out test simulations for 12 of the 13 test (e b,qb) pairs, arranged on the parameter-space grid
+(eb increasing bottom to top,q b increasing left to right; cf. Figure 4). Each cell contains two stacked sub-panels: ˙M1 (top, green) and
+˙M2 (bottom, orange). The lighter line and shaded band show the mean and±1σscatter across 500 phase-aligned held-out windows; the
+darker line is the mean ofN synth = 500 stochasticcalypsorealisations (epistemic off). The horizontal axis spans one 10-orbit window
+in units ofP b; the vertical axis is ˙Mi/⟨ ˙Mb⟩. The largest biases occur in the primary variability of the binaries at (e b=0.4,q b=0.25) and
+(eb=0.2,q b=0.35).
+5 APPLICATION: SYNTHETIC LSST LIGHT CUR VES
+A central motivation forcalypsois the rapid generation of
+synthetic accretion light curves anywhere in the (e b,qb) pa-
+rameter space, which can then be combined with a radia-
+tive model to produce observable signatures. In this section
+we illustrate the end-to-end pipeline by convertingcalypso-
+emulated accretion-rate samples into apparent magnitudes in
+the LSSTg-band, for a set of binary configurations chosen to
+lieoffthe training and test grids. A reference implementation
+of this pipeline is included in the publiccalypsorelease.
+5.1 From accretion rate to apparent magnitude
+For a binary with total massM b, mass ratioq b≡M 2/M1 ∈
+(0,1], and Eddington fractionf Edd, the physical accretion
+rate onto each componenti∈ {1,2}is obtained by rescaling
+the dimensionlesscalypsooutputs ˙m i ≡ ˙Mi/ ˙MEdd by the
+binary-wide Eddington rate,
+˙MEdd = fEdd LEdd(Mb)
+η c2 , L Edd(Mb) = 4πGMbmpc
+σT
+,
+(27)
+whereη= 0.1 is the radiative efficiency,m p the proton
+mass andσ T the Thomson cross-section. The component
+mass enters the mini-disk radiative model and is given by
+M1 =M b/(1 +q b) andM 2 =q b Mb/(1 +q b).
+MNRAS000, 1–??(2026)
+
+calypso11
+Figure 9.Per-binary z-score distributions for the same 12 of 13 test (e b,qb) pairs as in Figure 8, with the same grid layout and the
+same component colours ( ˙M1 top/green, ˙M2 bottom/orange). The z-score is computed per time bin, by subtracting the mean of the
+held-out test windows from each synthetic emulator realisation and normalising by the standard deviation of the test windows. Each
+histogram aggregatesz-scores over all time bins ofN synth = 500 phase-alignedcalypsorealisations and is density-normalised. Faint
+dashed verticals markz=±1,±2. The upper-left text box reports the panel’s⟨z⟩andσ z; the upper-right box repeats (e b,qb). Perfect
+calibration corresponds to⟨z⟩= 0,σ z = 1 (see also Figure 7).
+Each accreting component is modelled as a geometrically
+thin, optically thick Shakura–Sunyaev disk extending be-
+tween an inner radiusr min = 20GM i/c2 (chosen to exclude
+the innermost region that emits primarily in X-rays and is
+poorly described by the thin-disk approximation) and an
+outer radiusr max. For simplicity in this section we adopt
+a steady-state circumbinary prescription for the outer radius
+of each mini-disk, which is a fixed fraction of the binary sep-
+arationa b
+rmax = 0.27a b,(28)
+which is independent of orbital phase and binary parameters
+other thana b. The local effective temperature of the disk
+follows the standard thin-disk profile,
+T(R) =
+ 
+3GM i ˙Mi
+8πσR3
+!1/4
+,(29)
+whereσis the Stefan–Boltzmann constant. Each annulus ra-
+diates as a blackbody, so that the spectral luminosity of com-
+ponentiat rest-frame wavelengthλ em is
+Lλ,i(λem, t) =
+Z rmax
+rmin
+4π2R Bλ
+ 
+λem, T(R, t)
+
+dR,(30)
+withB λ the Planck function. The full binary spectrum is the
+sumL λ(t) =L λ,1(t) +L λ,2(t).
+To translateL λ into an LSST-band AB magnitude at red-
+shiftz, we integrate over the rest-frame band that maps to
+the observed bandpass, [λem
+min, λem
+max] = [λobs
+min, λobs
+max]/(1+z). A
+MNRAS000, 1–??(2026)
+
+12Magdalena Siwek et al.
+Figure 10.Per-binaryz RMS across the 13 held-out test cases in the (e b,qb) parameter space. From left to right, panels show the binary,
+primary, and secondary accretion-rate components ( ˙Mb, ˙M1, ˙M2); the horizontal axis isq b and the vertical axis ise b. Each cross marks
+a test case, and the surrounding Voronoi cell is colored by that case’sz RMS (defined in§3), aggregated over all time bins ofN synth = 500
+phase-alignedcalypsorealisations. The diverging RdBu colormap (shared colorbar, right) is anchored atz RMS = 1, the value expected
+when the emulator predictive scatter matches the held-out scatter: red cells flagz RMS >1 (emulator biased or under-dispersed), blue
+cells flagz RMS <1 (over-dispersed).
+K-correction relates the resulting band-integrated rest-frame
+luminosityL band to the observed monochromatic flux den-
+sity at the bandpass pivot wavelengthλ obs
+pivot (e.g., Hogg et al.
+2002),
+fν =
+Lband
+
+λobs
+pivot
+2
+4π D2
+L(z) (1 +z) ∆λem c ,(31)
+whereD L(z) is the luminosity distance for a flat ΛCDM cos-
+mology (H 0 = 70 km s −1 Mpc−1, Ω m = 0.3) and ∆λ em is
+the rest-frame bandpass width. The apparent AB magnitude
+is then
+mAB =−2.5 log 10
+ fν
+erg s−1 cm−2 Hz−1
+
+−48.6.(32)
+5.2 On the choice of outer disk radius
+The steady-state assumption of equation (28) is a deliberate
+simplification: in eccentric or unequal-mass binaries the per-
+component Roche lobe contracts and expands on the orbital
+timescale. This effect can be seen by eye in hydrodynamic
+simulations, and adds a time-varying component to the disk
+structure. A more physical prescription truncates each mini-
+disk at its instantaneous Roche radius. Using the Eggleton
+approximation (Eggleton 1983),
+rER(t) =r b(t)· 0.49q 2/3
+0.6q 2/3 + ln
+ 
+1 +q 1/3 ,(33)
+with the instantaneous binary separationr b(t) =a b [1−
+eb cosE(t)] andE(t) the eccentric anomaly, the outer ra-
+dius modulates with the orbital phase and depends on the
+mass ratio of the considered component to its companion
+(q=M i/Mj̸=i).
+This time-varying outer radius introduces an additional,
+purely geometric source of variability that can amplify the
+optical-band variability peaks emerging from the underlying
+accretion-rate oscillations captured bycalypso. The ampli-
+tude of this effect is non-trivial and depends sensitively on
+the assumed disk thermal response time relative to the orbital
+period. A self-consistent treatment requires coupling the disk
+thermal/viscous evolution to the orbital phase, which is be-
+yond the scope of this paper. We therefore adopt the simpler
+steady prescription throughout this section, and note that
+rER(t) should be considered when interpreting periastron-
+phased modulations in observed candidates.
+5.3 Synthetic LSSTg-band light curves
+Figure 11 shows the resulting binary apparent magnitudes
+for three off-grid binary configurations chosen to span dis-
+tinct dynamical regimes: a near-circular equal-mass binary, a
+moderately eccentric and moderately unequal-mass system,
+and a strongly eccentric, asymmetric system. None of the
+(eb,qb) values lie on thecalypsotraining or test grids —
+they are fully synthesized via Cholesky-space interpolation.
+The mean and 1σscatter are computed across 100 stochastic
+calypsodraws per case. For the chosen reference configura-
+tion (Mb = 107 M⊙,z= 1,f Edd = 0.1), all three regimes sit
+within∼1 mag of the LSSTg-band 5σsingle-visit limit, with
+the eccentric configurations dipping below the limit at perias-
+tron. We contrast three such cases to show that, for a given set
+of binary parameters, the variability amplitude and pattern
+can differ significantly, with the more eccentric and unequal-
+mass systems showing stronger variability and sharper peaks
+at periastron than the near-circular equal-mass system. The
+binary parameters will likely have a significant effect on the
+variability pattern, and therefore on the detectability of the
+binary in time-domain surveys, in particular when the appar-
+ent magnitude is close to the survey detection limit.
+6 SUMMARY AND DISCUSSION
+We have developedcalypso, a fully stochastic PCA-based
+emulator for the accretion variability of eccentric, unequal-
+mass binaries across a wide range of eccentricities and mass
+MNRAS000, 1–??(2026)
+
+calypso13
+Figure 11.Synthetic LSSTg-band apparent magnitudes for three off-gridcalypsobinary configurations, showing the binary-total signal
+˙Mb. Mean and 1σshaded bands are computed acrossN draws = 100 stochasticcalypsosamples per case. Reference parameters: total
+binary massM b = 107 M⊙, semi-major axisa b = 10−3 pc corresponding to an orbital periodP b ≈0.94 yr, redshiftz= 1.0, Eddington
+fractionf Edd = 0.1, and radiative efficiencyη= 0.1. The mini-disk extends fromr min = 20GM i/c2 tor max = 0.27a b as in equation (28).
+The pink shaded band marks the LSSTg-band 5σsingle-visit depth (m AB = 25.0); fluctuations dipping into this band fall below per-visit
+detectability but remain accessible in coadded stacks. The (e b,qb) cases shown — (0.05,0.95), (0.43,0.47), (0.72,0.28) — were chosen to
+lie strictly between training-grid points to highlight that the curves are fully synthesized via Cholesky-space interpolation in the (e b,qb)
+plane.
+ratios. Trained on a suite of 2D hydrodynamic simulations of
+circumbinary accretion,calypsoreproduces the time-series
+data on which it was trained and interpolates smoothly in
+the (e b,qb) parameter space using a multivariate Gaussian
+distribution over the PCA coefficients. A z-scored MSE esti-
+mate on the test set was used to select the number of PCA
+components retained in the final model, yieldingk final = 142
+components and capturing≳90% of the variance in the train-
+ing data. Beyondk final, the zMSE on the test set plateaus,
+so additional components are omitted to keep the final model
+compact.
+We have validatedcalypsoon a test set of 13 (e b,qb) pairs
+that were not included in training, and find that it performs
+well in capturing the variability patterns of the held-out sim-
+ulations. In particular, the periodicity and amplitude of the
+variability are well reproduced. We do not identify any spe-
+cific region of the parameter space where the emulator per-
+forms significantly better or worse than another, with only
+a few outliers showing larger biases (e.g.e b=0.40,q b=0.25
+ande b=0.20,q b=0.35; see Figure 8) or higher variance (e.g.
+eb=0.25,q b=0.85 ande b=0.45,q b=0.65; see Figure 9) than
+the rest of the test set.
+A key feature ofcalypsois its ability to capture both the
+short-term stochastic variability in the accretion time series
+and the long-term modulation due to disk precession. This is
+achieved by including multiple time windows for each (eb,qb)
+pair in the training dataset, which allows the PCA basis
+to capture the stochasticity of the accretion variability, and
+by modelling the distribution of the PCA coefficients across
+these windows as a multivariate Gaussian. This approach cap-
+tures the aleatoric uncertainty arising from the intrinsic vari-
+ability of the accretion process. We have also developed an
+estimate for the epistemic uncertainty, which arises from the
+limited number of training samples and the interpolation in
+the (eb,qb) parameter space. However, we find that including
+the epistemic uncertainty does not improve performance on
+the test set; instead it inflates the variance of the emulator
+predictions, and we therefore do not include it in the default
+settings ofcalypso. In other words, the aleatoric component
+alone already reproduces the variance observed in the held-
+out simulations, and our particular estimator of the epistemic
+uncertainty over-counts the additional spread introduced by
+interpolation in the (eb,qb) plane beyond what the validation
+data support.
+We have further demonstrated the end-to-end pipeline of
+usingcalypsoto generate synthetic accretion-rate time series
+for arbitrary (eb,qb) pairs and to convert them into synthetic
+LSSTg-band light curves with a simple radiative model. For
+a binary with a given mass, separation, redshift and accretion
+rate, the variability pattern and amplitude vary significantly
+across (eb,qb) pairs, with potentially significant consequences
+for the detectability of such binaries in time-domain surveys.
+6.1 Caveats and Future Work
+A number of caveats apply to the present version ofcalypso,
+both on the training-data side and on the modelling assump-
+tions in the emulator and its downstream applications.
+calypsois trained on a specific suite of 2D hydrodynamic
+simulations, and its predictions are only as good as the un-
+derlying simulations. The training simulations adopt a lo-
+cally isothermal equation of state, a fixed disk aspect ratio,
+and a fixed Shakura-Sunyaev viscosity parameterα. These
+assumptions need not hold in real circumbinary disks, whose
+thermodynamics can be more complicated;calypsopredic-
+tions should therefore be interpreted accordingly when ap-
+plied to observed systems.calypsoalso interpolates within
+the trained (e b,qb) box but does not extrapolate beyond it,
+and the multivariate Gaussian assumption on the PCA coeffi-
+cients (validated in Appendix B) is an approximation that we
+have verified empirically rather than derived from first princi-
+ples. Each emulator draw covers a fixed window of 10 binary
+orbits; longer time series can be stitched from independent
+windows, but secular drift on timescales≫P b is not captured
+by such stitching. Finally, the radiative pipeline used in§5 is
+itself idealized. It assumes a thin Shakura-Sunyaev disk with
+MNRAS000, 1–??(2026)
+
+14Magdalena Siwek et al.
+a steady-stater max = 0.27a b, no radiation reprocessing, wind
+or jet contribution, or relativistic effects. Therefore, the syn-
+thetic LSST magnitudes should be read as a transfer-function
+illustration of the emulator’s output rather than a dogmatic
+prediction. On the diagnostics side, our primary performance
+metric is the per-time-bin z-score and its summary statistics
+(Figures 6, 9). The z-scored MSE uses only the marginal stan-
+dard deviation at each time bin and therefore captures errors
+in the marginal predictive distribution, but is insensitive to
+errors in the temporal covariance of the emulated time series.
+It does not capture how wellcalypsoreproduces correlations
+between neighbouring (or distant) time bins. We discuss po-
+tential future diagnostics that explicitly probe the temporal
+covariance below.
+Several extensions are natural follow-ups to this work.
+First, the emulator can be augmented with additional binary
+and disk parameters such as the disk aspect ratio and viscos-
+ityα, as more simulations covering these dimensions of the
+parameter space become available. Second,calypsocan be
+extended to emit time series of user-specified length, rather
+than the fixed 10-orbit window of the current version. For
+now, users can stitch together independent 10-orbit predic-
+tions to obtain longer time series, with the secular caveat
+noted above. Third, we plan to disentangle the short-term
+stochastic variability from the long-term modulation due to
+disk precession. One route is to add the precession angle as a
+training-time parameter: variability at fixed precession angle
+could then be attributed to the stochastic component, while
+variability across precession angles would isolate the secular
+modulation. Fourth, we plan to perform parameter inference
+on the held-out simulations using the closed-form likelihood
+derived in Appendix A, to quantify how tightly (eb,qb) can be
+recovered from a noisy variability pattern, which is the nat-
+ural prerequisite to applyingcalypsoto real time-domain
+candidates from surveys such as LSST. We anticipate us-
+ingcalypsoin tandem with public radiative-transfer tools
+such asbinlite(D’Orazio et al. 2024), which is currently
+being extended to unequal-mass binaries, to translate em-
+ulated accretion-rate time series into synthetic photometry
+and spectra. Fifth, in addition to the per-time-bin z-score
+used here, future evaluations of the emulator can use statis-
+tics that explicitly probe the temporal covariance in the time
+series. Examples include auto- and cross-correlation functions
+of the accretion rates, or the Mahalanobis distance under a
+non-diagonal time-bin covariance estimate.
+To our knowledge,calypsoprovides the first stochastic em-
+ulator of accretion variability across the eccentric, unequal-
+mass binary parameter space. As 3D hydrodynamic and
+MHD simulations, broader disk-parameter coverage, and cou-
+pled radiative pipelines become available, they can be folded
+intocalypsowithout restructuring its PCA and interpola-
+tion backbone, so that the emulator can continue to serve
+as a bridge between hydrodynamic predictions and the time-
+domain surveys that motivated it.
+7 INSTALLATION AND USAGE
+We have developedcalypsoas a Python package, and it can
+be downloaded and installed via pip from the Python Package
+Index (PyPI) as follows,
+pip install calypso-emulator
+with the main emulator usage pattern,
+import calypso
+emulator = calypso.load_emulator()
+synth = emulator.predict(eb, qb)
+whereebandqbare the eccentricity and mass ratio of the
+binary, respectively, andsynthcontains the synthetic time-
+series data generated by the emulator for the specified pa-
+rameters.
+8 ACKNOWLEDGEMENTS
+This work was supported by a grant from the Simons Foun-
+dation International [SFI-MPS-SFJ-00006123, MSS]. This re-
+search was supported in part by grant NSF PHY-1748958
+to the Kavli Institute for Theoretical Physics (KITP). MS
+acknowledges early conversations about this project with
+Maria Charisi at the KITP Circumbinary Disk workshop
+(2022), Steve Taylor and Lars Hernquist, and later discus-
+sions with Zoltan Haiman and Andrew MacFadyen. MS
+thanks Chiara Mingarelli for helpful suggestions on the
+public-facingcalypsodemo. M.H. is supported by the Si-
+mons Collaboration on “Learning the Universe”.
+The computations in this paper were run on the FASRC
+Cannon cluster supported by the FAS Division of Science
+Research Computing Group at Harvard University. The hy-
+drodynamic simulations were performed with theArepocode
+(Springel 2010; Pakmor et al. 2016). This work made use
+of the following open-source software:numpy(Harris et al.
+2020),scipy(Virtanen et al. 2020),matplotlib(Hunter
+2007),scikit-learn(Pedregosa et al. 2011), andastropy
+(Astropy Collaboration et al. 2022).
+DATA A V AILABILITY
+Thecalypsosource code is publicly available on Zenodo
+(Siwek et al. 2026) and developed openly on GitHub at
+https://github.com/mssiwek/calypso. The GitHub repos-
+itory includes documentation on how to usecalypsoto make
+predictions for arbitrary (e b,qb) pairs within the parame-
+ter space covered by the training data, as well as exam-
+ple scripts and Jupyter notebooks to demonstrate its usage.
+The PCA training basis, interpolation tables, and hydrody-
+namic time series underlying this work are archived on Zen-
+odo (Siwek 2026). An interactive web demo is available at
+https://calypso.streamlit.app/.
+APPENDIX A: LIKELIHOOD FOR PARAMETER
+INFERENCE
+A natural application ofcalypsois inference of the binary
+parameters (eb,q b) from observed accretion-rate time series.
+Our generative model is a multivariate Gaussian over a finite
+set of PCA coefficients (§2.3,§2.4), so the corresponding like-
+lihood is also Gaussian and we can write it down in closed
+form.
+Lety obs ∈R 3T be an observed accretion time series,
+formed by concatenating the de-trended, time-aligned ˙Mb,
+˙M1, and ˙M2 identically to the training pre-processing (§2.2).
+LetV∈R 3T×k be the retained PCA basis matrix atk=k final
+MNRAS000, 1–??(2026)
+
+calypso15
+withV ⊤V=I k, and ¯y∈R 3T the training-set column mean.
+We assume thaty obs is well represented by the firstkPCA
+components, so that measurement noise and truncation resid-
+uals are small relative to the in-basis variability of the model.
+Thecalypsoforward model is then
+y= ¯y+V c, c∼ N(µ(e b, qb),Σ(e b, qb)),(A1)
+whereµ(e b, qb) and Σ(eb, qb) are the interpolated coefficient
+mean and covariance from§2.4.
+We first project the observation onto the basis. BecauseV
+is orthonormal, multiplying both sides of equation (A1) by
+V ⊤ inverts the basis expansion and recovers the coefficient
+vector that corresponds toy obs,
+cobs =V ⊤(yobs −¯y)∈R k.(A2)
+The projectionc obs is a deterministic, parameter-independent
+function ofy obs, so it carries the same information about (eb,
+qb) as the original observation.
+The forward model in equation (A1) gives us a probability
+density over coefficients,
+p(c|e b, qb) = 1p
+(2π)k |Σ|
+exp
+h
+− 1
+2(c−µ) ⊤Σ−1(c−µ)
+i
+,(A3)
+withµ=µ(e b, qb) and Σ = Σ(e b, qb) the interpolated mean
+and covariance. Read as a function ofcat fixed parameters,
+equation (A3) is the standard normalised density that inte-
+grates to one overc∈R k. We want to read it instead as a
+function of the parameters at fixed observed data, which is
+the definition of a likelihood. Specifically, we define the like-
+lihood as the probability density of the observedy obs, taken
+as a function of the parameters with the data held fixed,
+L(eb, qb |y obs)≡p(y obs |e b, qb) =p(c obs |e b, qb)·J,(A4)
+whereJis the Jacobian factor from the change-of-variables
+formula, which we now determine.
+The change-of-variables formula for probability densities
+relates the densities of two variables connected by a smooth
+invertible transformation: the two densities differ by a mul-
+tiplicative factor that accounts for how the transformation
+locally stretches or compresses volumes. For our linear pro-
+jectionc=V ⊤(y−¯y), that factor is
+J= 1p
+det(V ⊤V)
+,(A5)
+which measures by how much the projection scales volumes
+on thek-dimensional coefficient subspace. The columns ofV
+are PCA basis vectors obtained from the SVD in§2.3 and
+are unit-norm and pairwise orthogonal by construction, so
+V ⊤V=I k and det(Ik) = 1. The Jacobian factor is therefore
+J= 1: geometrically, an orthonormal projection preserves
+lengths, and so it preserves volumes; no volume element is
+stretched or compressed in moving fromy obs toc obs. Equa-
+tion (A4) then reduces to
+L(eb, qb |y obs) =p(c obs |e b, qb).(A6)
+Taking the logarithm of equation (A3) atc=c obs and
+collecting the parameter-independent− k
+2 log(2π) Gaussian
+normalisation into a single additive offset, we obtain
+logL(e b, qb |y obs) =− 1
+2(cobs −µ) ⊤Σ−1(cobs −µ)
+− 1
+2 log|Σ|+const.
+(A7)
+The first term is the squared Mahalanobis distance between
+the observed coefficient vector and the predicted mean, with
+deviations weighted by the inverse covariance: it is small when
+cobs lines up withµ(e b, qb), and large when it does not. The
+second term penalises parameter points where Σ has a large
+determinant. Without it, the Mahalanobis term alone would
+always prefer broader covariances, since a wider Σ shrinks
+Σ−1 and therefore reduces (cobs−µ)⊤Σ−1(cobs−µ) regardless
+of how well Σ actually matches the spread of the residuals.
+The constant term collects everything that does not depend
+on (eb, qb). The cost of evaluating equation (A7) at a single
+(eb, qb) is dominated by the Cholesky-factor interpolation of
+§2.4.
+To turn the likelihood into a probability distribution
+over the parameters, we apply Bayes’ theorem with a prior
+p(eb, qb) on the training-grid support,
+p(eb, qb |y obs) = L(eb, qb |y obs)p(e b, qb)
+p(yobs)
+∝L(e b, qb |y obs)p(e b, qb).
+(A8)
+The denominatorp(y obs) is the marginal likelihood, which
+does not depend on (e b, qb) and is the normalisation that
+makes the posterior integrate to one over the parameter
+space. Standard MCMC or nested-sampling routines do not
+require it explicitly, and so we can sample the posterior di-
+rectly from the unnormalised right-hand side.
+Two caveats apply. First, the analytic likelihood assumes
+thaty obs has been pre-processed identically to the training
+data, with the same time grid, de-trending, and column-mean
+subtraction. Real observations of accretion variability are typ-
+ically light curves rather than direct accretion rates, so ap-
+plying equation (A7) requires recovering an estimate of the
+accretion-rate time seriesyfrom the observed magnitudesm
+before projecting onto the PCA basis. This means inverting
+the radiative-transfer pipeline (§5) to gety obs fromm, and
+then applying equations (A2) and (A7) as written. The inver-
+sion is not always well-posed, sincemdepends on integrated
+disk quantities and may not be uniquely invertible. Second,
+the likelihood inherits the modelling assumptions of the train-
+ing simulations (locally isothermal EOS, fixedh/r, fixedα;
+§2.1), so posteriors on (e b,q b) should be interpreted within
+that scope.
+APPENDIX B: GAUSSIANITY OF THE PCA
+COEFFICIENTS
+Our sampling method draws PCA coefficients from a multi-
+variate Gaussian fit to the training-set distribution (§2). Here
+we quantify the residual departure from Gaussianity in each
+per-mode coefficient distribution and check that it is small
+enough for that generative model to be a useful approxima-
+tion across the (e b,qb) training grid.
+For each binary in the training set, we project the concate-
+nated accretion-rate windows onto the global PCA basis and
+obtain coefficient samplesc k for modesk∈[1, K]. For each
+mode separately, we standardize the coefficients,
+zk = ck − ⟨ck⟩
+σ(ck) ,(B1)
+and quantify how far the resulting empirical distribution sits
+MNRAS000, 1–??(2026)
+
+16Magdalena Siwek et al.
+from the standard normalN(0,1) using the first Wasserstein
+distance (Villani 2009),
+W1,k =
+Z ∞
+−∞
+Fn,k(z)−Φ(z)
+ dz,(B2)
+whereF n,k is the empirical CDF of thenstandardized sam-
+ples{z (i)
+k }n
+i=1 for that binary (n= 500 training windows per
+mode), and Φ is the CDF ofN(0,1). We evaluate this as the
+mean absolute QQ-plot residual,
+W1,k ≈ 1
+n
+nX
+i=1
+z(i)
+k −Φ −1
+ i−1/2
+n
+ ,(B3)
+in units ofz(standardized standard deviations). Unlike for-
+mal goodness-of-fit test statistics (e.g. Anderson–Darling or
+Kolmogorov–Smirnov), which scale withnunder any non-
+Gaussian alternative so as to drive the test toward rejection
+at large sample sizes,W 1,k does not amplify withn: under
+any fixed underlying distribution it converges to the true dis-
+tance between that distribution andN(0,1), so the absolute
+value ofW 1,k remains directly interpretable as az-unit dis-
+placement.
+To obtain a single per-binary score, we aggregateW1,k over
+the retained modes, weighted by the global PCA explained-
+variance ratios,
+¯W1 =
+KX
+k=1
+˜λk W1,k,(B4)
+where ˜λk are the explained-variance ratios normalized over
+the retained modes, so that the modes contributing most
+strongly to the global representation dominate the score.
+Figure B1 shows the resulting heatmap across the (e b,qb)
+training grid. The aggregate ¯W1 ranges from a few percent
+to roughly 0.6 standard deviations across the training set,
+with the bulk of binaries in the 0.05–0.2 range and a small
+number of cases reaching the upper end of that range. Fig-
+ure B2 shows the underlying per-mode histograms for three
+representative cases (best, median, and worst ¯W1) at modes
+k∈ {1,10,50,100}, withW 1,k printed in each panel. In the
+best and median cases, the empirical distributions overlay
+N(0,1) closely across all four sampled modes; in the worst
+case,z 1 is over-concentrated near zero (two narrow spikes
+flanking the origin, with thin tails), whilez k≥10 recovers
+a Gaussian shape. The per-binary deviations fromN(0,1)
+stay well within a standard deviation across the entire grid,
+which we take as “good enough” for our Gaussian sampling
+assumption. We note that the worst-case binary identified
+here, (e b=0.4,q b=0.3), sits adjacent to one of the largest
+residual biases in the end-to-end emulator predictions (Fig-
+ure 8, ate b=0.4,q b=0.25), suggesting that the residual non-
+Gaussianity in this region of parameter space may contribute
+to the bias observed there.
+Figure B1.Per-binary variance-weighted Wasserstein-1 distance
+¯W1 = P
+k ˜λk W1,k between the standardized PCA coefficient dis-
+tributions andN(0,1), across the (e b,qb) training grid; the hori-
+zontal axis isq b and the vertical axis ise b. Values are in units of
+standardized standard deviations, so ¯W1 =Xmeans the empiri-
+cal CDFs differ from Φ by an average ofX z-units. Lower values
+(darker) indicate distributions closer to Gaussian.
+MNRAS000, 1–??(2026)
+
+calypso17
+Figure B2.Standardized PCA coefficient distributions for three representative training cases (columns) and selected modesk(rows):
+from left to right, the binaries with the lowest, median, and highest ¯W1 in Figure B1. Each panel shows the empirical histogram of
+zk = (c k − ⟨c k⟩)/σ(ck) overlaid with a standard normalN(0,1) reference; the per-mode Wasserstein-1 distanceW 1,k (inz-units) is
+printed in the upper-left of each panel, and each column header gives the binary (e b,qb) and its ¯W1. In the best case all four sampled
+modes trackN(0,1) closely; in the worst case the dominant mode is over-concentrated near zero — two narrow spikes with thin tails rather
+than a smooth bell — butz k≥50 recovers a Gaussian shape. Even in the worst case the per-mode deviations are bounded (W 1,k ≲1),
+supporting the use of the Gaussian sampler as a tractable approximation rather than an exact match.
+MNRAS000, 1–??(2026)
+
+18Magdalena Siwek et al.
+REFERENCES
+Agazie G., et al., 2023a, ApJ, 951, L8
+Agazie G., et al., 2023b, ApJ, 952, L37
+Antoniadis J., et al., 2023, The second data release from
+the European Pulsar Timing Array III. Search for gravita-
+tional wave signals, doi:10.48550/ARXIV.2306.16214,https:
+//arxiv.org/abs/2306.16214
+Astropy Collaboration et al., 2022, ApJ, 935, 167
+Charisi M., Bartos I., Haiman Z., Price-Whelan A. M., Graham
+M. J., Bellm E. C., Laher R. R., M´ arka S., 2016, Monthly
+Notices of the Royal Astronomical Society, 463, 2145–2171
+Cocchiararo F., Franchini A., Lupi A., Sesana A., 2024, Astronomy
+&amp; Astrophysics, 691, A250
+D’Orazio D. J., Haiman Z., MacFadyen A., 2013, Monthly Notices
+of the Royal Astronomical Society, 436, 2997–3020
+D’Orazio D. J., Duffell P. C., Tiede C., 2024, The Astrophysical
+Journal, 977, 244
+Eggleton P. P., 1983, ApJ, 268, 368
+El-Badry K., Hogg D. W., Rix H.-W., 2026, Publications of the
+Astronomical Society of the Pacific, 138, 024102
+Farris B. D., Duffell P., MacFadyen A. I., Haiman Z., 2014, The
+Astrophysical Journal, 783, 134
+Graham M. J., et al., 2015a, Monthly Notices of the Royal Astro-
+nomical Society, 453, 1562–1576
+Graham M. J., et al., 2015b, Nature, 518, 74–76
+Harris C. R., et al., 2020, Nature, 585, 357
+Hogg D. W., Baldry I. K., Blanton M. R., Eisenstein D. J., 2002,
+arXiv e-prints, pp astro–ph/0210394
+Hunter J. D., 2007, Computing in Science & Engineering, 9, 90
+Ivezi´ cˇZ., et al., 2019, ApJ, 873, 111
+Lin A., Charisi M., Haiman Z., 2026, The Astrophysical Journal,
+997, 316
+Liu T., et al., 2019, The Astrophysical Journal, 884, 36
+MacFadyen A. I., Milosavljevi´ c M., 2008, The Astrophysical Jour-
+nal, 672, 83
+Miranda R., Mu˜ noz D. J., Lai D., 2016, Monthly Notices of the
+Royal Astronomical Society, 466, 1170
+Moody M. S. L., Shi J.-M., Stone J. M., 2019, The Astrophysical
+Journal, 875, 66
+Mu˜ noz D. J., Springel V., Marcus R., Vogelsberger M., Hernquist
+L., 2013, MNRAS, 428, 254
+Mu˜ noz D. J., Lai D., Kratter K., Miranda R., 2020, ApJ, 889, 114
+Mu˜ noz D. J., Lai D., 2016, The Astrophysical Journal, 827, 43
+Mu˜ noz D. J., Miranda R., Lai D., 2019, The Astrophysical Journal,
+871, 84
+Pakmor R., Springel V., Bauer A., Mocz P., Munoz D. J., Ohlmann
+S. T., Schaal K., Zhu C., 2016, MNRAS, 455, 1134
+Park K., Haiman Z., Xin C., Shen T., Villar A., Davelaar J., 2026,
+Physical Review D, 113
+Pedregosa F., et al., 2011, Journal of Machine Learning Research,
+12, 2825
+Ragusa E., Alexander R., Calcino J., Hirsh K., Price D. J.,
+2020, Monthly Notices of the Royal Astronomical Society, 499,
+3362–3380
+Reardon D. J., et al., 2023, The Astrophysical Journal Letters,
+951, L6
+Shi J.-M., Krolik J. H., Lubow S. H., Hawley J. F., 2012, The
+Astrophysical Journal, 749, 118
+Siwek M., 2026, CALYPSO runtime artifact and training/test
+dataset, doi:10.5281/zenodo.20027762,https://doi.org/10.
+5281/zenodo.20027762
+Siwek M., Weinberger R., Mu˜ noz D. J., Hernquist L., 2023a, MN-
+RAS, 518, 5059
+Siwek M., Weinberger R., Hernquist L., 2023b, MNRAS, 522, 2707
+Siwek M., Ho M., Bellinger E., 2026, calypso: a Parameter-
+Conditioned Stochastic Surrogate Model for Circumbinary Ac-
+cretion Time-Series, doi:10.5281/zenodo.XXXXXXX,https:
+//doi.org/10.5281/zenodo.XXXXXXX
+Springel V., 2010, Monthly Notices of the Royal Astronomical So-
+ciety, 401, 791
+Tiede C., Zrake J., MacFadyen A., Haiman Z., 2020, The Astro-
+physical Journal, 900, 43
+Villani C., 2009, Optimal Transport: Old and New. Grundlehren
+der mathematischen Wissenschaften Vol. 338, Springer,
+doi:10.1007/978-3-540-71050-9
+Virtanen P., et al., 2020, Nature Methods, 17, 261
+Xin C., Isi M., Farr W. M., Haiman Z., 2026, The Astrophysical
+Journal, 999, 149
+Xu H., et al., 2023, Research in Astronomy and Astrophysics, 23,
+075024
+Zrake J., Tiede C., MacFadyen A., Haiman Z., 2021, ApJ, 909, L13
+MNRAS000, 1–??(2026)

@@ -1,0 +1,1306 @@
+Title: $\tt BlackHawk$ $\tt v3.0$: Hawking Radiation from Regular Black Holes
+Authors: Alexandre Arbey, Marco Calzà, Léa Malacher, Davide Pedrotti, Yuber F. Perez-Gonzalez
+Published: 2026-06-04
+Categories: gr-qc, astro-ph.CO, hep-ph
+
+IFT-UAM/CSIC-26-69
+BlackHawk v3.0: Hawking Radiation from Regular Black Holes
+Alexandre Arbey,1,∗ Marco Calz` a,2, 3,† L´ ea Malacher,1,‡ Davide Pedrotti,2, 3,§ and Yuber F. Perez-Gonzalez 4,¶
+1Universit´ e Lyon 1, CNRS, IP2I, UMR 5822, Villeurbanne, France
+2Department of Physics, University of Trento, Via Sommarive 14, 38123 Povo (TN), Italy
+3Trento Institute for Fundamental Physics and Applications (TIFPA)-INFN. Via Sommarive 14, 38123 Povo (TN), Italy
+4Departamento de F´ ısica Te´ orica and Instituto de F´ ısica Te´ orica (IFT) UAM/CSIC,
+Universidad Aut´ onoma de Madrid, Cantoblanco, 28049 Madrid, Spain
+We presentBlackHawk v3.0, a major update of the public code designed to compute Hawk-
+ing radiation spectra of black holes. Building upon previous versions, this release considerably
+extends the range of black hole geometries that can be studied by implementing several new spher-
+ically symmetric metrics: the Bardeen and Hayward regular black holes, the Simpson-Visser and
+Peltola-Kunstatter black-bounces, the D’Ambrosio-Rovelli black hole-to-white hole metric, and the
+Babichev-Charmousis-Leh´ ebel black hole. For each metric, we compute the corresponding Hawking
+temperatures and greybody factors, enabling the determination of primary Hawking emission spec-
+tra for particles of different spins. The greybody factors are obtained through dedicated numerical
+routines based on the companion codeGrayHawk. Additionally,BlackHawk v3.0introduces several
+technical improvements aimed at enhancing precision and efficiency, providing a highly versatile
+tool. The code is publicly available at https://blackhawk.hepforge.org/
+CONTENTS
+I. Introduction 2
+II. New features 3
+A. Metrics 3
+1. Bardeen Black Hole 4
+2. Hayward Black Hole 5
+3. Simpson-Visser Black Bounce 5
+4. Peltola-Kunstatter Black Bounce 6
+5. D’Ambrosio-Rovelli Black Hole-to-White Hole Metric 6
+6. Babichev-Charmousis-Leh´ ebel Black Hole 7
+B. Code Improvements 7
+1. Greybody Factors 8
+2. Improved Kerr tables 9
+III. Parameters 11
+IV. Validation 11
+V. Conclusions 12
+Acknowledgments 13
+VI. Appendix 13
+A. Mathematica notebooks derived from GrayHawk 13
+B. Notebooks for the Kerr Case 14
+References 15
+∗ alexandre.arbey@ens-lyon.fr
+† marco.calza@unitn.it
+‡ lmalacher@ip2i.in2p3.fr
+§ davide.pedrotti-1@unitn.it
+¶ yuber.perez@uam.es
+arXiv:2606.06355v1  [gr-qc]  4 Jun 2026
+
+2
+I. INTRODUCTION
+Black Holes (BHs) provide a unique framework for testing our understanding of the Universe [1]. The vast array of
+observational signatures collected over the past decades [2], together with recent experimental breakthroughs—such
+as the direct observation of supermassive BH shadows by the Event Horizon Telescope [3–5] and the detection of
+gravitational waves from compact binary mergers by the LIGO/Virgo/KAGRA collaborations [6–8], have transitioned
+BHs from hypothetical objects to primary laboratories for testing gravity and fundamental physics in the strong-field
+regime, where departures from General Relativity (GR) might first manifest [8–58]. The success of these observational
+milestones, alongside the development of future missions—including next-generation ground-based gravitational-wave
+detectors like the Einstein Telescope [59, 60] and Cosmic Explorer [61, 62], the space-based LISA observatory [63], the
+Next-Generation EHT (ngEHT) [64–66], and the Black Hole Explorer [67], see [68] for a comprehensive overview—has
+also renewed interest in more speculative scenarios that could become observationally accessible in the near future.
+Among these, Primordial Black Holes (PBHs) have arguably attracted the most widespread attention as uniquely
+versatile probes of both early-Universe cosmology and fundamental physics, see Refs. [69–78] for reviews. PBHs
+are hypothetical objects formed in the very early Universe through the direct collapse of large density perturbations
+upon horizon re-entry [79–186]. Although currently undetected, they remain of significant theoretical interest. Indeed,
+forming deep in the radiation-dominated era, PBHs evade Big Bang Nucleosynthesis (BBN) constraints on the baryon
+abundance, making them viable cold Dark Matter (DM) candidates, particularly within the so-called asteroid-mass
+window, 10 17 g≲M pbh ≲10 23 g [187–202]. This possibility has been widely discussed in the literature, yielding
+numerous constraints on PBH abundance across different mass scales. Indeed, PBHs can span a vast mass range,
+determined solely by their formation time, and, quite interestingly, those formed at the earliest epochs would be
+light enough to exhibit quantum properties. Incorporating these quantum effects in highly curved spacetimes led
+Hawking to discover black hole evaporation, establishing a profound connection between gravity, thermodynamics,
+and quantum mechanics [203–206]. In the semiclassical regime, particle emission causes a BH to lose mass and
+eventually evaporate completely. Because the Hawking temperature is inversely proportional to the BH mass, the
+temperature rises during evaporation, leading to the emission of increasingly energetic particles and, theoretically, the
+entire spectrum of fundamental degrees of freedom [207–209]. This continuous process yields potentially observable
+signatures in gamma rays, cosmic rays, neutrinos, or cosmological observables like BBN and the Cosmic Microwave
+Background (CMB), offering novel avenues to search for dark sectors and physics Beyond the Standard Model (BSM)
+[113, 114, 179–183, 210–227].
+These phenomenological prospects necessitate robust numerical tools capable of accurately tracking complex decay
+cascades and computing the final particle emission spectra originating from Hawking evaporation. To this end, the
+public codeBlackHawkwas introduced as a flexible framework for calculating these spectra for generic BH populations,
+enabling users to constrain the PBH dark matter fraction or predict Hawking radiation signals for future instruments
+[228, 229]. Historically, Hawking radiation was also considered a means to detect microscopic BHs evaporating in high-
+energy colliders like the LHC, prompting the development of earlier codes such asBlackMax[230] andCharybdis[231].
+Previous versions ofBlackHawkimplemented the evaporation of Schwarzschild, Kerr, charged, higher-dimensional,
+and polymerized BHs, alongside the computation of primary and secondary spectra for both Standard Model and
+BSM particles.
+Recently, some of the authors proved that consideringregularBH (RBH) metrics can significantly alter PBH
+evaporation constraints, indicating that the theoretical resolution of spacetime singularities has direct, calculable
+phenomenological consequences for the interplay between BHs and DM [185, 186, 232–234]. Born from the expectation
+that quantum gravity must smooth out the singularities predicted by classical theory, these geometries typically
+substitute the central singularity with a regular core, such as a localized de Sitter vacuum or a wormhole throat.
+Consequently, they serve as excellent phenomenological prototypes to explore how microscopic quantum corrections
+manifest macroscopically in black hole spacetimes. The findings of [185, 186, 232–234] highlighted the need for
+BlackHawk v3.0, a comprehensive tool designed to describe the Hawking radiation ofnon-singularandbeyond-
+Schwarzschildgeometries. Building on previous iterations, v3.0 introduces several singularity-free metrics, focusing on
+regular and quantum-gravity-inspired spacetimes. Specifically, it incorporates the Bardeen [235] and Hayward [236]
+regular BHs, the Simpson–Visser [237] and Peltola–Kunstatter [238] black bounces, the D’Ambrosio–Rovelli [239]
+spacetime, and the Babichev–Charmousis–Leh’ebel (BCL) [240] BH, an exact solution within a subclass of Horndeski
+theories of particular interest for the study of quasinormal modes [241]. For these models, the code computes Hawking
+spectra using dedicated numerical routines from the companion codeGrayHawk[242], which evaluates the GreyBody
+Factors (GBFs) that quantify the energy-dependent departure of the emission from a pure blackbody spectrum [242].
+It is worth mentioning thatGrayHawk v2[243], which enables the user to consider the scattering of waves on many
+black hole and wormhole metrics in a semi-analytical or fully numerical way, is twinned-released with the release of
+BlackHawk v3.0. Beyond the new metrics,BlackHawk v3.0features significant technical optimizations, as e.g. the
+ones described in [244], improving interpolation routines, data table handling, and overall code efficiency, thereby
+
+3
+facilitating future extensions to more general BH models and BSM scenarios.BlackHawk v3.0is publicly available
+at
+https://blackhawk.hepforge.org/.
+This paper is organized as follows. In Sec. II, we detail the new metrics implemented inBlackHawk v3.0, summarizing
+their primary geometric and thermodynamic properties, alongside the main technical improvements introduced in the
+code. In Sec. III, we list the new input parameters available to the user. Section IV is dedicated to code validation,
+where we compare our results against established literature benchmarks to verify the accuracy of the new numerical
+routines. Finally, we summarize our conclusions and discuss future perspectives in Sec. V. Unless otherwise specified,
+we use geometrized units withG=c=k B =ℏ= 4πε 0 = 1.
+II. NEW FEA TURES
+This Section is devoted to the description of the new features ofBlackHawk v3.0. We grouped them into two
+categories:MetricsandCode improvements. Some of these add-ons imply a modification of some parameters and
+routines, which are listed in Section III.
+A. Metrics
+It is well known that, in General Relativity (GR), continuous gravitational collapse of matter, under physically
+reasonable energy conditions, leads to spacetimesingularities[245, 246]. Curvature singularities, characterized by
+the divergence of curvature invariants and geodesic incompleteness, lead to the breakdown of predictability and,
+presumably, of the classical theory itself. Generally, singularities are regarded as indicators that GR is incomplete
+and should be replaced, at sufficiently high energies, by a quantum theory of gravity. This motivated the construction
+of numerous models in which the singularity is replaced by a regular portion of spacetime. Those objects are dubbed
+Regular BHs (RBHs), if the central singularity is replace by a smooth core, most commonly de-Sitter, or Black
+Bounces (BBs), if the singularity is avoided by altering the internal topology, by adding a “bounce” or a throat that
+connects to another region of spacetime [232–234, 247–299].
+RBHs and BBs attracted increasing attention in recent years after the development of several frameworks like
+non-linear electrodynamics, effective quantum gravity corrections, polymer quantization, modified gravity theories,
+or phenomenological regularization prescriptions. As shown in [232–234], such spacetime regularizations incur mod-
+ifications in both the Hawking temperature and the greybody factors, thus changing the phenomenology relative to
+the Schwarzschild case. Many RBHs and BBs are characterized by a decrease in the Hawking temperature with
+respect to the standard case as the regularizing parameter increases. This leads to slower evaporation and potentially
+longer-lived PBHs. At the same time, non-trivial modifications of the emitted spectra may be generated by the
+different greybody factors’ shapes that may enhance or dim specific energy ranges. Consequently, constraints on PBH
+abundances derived from evaporation observables can be substantially modified when regular metrics are considered
+[232–234]. These results suggest that the resolution of spacetime singularities may have direct phenomenological
+implications for the interplay between BH physics, dark matter, and quantum gravity.
+Since the publication of its last versions [228, 229], we updatedBlackHawkby adding some new singularity-free
+metrics: the BCL BH metric [240], an exact solution of a special subclass of Horndeski theories, two regular BH
+metrics, namely the Bardeen and Hayward BHs, two black bounces, the Simpson-Visser and Peltola-Kunstatter BB,
+and a black hole-to-white hole geometry, i.e., the D’Ambrosio-Rovelli metric.
+All the metrics considered here enjoy spherical symmetry, and their line element can be written in the following
+general form, in Boyer-Lindquist coordinates:
+ds2 =−G(r)dt 2 +F(r) −1dr2 +H(r)dΩ 2,(1)
+wheredΩ 2 =dθ 2 + sin2 θdφ2 is the metric on the 2-sphere and the metric functionsF(r), G(r),andH(r) are such
+that
+G(r)
+r→∞
+− − − →1, F(r)
+r→∞
+− − − →1, H(r)
+r→∞
+− − − →r2 ,(2)
+namely, the spacetimes are asymptotically flat. BHs whose line element can be recast in the form of Eq. (1) in
+Boyer-Lindquist coordinates fall into the Petrov-D type category [300]; we refer the interested reader to [301, 302] for
+a comprehensive discussion on the Petrov classification.
+
+4
+We now introduce an important quantity for what follows, namely the Hawking temperatureTof a black hole,
+which is defined as
+T=
+s
+F(r)
+G(r)
+G′(r)
+4π
+
+rH
+,(3)
+where we adopted the Gibbons–Hawking definition, thereby implicitly assuming a standard Boltzmann–Gibbs distri-
+bution. In Eq. (3) ′ denotes differentiation with respect tor, whiler H is the event horizon radius, which is defined as
+the largest real root ofF(r) = 0. In what follows, we present a list of the new BH metrics implemented inBlackHawk
+v3.0. We note that the functionsF(r),G(r), andH(r) depend on the radial coordinate and on a regularizing param-
+eterℓ, ranging from a minimum valueℓ= 0, which recovers the Schwarzschild solution, and a maximum valueℓ M ax
+which in general differs for different BHs. For this reason, we normalized the regularizing parameter by defining
+l≡ℓ/ℓ max ∈[0,1).(4)
+Because the physical interpretation of regularizing parameters differs across models, the treatment of BH evolution
+in regular spacetimes requires particular care. In some constructions, the regularizing parameter may correspond
+to a conserved charge or a dynamical quantity that evolves during evaporation; in others, it emerges as an effective
+parameter inherited from an underlying high-energy theory and may remain approximately constant throughout the
+evaporation process. Given the present theoretical uncertainties,BlackHawk v3.0adopts a conservative and agnostic
+approach: while instantaneous Hawking spectra are computed for all implemented metrics, the code, in its current
+version, does not attempt to model the time evolution of BHs unless a consistent dynamical framework is available.
+1. Bardeen Black Hole
+The Bardeen BH [235] is one of the most well-known examples of RBHs and, to the best of our knowledge, the first
+RBH that appeared in the literature. It is defined by the line element
+ds2 =−
+
+1− 2M r2
+(r2 +ℓ 2)3/2
+
+dt2 +
+
+1− 2M r2
+(r2 +ℓ 2)3/2
+−1
+dr2 +r 2dΩ2 ,(5)
+whereℓis the regularizing parameter andMdenotes the BH mass. 1 It is easy to see that the Schwarzschild limit
+is smoothly recovered asℓ→0. For the metric Eq. (5) to describe a BH rather than a horizonless object, the
+regularizing parameterℓmust satisfyℓ≤
+p
+16/27M≈0.77M. An alternative, arguably more physically motivated,
+parametrization is obtained by expressing the regularizing parameter as a fraction of the horizon radiusr H. In this
+reparametrization,ℓis constrained to beℓ≲0.70r H, a limit which is saturated in the regime where the temperature
+vanishes. A notable feature of the Bardeen BH is the presence of a de Sitter (dS) core that replaces the Schwarzschild
+singularity. Indeed, asr→0, the metric function behaves asG(r) =F(r)∝r 2, consistent with the structure of an
+asymptotically dS spacetime. Although initially introduced as a phenomenological model, the Bardeen BH has since
+been shown to arise as a magnetic monopole configuration [303] within specific nonlinear electrodynamics models [304].
+Alternative origins have also been proposed, including quantum corrections to the uncertainty principle [305].
+The temperature of the Bardeen BH, given as a function ofl≡
+p
+27/16ℓ/M, so thatl∈[0,1), is given by:
+T= 1
+4πrH
+r2
+H − 32
+27 M2l2
+ 
+r2
+H + 16
+27 M2l2 ,(6)
+wherer H is obtained by solving
+
+r2
+H + 16
+27 M2l2
+3/2
+= 2M r2
+H .(7)
+1 For all metrics considered in this work, the parameterMappearing in the metric function can be unambiguously identified with the
+BH mass (Komar, ADM, Misner–Sharp–Hernandez, or Brown–York).
+
+5
+2. Hayward Black Hole
+Another well-known example of RBH is the Hayward BH [236], which is defined by the line element:
+ds2 =−
+
+1− 2M r2
+r3 + 2M ℓ2
+
+dt2 +
+
+1− 2M r2
+r3 + 2M ℓ2
+−1
+dr2 +r 2dΩ2 .(8)
+Also, in this case, it is straightforward to see that the Schwarzschild solution is smoothly recovered in theℓ→0
+limit. When expressed in terms of the BH massM, the regularizing parameterℓis subject to the same bound as the
+Bardeen BH, namelyℓ≤
+p
+16/27M. Alternatively, if one adopts the re-parametrization in terms of the horizon radius
+rH, the constraint becomesℓ≲0.57r H, which, again, corresponds to the regime where the temperature vanishes.
+Exactly as in the Bardeen BH case, the Hayward space-time features a de Sitter (dS) core that replaces the central
+singularity. In fact, Hayward’s original motivation was precisely to resolve the singularity by introducing a dS core
+with an effective cosmological constant Λ = 3/ℓ 2. Despite being proposed phenomenologically, possible theoretical
+origins of the Hayward black hole have since been explored. These include modifications to the equation of state of
+matter at high densities [306, 307], finite-density and finite-curvature effects [308–310], models based on nonlinear
+electrodynamics [311, 312], and, more broadly, quantum-gravity–induced corrections [313, 314].
+The temperature of the Hayward BH, given as a function ofl≡
+p
+27/16ℓ/M, so thatl∈[0,1), is given by:
+T= 1
+4πrH
+
+1− 16
+9
+l2M2
+r2
+H
+
+(9)
+wherer H is obtained by solving
+r3
+H = 2M r2
+H − 32
+27 M3l2.(10)
+3. Simpson-Visser Black Bounce
+The Simpson–Visser metric is a one-parameter extension of the Schwarzschild metric and is arguably the most pop-
+ular example of black-bounce geometry. As Simpson and Visser themselves describe it, this construction “represents
+the minimal violence to the standard Schwarzschild solution” required to enforce regularity [237]. The line element
+of the Simpson-Visser spacetime reads
+ds2 =−
+
+1− 2M√
+r2 +ℓ 2
+
+dt2 + dr2
+1− 2M√
+r2+ℓ2
++ (r2 +ℓ 2)dΩ 2.(11)
+The Simpson-Visser space-time exhibits a rich phenomenology, smoothly interpolating between a BH and a traversable
+wormhole, depending on the value of the regularizing parameter; in particular
+•forℓ= 0, it reduces to the Schwarzschild BH;
+•for 0< ℓ <2M, it describes a RBH with a one-way spacelike throat;
+•forℓ= 2M, it yields a one-way wormhole with an extremal null throat;
+•forℓ >2M, it describes a traversable wormhole with a two-way timelike throat.
+Since its introduction, the Simpson-Visser metric has been the subject of numerous follow-up studies (see, for example
+Refs. [315–325]). Although originally motivated from a phenomenological perspective, it can also arise as a solution
+of general relativity coupled to nonlinear electrodynamics and a minimally coupled phantom scalar field [326].
+The temperature of the Simpson-Visser BH, given as a function ofl≡ ℓ
+2M , is given by:
+T=
+√
+1−l 2
+8πM (12)
+using the fact that
+rH = 2M
+p
+1−l 2.(13)
+
+6
+4. Peltola-Kunstatter Black Bounce
+The Peltola–Kunstatter space-time is a loop quantum gravity (LQG)–inspired metric obtained by applying effective
+polymerization techniques to the Schwarzschild BH. While LQG is expected to resolve the singularities inherent in
+general relativity, the complexity of the full quantum system motivates the use of semiclassical polymer quantization
+methods. These provide an alternative to standard Schr¨ odinger quantization—unitarily inequivalent but retaining the
+key feature of spacetime discreteness. In the Peltola–Kunstatter construction, polymerization is applied to the area
+variable but not to the conformal mode. This leads to a geometry in which the central singularity is replaced by a com-
+plete, nonsingular bounce: the spacetime contracts to a minimum radius before re-expanding into a Kantowski–Sachs
+universe [238, 327]. The line element reads
+ds2 =−
+ r−2M√
+r2 +ℓ 2
+
+dt2 + dr2
+r−2M√
+r2+ℓ2
++ (r2 +ℓ 2)dΩ2.(14)
+The Peltola-Kunstatter space-time is an example of a RBH metric derived from quantum gravity considerations, in
+contrast to the more phenomenologically motivated constructions discussed earlier.
+The temperature of the Peltola-Kunstatter BH does not have a maximum value for its regularizing parameter. To
+maintain consistency with the other choices, we took a value ofℓ M ax = 2Mand, therefore, expressedl≡ℓ/2M, so
+thatl∈[0,1), and the temperatures read:
+T= 1
+8πM
+√
+1 +l 2 (15)
+using the fact thatr H = 2M.
+5. D’Ambrosio-Rovelli Black Hole-to-White Hole Metric
+The D’Ambrosio–Rovelli space-time, also motivated by LQG, was originally developed with aims other than sin-
+gularity resolution. It provides a natural extension of the Schwarzschild geometry in which ther= 0 singularity is
+smoothly crossed into the interior of a white hole, and can be regarded as theℏ→0 limit of an effective quantum
+gravity metric [239, 328]. This black hole–to–white hole tunnelling mechanism has been suggested as a possible avenue
+toward resolving the information loss paradox. For our purposes, the key property is that the D’Ambrosio-Rovelli
+metric is regular. The line element reads:
+ds2 =−
+
+1− 2M√
+r2 +ℓ 2
+
+dt2 + dr2
+1− 2M√
+r2+ℓ2
+
+1 + ℓ√
+r2 +ℓ 2
+
++ (r2 +ℓ 2)dΩ2.(16)
+As with the Peltola-Kunstatter space-time, the D’Ambrosio-Rovelli metric is a well-motivated, quantum grav-
+ity–inspired example of a regular geometry. Notably, the existence of primordial D’Ambrosio-Rovelli BH would
+necessarily imply the presence of long-lived primordial white holes, arising from quantum transitions near the would-
+be singularity. This could give rise to an intriguing phenomenology, though a detailed investigation lies beyond the
+scope of this work.
+The temperature of the D’Ambrosio-Rovelli BH, given as a function ofl≡ ℓ
+2M , so thatl∈[0,1), is given by:
+T=
+√
+1−l
+8πM (17)
+using the fact that
+rH = 2M
+p
+1−l 2.(18)
+
+7
+6. Babichev-Charmousis-Leh´ ebel Black Hole
+The Babichev-Charmousis-Leh´ ebel (BCL) metric [240, 329] is a black hole solution of a subset of Horndeski theories
+referred to as the quadratic shift-symmetric theories, which are described by the action
+S[gµν, ϕ] =
+Z
+d4x
+
+F(X)R+P(X) +Q(X)□ϕ+ 2 ∂F
+∂X
+ 
+ϕµνϕµν −(□ϕ) 2
+,(19)
+whereX≡ ∇ µϕ∇µϕandϕ µν ≡ ∇ µ∇νϕ. The action Eq. (19) features no cubic terms in the second derivative of the
+scalar fieldϕ, and it is invariant under constant shifts of the scalar fieldϕitself, hence the name. The BCL black hole
+is a solution of the theory in the special case when
+F(X) =F 0 +F 1
+√
+X, P(X) =−P 1X, Q(X) = 0,(20)
+withF 0, F1, P0 being constants. The BCL solution is described by the line element (1), with the metric functions
+given by
+G(r) =F(r) =−
+
+1− r+
+r
+
+1 + r−
+r
+
+, H(r) =r 2 (21)
+wherer + andr − are related to the functions (20) by
+r+r− = F 2
+1
+2F0P1
+, r + −r − = 2M, r + > r − >0.(22)
+Interestingly, this metric can be recast in a form that resembles that of the Reissner-Nordstr¨ om black hole by intro-
+ducing the parameterℓ≡2 r+r−
+2r2 = F 2
+1
+F0P1r2s
+. With this definition, the metric functions can be written as:
+F(r) =G(r) = 1− 2M
+r − 4M2ℓ
+2r2 ,(23)
+We notice that, despite the resemblance made explicit in Eq. (23), the BCL black hole cannot be mapped into the
+Reissner-Nordstr¨ om solution of general relativity as it features only one horizon atr +. This makes the BCL BH
+fundamentally different from the Reissner-Nordstr¨ om one which, on the contrary, is characterized by two physical
+horizons. We also want to stress that the BCL metric, from which the Schwarzchild metric is recovered in the limit
+ξ→0, is not regular, as ther= 0 essential singularity is not cured. Nevertheless, this BH solution stands out for its
+simplicity and for being one of the few solutions from modified gravity for which the quasinormal modes [330–332]
+for both physical and test field perturbations have been extensively studied [241, 329, 333]. The temperature of the
+BCL BH, given as a function ofl≡ r−
+r+
+, so thatl∈[0,1], is given by:
+T= l2 −1
+8πM (24)
+where we used the fact that
+rH = 2M
+1−l .(25)
+B. Code Improvements
+We discuss here the technical improvements made to the previous versions of the code [228, 229]. More specifically,
+we adopted a new way of computing GBFs, by means ofGrayHawk[242], a public code developed by one of us;
+we improved the precision of Kerr tables, following the discussion of some of us in [244]; and we improved on the
+interpolation routines of the previous versions ofBlackHawk. In particular, for the interpolation of high- and low-
+energy extrapolations, we now interpolate on the values of the extrapolating functions instead of on their coefficients,
+and we checked that this leads to more stable results.
+
+8
+0.0 0.2 0.4 0.6 0.8 1.0
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+
+T/TS
+Schwarzschild
+Bardeen
+Hayward
+Simpson-Visser
+Peltola-Kunstatter
+D'Ambrosio-Rovelli
+BCL
+FIG. 1. Temperature dependence on thelparameters for the different types of BHs included inBlackHawk v3.0normalized
+to the temperature of a Schwarzschild BH.
+1. Greybody Factors
+The Hawking radiation rate of a given particle speciesiwith spins, as predicted by Hawking [203–206], is given by
+d2Ni
+dtdEi
+= 1
+2π
+X
+l,m
+niΓs
+l,m(ω)
+eω/T ±1 ,(26)
+wheren i is the number of degrees of freedom of the particle in question,E i =ωis the mode frequency (in natural
+units), and the plus (minus) sign in the denominator is associated with fermions (bosons). Γ s
+l,m are the GBFs. The
+latter are functions of energy/frequency and angular momentum which govern the deviation of the emitted spectrum
+from that of a blackbody [334–336]. Although the emitted Hawking radiation at the horizon takes the blackbody form,
+the potential barrier due to space-time geometry will attenuate the radiation, so that an observer at spatial infinity
+will measure a spectrum which differs from that of a blackbody by a frequency-dependent function Γ(ω). GBFs
+can be characterized by setting up a classical scattering problem around the BH potential barrier, with boundary
+conditions allowing for incoming wave packets from infinity or, equivalently, due to the symmetries of the scattering
+problem, originating from the horizon. As mentioned in Sec. II A, for BHs whose metric is in the form of Eq. (2), the
+temperatureT, is given by Eq. (3), leaving the GBFs as the only undetermined quantity in Eq. (26). The GBFs of the
+newly implemented metrics, discussed in Sec. II A, are computed usingGrayHawk[242], a public code for calculating
+the GBFs of generic spherically symmetric BHs, developed by one of us. The GBFs are mathematically defined as
+the transmission coefficients of the scattering problem for test fields evolving on the background geometry defined
+by the metric tensor of a given black hole. The Newman-Penrose formalism [337] provides a unified framework for
+expressing the field equations of different spinsin a single equation, known as the Teukolsky equation [338–341].
+After performing a variable transformation, the radial component of the Teukolsky equation can be rewritten in a
+particularly compact and convenient form, commonly referred to as the Schr¨ odinger-like form,
+∂2
+r∗ ψs(r∗) +
+
+ω2 −V s(r(r∗))
+
+ψs(r∗) = 0,(27)
+withr ∗ the tortoise coordinate, defined by
+dr∗
+dr = 1√
+F G
+,(28)
+
+9
+whereFandGare the metric functions defined in Eq. (2).
+The Schr¨ odinger-like form of the Teukolsky equation is particularly suitable for the computation of the scattering
+problem since the potentialV s(r(r∗)) is typically vanishing on the asymptotesr ∗ → ±∞, leading to plane wave
+asymptotic solutions∼e ±iωr∗
+. Finally, imposing purely in-going boundary conditions at the event horizon and
+integrating out the solution, it is possible to compute the transmission coefficient or GBFs of the problem. For
+practical reasons, we computed the values of a single helicity/color degree of freedom emissivity
+Qslm ≡
+Γs
+l,m
+eE′/T−(−1) 2s ,such thatQ s =
+X
+l,m
+Qslm,(29)
+for 50 values of 0<l<0.99 and for a range of 200 energies 0.01≤x≡Er S ≤5 andlup to 10. Forxout of this
+range, we fit empirical asymptotic forms to the emissivities; we refer the reader to [228, 229].
+2. Improved Kerr tables
+In the previous versions ofBlackHawk, the framework discussed above was generalized to rotating BHs by means
+of a clever choice of radial coordinates, which allows for reducing the rotating version of the Teukolsky equation into
+a Schr¨ odinger-like equation. Specifically, the Kerr metric in Boyer-Lindquist coordinates (t, r, θ, φ) reads
+ds2 =−
+
+1− 2M r
+Σ
+
+dt2 − 4M arsin2 θ
+Σ dtdφ+ Σ
+∆ dr2 + Σdθ2 +
+
+r2 +a 2 + 2M a2rsin 2 θ
+Σ
+
+sin2 θdφ2 (30)
+whereMis the mass of the BH,a=J/Mis the BH angular momentum, ∆ =r 2 +a 2 −2M r, and Σ =r 2a2 cos2 θ.
+In Kerr spacetime, the Teukolsky equation for the radial componentR s of a field with spinsis given by
+∆−s∂r(∆(s+1)∂rRs) +
+
+(K2 −2is(r−M)K)∆ −1 + 4isωr− s Qm
+l
+
+Rs = 0,(31)
+where sQm
+l =s Am
+l +a 2ω2 −2aωm,K= (r 2 +a 2)ω−maand sAm
+l (aω) are the eigenvalues of the spin-weighted
+spheroidal harmonics. In a series of papers, Chandrasekhar and Detweiler [342–344] proved that Eq. (31) can be
+greatly simplified by adopting the following change of variables
+dr∗
+dr = ρ2
+∆ ,(32)
+withρ 2 ≡r 2 +a 2 −am/ω, andmbeing the azimuthal number of the specific mode. Integrating Eq. (32) with a
+vanishing integration constant yields:
+r∗(r) =r+ rSr+ −am/ω
+r+ −r −
+log
+ r
+r+
+−1
+
+− rSr− −am/ω
+r+ −r −
+log
+ r
+r−
+−1
+
+,(33)
+where we have defined the Schwarzschild radiusr S = 2Mandr ± as the outer (event) and inner (Cauchy) horizons of
+the Kerr BH, which read:
+r± ≡ rS
+2
+
+1±
+p
+1−a 2∗
+
+,(34)
+wherea ∗ ≡a/M. With the new radial coordinate Eq. (33), the radial part of the Teusolsky equation in Kerr
+spacetime Eq. (31) can be recast into a Schr¨ odinger-like form, as in Eq. (27). However, the price to pay for this
+great simplification is the fact that, forω < ω s ≡am/(r Sr+), the functionr ∗(r) is not invertible, a requirement
+that is essential for numerically solving the Teukolsky equation in its Schr¨ odinger-like form. Specifically, in the
+abovementioned frequency regime, the functionr ∗(r) exhibits a minimum aroundr min = 1.5M, which makes it
+globally non-invertible, but locally invertible on two monotonic branches, see Fig. 1 of [244]. In previous versions
+ofBlackHawk[228, 229], the issue of non-invertibility ofr ∗(r) was addressed by inverting the function on the two
+monotonic branches, effectively bypassing the minimumr min and using the solution on the first branch as a boundary
+condition for the integration on the second branch. In a recent paper [244], some of us showed that this method leads
+to numerical inaccuracies, particularly in the superradiant regime, leading to severe overestimation of the Hawking
+radiation spectrum for highly-spinning black holes. In the same paper, an alternative method based on re-scaling
+radial coordinates and employing Frobenius-like expansions was discussed, and the greater numerical stability over
+
+10
+the previously discussed method was assessed. This new formalism, which is briefly summarized in what follows, is
+implemented in the new version ofBlackHawk, for computing the GBFs of rotating BHs.
+By introducing a rescaling of the radial coordinate
+x≡ r−r +
+r+
+(35)
+the radial part of the Teukolsky equation, Eq. (31) can be written as
+x2(x+τ) 2∂2
+xR(x) + (s+ 1)(2x+τ)x(x+τ)∂ xR(x) +V(x)R(x) = 0,(36)
+where the effective potential is given by 2
+V(x) =k 2 −is(2x+τ)k+ (4isωr +(x+ 1)− s Qm
+l )x(x+τ) (37)
+beingk= (2−τ)(ω−mΩ H)r+ +x(x+ 2)ωr + andτ= (r + −r −)/r+. The imposition of purely ingoing boundary
+conditions near the event horizon can be expressed as a Frobenius series [346–353]
+Rs(x) =x −s− iϖ
+τ
+∞X
+n=0
+anxn (38)
+which is typically used for solving second-order differential equations [232, 233]. Hereϖ≡(2−τ)(¯ω−m ¯ΩH) and
+barred quantities are normalized to the horizon radius, e.g., ¯ω=ωr +. The asymptotic form of the solution, far from
+the BH, takes the form [338]:
+Rs(x)∼ Rlm
+s,in
+r+
+e−i¯ωx
+x + Rlm
+s,out
+r2s+1
++
+ei¯ωx
+x2s+1 .(39)
+The normalization of the scattering problem is set by choosinga 0 = 1 in Eq. (38). The GBFs can then be computed
+from theR lm
+s,in(ω) coefficient as:
+Γs
+lm(ω) =δ s|Rlm
+s,in(ω)|−2,(40)
+where the coefficientδ s is given by:
+δs =−ie iπs ¯ω(2s−1)
+1
+2
+1−2s Γ(1−s+i2 ϖ
+τ )
+Γ(s+i2 ϖ
+τ ) τ(41)
+where Γ is Euler’s gamma function. The near-horizon solution Eq. (38) is used as a boundary condition for the
+numerical integration of the radial Teukolsky equation up to large radial distances. Finally, to extract the value of
+Rlm
+s,in, needed to compute the GBFs according to Eq. (40), the numerical solution at large radial distance is matched
+to the asymptotic form of Eq. (39). This method, dubbeddirect methodin [244], was shown to perform significantly
+better in terms of numerical stability, as compared to the Schr¨ odinger-like approach for highly spinning BHs. For this
+reason, in the latest version ofBlackHawk, thedirect methodhas replaced the old one for the calculation of the GBFs
+of rotating BHs. Specifically, we used the direct method to recompute from scratch thegamma tablesof Kerr BH for
+test fields of spins= 0,1/2,1,3/2,2. We finally checked the consistency of our results by comparing them against
+some existing benchmarks in the literature [179, 180, 182, 183, 354].
+We present theQ slm fors= 0 (left),s= 1 (right) anda ⋆ = 0.99 as function ofEr S in Fig. (2). Eachl=m
+mode is colored, while the totalQ s is presented as a black line. We observe that the contribution of thel=mmode
+dominates the emission for highly spinning black holes, while the rest of the modes contribute in a negligible manner.
+Additionally, for the scalar case, we observe that thel=m= 0 mode contribution, not affected by the enhancement
+from the BH angular momentum, is about 1 order of magnitude smaller than thel=m= 1 case, demonstrating that
+even for scalars, the dominating mode is the latter one.
+2 We notice that in [181, 242, 244, 345], there is a typo reporting Eq. (37). Specifically, the potential term contained 4isω(x+ 1) instead
+of the correct 4isωr +(x+ 1). We underline that this typo has no consequences on the conclusions provided in those papers since all
+computations were performed settingr + = 1.
+
+11
+0 1 2 3 4 5
+10-6
+10-5
+10-4
+0.001
+0.010
+ErS
+Ql
+0
+Σl Ql
+0
+Q0
+0
+Q1
+0
+Q2
+0
+Q3
+0
+Q4
+0
+Q5
+0
+Q6
+0
+0 1 2 3 4 5
+10-6
+10-5
+10-4
+0.001
+0.010
+ErS
+Ql
+1
+Σl Ql
+1
+Q1
+1
+Q2
+1
+Q3
+1
+Q4
+1
+Q5
+1
+Q6
+1
+FIG. 2. Emission spectraQ s
+l = P
+m Qs
+lm in the case of Kerr BHs fors= 0 (left) ands= 1 (right), assuming a value of
+a⋆ = 0.99. We present the individual contributions of thelmodes up to a value ofl= 6 and thetotalcontributionQ s obtained
+by summing over all modes in black.
+III. P ARAMETERS
+The input parameters used byBlackHawkare listed in a parameter file (e.g.,parameters.txtfor the pre-built
+one). This file can be modified by the user and is saved for each new run of the code in the results/ directory.
+Here we report only the newly introduced modification with respect to the previous version ofBlackHawk. Namely,
+the entrymetric=nallows the selection of the newly introduced BHs. Besides the one already present in the pre-
+vious version, it is now possible to choose4=Bardeen, 5=Hayward, 6=Simpson-Visser, 7=Peltola-Kunstatter,
+8=D’Ambrosio-Rovelli, 9=BCL. The temporal evolution of such BHs should, in principle, be characterized by the
+functionsM(t) andl(t). Defining the differential equation governingl(t) and relating it toM(t) is model-dependent
+and goes beyond the scope of this code. Therefore, we decided not to include the possibility of having a temporal
+evolution of such newly introduced BHs. It is worth noticing that when selectingmetric = 0, the code will use the
+improved version of the Kerrgamma-tables
+IV. V ALIDA TION
+In this section, we first validateBlackHawk v3.0, comparing its results with those reported in Refs. [232, 233] and,
+subsequently, inGrayHawk[242]. To perform such analysis, we consider the Hawking spectra of Bardeen and Hayward
+black holes computed in [232, 233, 242] and the corresponding ones computed withBlackHawk v3.0, In [232, 233]
+the calculations rely on the Frobenius method to solve the scattering problem, following a reformulation of the radial
+equation in terms of a suitably rescaled radial coordinate. By contrast,GrayHawk[242], which is at the base of
+BlackHawk v3.0regular BHs, adopts a different coordinate choice to perform the computation.
+To enable a consistent comparison among these results, we first convert the values of the regularization parameter
+reported in Refs. [232, 233], originally expressed in units ofr H, into the corresponding values in units of the black
+hole massM, as employed in Ref. [242]. Finally, these parameters are re-expressed in units ofl, see Tab I.
+Modelℓ= 0.15r H (0.293M)ℓ= 0.30r H (0.546M)ℓ= 0.45r H (0.718M)
+Hayward 0.381l0.709l0.932l
+Bardeen 0.377l0.685l0.887l
+TABLE I. Regularization parameters conversion (ℓ→l) for the Hayward and Bardeen RBHs.
+Fig. (3) illustrates a direct comparison between the photon spectra obtained usingBlackHawkand the results published
+in [232, 233, 242]. The superimposed plots reveal an excellent agreement: the spectra overlap to such an extent that
+
+12
+10-4 0.001 0.010
+1016
+1017
+1018
+1019
+1020
+1021
+Energy(GeV)
+d2 Nγ
+dt dE γ
+(GeV-1 s-1)
+Bardeen
+=0
+=0.377
+=0.685
+=0.887
+10-4 0.001 0.010
+1016
+1017
+1018
+1019
+1020
+1021
+Energy(GeV)
+d2 Nγ
+dt dE γ
+(GeV-1 s-1)
+Hayward
+=0
+=0.381
+=0.709
+=0.932
+FIG. 3. Emission photon spectra in the case of Bardeen (left plot) and Hayward (right plot) BHs , assuming a values ofa ⋆
+identical to [232, 233, 242].
+they are visually indistinguishable. We point out that the tables of regular and BCL BHs are obtained by a modified
+version ofGrayHawk, the second version of which,GrayHawk v2[243], is released together withBlackHawk v3.0. To
+further validate the reliability ofBlackHawk v3.0and propose quantitative comparisons with third-party results, it is
+worth mentioning thatBlackHawk v3.0inherits the accuracy of the gray-body factors computed byGrayHawk[242]
+andGrayHawk v2[243], where many comparisons are considered and quantified using residuals.
+V. CONCLUSIONS
+In this work, we presentedBlackHawk v3.0, a major update of the public code dedicated to the computation of
+Hawking radiation spectra from BHs. Building upon the numerical settings developed in the previous versions of the
+code,BlackHawk v3.0significantly enlarges the class of BH geometries that can be investigated within a unified and
+flexible framework, with a particular emphasis on regular and quantum-gravity-inspired black holes. The main novelty
+of this release is indeed the implementation of several new spherically symmetric metrics, including the Bardeen and
+Hayward regular black holes, the Simpson–Visser and Peltola–Kunstatter black-bounce geometries, the D’Ambrosio–
+Rovelli metric, and the Babichev–Charmousis–Leh´ ebel (BCL) black hole arising in Horndeski gravity. For all these
+metrics, we computed the corresponding Hawking temperatures and greybody factors, allowing the determination of
+primary Hawking emission spectra for particles of different spins.
+The computation of greybody factors has been performed using dedicated numerical routines based on the com-
+panion codeGrayHawk, which solves the associated scattering problem for test fields propagating on generic BH back-
+grounds. These new implementations considerably extend the phenomenological reach ofBlackHawk. In particular,
+they enable the investigation of how spacetime geometry modifications affect Hawking evaporation and, consequently,
+the observational constraints on primordial black holes (PBHs). Since both the Hawking temperature and greybody
+factors are sensitive to the underlying metric, regular and modified black holes can exhibit evaporation spectra that
+differ substantially from the Schwarzschild case. This may lead to important consequences for PBH dark matter
+constraints, cosmological observables, and the phenomenology of quantum-gravity-inspired compact objects. A key
+aspect of this release is the adoption of a conservative and model-independent strategy regarding the evolution of
+regular black holes. While instantaneous Hawking spectra are computed for all implemented metrics, we refrain from
+modeling the time evolution of regularizing parameters in the absence of a robust and universally accepted dynamical
+framework. This choice reflects the present theoretical uncertainties surrounding the microscopic interpretation of
+regular black holes and their evaporation dynamics.
+Beyond the implementation of new metrics,BlackHawk v3.0also includes several technical improvements and
+optimizations aimed at enhancing the flexibility, stability, and efficiency of the code. These updates facilitate the
+inclusion of additional metrics and particle sectors, making the framework suitable for future studies involving modi-
+fied gravity, beyond-the-Standard-Model physics, and alternative quantum-gravity scenarios. The study of Hawking
+radiation remains one of the most promising avenues toward understanding the interplay between gravity, quantum
+mechanics, and particle physics. In this context, numerical tools such asBlackHawkplay an essential role in connect-
+
+13
+ing theoretical models with observational predictions. We hope that the new capabilities introduced inBlackHawk
+v3.0will provide a useful platform for future investigations of black hole evaporation, primordial black holes, and
+quantum-gravity-inspired phenomena.
+Several possible extensions of the code are currently under consideration. These include the implementation of
+rotating regular black holes, dynamical evaporation models for regular metrics, additional modified-gravity solutions,
+more realistic electromagnetic charge effects, and improved treatments of beyond-the-Standard-Model particle emis-
+sion. We also anticipate further developments toward a more systematic treatment of greybody factors for generic
+spacetimes and the inclusion of additional observational interfaces relevant for cosmology and astrophysics.
+ACKNOWLEDGMENTS
+We want to thank Michael Zantedeschi for fruitful discussions. DP acknowledges support from the Istituto Nazionale
+di Fisica Nucleare (INFN) through the Commissione Scientifica Nazionale 4 (CSN4) Iniziativa Specifica “Quantum
+Fields in Gravity, Cosmology and BHs” (FLAG). This publication is based upon work from the COST Action CA21136
+“Addressing observational tensions in cosmology with systematics and fundamental physics” (CosmoVerse), supported
+by COST (European Cooperation in Science and Technology).
+VI. APPENDIX
+A. Mathematica notebooks derived from GrayHawk
+This part of the appendix contains a brief description of the scripts obtained by modifying the Mathematica code
+GrayHawkand used to compute the tables in “scr/tables/gamma tables...” for the Hayward, Bardeen, SV, DR,
+PK, and BCL BHs. The scripts will be found in the folders:
+>>> scripts/greybody scripts/greybody factors/GrayHawk/Bardeen
+>>> scripts/greybody scripts/greybody factors/GrayHawk/Hayward
+>>> scripts/greybody scripts/greybody factors/GrayHawk/Simpson-Visser
+>>> scripts/greybody scripts/greybody factors/GrayHawk/Peltola-Kunstatter
+>>> scripts/greybody scripts/greybody factors/GrayHawk/D’Ambrosio-Rovelli
+>>> scripts/greybody scripts/greybody factors/GrayHawk/BCL
+Each of the folders described above contains four files, corresponding to the field spin valuess= 0,1/2,1,2, as
+well as an additional subfolder labelled “For Fits”. The files are self-contained code modules that compute the
+quantitiesQ s
+lm as defined in Eq. (29). These files are based on ad hoc modifications ofGrayHawk, where the intro-
+duction of nestedfor-loops automates the evaluation of gray-body factors for multiple values of the regularization
+parameterland for different angular momentum l. The resulting contributions are summed to obtainQ s
+lm, and the
+corresponding data are organized into tables for various values ofl, which are exported in.txtformat.
+TheFor Fitssubfolder contains analogous scripts optimized to computeQ s
+lm at energies outside the interval
+0.01≤x≡Er S ≤5. Specifically, calculations are performed atx= 0.001,0.005,25,and 50. These additional data
+points are used to extrapolate the fitting functions beyond the range covered by the tabulated energies. The folder
+>>> scripts/greybody scripts/greybody factors/GrayHawk/Formatter
+contains the fileformatter.pywhich is use to reformat of the .txt tables in such a way to obtain the one in reported in
+>>> src/tables/gamma tables/...
+
+14
+B. Notebooks for the Kerr Case
+Here, we briefly describe the codes used to compute the gray-body factors for Kerr BHs in the direct method. The
+pythonscripts and aREADMEare in the folder:
+>>> scripts/greybody scripts/greybody factors/kerr
+The files contained in that folder are:
+Script containing mainpythonclass:greybody Kerr.py
+File containing Kerr background class:background.py
+Script containing approximation for angular eigenvalues until order six, following Ref. [354]:lms.py
+Teukolsky equations and required defintions:teuk eqs.py
+Algorithm to obtain absorption probabilities:radial eqs.py
+Formatting:format.py
+Example script to run the code and obtain graybody tables:Glms.py
+The main class ingreybody Kerr.py, calledHawk spectrum, requires as input the dimensionless parameterw=
+GM E, the spin of the particles, and the background quantities for the Kerr spacetime, formatted according to the
+classBackgroundinbackground.py. This main class contains the functiond2N dEdt(l, m)which computes the
+Hawking spectrumQ slm(ω) according to Eq. (29) after solving the radial part of the Teukolsky equation. Note that
+for the angular eigenvalues we have sQm
+l = sEm
+l −s(s+ 1) +a 2ω2 −2aωm, with sEm
+l given by an expansion up to
+six order ina ⋆GM ω, with coefficients as given in Ref. [354].
+We evolve the radial Teukolsky equation from a value ofx= 10 −4 up tox= 10 3, assuming as initial condition
+the Frobenius series given in Eq. (38), with coefficientsa n given inteuk eqs.py. Then, we compare our numerical
+solution with the asymptotic form given in Eq. (39) to extractR lm
+s,in(ω), and then we compute Γ s
+lm(ω). The algorithm
+for the evolution of the radial equations is contained in theradial eqs.pyfiles.
+To obtain the Page factorsf, g, one needs to use the functionNgf dEdt(l, m)in the mainHawk spectrumclass
+for given values ofl, mquantum numbers. An example of how to use these functions is provided inGlms.py, which
+produces the Page factors in the format used by the mainBlackHawkcode.
+
+15
+[1] V. Cardoso and P. Pani, Living Rev. Rel.22, 4 (2019), arXiv:1904.05363 [gr-qc].
+[2] C. Bambi, Annalen Phys.530, 1700430 (2018), arXiv:1711.10256 [gr-qc].
+[3] K. Akiyamaet al.(Event Horizon Telescope), Astrophys. J. Lett.875, L1 (2019), arXiv:1906.11238 [astro-ph.GA].
+[4] P. Kocherlakotaet al.(Event Horizon Telescope), Phys. Rev. D103, 104047 (2021), arXiv:2105.09343 [gr-qc].
+[5] K. Akiyamaet al.(Event Horizon Telescope), Astrophys. J. Lett.930, L17 (2022), arXiv:2311.09484 [astro-ph.HE].
+[6] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev. Lett.116, 061102 (2016), arXiv:1602.03837 [gr-qc].
+[7] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev. Lett.119, 161101 (2017), arXiv:1710.05832 [gr-qc].
+[8] B. P. Abbottet al.(LIGO Scientific, Virgo), Phys. Rev. Lett.123, 011102 (2019), arXiv:1811.00364 [gr-qc].
+[9] P. Creminelli and F. Vernizzi, Phys. Rev. Lett.119, 251302 (2017), arXiv:1710.05877 [astro-ph.CO].
+[10] J. Sakstein and B. Jain, Phys. Rev. Lett.119, 251303 (2017), arXiv:1710.05893 [astro-ph.CO].
+[11] J. M. Ezquiaga and M. Zumalac´ arregui, Phys. Rev. Lett.119, 251304 (2017), arXiv:1710.05901 [astro-ph.CO].
+[12] S. Boran, S. Desai, E. O. Kahya, and R. P. Woodard, Phys. Rev. D97, 041501 (2018), arXiv:1710.06168 [astro-ph.HE].
+[13] T. Baker, E. Bellini, P. G. Ferreira, M. Lagos, J. Noller, and I. Sawicki, Phys. Rev. Lett.119, 251301 (2017),
+arXiv:1710.06394 [astro-ph.CO].
+[14] L. Amendola, M. Kunz, I. D. Saltas, and I. Sawicki, Phys. Rev. Lett.120, 131101 (2018), arXiv:1711.04825 [astro-ph.CO].
+[15] L. Visinelli, N. Bolis, and S. Vagnozzi, Phys. Rev. D97, 064039 (2018), arXiv:1711.06628 [gr-qc].
+[16] M. Crisostomi and K. Koyama, Phys. Rev. D97, 021301 (2018), arXiv:1711.06661 [astro-ph.CO].
+[17] A. Dima and F. Vernizzi, Phys. Rev. D97, 101302 (2018), arXiv:1712.04731 [gr-qc].
+[18] Y.-F. Cai, C. Li, E. N. Saridakis, and L. Xue, Phys. Rev. D97, 103513 (2018), arXiv:1801.05827 [gr-qc].
+[19] A. Casalino, M. Rinaldi, L. Sebastiani, and S. Vagnozzi, Phys. Dark Univ.22, 108 (2018), arXiv:1803.02620 [gr-qc].
+[20] L. Baracket al., Class. Quant. Grav.36, 143001 (2019), arXiv:1806.05195 [gr-qc].
+[21] A. Casalino, M. Rinaldi, L. Sebastiani, and S. Vagnozzi, Class. Quant. Grav.36, 017001 (2019), arXiv:1811.06830 [gr-qc].
+[22] A. Held, R. Gold, and A. Eichhorn, JCAP06, 029 (2019), arXiv:1904.07133 [gr-qc].
+[23] C. Bambi, K. Freese, S. Vagnozzi, and L. Visinelli, Phys. Rev. D100, 044057 (2019), arXiv:1904.12983 [gr-qc].
+[24] S. Vagnozzi and L. Visinelli, Phys. Rev. D100, 024020 (2019), arXiv:1905.12421 [gr-qc].
+[25] T. Zhu, Q. Wu, M. Jamil, and K. Jusufi, Phys. Rev. D100, 044055 (2019), arXiv:1906.05673 [gr-qc].
+[26] P. V. P. Cunha, C. A. R. Herdeiro, and E. Radu, Universe5, 220 (2019), arXiv:1909.08039 [gr-qc].
+[27] I. Banerjee, S. Chakraborty, and S. SenGupta, Phys. Rev. D101, 041301 (2020), arXiv:1909.09385 [gr-qc].
+[28] I. Banerjee, S. Sau, and S. SenGupta, Phys. Rev. D101, 104057 (2020), arXiv:1911.05385 [gr-qc].
+[29] A. Allahyari, M. Khodadi, S. Vagnozzi, and D. F. Mota, JCAP02, 003 (2020), arXiv:1912.08231 [gr-qc].
+[30] S. Vagnozzi, C. Bambi, and L. Visinelli, Class. Quant. Grav.37, 087001 (2020), arXiv:2001.02986 [gr-qc].
+[31] M. Khodadi, A. Allahyari, S. Vagnozzi, and D. F. Mota, JCAP09, 026 (2020), arXiv:2005.05992 [gr-qc].
+[32] R. Kumar, A. Kumar, and S. G. Ghosh, Astrophys. J.896, 89 (2020), arXiv:2006.09869 [gr-qc].
+[33] M. Khodadi and E. N. Saridakis, Phys. Dark Univ.32, 100835 (2021), arXiv:2012.05186 [gr-qc].
+[34] R. C. Pantig, P. K. Yu, E. T. Rodulfo, and A. ¨Ovg¨ un, Annals Phys.436, 168722 (2022), arXiv:2104.04304 [gr-qc].
+[35] M. Khodadi, G. Lambiase, and D. F. Mota, JCAP09, 028 (2021), arXiv:2107.00834 [gr-qc].
+[36] R. Roy, S. Vagnozzi, and L. Visinelli, Phys. Rev. D105, 083002 (2022), arXiv:2112.06932 [astro-ph.HE].
+[37] A. Uniyal, R. C. Pantig, and A. ¨Ovg¨ un, Phys. Dark Univ.40, 101178 (2023), arXiv:2205.11072 [gr-qc].
+[38] R. C. Pantig and A. ¨Ovg¨ un, Annals Phys.448, 169197 (2023), arXiv:2206.02161 [gr-qc].
+[39] S. G. Ghosh and M. Afrin, Astrophys. J.944, 174 (2023), arXiv:2206.02488 [gr-qc].
+[40] M. Khodadi and G. Lambiase, Phys. Rev. D106, 104050 (2022), arXiv:2206.08601 [gr-qc].
+[41] R. Kumar Walia, S. G. Ghosh, and S. D. Maharaj, Astrophys. J.939, 77 (2022), arXiv:2207.00078 [gr-qc].
+[42] R. Shaikh, Mon. Not. Roy. Astron. Soc.523, 375 (2023), arXiv:2208.01995 [gr-qc].
+[43] S. D. Odintsov and V. K. Oikonomou, EPL139, 59003 (2022), arXiv:2208.07972 [gr-qc].
+[44] V. K. Oikonomou, P. Tsyba, and O. Razina, Universe8, 484 (2022), arXiv:2209.04669 [gr-qc].
+[45] R. C. Pantig, Chin. J. Phys.87, 49 (2024), arXiv:2303.01698 [gr-qc].
+[46] E. Gonz´ alez, K. Jusufi, G. Leon, and E. N. Saridakis, Phys. Dark Univ.42, 101304 (2023), arXiv:2305.14305 [astro-
+ph.CO].
+[47] S. K. Sahoo, N. Yadav, and I. Banerjee, Phys. Rev. D109, 044008 (2024), arXiv:2305.14870 [gr-qc].
+[48] K. Nozari and S. Saghafi, Eur. Phys. J. C83, 588 (2023), arXiv:2305.17237 [gr-qc].
+[49] A. Uniyal, S. Chakrabarti, M. Fathi, and A. ¨Ovg¨ un, Annals Phys.462, 169614 (2024), arXiv:2309.13680 [gr-qc].
+[50] A. A. A. Filho, J. A. A. S. Reis, and H. Hassanabadi, JCAP05, 029 (2024), arXiv:2309.15778 [gr-qc].
+[51] M. A. Raza, J. Rayimbaev, F. Sarikulov, M. Zubair, B. Ahmedov, and Z. Stuchlik, Phys. Dark Univ.44, 101488 (2024),
+arXiv:2311.15784 [gr-qc].
+[52] H. Hoshimov, O. Yunusov, F. Atamurotov, M. Jamil, and A. Abdujabbarov, Phys. Dark Univ.43, 101392 (2024),
+arXiv:2312.10678 [gr-qc].
+[53] L. Chakhchi, H. El Moumni, and K. Masmar, Phys. Dark Univ.44, 101501 (2024), arXiv:2403.09756 [gr-qc].
+[54] W. Liu, D. Wu, X. Fang, J. Jing, and J. Wang, JCAP08, 035 (2024), arXiv:2406.00579 [gr-qc].
+[55] W. Liu, D. Wu, and J. Wang, JCAP05, 017 (2025), arXiv:2407.07416 [gr-qc].
+[56] M. Khodadi, S. Vagnozzi, and J. T. Firouzjaee, Sci. Rep.14, 26932 (2024), arXiv:2408.03241 [gr-qc].
+
+16
+[57] W. Liu, D. Wu, and J. Wang, Phys. Lett. B858, 139052 (2024), arXiv:2408.05569 [gr-qc].
+[58] S. Nojiri and S. D. Odintsov, Phys. Dark Univ.46, 101669 (2024), arXiv:2408.05668 [gr-qc].
+[59] M. Maggioreet al.(ET), JCAP03, 050 (2020), arXiv:1912.02622 [astro-ph.CO].
+[60] A. Abacet al.(ET), JCAP03, 081 (2026), arXiv:2503.12263 [gr-qc].
+[61] D. Reitzeet al., Bull. Am. Astron. Soc.51, 035 (2019), arXiv:1907.04833 [astro-ph.IM].
+[62] M. Evanset al., (2021), arXiv:2109.09882 [astro-ph.IM].
+[63] P. Auclairet al.(LISA Cosmology Working Group), Living Rev. Rel.26, 5 (2023), arXiv:2204.05434 [astro-ph.CO].
+[64] P. Tiede, M. D. Johnson, D. W. Pesce, D. C. M. Palumbo, D. O. Chang, and P. Galison, Galaxies10, 111 (2022),
+arXiv:2210.13498 [astro-ph.HE].
+[65] S. S. Doelemanet al., Galaxies11, 107 (2023), arXiv:2306.08787 [astro-ph.IM].
+[66] M. D. Johnsonet al., Galaxies11, 61 (2023), arXiv:2304.11188 [astro-ph.HE].
+[67] M. D. Johnsonet al., Proc. SPIE Int. Soc. Opt. Eng.13092, 130922D (2024), arXiv:2406.12917 [astro-ph.IM].
+[68] R. Genzel, F. Eisenhauer, and S. Gillessen, Astron. Astrophys. Rev.32, 3 (2024), arXiv:2404.03522 [astro-ph.GA].
+[69] M. Y. Khlopov, Res. Astron. Astrophys.10, 495 (2010), arXiv:0801.0116 [astro-ph].
+[70] B. Carr, F. Kuhnel, and M. Sandstad, Phys. Rev. D94, 083504 (2016), arXiv:1607.06077 [astro-ph.CO].
+[71] A. M. Green and B. J. Kavanagh, J. Phys. G48, 043001 (2021), arXiv:2007.10722 [astro-ph.CO].
+[72] B. Carr and F. Kuhnel, Ann. Rev. Nucl. Part. Sci.70, 355 (2020), arXiv:2006.02838 [astro-ph.CO].
+[73] P. Villanueva-Domingo, O. Mena, and S. Palomares-Ruiz, Front. Astron. Space Sci.8, 87 (2021), arXiv:2103.12087
+[astro-ph.CO].
+[74] B. Carr and F. Kuhnel, SciPost Phys. Lect. Notes48, 1 (2022), arXiv:2110.02821 [astro-ph.CO].
+[75] S. Birdet al., Phys. Dark Univ.41, 101231 (2023), arXiv:2203.08967 [hep-ph].
+[76] B. Carr, S. Clesse, J. Garcia-Bellido, M. Hawkins, and F. Kuhnel, Phys. Rept.1054, 1 (2024), arXiv:2306.03903 [astro-
+ph.CO].
+[77] A. Arbey, in58th Rencontres de Moriond on Very High Energy Phenomena in the Universe(2024) arXiv:2405.08624
+[gr-qc].
+[78] S. Choudhury and M. Sami, Phys. Rept.1103, 1 (2025), arXiv:2407.17006 [gr-qc].
+[79] G. F. Chapline, Nature253, 251 (1975).
+[80] P. Meszaros, Astron. Astrophys.38, 5 (1975).
+[81] M. Y. Khlopov and A. G. Polnarev, Phys. Lett. B97, 383 (1980).
+[82] M. Y. Khlopov, B. A. Malomed, I. B. Zeldovich, and Y. B. Zeldovich, Mon. Not. Roy. Astron. Soc.215, 575 (1985).
+[83] P. Ivanov, P. Naselsky, and I. Novikov, Phys. Rev. D50, 7173 (1994).
+[84] S. Choudhury and A. Mazumdar, Phys. Lett. B733, 270 (2014), arXiv:1307.5119 [astro-ph.CO].
+[85] K. M. Belotsky, A. D. Dmitriev, E. A. Esipova, V. A. Gani, A. V. Grobov, M. Y. Khlopov, A. A. Kirillov, S. G. Rubin,
+and I. V. Svadkovsky, Mod. Phys. Lett. A29, 1440005 (2014), arXiv:1410.0203 [astro-ph.CO].
+[86] S. Bird, I. Cholis, J. B. Mu˜ noz, Y. Ali-Ha¨ ımoud, M. Kamionkowski, E. D. Kovetz, A. Raccanelli, and A. G. Riess, Phys.
+Rev. Lett.116, 201301 (2016), arXiv:1603.00464 [astro-ph.CO].
+[87] S. Clesse and J. Garc´ ıa-Bellido, Phys. Dark Univ.15, 142 (2017), arXiv:1603.05234 [astro-ph.CO].
+[88] V. Poulin, P. D. Serpico, F. Calore, S. Clesse, and K. Kohri, Phys. Rev. D96, 083524 (2017), arXiv:1707.04206 [astro-
+ph.CO].
+[89] A. Raccanelli, F. Vidotto, and L. Verde, JCAP08, 003 (2018), arXiv:1708.02588 [astro-ph.CO].
+[90] J. L. Bernal, N. Bellomo, A. Raccanelli, and L. Verde, JCAP10, 052 (2017), arXiv:1709.07465 [astro-ph.CO].
+[91] S. Clesse and J. Garc´ ıa-Bellido, Phys. Dark Univ.22, 137 (2018), arXiv:1711.10458 [astro-ph.CO].
+[92] K. Kohri and T. Terada, Class. Quant. Grav.35, 235017 (2018), arXiv:1802.06785 [astro-ph.CO].
+[93] L. Liu, Z.-K. Guo, and R.-G. Cai, Phys. Rev. D99, 063523 (2019), arXiv:1812.05376 [astro-ph.CO].
+[94] L. Liu, Z.-K. Guo, and R.-G. Cai, Eur. Phys. J. C79, 717 (2019), arXiv:1901.07672 [astro-ph.CO].
+[95] R. Murgia, G. Scelfo, M. Viel, and A. Raccanelli, Phys. Rev. Lett.123, 071102 (2019), arXiv:1903.10509 [astro-ph.CO].
+[96] B. Carr, S. Clesse, J. Garc´ ıa-Bellido, and F. K¨ uhnel, Phys. Dark Univ.31, 100755 (2021), arXiv:1906.08217 [astro-ph.CO].
+[97] L. Liu, Z.-K. Guo, R.-G. Cai, and S. P. Kim, Phys. Rev. D102, 043508 (2020), arXiv:2001.02984 [astro-ph.CO].
+[98] M. P. Hertzberg, E. D. Schiappacasse, and T. T. Yanagida, Phys. Rev. D102, 023013 (2020), arXiv:2001.07476 [astro-
+ph.CO].
+[99] P. D. Serpico, V. Poulin, D. Inman, and K. Kohri, Phys. Rev. Res.2, 023204 (2020), arXiv:2002.10771 [astro-ph.CO].
+[100] V. De Luca, G. Franciolini, P. Pani, and A. Riotto, JCAP04, 052 (2020), arXiv:2003.02778 [astro-ph.CO].
+[101] V. De Luca, G. Franciolini, P. Pani, and A. Riotto, Phys. Rev. D102, 043505 (2020), arXiv:2003.12589 [astro-ph.CO].
+[102] V. De Luca, G. Franciolini, P. Pani, and A. Riotto, JCAP06, 044 (2020), arXiv:2005.05641 [astro-ph.CO].
+[103] B. Carr, F. Kuhnel, and L. Visinelli, Mon. Not. Roy. Astron. Soc.501, 2029 (2021), arXiv:2008.08077 [astro-ph.CO].
+[104] S. Bhagwat, V. De Luca, G. Franciolini, P. Pani, and A. Riotto, JCAP01, 037 (2021), arXiv:2008.12320 [astro-ph.CO].
+[105] V. De Luca, V. Desjacques, G. Franciolini, P. Pani, and A. Riotto, Phys. Rev. Lett.126, 051101 (2021), arXiv:2009.01728
+[astro-ph.CO].
+[106] K. W. K. Wong, G. Franciolini, V. De Luca, V. Baibhav, E. Berti, P. Pani, and A. Riotto, Phys. Rev. D103, 023026
+(2021), arXiv:2011.01865 [gr-qc].
+[107] B. Carr, F. Kuhnel, and L. Visinelli, Mon. Not. Roy. Astron. Soc.506, 3648 (2021), arXiv:2011.01930 [astro-ph.CO].
+[108] G. Dom` enech, C. Lin, and M. Sasaki, JCAP04, 062 (2021), [Erratum: JCAP 11, E01 (2021)], arXiv:2012.08151 [gr-qc].
+[109] V. De Luca, G. Franciolini, P. Pani, and A. Riotto, JCAP05, 003 (2021), arXiv:2102.03809 [astro-ph.CO].
+[110] A. Arbey, J. Auffinger, P. Sandick, B. Shams Es Haghi, and K. Sinha, Phys. Rev. D103, 123549 (2021), arXiv:2104.04051
+
+17
+[astro-ph.CO].
+[111] G. Franciolini, V. Baibhav, V. De Luca, K. K. Y. Ng, K. W. K. Wong, E. Berti, P. Pani, A. Riotto, and S. Vitale, Phys.
+Rev. D105, 083526 (2022), arXiv:2105.03349 [gr-qc].
+[112] V. De Luca, G. Franciolini, P. Pani, and A. Riotto, JCAP11, 039 (2021), arXiv:2106.13769 [astro-ph.CO].
+[113] A. Cheek, L. Heurtier, Y. F. Perez-Gonzalez, and J. Turner, Phys. Rev. D105, 015022 (2022), arXiv:2107.00013 [hep-ph].
+[114] A. Cheek, L. Heurtier, Y. F. Perez-Gonzalez, and J. Turner, Phys. Rev. D105, 015023 (2022), arXiv:2107.00016 [hep-ph].
+[115] S. Heydari and K. Karami, Eur. Phys. J. C82, 83 (2022), arXiv:2107.10550 [gr-qc].
+[116] G. Dvali, F. K¨ uhnel, and M. Zantedeschi, Phys. Rev. D104, 123507 (2021), arXiv:2108.09471 [hep-ph].
+[117] S. Heydari and K. Karami, JCAP03, 033 (2022), arXiv:2111.00494 [gr-qc].
+[118] V. De Luca, G. Franciolini, A. Kehagias, P. Pani, and A. Riotto, Phys. Lett. B832, 137265 (2022), arXiv:2112.02534
+[astro-ph.CO].
+[119] L. Liu, X.-Y. Yang, Z.-K. Guo, and R.-G. Cai, JCAP01, 006 (2023), arXiv:2112.05473 [astro-ph.CO].
+[120] A. K. Saha and R. Laha, Phys. Rev. D105, 103026 (2022), arXiv:2112.10794 [astro-ph.CO].
+[121] N. Bhaumik, A. Ghoshal, and M. Lewicki, JHEP07, 130 (2022), arXiv:2205.06260 [astro-ph.CO].
+[122] L. A. Anchordoqui, I. Antoniadis, and D. Lust, Phys. Rev. D106, 086001 (2022), arXiv:2206.07071 [hep-th].
+[123] Y.-F. Cai, X.-H. Ma, M. Sasaki, D.-G. Wang, and Z. Zhou, JCAP12, 034 (2022), arXiv:2207.11910 [astro-ph.CO].
+[124] M. Oguri, V. Takhistov, and K. Kohri, Phys. Lett. B847, 138276 (2023), arXiv:2208.05957 [astro-ph.CO].
+[125] G. Franciolini, I. Musco, P. Pani, and A. Urbano, Phys. Rev. D106, 123526 (2022), arXiv:2209.05959 [astro-ph.CO].
+[126] K. Mazde and L. Visinelli, JCAP01, 021 (2023), arXiv:2209.14307 [astro-ph.CO].
+[127] R.-G. Cai, T. Chen, S.-J. Wang, and X.-Y. Yang, JCAP03, 043 (2023), arXiv:2210.02078 [astro-ph.CO].
+[128] L. A. Anchordoqui, I. Antoniadis, and D. Lust, Phys. Lett. B840, 137844 (2023), arXiv:2210.02475 [hep-th].
+[129] L. Liu, Z.-Q. You, Y. Wu, and Z.-C. Chen, Phys. Rev. D107, 063035 (2023), arXiv:2210.16094 [astro-ph.CO].
+[130] C. Fu and S.-J. Wang, JCAP06, 012 (2023), arXiv:2211.03523 [astro-ph.CO].
+[131] S. Choudhury, M. R. Gangopadhyay, and M. Sami, Eur. Phys. J. C84, 884 (2024), arXiv:2301.10000 [astro-ph.CO].
+[132] T. Papanikolaou, Class. Quant. Grav.40, 134001 (2023), arXiv:2301.11439 [gr-qc].
+[133] J. A. de Freitas Pacheco, E. Kiritsis, M. Lucca, and J. Silk, Phys. Rev. D107, 123525 (2023), arXiv:2301.13215 [astro-
+ph.CO].
+[134] S. Choudhury, S. Panda, and M. Sami, Phys. Lett. B845, 138123 (2023), arXiv:2302.05655 [astro-ph.CO].
+[135] S. Choudhury, S. Panda, and M. Sami, JCAP11, 066 (2023), arXiv:2303.06066 [astro-ph.CO].
+[136] I. Musco, K. Jedamzik, and S. Young, Phys. Rev. D109, 083506 (2024), arXiv:2303.07980 [astro-ph.CO].
+[137] G.-W. Yuan, L. Lei, Y.-Z. Wang, B. Wang, Y.-Y. Wang, C. Chen, Z.-Q. Shen, Y.-F. Cai, and Y.-Z. Fan, Sci. China
+Phys. Mech. Astron.67, 109512 (2024), arXiv:2303.09391 [astro-ph.CO].
+[138] S. Choudhury, S. Panda, and M. Sami, JCAP08, 078 (2023), arXiv:2304.04065 [astro-ph.CO].
+[139] A. Ghoshal, Y. Gouttenoire, L. Heurtier, and P. Simakachorn, JHEP08, 196 (2023), arXiv:2304.04793 [hep-ph].
+[140] Y. Cai, M. Zhu, and Y.-S. Piao, Phys. Rev. Lett.133, 021001 (2024), arXiv:2305.10933 [gr-qc].
+[141] S. Choudhury, A. Karde, S. Panda, and M. Sami, JCAP01, 012 (2024), arXiv:2306.12334 [astro-ph.CO].
+[142] H.-L. Huang, Y. Cai, J.-Q. Jiang, J. Zhang, and Y.-S. Piao, Res. Astron. Astrophys.24, 091001 (2024), arXiv:2306.17577
+[gr-qc].
+[143] S. Choudhury, A. Karde, S. Panda, and M. Sami, Nucl. Phys. B1007, 116678 (2024), arXiv:2308.09273 [astro-ph.CO].
+[144] G. Bhattacharya, S. Choudhury, K. Dey, S. Ghosh, A. Karde, and N. S. Mishra, Phys. Dark Univ.46, 101602 (2024),
+arXiv:2309.00973 [astro-ph.CO].
+[145] S. Heydari and K. Karami, JCAP02, 047 (2024), arXiv:2309.01239 [astro-ph.CO].
+[146] S. Heydari and K. Karami, Eur. Phys. J. C84, 127 (2024), arXiv:2310.11030 [gr-qc].
+[147] S. Choudhury, K. Dey, A. Karde, S. Panda, and M. Sami, Phys. Lett. B856, 138925 (2024), arXiv:2310.11034 [astro-
+ph.CO].
+[148] S. Choudhury, K. Dey, and A. Karde, Fortsch. Phys.74, e70067 (2026), arXiv:2311.15065 [astro-ph.CO].
+[149] A. Ghoshal and A. Strumia, JCAP07, 011 (2024), arXiv:2311.16236 [hep-ph].
+[150] H.-L. Huang, J.-Q. Jiang, and Y.-S. Piao, Phys. Rev. D109, 063515 (2024), arXiv:2312.00338 [astro-ph.CO].
+[151] H.-L. Huang and Y.-S. Piao, Phys. Rev. D110, 023501 (2024), arXiv:2312.11982 [astro-ph.CO].
+[152] L. A. Anchordoqui, I. Antoniadis, and D. Lust, Phys. Rev. D109, 095008 (2024), arXiv:2401.09087 [hep-th].
+[153] S. Choudhury, A. Karde, S. Panda, and M. Sami, JCAP07, 034 (2024), arXiv:2401.10925 [astro-ph.CO].
+[154] V. Thoss, A. Burkert, and K. Kohri, Mon. Not. Roy. Astron. Soc.532, 451 (2024), arXiv:2402.17823 [astro-ph.CO].
+[155] T. Papanikolaou, X.-C. He, X.-H. Ma, Y.-F. Cai, E. N. Saridakis, and M. Sasaki, Phys. Lett. B857, 138997 (2024),
+arXiv:2403.00660 [astro-ph.CO].
+[156] S. Choudhury, Int. J. Mod. Phys. D33, 2441007 (2024), arXiv:2403.07343 [astro-ph.CO].
+[157] S. Choudhury, A. Karde, P. Padiyar, and M. Sami, Eur. Phys. J. C85, 21 (2025), arXiv:2403.13484 [astro-ph.CO].
+[158] L. A. Anchordoqui, I. Antoniadis, and D. Lust, Phys. Rev. D110, 015004 (2024), arXiv:2403.19604 [hep-th].
+[159] T. Papanikolaou, S. Banerjee, Y.-F. Cai, S. Capozziello, and E. N. Saridakis, JCAP06, 066 (2024), arXiv:2404.03779
+[gr-qc].
+[160] Z. Yin and L. Visinelli, JCAP10, 013 (2024), arXiv:2404.10340 [hep-ph].
+[161] S. Choudhury, A. Karde, S. Panda, and S. SenGupta, Eur. Phys. J. C84, 1149 (2024), arXiv:2405.06882 [astro-ph.CO].
+[162] S. Heydari and K. Karami, Astrophys. J.975, 148 (2024), arXiv:2405.08563 [gr-qc].
+[163] G. Dvali, J. S. Valbuena-Berm´ udez, and M. Zantedeschi, Phys. Rev. D110, 056029 (2024), arXiv:2405.13117 [hep-th].
+[164] A. Boccia, F. Iocco, and L. Visinelli, Phys. Rev. D111, 063508 (2025), arXiv:2405.18493 [astro-ph.CO].
+
+18
+[165] H.-L. Huang, J.-Q. Jiang, and Y.-S. Piao, Phys. Rev. D110, 103540 (2024), arXiv:2407.15781 [astro-ph.CO].
+[166] S. Choudhury, S. Ganguly, S. Panda, S. SenGupta, and P. Tiwari, JCAP09, 013 (2024), arXiv:2407.18976 [astro-ph.CO].
+[167] L. A. Anchordoqui, I. Antoniadis, D. Lust, and K. P. n. Castillo, Phys. Dark Univ.46, 101714 (2024), arXiv:2407.21031
+[hep-th].
+[168] C. Yang, S. Wang, M.-L. Zhao, and X. Zhang, JCAP10, 083 (2024), arXiv:2408.10897 [astro-ph.HE].
+[169] A. K. Saha, A. Singh, P. Parashari, and R. Laha, Eur. Phys. J. C85, 1117 (2025), arXiv:2409.10617 [astro-ph.CO].
+[170] L. A. Anchordoqui, I. Antoniadis, D. Lust, and K. P. n. Castillo, Phys. Dark Univ.46, 101681 (2024), arXiv:2409.12904
+[hep-ph].
+[171] C. Chen, A. Ghoshal, G. Tasinato, and E. Tomberg, Phys. Rev. D111, 063539 (2025), arXiv:2409.12950 [astro-ph.CO].
+[172] D.-C. Dai and D. Stojkovic, Phys. Dark Univ.46, 101662 (2024), arXiv:2409.14321 [gr-qc].
+[173] H.-L. Huang, Y.-Y. Li, Y.-T. Wang, and Y.-S. Piao, Phys. Rev. D113, 023519 (2026), arXiv:2410.05891 [astro-ph.GA].
+[174] M. Zantedeschi and L. Visinelli, Phys. Dark Univ.49, 102034 (2025), arXiv:2410.07037 [astro-ph.HE].
+[175] M. Chianese, A. Boccia, F. Iocco, G. Miele, and N. Saviano, Phys. Rev. D111, 063036 (2025), arXiv:2410.07604
+[astro-ph.HE].
+[176] W. Barker, B. Gladwyn, and S. Zell, Phys. Rev. D111, 123033 (2025), arXiv:2410.11948 [astro-ph.CO].
+[177] D. Borah and N. Das, JCAP02, 031 (2025), arXiv:2410.16403 [hep-ph].
+[178] H.-L. Huang, J.-Q. Jiang, J. He, Y.-T. Wang, and Y.-S. Piao, (2024), arXiv:2410.20663 [astro-ph.GA].
+[179] M. Calz` a, J. March-Russell, and J. a. G. Rosa, Phys. Rev. Lett.133, 261003 (2024), arXiv:2110.13602 [astro-ph.CO].
+[180] M. Calz` a and J. G. Rosa, JHEP12, 090 (2022), arXiv:2210.06500 [gr-qc].
+[181] M. Calz` a, J. a. G. Rosa, and F. Serrano, JHEP05, 140 (2024), arXiv:2306.09430 [hep-ph].
+[182] M. Calz` a and J. a. G. Rosa, JHEP08, 012 (2024), arXiv:2311.12930 [gr-qc].
+[183] M. Calz` a and J. G. Rosa, JHEP11, 044 (2025), arXiv:2312.09261 [hep-ph].
+[184] M. Calz´ a, M. Rinaldi, and S. Zerbini, Phys. Rev. D112, 024024 (2025), arXiv:2505.04427 [gr-qc].
+[185] M. Calz` a, M. Rinaldi, and S. Vagnozzi, Phys. Rev. D112, 104055 (2025), arXiv:2510.12257 [gr-qc].
+[186] M. Calz´ a, Phys. Rev. D107, 044067 (2023), arXiv:2207.10467 [gr-qc].
+[187] A. Katz, J. Kopp, S. Sibiryakov, and W. Xue, JCAP12, 005 (2018), arXiv:1807.11495 [astro-ph.CO].
+[188] Y. Bai and N. Orlofsky, Phys. Rev. D99, 123019 (2019), arXiv:1812.01427 [astro-ph.HE].
+[189] N. Smyth, S. Profumo, S. English, T. Jeltema, K. McKinnon, and P. Guhathakurta, Phys. Rev. D101, 063005 (2020),
+arXiv:1910.01285 [astro-ph.CO].
+[190] A. Coogan, L. Morrison, and S. Profumo, Phys. Rev. Lett.126, 171101 (2021), arXiv:2010.04797 [astro-ph.CO].
+[191] A. Ray, R. Laha, J. B. Mu˜ noz, and R. Caputo, Phys. Rev. D104, 023516 (2021), arXiv:2102.06714 [astro-ph.CO].
+[192] J. Auffinger, Eur. Phys. J. C82, 384 (2022), arXiv:2201.01265 [astro-ph.HE].
+[193] D. Ghosh and A. K. Mishra, Phys. Rev. D109, 043537 (2024), arXiv:2208.14279 [hep-ph].
+[194] A. L. Miller, N. Aggarwal, S. Clesse, and F. De Lillo, Phys. Rev. D105, 062008 (2022), arXiv:2110.06188 [gr-qc].
+[195] N. P. Branco, R. Z. Ferreira, and J. a. G. Rosa, JCAP04, 003 (2023), arXiv:2301.01780 [hep-ph].
+[196] B. Bertrand, M. Cuadrat-Grzybowski, P. Defraigne, M. Van Camp, and S. Clesse (2023) arXiv:2312.14520 [astro-ph.CO].
+[197] T. X. Tran, S. R. Geller, B. V. Lehmann, and D. I. Kaiser, Phys. Rev. D110, 063533 (2024), arXiv:2312.17217 [astro-
+ph.CO].
+[198] M. Gorton and A. M. Green, SciPost Phys.17, 032 (2024), arXiv:2403.03839 [astro-ph.CO].
+[199] J. B. Dent, B. Dutta, and T. Xu, Phys. Lett. B861, 139254 (2025), arXiv:2404.02956 [hep-ph].
+[200] M. Tamta, N. Raj, and P. Sharma, Phys. Rev. D111, 043043 (2025), arXiv:2405.20365 [astro-ph.HE].
+[201] P. Tinyakov, (2024), arXiv:2406.03114 [astro-ph.CO].
+[202] A. Loeb, Res. Notes AAS8, 211 (2024), arXiv:2408.10799 [hep-ph].
+[203] S. W. Hawking, Nature248, 30 (1974).
+[204] S. W. Hawking, Commun. Math. Phys.43, 199 (1975).
+[205] S. W. Hawking, in1st Oxford Conference on Quantum Gravity(1975).
+[206] S. W. Hawking, Commun. Math. Phys.43, 199 (1975), [Erratum: Commun.Math.Phys. 46, 206 (1976)].
+[207] D. N. Page, Phys. Rev. D13, 198 (1976).
+[208] D. N. Page, Phys. Rev. D14, 3260 (1976).
+[209] D. N. Page, Phys. Rev. D16, 2402 (1977).
+[210] B. Carr, K. Kohri, Y. Sendouda, and J. Yokoyama, Rept. Prog. Phys.84, 116902 (2021), arXiv:2002.12778 [astro-ph.CO].
+[211] Y. F. Perez-Gonzalez and J. Turner, (2020), arXiv:2010.03565 [hep-ph].
+[212] N. Bernal and O. Zapata, JCAP03, 015 (2021), arXiv:2011.12306 [astro-ph.CO].
+[213] N. Bernal and O. Zapata, Phys. Lett. B815, 136129 (2021), arXiv:2011.02510 [hep-ph].
+[214] N. Bernal, Y. F. Perez-Gonzalez, Y. Xu, and O. Zapata, Phys. Rev. D104, 123536 (2021), arXiv:2110.04312 [hep-ph].
+[215] N. Bernal, F. Hajkarim, and Y. Xu, Phys. Rev. D104, 075007 (2021), arXiv:2107.13575 [hep-ph].
+[216] N. Bernal, Y. F. Perez-Gonzalez, and Y. Xu, Phys. Rev. D106, 015020 (2022), arXiv:2205.11522 [hep-ph].
+[217] Y. F. Perez-Gonzalez, Phys. Rev. D108, 083014 (2023), arXiv:2307.14408 [astro-ph.HE].
+[218] A. Cheek, L. Heurtier, Y. F. Perez-Gonzalez, and J. Turner, Phys. Rev. D106, 103012 (2022), arXiv:2207.09462 [astro-
+ph.CO].
+[219] A. Cheek, L. Heurtier, Y. F. Perez-Gonzalez, and J. Turner, Phys. Rev. D108, 015005 (2023), arXiv:2212.03878 [hep-ph].
+[220] E. Bertuzzo, Y. F. Perez-Gonzalez, G. M. Salla, and R. Z. Funchal, JCAP09, 059 (2024), arXiv:2405.17611 [hep-ph].
+[221] V. De Romeri, Y. F. Perez-Gonzalez, and A. Tolino, JCAP04, 018 (2025), arXiv:2405.00124 [hep-ph].
+[222] J. Gunn, L. Heurtier, Y. F. Perez-Gonzalez, and J. Turner, JCAP02, 040 (2025), arXiv:2409.02173 [hep-ph].
+
+19
+[223] Y. F. Perez-Gonzalez, Phys. Rev. D111, 083015 (2025), arXiv:2502.04430 [astro-ph.CO].
+[224] H. Sanchis, G. Barenboim, and Y. F. Perez-Gonzalez, JCAP08, 049 (2025), arXiv:2502.19498 [astro-ph.CO].
+[225] L. F. T. Airoldi, G. F. S. Alves, Y. F. Perez-Gonzalez, G. M. Salla, and R. Z. Funchal, Phys. Rev. D113, 023052 (2026),
+arXiv:2505.24652 [astro-ph.HE].
+[226] L. F. T. Airoldi, G. F. S. Alves, Y. F. Perez-Gonzalez, G. M. Salla, and R. Z. Funchal, Phys. Rev. Lett.136, 041002
+(2026), arXiv:2505.24666 [hep-ph].
+[227] J. Iguaz Juan, Y. F. Perez-Gonzalez, and J. Turner, JCAP05, 055 (2026), arXiv:2508.21011 [hep-ph].
+[228] A. Arbey and J. Auffinger, Eur. Phys. J. C79, 693 (2019), arXiv:1905.04268 [gr-qc].
+[229] A. Arbey and J. Auffinger, Eur. Phys. J. C81, 910 (2021), arXiv:2108.02737 [gr-qc].
+[230] D.-C. Dai, C. Issever, E. Rizvi, G. Starkman, D. Stojkovic, and J. Tseng, Comput. Phys. Commun.236, 285 (2019),
+arXiv:0902.3577 [hep-ph].
+[231] J. A. Frost, J. R. Gaunt, M. O. P. Sampaio, M. Casals, S. R. Dolan, M. A. Parker, and B. R. Webber, JHEP10, 014
+(2009), arXiv:0904.0979 [hep-ph].
+[232] M. Calz` a, D. Pedrotti, and S. Vagnozzi, Phys. Rev. D111, 024009 (2025), arXiv:2409.02804 [gr-qc].
+[233] M. Calz` a, D. Pedrotti, and S. Vagnozzi, Phys. Rev. D111, 024010 (2025), arXiv:2409.02807 [gr-qc].
+[234] M. Calz` a, D. Pedrotti, G.-W. Yuan, and S. Vagnozzi, Phys. Rev. D112, 124015 (2025), arXiv:2507.02396 [gr-qc].
+[235] J. Bardeen, inProceedings, 5th International Conference on Gravitation and the theory of relativity: Tbilisi, USSR,
+December 9-13, 1968(1968) p. 174.
+[236] S. A. Hayward, Phys. Rev. Lett.96, 031103 (2006), arXiv:gr-qc/0506126.
+[237] A. Simpson and M. Visser, JCAP02, 042 (2019), arXiv:1812.07114 [gr-qc].
+[238] A. Peltola and G. Kunstatter, Phys. Rev. D79, 061501 (2009), arXiv:0811.3240 [gr-qc].
+[239] F. D’Ambrosio and C. Rovelli, Class. Quant. Grav.35, 215010 (2018), arXiv:1803.05015 [gr-qc].
+[240] E. Babichev, C. Charmousis, and A. Leh´ ebel, JCAP04, 027 (2017), arXiv:1702.01938 [gr-qc].
+[241] A. Arbey, E. R. Livine, and C. Montagnon, Class. Quant. Grav.42, 235009 (2025), arXiv:2505.16883 [gr-qc].
+[242] M. Calz´ a, Phys. Dark Univ.48, 101900 (2025), arXiv:2502.04041 [gr-qc].
+[243] M. Calz´ a’, GrayHawk v2: wormholes and numeric extension arXiv:XXXX.XXXXX [gr-qc].
+[244] A. Arbey, M. Calz` a, and Y. F. Perez-Gonzalez, Phys. Dark Univ.48, 101903 (2025), arXiv:2502.17240 [gr-qc].
+[245] R. Penrose, Phys. Rev. Lett.14, 57 (1965).
+[246] S. W. Hawking and R. Penrose, Proc. Roy. Soc. Lond. A314, 529 (1970).
+[247] A. Borde, Phys. Rev. D55, 7615 (1997), arXiv:gr-qc/9612057.
+[248] E. Ayon-Beato and A. Garcia, Phys. Rev. Lett.80, 5056 (1998), arXiv:gr-qc/9911046.
+[249] E. Ayon-Beato and A. Garcia, Phys. Lett. B464, 25 (1999), arXiv:hep-th/9911174.
+[250] K. A. Bronnikov and J. C. Fabris, Phys. Rev. Lett.96, 251101 (2006), arXiv:gr-qc/0511109.
+[251] W. Berej, J. Matyjasek, D. Tryniecki, and M. Woronowicz, Gen. Rel. Grav.38, 885 (2006), arXiv:hep-th/0606185.
+[252] K. A. Bronnikov, R. A. Konoplya, and A. Zhidenko, Phys. Rev. D86, 024028 (2012), arXiv:1205.2224 [gr-qc].
+[253] M. Rinaldi, Phys. Rev. D86, 084048 (2012), arXiv:1208.0103 [gr-qc].
+[254] Z. Stuchl´ ık and J. Schee, Int. J. Mod. Phys. D24, 1550020 (2014), arXiv:1501.00015 [astro-ph.HE].
+[255] J. Schee and Z. Stuchlik, JCAP06, 048 (2015), arXiv:1501.00835 [astro-ph.HE].
+[256] T. Johannsen, Phys. Rev. D88, 044002 (2013), arXiv:1501.02809 [gr-qc].
+[257] R. Myrzakulov, L. Sebastiani, S. Vagnozzi, and S. Zerbini, Class. Quant. Grav.33, 125005 (2016), arXiv:1510.02284
+[gr-qc].
+[258] Z.-Y. Fan and X. Wang, Phys. Rev. D94, 124027 (2016), arXiv:1610.02636 [gr-qc].
+[259] L. Sebastiani, S. Vagnozzi, and R. Myrzakulov, Adv. High Energy Phys.2017, 3156915 (2017), arXiv:1612.08661 [gr-qc].
+[260] B. Toshmatov, Z. Stuchl´ ık, and B. Ahmedov, Phys. Rev. D95, 084037 (2017), arXiv:1704.07300 [gr-qc].
+[261] S. Chinaglia and S. Zerbini, Gen. Rel. Grav.49, 75 (2017), arXiv:1704.08516 [gr-qc].
+[262] V. P. Frolov, EPJ Web Conf.168, 01001 (2018), arXiv:1708.04698 [gr-qc].
+[263] M. Bertipagani, M. Rinaldi, L. Sebastiani, and S. Zerbini, Phys. Dark Univ.33, 100853 (2021), arXiv:2012.15645 [gr-qc].
+[264] G. G. L. Nashed and E. N. Saridakis, JCAP05, 017 (2022), arXiv:2111.06359 [gr-qc].
+[265] A. Simpson and M. Visser, JCAP03, 011 (2022), arXiv:2111.12329 [gr-qc].
+[266] E. Franzin, S. Liberati, J. Mazza, R. Dey, and S. Chakraborty, Phys. Rev. D105, 124051 (2022), arXiv:2201.01650
+[gr-qc].
+[267] L. Chataignier, A. Y. Kamenshchik, A. Tronconi, and G. Venturi, Phys. Rev. D107, 023508 (2023), arXiv:2208.02280
+[gr-qc].
+[268] R. Ghosh, M. Rahman, and A. K. Mishra, Eur. Phys. J. C83, 91 (2023), arXiv:2209.12291 [gr-qc].
+[269] M. Khodadi and R. Pourkhodabakhshi, Phys. Rev. D106, 084047 (2022), arXiv:2210.06861 [gr-qc].
+[270] D. Pedrotti and M. Calz` a, Phys. Rev. D111, 124056 (2025), arXiv:2504.01909 [gr-qc].
+[271] D. Farrahet al., Astrophys. J. Lett.944, L31 (2023), arXiv:2302.07878 [astro-ph.CO].
+[272] M. Fontana and M. Rinaldi, Phys. Rev. D108, 125003 (2023), arXiv:2302.08804 [gr-qc].
+[273] K. Boshkayev, A. Idrissov, O. Luongo, and M. Muccino, Phys. Rev. D108, 044063 (2023), arXiv:2303.03248 [astro-
+ph.HE].
+[274] O. Luongo, S. Mancini, and P. Pierosara, Phys. Rev. D108, 104059 (2023), arXiv:2304.06593 [gr-qc].
+[275] O. Luongo and H. Quevedo, Class. Quant. Grav.41, 125011 (2024), arXiv:2305.11185 [gr-qc].
+[276] M. Cadoni, A. P. Sanna, M. Pitzalis, B. Banerjee, R. Murgia, N. Hazra, and M. Branchesi, JCAP11, 007 (2023),
+arXiv:2306.11588 [gr-qc].
+
+20
+[277] R. Giamb` o and O. Luongo, Class. Quant. Grav.41, 125005 (2024), arXiv:2308.10060 [gr-qc].
+[278] M. Cadoni, R. Murgia, M. Pitzalis, and A. P. Sanna, JCAP03, 026 (2024), arXiv:2309.16444 [gr-qc].
+[279] O. Luongo, H. Quevedo, and S. N. Sajadi, Gen. Rel. Grav.56, 17 (2024), arXiv:2311.13264 [gr-qc].
+[280] S. N. Sajadi, M. Khodadi, O. Luongo, and H. Quevedo, Phys. Dark Univ.45, 101525 (2024), arXiv:2312.16081 [gr-qc].
+[281] F. Javed, S. Mumtaz, G. Mustafa, F. Atamurotov, and S. G. Ghosh, Chin. J. Phys.88, 55 (2024).
+[282] A. Ditta, T. Xia, R. Ali, G. Mustafa, G. Mustafa, and A. Mahmood, Phys. Dark Univ.43, 101418 (2024).
+[283] A. Al-Badawi, S. Shaymatov, M. Alloqulov, and A. Wang, Commun. Theor. Phys.76, 085401 (2024), arXiv:2401.12723
+[gr-qc].
+[284] A. ¨Ovg¨ un, R. C. Pantig, and A. Rinc´ on, Annals Phys.463, 169625 (2024), arXiv:2402.14190 [gr-qc].
+[285] D. Corona, R. Giamb` o, and O. Luongo, Int. J. Geom. Meth. Mod. Phys.21, 2440019 (2024), arXiv:2402.18997 [gr-qc].
+[286] P. Bueno, P. A. Cano, and R. A. Hennigar, Phys. Lett. B861, 139260 (2025), arXiv:2403.04827 [gr-qc].
+[287] R. A. Konoplya and A. Zhidenko, Phys. Rev. D109, 104005 (2024), arXiv:2403.07848 [gr-qc].
+[288] D. Pedrotti and S. Vagnozzi, Phys. Rev. D110, 084075 (2024), arXiv:2404.07589 [gr-qc].
+[289] K. A. Bronnikov, Phys. Rev. D110, 024021 (2024), arXiv:2404.14816 [gr-qc].
+[290] Y. Kurmanov, K. Boshkayev, T. Konysbayev, O. Luongo, N. Saiyp, A. Urazalina, G. Ikhsan, and G. Suliyeva, Phys.
+Dark Univ.46, 101566 (2024), arXiv:2404.15437 [gr-qc].
+[291] S. V. Bolokhov, K. A. Bronnikov, and M. V. Skvortsova, Grav. Cosmol.30, 265 (2024), arXiv:2405.09124 [gr-qc].
+[292] A. S. Agrawal, S. Zerbini, and B. Mishra, Phys. Dark Univ.46, 101637 (2024), arXiv:2406.01241 [gr-qc].
+[293] A. Belfiglio, S. M. Chandran, O. Luongo, and S. Mancini, Phys. Rev. D111, 024013 (2025), arXiv:2407.03775 [gr-qc].
+[294] O. Stashko, Phys. Rev. D110, 084016 (2024), arXiv:2407.07892 [gr-qc].
+[295] V. Faraoni and M. Rinaldi, Phys. Rev. D110, 063553 (2024), arXiv:2407.14549 [gr-qc].
+[296] R. A. Konoplya and O. S. Stashko, Phys. Rev. D111, 104055 (2025), arXiv:2408.02578 [gr-qc].
+[297] M. Khodadi and J. T. Firouzjaee, Phys. Lett. B857, 138986 (2024), arXiv:2408.12873 [gr-qc].
+[298] M. Calz` a, F. Gianesello, M. Rinaldi, and S. Vagnozzi, Sci. Rep.14, 31296 (2024), arXiv:2409.01801 [gr-qc].
+[299] G.-W. Yuan, M. Calz` a, and D. Pedrotti, Phys. Dark Univ.50, 102078 (2025), arXiv:2504.18270 [astro-ph.CO].
+[300] W. Kinnersley, J. Math. Phys.10, 1195 (1969).
+[301] A. Z. Petrov, Gen. Rel. Grav.32, 1661 (2000).
+[302] A. Coley, R. Milson, V. Pravda, and A. Pravdova, Class. Quant. Grav.21, L35 (2004), arXiv:gr-qc/0401008.
+[303] E. Ayon-Beato and A. Garcia, Phys. Lett. B493, 149 (2000), arXiv:gr-qc/0009077.
+[304] E. Ayon-Beato and A. Garcia, Gen. Rel. Grav.37, 635 (2005), arXiv:hep-th/0403229.
+[305] R. V. Maluf and J. C. S. Neves, Int. J. Mod. Phys. D28, 1950048 (2018), arXiv:1801.08872 [gr-qc].
+[306] A. D. Sakharov, Sov. Phys. JETP22, 241 (1966).
+[307] E. B. Gliner, Soviet Journal of Experimental and Theoretical Physics22, 378 (1966).
+[308] M. A. Markov, Soviet Journal of Experimental and Theoretical Physics Letters36, 265 (1982).
+[309] M. A. Markov, Soviet Journal of Experimental and Theoretical Physics Letters46, 431 (1987).
+[310] V. F. Mukhanov and R. H. Brandenberger, Phys. Rev. Lett.68, 1969 (1992).
+[311] A. Kumar, D. V. Singh, and S. G. Ghosh, Annals Phys.419, 168214 (2020), arXiv:2003.14016 [gr-qc].
+[312] S. I. Kruglov, Grav. Cosmol.27, 78 (2021), arXiv:2103.14087 [gr-qc].
+[313] A. Addaziet al., Prog. Part. Nucl. Phys.125, 103948 (2022), arXiv:2111.05659 [hep-ph].
+[314] R. Alves Batistaet al., Class. Quant. Grav.42, 032001 (2025), arXiv:2312.00409 [gr-qc].
+[315] N. Tsukamoto, Phys. Rev. D103, 024033 (2021), arXiv:2011.03932 [gr-qc].
+[316] J. Mazza, E. Franzin, and S. Liberati, JCAP04, 082 (2021), arXiv:2102.01105 [gr-qc].
+[317] R. Shaikh, K. Pal, K. Pal, and T. Sarkar, Mon. Not. Roy. Astron. Soc.506, 1229 (2021), arXiv:2102.04299 [gr-qc].
+[318] S. U. Islam, J. Kumar, and S. G. Ghosh, JCAP10, 013 (2021), arXiv:2104.00696 [gr-qc].
+[319] M. Guerrero, G. J. Olmo, D. Rubiera-Garcia, and D. S.-C. G´ omez, JCAP08, 036 (2021), arXiv:2105.15073 [gr-qc].
+[320] P. Bambhaniya, S. K, K. Jusufi, and P. S. Joshi, Phys. Rev. D105, 023021 (2022), arXiv:2109.15054 [gr-qc].
+[321] Y. Yang, D. Liu, A. ¨Ovg¨ un, Z.-W. Long, and Z. Xu, (2022), arXiv:2205.07530 [gr-qc].
+[322] S. Riaz, S. Shashank, R. Roy, A. B. Abdikamalov, D. Ayzenberg, C. Bambi, Z. Zhang, and M. Zhou, JCAP10, 040
+(2022), arXiv:2206.03729 [gr-qc].
+[323] D. Arora, P. Bambhaniya, D. Dey, and P. S. Joshi, Phys. Dark Univ.44, 101487 (2024), arXiv:2305.08082 [gr-qc].
+[324] S. K. Jha, Eur. Phys. J. Plus138, 757 (2023), arXiv:2309.06454 [gr-qc].
+[325] S. K. Jha and A. Rahaman, Phys. Dark Univ.42, 101327 (2023).
+[326] K. A. Bronnikov and R. K. Walia, Phys. Rev. D105, 044039 (2022), arXiv:2112.13198 [gr-qc].
+[327] A. Peltola and G. Kunstatter, Phys. Rev. D80, 044031 (2009), arXiv:0902.1746 [gr-qc].
+[328] E. Bianchi, M. Christodoulou, F. D’Ambrosio, H. M. Haggard, and C. Rovelli, Class. Quant. Grav.35, 225003 (2018),
+arXiv:1802.04264 [gr-qc].
+[329] D. Langlois, K. Noui, and H. Roussille, Phys. Rev. D104, 124043 (2021), arXiv:2103.14744 [gr-qc].
+[330] K. D. Kokkotas and B. G. Schmidt, Living Rev. Rel.2, 2 (1999), arXiv:gr-qc/9909058.
+[331] E. Berti, V. Cardoso, and A. O. Starinets, Class. Quant. Grav.26, 163001 (2009), arXiv:0905.2975 [gr-qc].
+[332] R. A. Konoplya and A. Zhidenko, Rev. Mod. Phys.83, 793 (2011), arXiv:1102.4014 [gr-qc].
+[333] H. Roussille, D. Langlois, and K. Noui, JCAP01, 054 (2024), arXiv:2312.11986 [gr-qc].
+[334] I. Sakalli and S. Kanzi, Turk. J. Phys.46, 51 (2022), arXiv:2205.01771 [hep-th].
+[335] R. A. Konoplya and A. Zhidenko, JCAP09, 068 (2024), arXiv:2406.11694 [gr-qc].
+
+21
+[336] R. A. Konoplya and A. Zhidenko, Phys. Lett. B861, 139288 (2025), arXiv:2408.11162 [gr-qc].
+[337] E. Newman and R. Penrose, J. Math. Phys.3, 566 (1962).
+[338] S. A. Teukolsky, Phys. Rev. Lett.29, 1114 (1972).
+[339] S. A. Teukolsky, Astrophys. J.185, 635 (1973).
+[340] S. A. Teukolsky,Perturbations of a rotating black hole, Ph.D. thesis, Caltech (1973).
+[341] S. A. Teukolsky and W. H. Press, Astrophys. J.193, 443 (1974).
+[342] S. Chandrasekhar and S. L. Detweiler, Proc. Roy. Soc. Lond. A345, 145 (1975).
+[343] S. Chandrasekhar and S. L. Detweiler, Proc. Roy. Soc. Lond. A350, 165 (1976).
+[344] S. Chandrasekhar and S. L. Detweiler, Proc. Roy. Soc. Lond. A352, 325 (1977).
+[345] M. Calza’,Primordial Black Holes as laboratories for new physics, Ph.D. thesis, Coimbra U. (2024).
+[346] A. H. Wilson, Proceedings of The Royal Society A: Mathematical, Physical and Engineering Sciences118, 617 (1928).
+[347] W. G. Baber and H. R. Hass´ e, Mathematical Proceedings of the Cambridge Philosophical Society31, 564–581 (1935).
+[348] E. W. Leaver, Proc. Roy. Soc. Lond. A402, 285 (1985).
+[349] E. W. Leaver, J. Math. Phys.27, 1238 (1986).
+[350] R. A. Konoplya, D. Ovchinnikov, and B. Ahmedov, Phys. Rev. D108, 104054 (2023), arXiv:2307.10801 [gr-qc].
+[351] R. A. Konoplya, JCAP07, 001 (2023), arXiv:2305.09187 [gr-qc].
+[352] J. G. Rosa, JHEP02, 014 (2013), arXiv:1209.4211 [hep-th].
+[353] J. G. Rosa, Phys. Rev. D95, 064017 (2017), arXiv:1612.01826 [gr-qc].
+[354] R. Dong, W. H. Kinney, and D. Stojkovic, JCAP10, 034 (2016), arXiv:1511.05642 [astro-ph.CO].

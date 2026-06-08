@@ -1,0 +1,1388 @@
+Title: Scalable Dark Siren Cosmology with gwcosmo: GPU Acceleration, Validation and Systematics
+Authors: Alexander Papadopoulos, Christian E. A. Chapman-Bird, Rachel Gray, Christopher Messenger, Tom Bertheas
+Published: 2026-05-22
+Categories: astro-ph.CO, gr-qc
+
+Scalable Dark Siren Cosmology withgwcosmo: GPU Acceleration, Validation and
+Systematics
+Alexander Papadopoulos, 1 Christian E. A. Chapman-Bird, 2, 1
+Rachel Gray, 1 Christopher Messenger, 1 and Tom Bertheas 3, 4
+1Institute for Gravitational Research, University of Glasgow, Glasgow, G12 8QQ, United Kingdom
+2Institute for Gravitational Wave Astronomy & School of Physics and Astronomy,
+University of Birmingham, Edgbaston, Birmingham B15 2TT, United Kingdom
+3Laboratoire des 2 Infinis - Toulouse (L2IT-IN2P3),
+Universit´ e de Toulouse, CNRS, F-31062 Toulouse Cedex 9, France
+4Laboratoire de Physique de l’Ecole Normale Sup´ erieure (LPENS),
+ENS, Universit´ e PSL, CNRS, 75005 Paris, France
+(Dated: May 25, 2026)
+As the number of confident gravitational-wave detections grows, population-level hierarchical anal-
+yses face increasing computational costs. Dark-siren cosmological inference integrates over the local-
+isation volume of each gravitational-wave source. To remain feasible without discarding information
+from the quieter but more numerous sources in the catalogue, significant efficiency improvements
+are vital for analysis pipelines. In this work, we present an upgraded version of the cosmological
+inference pipelinegwcosmo, which leverages vectorisation on graphics processing units to process
+the entire gravitational-wave catalogue in parallel with each iteration. This new implementation
+achieves a speed-up of∼10 3 over the previous version, facilitating analyses of O5-like numbers
+of GW events on wall-clock timescales of hours. Our results demonstrate the scalability of the
+gwcosmopipeline, specifically its ability to handle the increasing computational load of expanding
+event catalogues, positioning it as a vital tool for future advances in dark-siren cosmology.
+I. INTRODUCTION
+Inference of cosmological parameters from compact bi-
+nary coalescences (CBCs) was first described by Schutz
+in 1986 [1], introducing the usage of gravitational wave
+(GW) signals as “standard sirens”. Unlike electromag-
+netic distance ladders, standard sirens offer an indepen-
+dent probe of cosmology, making it possible to constrain
+parameters such as the Hubble constant,H 0, directly
+from GW signals. Cosmological inference with GW sig-
+nals requires information on the redshift of the source
+(z), as well as the luminosity distance (d L) [1–3]. GW
+observations directly measure the redshifted chirp mass
+Mz =M(1 +z), whereMis the source-frame chirp
+mass, and the luminosity distance of the source, which
+depends on redshift through the cosmological model
+dL(z) = (1 +z)
+Z z
+0
+cdz′
+H(z ′) .(1)
+HereH(z) =H 0
+p
+Ωm(1 +z) 3 + ΩΛ, with Ω m,Λ being
+the matter and dark energy density parameters assum-
+ing a ΛCDM cosmological model. Because GW signals
+encode information on the redshifted rather than source-
+frame masses, the source redshift cannot be determined
+directly from GW data alone 1, and additional informa-
+tion is required to break this degeneracy
+In this framework, GW signals as standard sirens can
+be split into a number of classes. In the presence of an
+1 In the case of binary neutron star mergers, it is possible to break
+this degeneracy using the tidal information of the signal [4].
+electromagnetic (EM) counterpart, the redshift can be
+determined by the localisation of the counterpart inside
+a host galaxy - earning the namebright sirens[2, 5, 6].
+When no unique counterpart information is available, it
+is possible to break the degeneracy by either using infor-
+mation solely from the mass distribution of GW sources,
+or combining this with galaxy surveys to statistically de-
+termine the redshift of the sources -spectral[7–11] and
+dark sirensrespectively [1, 12–20].
+Since the first detection in 2015, more than 200 GW
+events have been detected by the LIGO-Virgo-KAGRA
+Collaboration (LVK) [21–23] up to the end of the first
+part of the fourth observing run (O4a), collected in the
+fourth Gravitational-Wave Transient Catalog (GWTC-
+4.0) [24–27]. It is anticipated that this number will con-
+tinue to rise in the near future, with both O4b and O4c
+data releases still to come, as well as future observing
+runs. This rapidly growing number of detections will be
+crucial for tightening cosmological constraints with GWs,
+since the precision of these measurements increases with
+the number of observed sources. Dark and spectral sirens
+will play an important role in constraining cosmological
+parameters, as to date there has been only one instance
+of a confidently associated bright siren, GW170817 [6].
+The cosmological inference pipelinegwcosmo[18, 28,
+29] implements thedark sirenmethod via a hierarchi-
+cal Bayesian framework to jointly infer cosmological and
+population properties of compact binary coalescences,
+additionally incorporating information from galaxy sur-
+veys. Other pipelines such asicarogw[30, 31] and
+CHIMERA[20, 32] employ similar hierarchical methods to
+perform cosmological inference with GWs. Previous ver-
+sions ofgwcosmohave been used by the LVK collabo-
+arXiv:2605.23538v1  [astro-ph.CO]  22 May 2026
+
+2
+ration to analyse GW events and produce cosmological
+constraints, most recently in [33]. During cosmological
+inference, this version ofgwcosmooperated on the GW
+catalogue data in a highly serialised fashion, processing
+the pixelated sky-localisation area of each GW event one
+at a time, working pixel-by-pixel to construct the hierar-
+chical likelihood. This means that the wall-time for anal-
+ysis scales approximately asO(N events ×Npix ×Nsamples),
+denoting the number of events, pixels and samples in
+each pixel respectively. Indeed, in [33], analyses us-
+ing 141 GW events tookO(weeks) to reach convergence
+even when parallelised over 32 central processing units
+(CPUs). This presents a real challenge to the scalability
+of cosmological analyses with a growing catalog of GW
+events, which threatens to become intractable in the cur-
+rent framework.
+In this work, we present an updated version ofgwcosmo
+which is capable of scalable cosmological inference us-
+ing a graphics processing unit (GPU), as well as retain-
+ing the original ability to parallelise over multiple CPUs.
+This update allows us to perform fully vectorised evalua-
+tions ofgwcosmo’s hierarchical likelihood, significantly
+decreasing the wall-time taken to produce constraints
+on cosmological and GW population parameters. Even
+when usingO(10 3) GW events, comparable to the num-
+bers expected during the O5 observing run, the updated
+code is capable of outperforming its predecessor by a fac-
+tor of 1000. This enables a wide range of new studies in
+GW cosmology in a fraction of the time, while produc-
+ing results fully consistent with previous versions of the
+code and supporting future analyses with substantially
+expanded GW event catalogs through additional perfor-
+mance optimizations.
+This paper is organised as follows. In§II we describe
+the methods used which allow the likelihood to be eval-
+uated on a GPU, as well as new features added to the
+pipeline. In§III we demonstrate the consistency of the
+code with the previous version, and the ability to recover
+parameters from a simulated population of GW events.
+Additionally in this section we investigate the effects of a
+number of implementation choices on the final cosmolog-
+ical constraints. We also include a number of appendices
+describing the GW data used in our analyses (Appendix
+A), validating our criterion for posterior agreement (Ap-
+pendix B), comparing code performance on different de-
+vices and energy consumption (Appendix C).
+II. METHODOLOGY
+A. Hierarchical Likelihood
+For a population of GW sources described by hyperpa-
+rameters Λ =Λ cosmo,Λpop, where Λ cosmo(Λpop) describe
+the cosmological (population) model, the posterior on the
+hyperparameters given the GW data{x GW}from the
+Ndet detected events, conditioned on the detection crite-
+rion{D GW}is given by by [34, 35]:
+p(Λ|{xGW},{D GW}, I)∝p(Λ|I)p(N det|Λ, I)
+×
+NdetY
+i
+p(xGWi|DGWi,Λ, I),
+(2)
+where the termp(x GWi|DGWi,Λ, I) is the likelihood
+from GW eventigiven the binary detection parameter
+DGWi = 1. The inclusion ofIis a catch-all for the re-
+maining information, cosmological or otherwise, not ex-
+pressed explicitly. Using Bayes’ theorem and by explicit
+marginalization over the source frame parameters of indi-
+vidual GW eventsθ(masses, spins, redshift, inclination
+etc.), this can be expressed as:
+p(Λ|{xGW},{D GW}, I)∝p(Λ|I)p(N det|Λ, I)
+×α(Λ) −Ndet
+NdetY
+i
+Z
+p(xGWi|θ,Λ, I)p(θ|Λ, I)dθ.
+(3)
+The termα(Λ) is known as theselection function, and
+is defined as
+α(Λ) =
+Z
+p(DGW|θ,Λ, I)p(θ|Λ, I)dθ,(4)
+and is used to account for the finite detection horizon
+for GW events in the observed population, meaning that
+they represent an incomplete set of the true astrophysical
+population. As this term is identical for all events in the
+population, it can be removed from the product. While
+seemingly dependent on Λ, by using a scale-free Jeffrey’s
+prior on the expected rate of detected GW events, the
+cosmological dependence inp(N det|Λ) drops out [36].
+In order to explicitly incorporate galaxy catalog infor-
+mation, Eq. 3 can be rewritten to marginalise over GW
+event sky location (Ω) by dividing each event intoN pix
+equally-sized pixels, and then marginalising overz, as
+well as explicitly including the selection function in the
+denominator,
+
+3
+p(Λ|{xGW},{D GW}, I)∝p(Λ|I)p(N det|Λ, I)
+
+
+ZZ
+p(DGW|z, θ′,Λ, I)p(θ ′|Λ, I)
+NpixX
+j
+p(z|Ωj,Λ, I)dθ ′dz
+
+
+−Ndet
+×
+NdetY
+i
+
+
+ZZ NpixX
+j
+p(xGWi|Ωj, z, θ′,Λ, I)p(θ ′|Λ, I)p(z|Ω j,Λ, I)dθ ′dz
+
+ ,
+(5)
+whereθ={z, θ ′}. We approximate in Eq. 5 that the
+probability of detection does not vary over the sky, and
+so thep(D GW|z, θ′,Λ, I) term is removed from the sum
+over pixels2. Of particular interest is the likelihood term
+p(xGWi|Ωj, z, θ′,Λ, I). This can be written in terms of
+samples to explicitly show the usage of a kernel density
+estimate (KDE) to construct a distribution of GW prob-
+ability in each pixel,
+p(xGWi|Ωj, z, θ′,Λ, I)∝
+Nsamps,jX
+k=1
+wijk Khij(z−z ijk) (6)
+WhereK hij(·) is a Gaussian kernel and bandwidthh ij,
+and the weights of samplekin pixeljare defined as
+wijk =
+p(zijk , θ′
+ijk |Λ, I)
+πPE(zijk , θ′
+ijk) ,(7)
+which removes assumed parameter estimation priors, and
+re-weighting by the cosmological and population models
+being analysed. Lastly, we also include a numerical sta-
+bility criterion on a pixel-by-pixel basis called theeffec-
+tive number of samples,N eff,PE, which for pixeljin event
+iusing sampleskis defined as [37, 38]
+Neff,PE,j = (P
+k wijk)2
+P
+k w2
+ijk
+,(8)
+using the weights calculated in Eq. 7. If a pixel does
+not pass this threshold for a given set of Λ, it does not
+contribute to to the total likelihood. For further discus-
+sion of the statistical framework underpinninggwcosmo,
+see [29].
+B. GPU Acceleration
+The primary computational cost when evaluating the
+gwcosmo’s likelihood is constructing the KDEs in Eq. 6.
+These are evaluated over the redshift samples - which are
+dependent on Λ via Λcosmo- for all sky pixels in each GW
+2 This is because the probability of detection is averaged over an
+observing run, and the rotation of the earth blurs much of the
+dependence on sky position. There remains a mild dependence
+on declination which is neglected in this framework, consistently
+with the previous version ofgwcosmo[29].
+Event 1 Event NEvent 2
+Pixel 
+1
+Pixel 
+N
+Pixel 
+3
+Pixel 
+2
+Sample 
+1
+KDE construction per sample
+Interpolation and integration per pixel
+Log-summation per event
+Evaluate events sequentially
+Evaluate pixels sequentially
+Evaluate samples sequentially
+Sample 
+2
+Sample 
+N
+Sample 
+3
+FIG. 1. Sequential CPU based likelihood evaluation scheme.
+The process uses serial evaluation over events, pixels and
+samples, whereby the KDE construction iterates over each
+sample, then pixel-level distributions are interpolated and in-
+tegrated, and the single-event likelihoods are log-summed.
+Dashed lines indicate elements which must wait to be evalu-
+ated in the sequential scheme.
+event. For each likelihood evaluation Λ are updated, and
+so the KDEs must be re-computed on the fly for each
+event. Given the lack of an alternative method to com-
+pute these in parallel, this operation is sequential, mean-
+ing the cost increases linearly with the number of events
+in the analysis. This process, which was implemented in
+previous iterations ofgwcosmo, is visualised in Fig. 1. In
+each likelihood call, the code must move through a set of
+nested loops, with the top level being a loop overN events,
+then through each of theNpixels making up the GW event
+sky area, and finally through theN samples in each pixel
+when constructing the KDE. These pixels are then in-
+tegrated over redshift, before a summation on the event
+level, to produce a single hierarchical likelihood value.
+
+4
+Event 1 Event NEvent 2
+Parallelised KDE construction
+Parallelised interpolation & integration
+Parallel log-sum reduction
+Many parallel threads
+Pixels 
+1 ,…, Npix
+Samples 
+1, …, Nsamples
+FIG. 2. Parallel GPU based likelihood evaluation scheme.
+The strength of this implementation is to leverage many par-
+allel threads in order to simultaneous process events, pixels
+and samples. The parallelised KDE construction, interpola-
+tion and integration, and log-sum reduction work in tandem
+to produce a significant performance upgrade relative to the
+sequential implementation.
+The cost of this process grows linearly as the number of
+GW events being analysed increases, to the point that
+analyses become intractable.
+We present a new approach to evaluate thegwcosmo
+likelihood, which leverages the massively parallel process-
+ing capabilities of GPUs to significantly improve the per-
+formance of cosmological analyses. The major structural
+change required to implement this is the construction of
+a three-dimensional tensor that contains event posterior
+samples, of shape (N events, Npix, Nsamples). Each tensor
+element corresponds to an unweighted posterior sample
+associated with a given sky pixel for a given event. To
+avoid the complexity of ragged arrays required by events
+with different numbers of pixels and samples, we pad our
+tensors based on the largest member’s dimensions (max
+sky pixels and max samples). This ensures a dense, rect-
+angular structure where padded indices do not contribute
+anything to the total likelihood. As visualised in Fig. 2,
+this allows the likelihood evaluation to be fully vector-
+ized, with every operation contained in both numerator
+and denominator of Eq. 5 being computed in parallel over
+events, pixels and samples. This means that all explicit
+loops over events, pixels and samples are removed from
+the code, delivering a significant increase in computa-
+tional performance. The cost of this process is in theory
+O(1), i.e constant with respect to the size of the inputs,
+but in practice this will be limited by both the part of
+the likelihood which is not computed in parallel, and by
+the total GPU memory available.
+To allow for this, we implement aPytorch[39] frame-
+work forgwcosmo, making population models, cosmo-
+logical calculations and selection effects computation
+Pytorch-compatible. Additionally, a number of custom
+CUDA[40] kernels are implemented using theNumba[41]
+library. In particular, the vectorized computation of
+KDEs eliminate the computational bottleneck caused by
+sequential KDEs. These kernels allow for many opera-
+tions to be carried out at low-level using shared memory,
+removing the need to instantiate large intermediate ar-
+rays during the likelihood evaluation. Despite these sub-
+stantial changes to allow the code to run in a massively
+parallel framework, it retains the CPU-only capability of
+previous versions - ensuring backwards compatibility.
+C. Memory Reduction Strategies
+The structure of a three-dimensional rectangular ar-
+ray containing the GW event posterior samples is very
+effective in improving the performance of the pipeline,
+however this is a trade off in terms of the memory re-
+quired. Given that GW posterior samples can number
+in the thousands for a given event, and the size of one
+array dimension is set by the maximum amount inany
+pixel inanyevent, the memory requirement of analysis
+can balloon with only a small number of events. In order
+to combat this, we implement the option to randomly
+downsample the GW posterior samples in a given pixel.
+In the limit of many thousands of samples, this still al-
+lows the KDE to accurately represent the distribution in
+each pixel.
+Additionally, for a catalog of many thousands of
+events, we can directly decrease the size of the array being
+evaluated by batching the likelihood. This is particularly
+useful when using a device with less VRAM, but also sees
+a decrease in computational performance proportional to
+the fraction of events evaluated in each batch.
+III. RESUL TS
+A. Acceleration
+To demonstrate the improved computational perfor-
+mance ofgwcosmo, we benchmark the code using 2000
+simulated GW events, more than 10 times the maximum
+number used in an analysis to date. The generation of
+this data is described in Appendix A. We compare the
+GPU implementation to the CPU code used in [33], and
+all values are produced with an Nvidia H100 GPU us-
+ing Hopper architecture unless explicitly stated other-
+
+5
+wise. The CPU values presented here were produced us-
+ing 2.4GHz Xeon E5-2630v3 CPUs, with the results in
+Fig. 6 parallelised over 32 processes. When stating times
+we take the mean evaluation time over 100 evaluations
+of the likelihood for hyperparameters randomly drawn
+from the prior, after 10 warm-up evaluations which are
+discarded.
+In Fig. 3 we compare the two versions ofgwcosmoas
+a function of the number of events in the catalog, rang-
+ing from 10 to 2000. The top panel includes the total
+evaluation time (numerator + denominator + parameter
+updates, from Eq. 5), while the bottom panel is the full
+likelihood without the denominator included. This was
+motivated by the fact that for O5-like sensitivity [42], a
+very large number of injections are required to calculate
+selection effects - in the previous version ofgwcosmothis
+becomes a dominant cost. This is due to the larger pa-
+rameter volume which becomes accessible to the detector
+- in order to accurately calculate Eq. 4 we require many
+more injections. When excluding this, the CPU evalu-
+ation curve returns to an expected linear scaling with
+Nevents. The key takeaway is the improvement of a fac-
+tor of almost 1000 whenN events = 2000, ensuring the
+scalability ofgwcosmofor O5-like analyses. Although in
+theory a perfectly vectorised implementation should not
+scale at all withN events, the small increase in computa-
+tional time taken on the GPU can be ascribed to a small
+number of operations which still require iterating over
+events, pixels or samples - as opposed to GPU satura-
+tion.
+It is possible to further decrease the computational
+cost of evaluating the likelihood by using a subset of the
+total posterior samples available per pixel, as described
+in§II C. In Fig. 4 we see that by decreasing this cap
+(effectively also a cap on the total number of samples),
+an improvement of a factor of 2 in performance can be
+achieved. In the lower panel of the same figure, the po-
+tential memory-saving effects of this are also clear. In
+§III C we investigate the effects of this on the final pos-
+terior.
+In Table I we break down the cost of a single likelihood
+evaluation by component and compare the improved per-
+formance relative to the legacy CPU implementation. We
+break evaluation into the numerator, denominator and
+other data processing operations, and compared these
+for the CPU, and two GPU settings - fiducial (with all
+samples) and downsampled (using a cap of 2500 sam-
+ples per pixel). The main operations in the numerator
+are the construction of KDEs and interpolating and sum-
+ming over pixels, before integrating over the expression.
+These operations are extremely costly in the CPU imple-
+mentation, making up over half the total evaluation time.
+Even for the fiducial GPU case, the KDE is a factor of
+almost 400×faster, while the interpolation and summa-
+tion are sped up by a factor of greater than 3×10 4. In
+the CPU implementation, the denominator becomes a
+more significant computational bottleneck (independent
+of the GW catalog size). When considering detectors
+10−1
+100
+101
+102
+Full evaluation (s)
+101 102 103
+Nevents
+10−1
+100
+101
+Evaluation w/o denominator (s)
+GPU
+CPU
+FIG. 3. Mean single likelihood evaluations times for the CPU
+and GPU implementations as a function of events, averaged
+over 100 evaluations. Both curves use the full set of GW event
+samples for a direct comparison. GPU values are calculated
+using an Nvidia H100 GPU.Top panel: Evaluations of both
+the numerator and denominator of the likelihood. For the
+legacy CPU implementation the evaluation of selection effects
+becomes a dominant cost.Bottom panel: Evaluations of the
+numerator only, where the linear scaling of the legacy CPU
+implementation is clear.
+with higher sensitivities, as a greater number of injec-
+tions are required to evaluate the selection effects. The
+effect of this is clear in the CPU column of Table I. By in-
+stead handling this with aPytorchframework the cost is
+reduced by a factor of almost 900. For more straightfor-
+ward operations on flattened arrays such as reweighting
+of GW event samples or filling arrays, the GPU imple-
+mentation actually increases the cost due to additional
+overhead, however the effect of this on the total evalua-
+tion time is negligible due to enormous savings in other
+operations. Overall, the improvement in performance is
+stark - with even the most conservative settings provided
+inference accelerated by a factor of greater than 600. In
+addition to this, by introducing mild downsampling to
+the posterior samples in each pixel can result in a fur-
+ther acceleration, meaning a single likelihood evaluation
+is complete more than one thousand times quicker than
+with the CPU implementation.
+B. Code validation
+In order to verify the consistency of the GPU imple-
+mentation ofgwcosmo, we report two tests: firstly, recov-
+ering the injected hyperparameters of a simulated popu-
+
+6
+Component CPU GPU Fiducial GPU Downsampled
+Time (ms) Time (ms) Speedup Time (ms) Speedup
+Numerator
+KDE 29780.13 75.59 394.0×28.22 1055.3×
+Interpolation & Rate 32156.28 1.04 30919.5×1.02 31525.8×
+Integration 200.45 0.19 1055.0×0.19 1055.0×
+Denominator
+Selection Effect 41772.22 48.70 857.7×48.76 856.7×
+zPrior<0.01 0.53 0.33×0.52 0.33×
+Other Operations
+Sample Reweighting<0.01 22.55 0.00005×14.69 0.00008×
+Parameter Update 0.81 6.61 0.12×6.43 0.13×
+Fill Arrays<0.01 5.38 0.00004×1.88 0.0001×
+Redshift Rate 0.12 0.11 1.10×0.11 1.09×
+T otal 103910.31 160.70 646.6×101.82 1020.5×
+TABLE I. Comparison of the evaluation cost for the legacy CPU likelihood and the GPU implementation, broken down by
+component when using a catalog of 2000 GW events. The ‘CPU’ column profiles the legacy implementation, while ‘GPU
+Fiducial’ reports the GPU likelihood using all PE samples, and ‘GPU Downsampled’ reports the GPU likelihood with a
+maximum of 2500 samples per pixel. The KDE evaluation, interpolation and selection effect calculation dominate the total
+time in the CPU implementation, and are significantly accelerated by the GPU implementation.
+101 102 103
+Nevents
+0.075
+0.100
+0.125
+0.150
+Full evaluation (s)
+Max samples per pixel
+1000
+2500
+5000
+10000
+20000
+All
+1000 2500 5000 10000 20000 All
+Max samples per pixel
+0
+5
+10
+15
+GPU memory use (GB)
+FIG. 4.Top panel: Likelihood evaluation times for the GPU
+code as a function of GW event catalog size, with different
+pixel downsampling limits, averaged over 100 evaluations. By
+decreasing the maximum number of samples used the mean
+evaluation time can be decrease by a further factor of 2 for the
+largest catalog size.Bottom panel: Maximum memory usage
+as a function of downsampling limits when using a full event
+catalog of 2000 GW sources. Event a conservative downsam-
+pling can significantly reduce the total memory required by
+the code. These values were produced enforcing a minimum
+number of pixels per event of 5.
+lation of 2000 GW events - representing an O5-like mag-
+nitude - in order to demonstrate the self-consistency of
+our method. The generation of this simulation popula-
+tion is described in Appendix A. Secondly, we analyse 141
+real GW events from GWTC-4.0 and look for agreement
+with the same analysis produced by the previous CPU-
+only implementation of the framework. For all analyses
+presented in this section we employ thebilbyparameter
+estimation library, with the nested samplernessai[43–
+45].
+Figure 5 presents the results of our analysis with simu-
+lated data for two different settings, with all samples be-
+ing used and when capping the maximum number allowed
+per sky pixel. Using 2000 mock GW events in a spectral
+siren analysis (without galaxy catalog information), we
+find that the new code version correctly recovers the in-
+jected hyperparameters for both cases, with the posteri-
+ors in good agreement. It also projects that such a spec-
+tral analysis with the BBH-onlyMultiPeakmass model
+produces a constraint ofH 0 = 64.01+5.20
+−5.30 km s−1 Mpc−1,
+or with an uncertainty of 16%. This analysis with an
+O5-like event count was able to reach convergence in a
+sampling time of 21 hours on a GPU when using the max-
+imum available number of event samples per pixel, and
+when capping this at 2500 samples, of 17 hours. This cap
+on maximum samples per pixel is motivated in§III C.
+It is worth noting that this analysis would be infeasible
+wit the previous CPU version ofgwcosmo, due to to the
+total computational cost.
+To demonstrate the ability of the updated code to pro-
+duce posteriors in agreement with previous iterations, we
+compare identical dark siren analyses using GWTC-4.0
+events using theFullPop-4.0[33, 46] model. This is
+presented in Figure. 6, with the legacy CPU result in
+blue and two GPU results with different maximum sam-
+ple caps in orange and green. These posteriors demon-
+strate excellent agreement, which is quantified using the
+Kullback-Leibler (KL) divergence between the marginal
+posteriors of each parameter [47]. The GPU posteri-
+ors are considered in agreement with the CPU reference
+
+7
+when the 90th percentile of marginal KL divergences falls
+below a noise tolerance bound established from the CPU
+distribution itself. This process is described in more de-
+tail in Appendix B. For the full GPU analysis, the 90th
+percentile marginal KL is 94.0 mbits, compared to a noise
+bound of 118.7 mbits, confirming agreement. The down-
+sampled GPU analysis achieves a 90th percentile KL of
+86.4 mbits, demonstrating that the approximation does
+not degrade the inference.
+Beyond this, the improvement in performance between
+the two implementations is significant - the GPU using all
+samples analysis reached convergence in 4 days (96 hours)
+of sampling, compared to 32 days (768 hours, or 24,576
+hours core-hours distributed over 32 cores) for the legacy
+CPU analysis. When decreasing the maximum number
+of samples per pixel to 2500, this is further improved to
+just 15 hours of sampling time - highlighting the perfor-
+mance gain from this approximation, while also showing
+that it does not degrade the inference. It is also worth
+noting that this comparison does not take into account
+the CPU analysis being parallelised over 32 cores, despite
+this GPU analysis is significantly faster in both cases. In
+Appendix. C we also note that the energy consumption of
+the two different implementations is very different, with
+the CPU-bound inference requiring an order of magni-
+tude more energy to reach convergence than the GPU
+implementation using downsampling.
+These analyses cannot be directly compared to the
+time required in our mock data analyses however, due to
+the presence of an additional 8 hyperparameters in the
+FullPop-4.0mass model relative to theMultiPeak,
+as well as theFullPop-4.0model being more complex
+and taking longer to evaluate for a given set of Λ pop.
+For more details on the construction of the two models,
+see [33].
+C. Systematic tests
+The improved performance ofgwcosmoenabled a sys-
+tematic validation of several implementation choices.
+Five configuration settings were varied to assess their
+impact on the resultingH 0 posterior: the previously in-
+troduced cap on the maximum number of samples per
+sky pixel, the bandwidth selection method for the sky-
+pixel KDEs, the resolution of the KDE evaluation grid,
+the floating-point precision, and the minimum effective
+number of PE samples required per pixel. Each case was
+compared to the ”fiducial” analysis settings, using all
+available GW event samples, single precision floats, the
+densest KDE grid, the default bandwidth estimator and
+Neff,PE = 2 as defined in Eq. 8.
+The left panel of Fig. 7 shows the resultingH 0 poste-
+riors for each test, as well as the KL divergence between
+the fiducial and test cases. We determine that a KL value
+below or equal to 5.96 mbits for theH0 posterior indicates
+agreement, a choice which is motivated in Appendix B.
+Based on this criterion, we find that it is possible to place
+a cap of 2500 samples per sky pixel without seeing a sig-
+nificant shift in the finalH 0 posterior or losing any con-
+straining power relative to an analysis using all GW event
+samples. Below this value however we find a difference
+in the posterior no longer consistent with noise from a
+finite number of samples being use to calculate the KL
+divergence. The maximum sample cap does give an ad-
+ditional improvement in performance, with a run using a
+cap of 2500 samples converging in∼15 hours, compared
+to∼21 hours when using the complete set of GW event
+samples. There is a slight systematic shift as the maxi-
+mum number of samples decreases. This occurs because
+uniform downsampling inside a pixel alters the represen-
+tation of the asymmetric sample distributions typical of
+GW distance posteriors. The resulting loss of resolution
+in the KDE tails ultimately affects the shape and posi-
+tion of theH 0 posterior. However, this effect causes only
+a small difference in the overall posterior and still falls
+below our criterion for agreement.
+We also find that calculating KDE bandwidths with
+more conservative estimators does not significantly af-
+fect the resulting posteriors onH 0. The default estima-
+tor uses Scott’s rule of thumb [48], but we additionally
+consider Silverman’s rule of thumb [49],and the biweight-
+midvariance (BM) [50]. These were chosen to be more
+robust to potential outliers in the sample set, and are
+outlined in more detail in Appendix D. Despite this, nei-
+ther has a significant effect on the posterior, nor do they
+affect the total convergence time for analysis.
+A greater effect is found by decreasing the resolution
+of the KDE evaluation redshift grid from the fiducial
+256 points. This is the number of points over which the
+KDE is constructed, and by increasing or decreasing it
+the ability of the KDE to recreate structure is improved
+or worsened. As seen in the centre row of Fig. 7, when
+this is below 128 points the posterior shifts relative to
+the fiducial case and no longer meets our KL divergence
+criterion. This can be explained by the fact that the
+grid is no longer dense enough to correctly capture the
+structure in the GW event samples. Indeed, this is one
+area in which the new version ofgwcosmoimproves over
+it’s predecessor, which only used 100 points for the KDE
+evaluation grid due to linear computational cost. This
+obstacle is removed in the new, vectorised code and as
+such finer grids can be used.
+The results also demonstrate that using single preci-
+sion floating point numbers shows no disadvantages rel-
+ative to double precision. Indeed, the final posteriors
+meet our criterion for agreement, while the double pre-
+cision analysis took over double the total analysis time
+compared to single precision, with∼46 hours compared
+to∼21 hours. This test allows us to state that our anal-
+yses are unchanged by the use of single single precision
+floats.
+Lastly, in the bottom left panel of Fig. 7, we test the
+effect of numerical stability criteria on our analysis. Each
+pixel in the likelihood must pass a threshold onN eff,PE,
+as defined in 8. If a pixel does not pass the threshold
+
+8
+3.0
+3.5
+4.0
+γ
+80
+90
+100
+Mmax,BH [M⊙]
+9.6
+10.4
+µg,lower [M⊙]
+60 75
+H0 [kms−1Mpc−1]
+27
+30
+33
+µg,higher [M⊙]
+3.0 3.5 4.0
+γ
+80 90 100
+Mmax,BH [M⊙]
+9.6
+10.4
+µg,lower [M⊙]
+27 30 33
+µg,higher [M⊙]
+Maximum samples
+Downsampled
+Truths
+FIG. 5. Corner plot of recovered hyperparameters using a simulated set of 2000 GW events at O5 sensitivity using the
+MultiPeakmass model, analysed with the GPU version. A subset of the total 15 hyperparameters are included here, of which
+the most cosmologically informative are chosen along withH 0. The blue (orange) posteriors pertain to analysis using all (2500)
+samples allowed in each pixel. Both sets of posteriors are in good agreement and recover the injected values, shown by the
+green lines.
+onN eff,PE then it does not contribute to the likelihood.
+This threshold is also dependent on the minimum num-
+ber of pixels enforced per event, as having fewer pixels
+with more samples means each is more likely to pass the
+threshold. However we do not vary this in this work,
+so that the systematic tests presented here remain con-
+sistent. We find that imposing a harsher threshold on
+the number of effective GW event samples in the bottom
+row of the left panel of Fig. 7 does show deviations in
+the posterior. Increasing this aboveN eff,PE = 10 intro-
+duces more variance to the shape of the posterior and it
+no longer passes our agreement criterion.
+IV. CONCLUSIONS
+We have developed a new implementation ofgwcosmo,
+which takes advantage of the massively-parallel computa-
+tional ability of GPUs, by enabling near-fully vectorised
+evaluation of the likelihood over GW events, pixels and
+samples. By restructuring the hierarchical likelihood and
+using a dense tensor containing the GW data, as well
+as implementingPytorchfunctionality and customCUDA
+kernels for key operations, we have eliminated the domi-
+nant sequential bottlenecks which were present in previ-
+ous CPU-only versions ofgwcosmo. Beyond this, it also
+retains its predecessor’s CPU capability, to allow analysis
+
+9
+3
+6
+γ
+100
+150
+200
+Mmax,BH [M⊙]
+7.5
+10.0
+µg,lower [M⊙]
+80 160
+H0 [kms−1Mpc−1]
+20
+30
+40
+µg,higher [M⊙]
+3 6
+γ
+100 150 200
+Mmax,BH [M⊙]
+7.5
+10.0
+µg,lower [M⊙]
+20 30 40
+µg,higher [M⊙]
+CPU
+GPU (Maximum samples)
+GPU (Downsampled)
+FIG. 6. Comparison of posteriors produced using the legacy CPU implementation and the GPU implementation ofgwcosmo
+for a dark siren analysis with GWTC-4.0 using theFullPop-4.0mass model. The blue posteriors represent the CPU analysis,
+while the orange (green) posteriors show analysis using all (2500) allowed samples per pixel. The posteriors demonstrate
+excellent agreement between all three analyses, with the GPU analysis using all samples. We determine agreement between
+the posteriors by calculating a bootstrap noise threshold using the CPU posterior (described in Appendix B), which we find
+to be 118.7 mbits. We find that in comparison with this, maximum marginal KL values for the GPU (96.0 mbits) and GPU
+downsampled (86.4 mbits) both fall beneath this, indicating agreement between the posteriors. These three analyses converged
+in 768 hours, 96 hours and 15 hours for the CPU, GPU and downsampled GPU results respectively.
+in different computing environments.
+This results in a potential performance increase of
+O(103), reducing likelihood evaluation times from min-
+utes to milliseconds for larger gravitational wave event
+catalogs. Given this, we demonstrated the ability of
+gwcosmoto analyse O5-like numbers of GW events
+(O(103)) in significantly reduced time, making previous
+intractable analyses computationally feasible. The GPU
+implementation is also capable of analysing substantially
+larger catalogs, by using the batched likelihood as de-
+scribed in Sec. II C, at the cost of computational per-
+formance. In order to further optimise the memory ef-
+ficiency of the code, and allow analyses of larger event
+catalogues, it will be necessary to eliminate padded ar-
+rays and replace them with flattened contiguous memory
+layouts and offset-based ragged tensor representations,
+reducing wasted memory and improving GPU utilisation
+With this new implementation, we demonstrated con-
+sistency of the pipeline through both the recovery of in-
+jected hyperparameters from a simulated population of
+
+10
+0.00
+0.05
+p(H0|{xGW})
+1k: KL=29.04 mbits
+2.5k: KL=4.91 mbits
+5k: KL=4.91 mbits
+10k: KL=5.69 mbits
+20k: KL=2.86 mbits
+Max Samples
+Fiducial
+−0.01
+0.00
+0.01
+0.00
+0.05
+p(H0|{xGW})
+BM: KL=2.64 mbits
+Silverman: KL=3.52 mbitsKDE Bandwidth
+Fiducial
+−0.01
+0.00
+0.01
+0.00
+0.05
+p(H0|{xGW})
+32: KL=73.03 mbits
+64: KL=9.70 mbits
+128: KL=4.34 mbits
+KDE Grid Res
+Fiducial
+−0.01
+0.00
+0.01
+0.00
+0.05
+p(H0|{xGW})
+Double: KL=3.54 mbits
+Precision
+Fiducial
+−0.01
+0.00
+0.01
+40 50 60 70 80 90
+H0 [kms−1Mpc−1]
+0.00
+0.05
+p(H0|{xGW})
+10: KL=3.16 mbits
+25: KL=14.01 mbits
+50: KL=6.03 mbits
+Eﬀective Samples
+Fiducial
+40 50 60 70 80 90
+H0 [kms−1Mpc−1]
+−0.01
+0.00
+0.01
+FIG. 7.Left panel:H 0 posteriors for systematic test cases, in descending order: maximum allowed samples per pixel, KDE
+bandwidth estimator, KDE grid resolution, floating point precision, minimum number of effective samples. The fiducial case is
+shown with the dashed black line, against which the KL divergence are calculated, whilst different tests are shown in different
+coloursRight panel: Residuals forH 0 posteriors for systematic test cases, calculated against the fiducial case represented by
+the black dashed line.
+GW events, as well as agreement with posteriors pro-
+duced with real data using the legacy CPU implemen-
+tation. As shown in Appendix C this also provides
+much improved energy efficiency for cosmological infer-
+ence, with a single analysis requiring an order of magni-
+tude less energy when using a GPU.
+Our testing also reveals that single-precision float-
+ing point arithmetic, or moderate downsampling of GW
+event samples do not introduce significant deviations in
+the final posteriors. Both of these are valuable tools with
+two purposes, allowing for mitigation of out-of-memory
+issues, as well as additional performance increases. How-
+ever a decrease in the resolution of the KDE grid or an
+aggressive stability cut on sky pixels have a more signif-
+icant effect on the final posterior.
+The new vectorised implementation ofgwcosmoalso
+makes it competitive in performance with other cosmo-
+logical inference pipelines. For example,icarogw[31]
+uses Monte Carlo integration rather than KDEs to eval-
+uate GW posterior samples, yet achieves comparable run-
+times. In the case ofCHIMERA[20, 32], the “many-1D”
+kernel which is most similar to that ingwcosmohas a
+similar evaluation time for O5-like event numbers. An
+important caveat for these comparisons is the use of dif-
+ferent GPU devices, and so they are not a direct com-
+parison.
+Overall, this implementation will enable a new regime
+of dark siren cosmology usinggwcosmo, ensuring cosmo-
+logical inference remains computationally tractable, even
+in an era of ever-expanding GW event catalogs. This
+capability opens the door to more sophisticated popula-
+tion modelling, the incorporation of new galaxy catalogs
+(see for example [51], which made use of the version of
+gwcosmopresented in this paper), and extended studies
+of modified gravitational-wave propagation.
+ACKNOWLEDGMENTS
+A. Papadopoulos is supported by UKRI STFC stu-
+dentship 323353-01. C. E. A. Chapman-Bird. is sup-
+ported by UKSA grant UKRI971. R. Gray and C. Mes-
+senger are supported by the University of Glasgow and
+STFC grant ST/V005634/1. T. Bertheas acknowledges
+
+11
+support from a CDSN PhD grant from ENS-PSL. This
+material is based upon work supported by NSF’s LIGO
+Laboratory which is a major facility fully funded by the
+National Science Foundation. The authors are grate-
+ful for computational resources provided by the LIGO
+Laboratory and supported by National Science Foun-
+dation Grants PHY-0757058 and PHY-0823459, as well
+as by the IN2P3 computing centre (CC-IN2P3) in Lyon
+(Villeurbanne).
+Appendix A: Data
+Simulated Data: To test and benchmark the perfor-
+mance ofgwcosmo, we simulate a catalog of mock grav-
+itational wave events at O5 sensitivity [42]. These were
+generated assuming a realistic 4-detector LVK network
+complete with 70% uncorrelated duty cycles, and PE car-
+ried out usingbilbywith theIMRPhenomXHMwaveform
+and gaussian noise. The population of GW events was
+drawn from theMultiPeakmass model, covering only
+the BBH range of the CBC mass spectrum, as first used
+in [52] and assuming a Madau-Dickinson distribution in
+redshift [53]. We generate 2000 GW event posteriors with
+an SNR>12, which approximates the number expected
+for three years of observing at O5 design sensitivity. This
+is not intended to be a projection of the potential con-
+straints onH 0 in this regime, but to demonstrate that
+gwcosmocan analyse such a magnitude of events.
+Parameter Value Parameter Value
+α2.9µ g,high [M⊙] 30.7
+β1.0σ g,high [M⊙] 6.3
+mmin [M⊙] 4.6λ g 0.4
+mmax [M⊙] 86.3λ g,low 0.8
+δm [M⊙] 4.8γ3.3
+µg,low [M⊙] 9.7κ2.9
+σg,low [M⊙] 0.7z p 2.5
+H0 [km s−1 Mpc−1] 67.4 Ω m 0.315
+TABLE II. Injected hyperparameter values for the simulated
+gravitational-wave event catalog used in this work. The
+BBH population parameters are taken from the maximum-
+likelihood values reported in [33], while the cosmological pa-
+rameter values are those from Planck18 [54].
+Real Data: To demonstrate agreement between the
+current and previous versions ofgwcosmowe also in-
+clude analysis using GWTC-4.0 data. Considering a se-
+lection threshold of IFAR<4 yr −1, consistent with that
+in [33], we use 141 CBCs in a dark siren analysis with the
+FullPop-4.0mass model and theGLADE+K-band
+galaxy catalog with weighting proportional to galaxy lu-
+minosity. Additionally to evaluate our selection function
+we use the publicly available injections campaign [55].
+0 2 4 6 8 10
+KL divergence (mbits)
+Count
+KL values
+90th Percentile = 5 .96 mbits
+FIG. 8. KL divergences calculated from two identical normal
+distributions, usingN samples = 7000 in order to show the scat-
+ter from using a finite number of samples. This was calculated
+1000 times, and the 90thpercentile, denoted by the orange
+dashed line, was found to be 5.96 mbits even when comparing
+identical distributions.
+Appendix B: KL V alidation
+In order to determine a threshold to decide on agree-
+ment between single marginal posteriors with the KL di-
+vergence, we employ a toy model with two identical nor-
+mal distributions. By drawing 7000 samples from both
+distributions (representative of the number of posterior
+samples produced in our analyses) and calculating the KL
+divergence for 1000 realisations. We find that 90% of the
+values fall below is 5.96 mbits, which can be seen in Fig. 8.
+This is similar to methods described in [56, 57] using an-
+other similar metric, the Jensen-Shannon divergence [58].
+Given this, we elect to consider posteriors with values in
+or below this range to be in statistical agreement with
+one another, accounting for a finite number of samples.
+In the case ofN-dimensional posteriors, we multiply this
+value byNin order to assess agreement.
+Secondly, in order to quantify agreement between GPU
+and CPU posterior implementations in many dimensions,
+we establish a threshold on the noise from finite samples
+using symmetric resampling. We generate a null distri-
+bution by resampling the CPU posterior 1000 times -
+at each iteration, two independent half-sample subsets
+are drawn without replacement and the marginal KL di-
+vergence is computed for each of the 23 parameters us-
+ing histogram-based estimation. The maximum of the
+marginal KL values across all parameters is calculated at
+each iteration. The 90th percentile of this distribution
+defines the noise threshold used to determine agreement.
+To assess the GPU posterior, we draw half-sample sub-
+sets from both CPU and GPU posteriors and compute
+the 90th percentile of marginal KL divergences as our
+test statistic. The GPU posterior is considered in agree-
+ment with the CPU posterior if this test statistic falls
+below the noise tolerance bound.
+
+12
+Appendix C: Device Comparison and Energy
+Considerations
+Given that our analyses make use of a top-of-the-
+range GPU in the Nvidia H100 (Hopper architecture),
+we also compared this to the performance when using
+a more affordable device. This was chosen to be the
+Nvidia L40s (Ada Lovelace architecture), a device with
+a smaller overall memory and lower memory bandwidth,
+but improved single-precision optimisation. While still
+reporting a significant improvement in performance over
+the legacy CPU implementation, the L40s evaluates the
+likelihood a factor of∼4 slower than the H100 when
+Nevents = 2000. This points to the overall bottleneck on
+this device being memory bandwidth.
+10−1
+2 × 10−1
+3 × 10−1
+4 × 10−1
+6 × 10−1
+Full evaluation (s)
+101 102 103
+Nevents
+10−1
+Evaluation w/o denominator (s)
+H100
+L40s
+FIG. 9. Bayesian inference wall-clock time comparison us-
+ing difference devices. The NVIDIA H100 outperforms the
+more affordable L40S by a factor of 4 when using a full cat-
+alog of mock GW events. The performance gap is primarily
+attributed to the H100’s superior memory bandwidth, mak-
+ing the top-of-the-range hardware more efficient for memory-
+bound likelihood calculations required in cosmological param-
+eter estimation.
+In Table III, we compare the energy consumption re-
+quired to complete an analysis of GWTC-4.0 using 141
+CBCs and theFullPop-4.0mass model with the legacy
+CPU and updated GPU implementation. Using figures
+from [59], the mean daily energy consumption for a res-
+idence in the European Union is taken to be 38.2 kWh,
+which is used to calculate the days equivalent row. The
+GPU implementation requires an order of magnitude less
+energy to complete this analysis when compared to it’s
+CPU-bound counterpart.
+Appendix D: Bandwidth Estimators
+Scott’s rule provides an optimal bandwidth (h) for ker-
+nel density estimation, assuming the underlying data dis-
+tribution is Gaussian [48]. While computationally effi-
+cient, it relies heavily on the sample standard deviation,
+ˆσ, making it sensitive to outliers which can artificially
+inflate the bandwidth and oversmooth the density esti-
+mate. It takes the form
+h= 1.06ˆσn−1/5.(D1)
+Silverman’s rule improves upon Scott’s by introducing a
+more robust measure of spread [49]. By taking the mini-
+mum of the standard deviation and the scaled Interquar-
+tile Range (IQR), it prevents extreme outliers from exces-
+sively widening the bandwidth. It is more often used in
+cases where the distribution deviates from Gaussianity,
+h= 0.9 min
+
+ˆσ,IQR
+1.34
+
+n−1/5.(D2)
+The biweight midvariance is a robust estimator of
+scale [50]. Unlike the previous rules, it employs an indi-
+cator functionI(|u i |<1) that acts as a “hard limit” as-
+signing zero weight to any observations falling more than
+9 median absolute deviations (MAD) from the centre.
+This makes it significantly more resistant to heavy-tailed
+distributions than either Scott’s or Silverman’s methods.
+It is implemented as
+h= nPn
+i=1(xi −Q) 2(1−u 2
+i )4I(|u i|<1)
+(P
+i(1−u 2
+i )(1−5u 2
+i )I(|u i|<1)) 2 .(D3)
+where the auxiliary variableu i is standardized by the
+median,Q,and the MAD,
+ui = xi −Q
+9·MAD .(D4)
+Metric CPU (32 cores) H100 GPU
+Wall time 32 days (768 hours) 15 hours
+Compute time 24,576 core-hours 15 GPU-hours
+Energy consumption 230.4 kWh 10.5 kWh
+Days equivalent≈6≈0.27
+TABLE III. Comparison of computational cost, energy con-
+sumption, and estimated carbon emissions between a 32-core
+CPU implementation and an H100 GPU implementation with
+a maximum of 2500 samples allowed per sky pixel. The wall
+time is that of completing one analysis of GWTC-4.0 with the
+FullPop-4.0mass model, the same as those shown in§III.
+[1] B. F. Schutz, Determining the Hubble Constant from
+Gravitational Wave Observations, Nature323, 310
+(1986).
+
+13
+[2] D. E. Holz and S. A. Hughes, Using gravitational-
+wave standard sirens, Astrophys. J.629, 15 (2005),
+arXiv:astro-ph/0504616.
+[3] M. Morescoet al., Unveiling the Universe with emerg-
+ing cosmological probes, Living Rev. Rel.25, 6 (2022),
+arXiv:2201.07241 [astro-ph.CO].
+[4] C. Messenger and J. Read, Measuring a cosmolog-
+ical distance-redshift relationship using only gravita-
+tional wave observations of binary neutron star coa-
+lescences, Physical Review Letters108, 10.1103/phys-
+revlett.108.091101 (2012).
+[5] S. Nissanke, D. E. Holz, S. A. Hughes, N. Dalal, and
+J. L. Sievers, Exploring short gamma-ray bursts as
+gravitational-wave standard sirens, Astrophys. J.725,
+496 (2010), arXiv:0904.1017 [astro-ph.CO].
+[6] Abbott, B. P.et al., A gravitational-wave standard siren
+measurement of the hubble constant, Nature551, 85–88
+(2017).
+[7] S. R. Taylor, J. R. Gair, and I. Mandel, Cosmology us-
+ing advanced gravitational-wave detectors alone, Physi-
+cal Review D85, 10.1103/physrevd.85.023535 (2012).
+[8] W. M. Farr, M. Fishbach, J. Ye, and D. E. Holz, A future
+percent-level measurement of the hubble expansion at
+redshift 0.8 with advanced ligo, The Astrophysical Jour-
+nal Letters883, L42 (2019).
+[9] J. M. Ezquiaga and D. E. Holz, Jumping the Gap:
+Searching for LIGO’s Biggest Black Holes, Astrophys. J.
+Lett.909, L23 (2021), arXiv:2006.02211 [astro-ph.HE].
+[10] J. M. Ezquiaga and D. E. Holz, Spectral sirens: Cos-
+mology from the full mass distribution of compact
+binaries, Physical Review Letters129, 10.1103/phys-
+revlett.129.061102 (2022).
+[11] G. Pierra and A. Papadopoulos, Heavy black-holes
+also matter in standard siren cosmology (2026),
+arXiv:2601.03257 [astro-ph.CO].
+[12] D. F. Chernoff and L. S. Finn, Gravitational radiation,
+inspiraling binaries, and cosmology, Astrophys. J. Lett.
+411, L5 (1993), arXiv:gr-qc/9304020.
+[13] W. Del Pozzo, Inference of cosmological parameters from
+gravitational waves: Applications to second generation
+interferometers, Phys. Rev. D86, 043011 (2012).
+[14] Soares-Santos, M.et al., First measurement of the hub-
+ble constant from a dark standard siren using the dark
+energy survey galaxies and the ligo/virgo binary–black-
+hole merger gw170814, The Astrophysical Journal Let-
+ters876, L7 (2019).
+[15] A. Palmeseet al., A statistical standard siren measure-
+ment of the hubble constant from the ligo/virgo gravita-
+tional wave compact object merger gw190814 and dark
+energy survey galaxies, The Astrophysical Journal Let-
+ters900, L33 (2020).
+[16] A. Finke, S. Foffa, F. Iacovelli, M. Maggiore, and
+M. Mancarella, Cosmology with ligo/virgo dark sirens:
+Hubble parameter and modified gravitational wave prop-
+agation, Journal of Cosmology and Astroparticle Physics
+2021(08), 026.
+[17] S. Mastrogiovanni, K. Leyde, C. Karathanasis,
+E. Chassande-Mottin, D. A. Steer, J. Gair, A. Ghosh,
+R. Gray, S. Mukherjee, and S. Rinaldi, On the impor-
+tance of source population models for gravitational-wave
+cosmology, Phys. Rev. D104, 062009 (2021).
+[18] R. Gray, C. Messenger, and J. Veitch, A pixelated ap-
+proach to galaxy catalogue incompleteness: improving
+the dark siren measurement of the Hubble constant,
+Monthly Notices of the Royal Astronomical Society512,
+1127 (2022), https://academic.oup.com/mnras/article-
+pdf/512/1/1127/45303118/stac366.pdf.
+[19] S. Mastrogiovanni, D. Laghi, R. Gray, G. C. Santoro,
+A. Ghosh, C. Karathanasis, K. Leyde, D. A. Steer, S. Per-
+ries, and G. Pierra, Joint population and cosmological
+properties inference with gravitational waves standard
+sirens and galaxy surveys, Phys. Rev. D108, 042002
+(2023), arXiv:2305.10488 [astro-ph.CO].
+[20] N. Borghi, M. Mancarella, M. Moresco, M. Tagliazucchi,
+F. Iacovelli, A. Cimatti, and M. Maggiore, Cosmology
+and astrophysics with standard sirens and galaxy cat-
+alogs in view of future gravitational wave observations,
+The Astrophysical Journal964, 191 (2024).
+[21] J. Aasiet al.(LIGO Scientific), Advanced LIGO, Class.
+Quant. Grav.32, 074001 (2015), arXiv:1411.4547 [gr-qc].
+[22] F. Acerneseet al.(VIRGO), Advanced Virgo: a second-
+generation interferometric gravitational wave detector,
+Class. Quant. Grav.32, 024001 (2015), arXiv:1408.3978
+[gr-qc].
+[23] T. Akutsuet al., Overview of kagra: Detector de-
+sign and construction history, Progress of Theo-
+retical and Experimental Physics2021, 05A101
+(2020), https://academic.oup.com/ptep/article-
+pdf/2021/5/05A101/37974994/ptaa125.pdf.
+[24] B. Abbottet al., Gwtc-1: A gravitational-wave transient
+catalog of compact binary mergers observed by ligo and
+virgo during the first and second observing runs, Physical
+Review X9, 10.1103/physrevx.9.031040 (2019).
+[25] R. Abbottet al., Gwtc-2: Compact binary coales-
+cences observed by ligo and virgo during the first half
+of the third observing run, Physical Review X11,
+10.1103/physrevx.11.021053 (2021).
+[26] R. Abbottet al., Gwtc-3: Compact binary coales-
+cences observed by ligo and virgo during the second
+part of the third observing run, Physical Review X13,
+10.1103/physrevx.13.041039 (2023).
+[27] Abac, A. G.et al., Gwtc-4.0: Updating the gravitational-
+wave transient catalog with observations from the first
+part of the fourth ligo-virgo-kagra observing run (2025),
+arXiv:2508.18082 [gr-qc].
+[28] R. Gray, I. M. n. Hernandez, H. Qi, A. Sur, P. R.
+Brady, H.-Y. Chen, W. M. Farr, M. Fishbach, J. R. Gair,
+A. Ghosh, D. E. Holz, S. Mastrogiovanni, C. Messenger,
+D. A. Steer, and J. Veitch, Cosmological inference using
+gravitational wave standard sirens: A mock data analy-
+sis, Phys. Rev. D101, 122001 (2020).
+[29] R. Gray, F. Beirnaert, C. Karathanasis, B. Revenu,
+C. Turski, A. Chen, T. Baker, S. Vallejo, A. E. Romano,
+T. Ghosh, A. Ghosh, K. Leyde, S. Mastrogiovanni, and
+S. More, Joint cosmological and gravitational-wave pop-
+ulation inference using dark sirens and galaxy catalogues
+(2023), arXiv:2308.02281 [astro-ph.CO].
+[30] S. Mastrogiovanni, D. Laghi, R. Gray, G. C. Santoro,
+A. Ghosh, C. Karathanasis, K. Leyde, D. A. Steer, S. Per-
+ries, and G. Pierra, Joint population and cosmological
+properties inference with gravitational waves standard
+sirens and galaxy surveys, Phys. Rev. D108, 042002
+(2023), arXiv:2305.10488 [astro-ph.CO].
+[31] S. Mastrogiovanni, G. Pierra, S. Perri` es, D. Laghi, G. C.
+Santoro, A. Ghosh, R. Gray, C. Karathanasis, and
+K. Leyde, Icarogw: A python package for inference of as-
+trophysical population properties of noisy, heterogeneous
+and incomplete observations (2023), arXiv:2305.17973
+
+14
+[astro-ph.CO].
+[32] M. Tagliazucchi, M. Moresco, N. Borghi, and M. Fiebig,
+Accelerating the standard siren method: Improved con-
+straints on modified gravitational-wave propagation with
+future data, Astronomy and Astrophysics702, A244
+(2025).
+[33] Abac, A. G.et al.(LIGO Scientific, Virgo, and KAGRA
+Collaborations), GWTC-4.0: Constraints on the Cos-
+mic Expansion Rate and Modified Gravitational-wave
+Propagation, arXiv preprint arXiv:2509.04348 (2025),
+arXiv:2509.04348 [astro-ph.CO].
+[34] I. Mandel, W. M. Farr, and J. R. Gair, Ex-
+tracting distribution parameters from multiple un-
+certain observations with selection biases, Monthly
+Notices of the Royal Astronomical Society486,
+1086 (2019), https://academic.oup.com/mnras/article-
+pdf/486/1/1086/28390969/stz896.pdf.
+[35] S. Vitale, D. Gerosa, W. M. Farr, and S. R. Taylor, Infer-
+ring the properties of a population of compact binaries in
+presence of selection effects, inHandbook of Gravitational
+Wave Astronomy(Springer Singapore, 2021) p. 1–60.
+[36] M. Fishbach, D. E. Holz, and W. M. Farr, Does the black
+hole merger rate evolve with redshift?, The Astrophysical
+Journal Letters863, L41 (2018).
+[37] W. M. Farr, Accuracy requirements for empirically mea-
+sured selection functions, Research Notes of the AAS3,
+66 (2019).
+[38] C. Talbot and J. Golomb, Growing pains: Understand-
+ing the impact of likelihood uncertainty on hierarchi-
+cal bayesian inference for gravitational-wave astronomy
+(2023), arXiv:2304.06138 [astro-ph.IM].
+[39] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Brad-
+bury, G. Chanan, T. Killeen, Z. Lin, N. Gimelshein,
+L. Antiga, A. Desmaison, A. K¨ opf, E. Yang, Z. De-
+Vito, M. Raison, A. Tejani, S. Chilamkurthy, B. Steiner,
+L. Fang, J. Bai, and S. Chintala, Pytorch: An impera-
+tive style, high-performance deep learning library (2019),
+arXiv:1912.01703 [cs.LG].
+[40] J. Nickolls, I. Buck, M. Garland, and K. Skadron, Scal-
+able parallel programming with cuda, Queue6, 40 (2008).
+[41] S. K. Lam, A. Pitrou, and S. Seibert, Numba: A LLVM-
+based Python JIT Compiler, inProc. Second Workshop
+on the LLVM Compiler Infrastructure in HPC(2015) pp.
+1–6.
+[42] Abbott, B. P.et al., Prospects for observing and local-
+izing gravitational-wave transients with advanced ligo,
+advanced virgo and kagra, Living Reviews in Relativity
+23, 10.1007/s41114-020-00026-9 (2020).
+[43] G. Ashtonet al., BILBY: A user-friendly Bayesian infer-
+ence library for gravitational-wave astronomy, Astrophys.
+J. Suppl.241, 27 (2019), arXiv:1811.02042 [astro-ph.IM].
+[44] M. J. Williams, nessai: Nested sampling with artificial
+intelligence (2021).
+[45] M. J. Williams, J. Veitch, and C. Messenger, Importance
+nested sampling with normalising flows, Mach. Learn.
+Sci. Tech.4, 035011 (2023), arXiv:2302.08526 [astro-
+ph.IM].
+[46] Abac, A. G.et al.(LIGO Scientific, Virgo, and KA-
+GRA Collaborations), Gwtc-4.0: Population properties
+of merging compact binaries (2025), arXiv:2508.18083
+[astro-ph.HE].
+[47] S. Kullback and R. A. Leibler, On Information and Suf-
+ficiency, The Annals of Mathematical Statistics22, 79
+(1951).
+[48] D. W. Scott,Multivariate Density Estimation: Theory,
+Practice, and Visualization, Wiley Series in Probability
+and Statistics (Wiley, 2009).
+[49] B. W. Silverman,Density estimation for statistics and
+data analysis(1986).
+[50] R. Wilcox,Introduction to Robust Estimation and Hy-
+pothesis Testing. 5th Edition. San Diego, CA: Academic
+Press(2021).
+[51] I. McMahon, D. Laghi, M. Soares-Santos, K. Ackley,
+G. D´ alya, Y. Gen¸ cel, D. S´ anchez-Cid, F. Andrade-
+Oliveira, S. MacBride, C. Chapman-Bird, R. Gray, and
+A. Papadopoulos, Measurement of the hubble constant
+using the dark energy survey year 6 gold galaxy cata-
+log and the fourth gravitational-wave transient catalog
+(2026), arXiv:2602.04766 [astro-ph.CO].
+[52] Abbot, R.et al.(LIGO Scientific, Virgo, and KAGRA
+Collaborations), Population properties of compact ob-
+jects from the second ligo–virgo gravitational-wave tran-
+sient catalog, The Astrophysical Journal Letters913, L7
+(2021).
+[53] P. Madau and M. Dickinson, Cosmic star-formation his-
+tory, Annual Review of Astronomy and Astrophysics52,
+415–486 (2014).
+[54] Aghanim, N. and others., Planck 2018 results: Vi. cos-
+mological parameters, Astronomy and Astrophysics641,
+A6 (2020).
+[55] R. Essicket al., Compact binary coalescence sensi-
+tivity estimates with injection campaigns during the
+LIGO-Virgo-KAGRA Collaborations’ fourth observing
+run, Phys. Rev. D112, 102001 (2025), arXiv:2508.10638
+[gr-qc].
+[56] I. M. Romero-Shaw, C. Talbot, S. Biscoveanu,
+V. D’Emilio, G. Ashton, C. P. L. Berry, S. Cough-
+lin, S. Galaudage, C. Hoy, M. H¨ ubner, K. S. Phukon,
+M. Pitkin, M. Rizzo, N. Sarin, R. Smith, S. Stevenson,
+A. Vajpeyi, M. Ar` ene, K. Athar, S. Banagiri, N. Bose,
+M. Carney, K. Chatziioannou, J. A. Clark, M. Colleoni,
+R. Cotesta, B. Edelman, H. Estell´ es, C. Garc´ ıa-Quir´ os,
+A. Ghosh, R. Green, C.-J. Haster, S. Husa, D. Keitel,
+A. X. Kim, F. Hernandez-Vivanco, I. Maga˜ na Hernandez,
+C. Karathanasis, P. D. Lasky, N. De Lillo, M. E. Lower,
+D. Macleod, M. Mateu-Lucena, A. Miller, M. Millhouse,
+S. Morisaki, S. H. Oh, S. Ossokine, E. Payne, J. Pow-
+ell, G. Pratten, M. P¨ urrer, A. Ramos-Buades, V. Ray-
+mond, E. Thrane, J. Veitch, D. Williams, M. J. Williams,
+and L. Xiao, Bayesian inference for compact binary coa-
+lescences with bilby: validation and application to the
+first ligo–virgo gravitational-wave transient catalogue,
+Monthly Notices of the Royal Astronomical Society499,
+3295–3319 (2020).
+[57] G. Ashton and C. Talbot, Bilby-mcmc: an mcmc
+sampler for gravitational-wave inference, Monthly
+Notices of the Royal Astronomical Society507,
+2037 (2021), https://academic.oup.com/mnras/article-
+pdf/507/2/2037/44923607/stab2236.pdf.
+[58] M. Men´ endez, J. Pardo, L. Pardo, and M. Pardo, The
+jensen-shannon divergence, Journal of the Franklin In-
+stitute334, 307 (1997).
+[59] ODYSSEE-MURE, Odyssee database: Energy effi-
+ciency indicators and consumption trends,https://www.
+odyssee-mure.eu/(2023), accessed: 2026-05-06.

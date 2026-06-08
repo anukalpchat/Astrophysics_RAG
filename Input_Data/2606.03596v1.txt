@@ -1,0 +1,1091 @@
+Title: Multimodal Transformer Based Generic Mixture Density Network for Scattering Timescale Estimation of Fast Radio Bursts
+Authors: Bikash Kharel, Emmanuel Fonseca, Srinjoy Das, Mason Ng, Paul Scholz, Mawson W. Simmons, Lordrick Kahinga, Afrokk Khan
+Published: 2026-06-02
+Categories: astro-ph.HE, stat.ML
+
+Draft version June 3, 2026
+Typeset using LATEXpreprintstyle in AASTeX7.0.1
+Multimodal Transformer Based Generic Mixture Density Network for Scattering
+Timescale Estimation of Fast Radio Bursts
+Bikash Kharel
+ ,1, 2 Emmanuel Fonseca
+ ,1, 2 Srinjoy Das
+ ,3 Mason Ng
+ ,4, 5
+Paul Scholz
+ ,6 Mawson W. Sammons
+ ,7 Lordrick Kahinga
+ ,8, 9 and Afrokk Khan
+ 4, 5
+1Department of Physics and Astronomy, West Virginia University, PO Box 6315, Morgantown, WV 26506, USA
+2Center for Gravitational Waves and Cosmology, West Virginia University, Chestnut Ridge Research Building,
+Morgantown, WV 26505, USA
+3School of Mathematical and Data Sciences, West Virginia University, PO Box 6310, Morgantown, WV 26506, USA
+4Department of Physics, McGill University, 3600 rue University, Montr´ eal, QC H3A 2T8, Canada
+5Trottier Space Institute, McGill University, 3550 rue University, Montr´ eal, QC H3A 2A7, Canada
+6Department of Physics and Astronomy, York University, 4700 Keele Street, Toronto, ON MJ3 1P3, Canada
+7Laboratoire d’Astrophysique de Marseille, Aix-Marseille Univ., CNRS, CNES, Marseille, France
+8Department of Astronomy and Astrophysics, University of California, Santa Cruz, 1156 High Street, Santa Cruz, CA
+95060, USA
+9Department of Physics, College of Natural and Mathematical Sciences, University of Dodoma, 1 Benjamin Mkapa
+Road, 41218 Iyumbu, Dodoma 259, Tanzania
+ABSTRACT
+The discovery rate of fast radio bursts (FRBs) continues to increase with the advent
+of new radio facilities and yet extracting their astrophysical parameters such as scatter-
+ing timescale (τ) remains a significant bottleneck. Currentτmeasurement approaches
+like fitting analytic template models and scattering aware de-convolution are accurate
+but slow, sensitive to initialization, limited by low signal to noise and often require
+manual supervision. These limitations inspired us to explore fast, robust and scalable
+machine learning methods to estimate the astrophysical parameter value. We present
+a deep learning approach named Multimodal Transformer Based Generic Mixture Den-
+sity Network (MT-GMDN) which ingests FRB dynamic spectrum and its corresponding
+timeseries profile through parallel transformer encoders, fuses their latent representa-
+tions and predicts the distribution ofτwith probabilistic output derived from generic
+mixture-density formulation. This formulation not only estimates the value ofτbut
+also captures the (zero inflated) nature of FRB populations where a significant fraction
+of bursts exhibit unresolvable scattering. We trained MT-GMDN on∼3500 FRBs from
+CHIME/FRB Catalog 2 while holding out some fraction of FRBs for validation during
+training and for testing after the training completes. The model achieves a coefficient
+of determination (R 2) value of 94% on the expected value ofτfor the events with
+measurable scattering with an excellent recall value of 90% on the test data set. The
+Corresponding author: Bikash Kharel
+bk0055@mix.wvu.edu
+arXiv:2606.03596v1  [astro-ph.HE]  2 Jun 2026
+
+2B. Kharel et al.
+model was also able to incorporate heteroskedastic errors enabling us the construction
+of a confidence interval for the predictions.
+Keywords:Fast radio bursts — Interstellar scattering — Neural networks — Trans-
+formers — Mixture density
+1.INTRODUCTION
+Fast radio bursts (FRBs) are powerful extragalactic astronomical transients of millisecond durations
+(D. R. Lorimer et al. 2007) and their observed morphology is strongly determined by propagation
+effects through ionized interstellar and intergalactic media (e.g., J. M. Cordes & M. A. McLaughlin
+2003). One of the key propagation signatures is a frequency dependent pulse dispersion and temporal
+broadening due to the multi-path scattering of the radio signal which is often modeled as a one-sided
+exponential tail with characteristic scattering timescale (τ) (I. P. Williamson 1974). Figure 1 displays
+two simulated FRBs. The first (left) shows a sharp Gaussian peak with no scattering while the second
+(right) exhibits an exponentially decaying tail demonstrating scattering.
+Electromagnetic radiation from an FRB source traveling through a turbulent interstellar medium
+(ISM) with inhomogeneous electron density distribution experiences a frequency dependent phase
+shift. The “thin screen” model formulates the observed intensity of the scattered radiation as a
+result of the phase shift to be an impulse response function (IRF) of the form (D. R. Lorimer & M.
+Kramer 2004):
+h(t)∝exp
+
+−∆t
+τ
+
+,(1)
+where,
+•∆t: Time delay between scattered and non-scattered rays and
+Figure 1.Simulated FRB dynamic spectra with corresponding timeseries at the top of respective dynamic
+spectrum. The left panel shows an FRB without scattering characterized by a symmetric Gaussian pulse
+profile, while the right panel shows a scattered FRB with asymmetric pulse profile characterized by expo-
+nentially decaying tail.
+
+Estimating Scattering Timescale of FRBs by Transformer3
+•τ: Characteristic scattering timescale of the ISM. This scattering timescale exhibits frequency
+dependence asτ∝f −4
+The resulting observed pulse profile of an FRB signal is thus the convolution of its intrinsic profile
+with the scattering exponential kernel, i.e.,
+Iobs(t) =I int(t)∗h(t) (2)
+The measurement ofτcarries significant astrophysical implications such as probing electron density
+fluctuations along FRB sight lines which thereby constrain the degree of plasma turbulence within
+host-galaxy environments (e.g., S. Xu & B. Zhang 2016; K. Shin et al. 2025), diffused halos of
+intervening galaxies (e.g., S. K. Ocker et al. 2021) and the large scale ionized structure of the Milky
+Way (e.g., S. Shivraj Patil et al. 2025) and constraining redshift (e.g., J. M. Cordes et al. 2022) and
+the Hubble constant (e.g., Yang, Tsung-Ching et al. 2025).
+There is a rapid rise in the detections of FRBs with commensal real-time surveys on radio telescopes
+(e.g., CHIME/FRB Collaboration et al. 2018; J.-P. Macquart et al. 2010; J. Jonas & MeerKAT Team
+2016; M. Sherman & DSA-110 Collaboration 2023). The current detection rate isO(10 3 FRBs yr−1),
+which is much larger compared to other astronomical radio transient phenomena. This data volume
+and diversity of the FRBs in morphology, observational instrument, and propagation effects pose
+significant challenges for extracting physical parameters such asτfrom the detected FRBs.
+Common scattering measurement tools, such asfitburst(E. Fonseca et al. 2024), fit parametric
+templates to the de-dispersed dynamic spectrum using regression methods. While these techniques
+can often be accurate, they face significant limitations. Parametric template fitting relies heavily on
+an adequate initial guess of the parameters and is sensitive to both low signal to noise and complex
+burst morphologies, thereby often failing to converge. Alternative approaches to estimating scattering
+timescale include Markov Chain Monte Carlo (MCMC) methods (e.g., CHIME/FRB Collaboration
+et al. 2019) and Fourier Transform based deconvolution methods (e.g., N. D. R. Bhat et al. 2003).
+However, these methods are computationally slow, require extensive per sample manual intervention
+and thus are not feasible for analyzing large scale datasets.
+This work mainly relies on the data set from CHIME/FRB Catalog 2 ( Chime/FRB Collaboration
+et al. 2026), the largest catalog of unique FRBs till date, which includes 4545 FRBs, comprising 3564
+one-off events and 981 repeating bursts from 83 different sources. The CHIME/FRB Catalog 2 data
+set consists of radiation in the frequency range of 400-800 MHz encoded as dynamic spectrum into
+16,384 frequency bins across 160 time samples of temporal resolution 0.983 ms.
+The applications of deep learning in FRB science have been primarily focused on classification
+(e.g., L. Connor & J. van Leeuwen 2018; B. Kharel et al. 2025) and detection (e.g., D. Agarwal
+et al. 2020). As a novel approach in FRB science, to address the issues with methods of scattering
+timescale estimation discussed in the above paragraph, we present a deep probabilistic model which
+estimates the distribution ofτfrom de-dispersed dynamic spectra and their corresponding pulse pro-
+files. Instead of treating scattering estimation as deterministic regression, we model the conditional
+distributionp(τ|x), wherexis the burst’s dynamic spectrum. This distribution approximation yields
+a well-calibrated heteroskedastic 10 uncertainty related to noise associated with the dynamic spec-
+trum containing an FRB signal, allowing one to construct a confidence interval on point estimates.
+10 Uncertainty parameter is data-dependendent.
+
+4B. Kharel et al.
+The deep probabilistic framework not only estimates the distribution ofτ, but also quantifies the
+Bernoulli probability ofτ≥0 as more than 50% of the FRBs have unresolvedτin CHIME/FRB
+Catalog 2 .
+We organize our work in this paper as follows. In Section 2 we present the methodology under-
+lying our approach which involves probabilistic formulation of scattering timescale estimation, deep
+learning architecture used to model the formulated distribution and data sources with preprocessing
+steps applied. Section 3 presents training details and results which includes evaluation performed
+on real observations from CHIME/FRB Catalog 2 through comparison withfitburst, quantitative
+validation using simulated data, benchmarking our approach against powerful MCMC based infer-
+ence and investigation of the robustness of our method under different noise conditions. In Section
+4 we discuss the implications of our findings and in Section 5 we outline limitations of our work and
+directions for future research. Finally, we conclude our work in Section 6.
+2.METHODS
+2.1.Mixture Density Network Formulation
+Based on the probabilistic interpretation of regression tasks, it is usually assumed that a target
+t (a variable that a regression methods seek to predict) for given data pointxfollows a normal
+distribution
+p(t|x)∼ N(t|µ(x), σ 2).
+Whereµ(x) is the mean of the target distribution and usually taken as point estimate whileσis
+uncertainty parameter or variance of the target. Here the uncertainty in the target is homoskedastic11.
+The regression is then performed by maximizing the likelihood associated with the training dataset.
+This is written as
+ˆθM L = argmax
+θ
+NY
+i=1
+N(t i|y(xi, θ), σ2),
+where,y(x i, θ) is the linear combination of some linear basis functions or neural network with pa-
+rametersθ. This formulation is overly generic and assumes the distribution of targets to be a normal
+distribution which may not be always true for a required specific problem domain.
+Scattering timescales in FRBs are strictly non-negative (i.e.τ≥0) with the vast majority of FRBs
+exhibiting minimal scattering with a significantly smaller population displaying large scattering tail.
+Also, the standard error associated with exponential distributions as in Equation 1 is proportional
+to the measured value. Given the wide range of observedτfor FRBs, it becomes more appropriate
+to assume the distribution of scattering timescales to follow lognormal distribution instead of normal
+distribution. Figure 2 demonstrates that the scattering timescales from CHIME/FRB Catalog 2
+follow a lognormal distribution. Thus, the distribution ofτfor a given dynamic spectrumxof an
+FRB event can be expressed as
+p(τ|x) = Lognormal
+ 
+τ|µ(x), σ 2(x)
+
+≡f LN
+ 
+τ|µ(x), σ 2(x)
+
+,(3)
+where,µandσ 2 are the location and scale parameters of the lognormal distribution, respectively.
+Here, the scale of the lognormal distribution is data dependent, i.e., heteroskedastic. This het-
+eroskedastic uncertainty is expected to be larger for dynamic spectrum with low signal to (J. Taylor
+11 Variance of the target distribution is data independent
+
+Estimating Scattering Timescale of FRBs by Transformer5
+Figure 2.Left: The distribution ofτfrom CHIME/FRB Catalog 2 ( at reference frequency 400 MHz)
+exhibiting highly skewed heavy tailed profile. Right: Corresponding log transformed (lnτ) distribution.
+The exhibition of Gaussian shape in the right panel verify that the scattering timescales follow a lognormal
+distribution.
+1997) and is also expected to be scaled along with the scattering timescale as standard error of the
+expected value of exponential tail is directly proportional to the expected value. Therefore, our re-
+gression task now becomes maximizing the likelihood associated with the training dataset with the
+target (τ) distribution being lognormal. This regression task can be written as
+ˆθM L = argmax
+θ
+NY
+i=1
+fLN (τi|xi;g θ(xi)),(4)
+where,g θ(xi) can be any arbitrary function which, in our case, is a neural network that approximates
+µi andσ i.
+We can now design and train a neural network to maximize the likelihood in Equation 4. After
+training, the network approximates the conditional distribution parametersµ i andσ i for any given
+inputx i. However, a notable challenge arises due to CHIME/FRB Catalog 2 dataset’s zero inflation
+i.e. a large fraction of the population with zero value of scattering timescale. More than 50% of
+the events in CHIME/FRB Catalog 2 contains FRBs whose scattering timescales are unresolved
+(i.e.τ≈0), from both repeating. This problem demands standard strategies like discarding the
+data with unresolvedτor two staged neural network cascaded such that first predicts the presence
+of scattering and the second regressing the distribution ofτ. Both of the methods are suboptimal
+as discarding significant fraction of dataset can introduce selection bias and cascading multistage
+network is computationally redundant and introduces additional complexity. Instead, we propose
+a generic mixture density network (GMDN) which can be written by modifying a mixture density
+network (C. M. Bishop & H. Bishop 2024) as
+p(τ|x) =
+KX
+k=1
+πk(x)fk(τ|x;g k(x)),(5)
+
+6B. Kharel et al.
+where,π k(x) are mixing coefficients andg k(x) are some functions or neural networks.
+In our case, ifp 0(x)denotes the probability ofτ= 0 andδ(τ) the probability mass function at
+τ= 0 then
+π1(x) =p 0(x;g θ(x)) andf 1(x) =δ(τ),
+π2(x) = 1−p 0(x;g θ(x)) andf 2(x) =f LN (τ|x;g θ(x)). (6)
+The neural networkg θ(x)now predicts the Bernoulli probability ofτ≥0 asp 0 along withµand
+σparameters for the distribution ofτgiven an inputx.
+Finally, we can maximize the likelihood of the observed training data under the distribution de-
+scribed by GMDN in Equation 5, i.e.
+ˆθM L = argmax
+θ
+NY
+i=1
+( KX
+k=1
+πk(xi)fk(τi|xi;g k(xi))
+)
+.(7)
+We have thus formulated a GMDN framework that allows a single neural network to model the
+presence of scattering in an FRB signal along with the distribution ofτ. The estimation of the
+distribution ofτinherently accounts for the heteroskedastic uncertainty as well as enabling a robust
+confidence interval construction. The choice and architecture of the neural network for maximizing
+the likelihood in Equation 7 is discussed in the following sections.
+2.2.Model Architecture
+We experimented with various neural network architectures, starting with a convolutional neural
+network (CNN) autoencoder for each dynamic spectrum. CNNs impose translational invariance
+assuming “spatial stationarity”, referring to uniform distribution of certain features of the image (Y.
+LeCun et al. 2015), which is not physically justified for scattering morphology. This is because of the
+fact that the same scattering morphology at the top of the frequency band corresponds to different
+scattering timescale than at the bottom of the frequency band. Thus, the CNN based regression
+failed to give good results withR 2 <50% on the regression task. The vision transformer (ViT)
+(A. Dosovitskiy et al. 2021) has been outperforming CNNs in most tasks but it requires very large
+training dataset to learn the inductive biases associated with the image data.
+Due to the limitations with the aforementioned architectures, we designed a transformer archi-
+tecture for the representation of FRB dynamic spectra where each time bin in dynamic spectrum
+acts as a token with each token beingd-dimensional frequency vector as shown in Figure 14. Upon
+training the transformer, we observed that the model was overfitting by performing exceptionally
+well on training data while not being able to generalize on test data. We then computed a frequency-
+averaged timeseries by collapsing the dynamic spectrum along the frequency axis. This operation
+produced a one-dimensional timeseries with the time samples equal to that of original dynamic spec-
+trum. Each time sample is then projected to ad-dimensional vector with a single layer feed forward
+neural network, thereby creating embedding vectors for each time step. We constructed the same
+transformer architecture for time series as was developed for the dynamic-spectrum representation
+described above. However, we observed that the timeseries-based transformer model under-fit the
+data.
+Ultimately, we developed a parallel transformer architecture to process both the dynamic spectrum
+and time series representations but separately and concatenated the contextual output from both of
+them. This parallel network achieved a performance superior to all other architectures and methods
+
+Estimating Scattering Timescale of FRBs by Transformer7
+Figure 3.Schematic diagram of the parallel transformer architecture for our regression task. The model pro-
+cesses dynamic spectrum and timeseries representations with two independent parallel transformer branches.
+The resulting contextual embeddings are then concatenated and passed through a final regression head to
+predict the output values.
+discussed before and was free from both overfitting and underfitting (see Section 3.1). The schematic
+diagram of the multi modal network architecture is shown in Figure 3. A breakdown of the network’s
+constituent components are discussed in Appendix A.
+2.3.Data and preprocessing
+For this work, we used real data acquired with the CHIME telescope presented in CHIME/FRB
+Catalog 2. The catalog provides de-dispersed dynamic spectra,I(ν, t), which are cutouts of the
+total intensity data. This dynamic spectra capture the intensity of FRB sources at different times
+(t) across different frequency channels (ν). Each dynamic spectrum consists of 16,384 frequency
+channels spanning the 400-800 MHz band and∼160 time samples with a resolution 0.983 ms. This
+time window is chosen to fully capture both the burst envelope and any scattering tail with the burst
+peak lying near the center of the window. We applied 64 channel block averaging to downsample
+frequency channels to 256, which improved the signal to noise while maintaining computational
+
+8B. Kharel et al.
+tractability. Each dynamic spectrum was then independently min-max normalized:
+I ′(ν, t) = I(ν, t)−min(I(ν, t))
+max(I(ν, t))−min(I(ν, t)) .
+The normalization ensures all inputs lie in the range [0, 1].
+Data for the timeseries transformer can be generated by different dimensionality reduction tech-
+niques along the frequency axis as discussed in Appendix A.2. Each timeseries was also independently
+min-max normalized ensuring all the timeseries points lie in the range [0, 1].
+The targetτvalues for our regression task are taken from CHIME/FRB Catalog 2 , which are
+reported in milliseconds as measured by the modeling toolfitburst. The target values are processed
+in such a way thatτ ′ = ln(τ) forτ >0 andτ ′ = 0 otherwise to compute the objective function in
+Equation B9.
+We do not apply any explicit filtering of data samples based on signal to noise ratio, burst width
+or morphology. This broad inclusion of the data enables the model to learn from the full diversity
+of FRB population present in the CHIME catalog. Besides CHIME/FRB data, we employ synthetic
+data generated bysimpulse 12 for the model evaluation purposes.
+3.TRAINING AND RESULTS
+The MT-GMDN was trained exclusively on data from CHIME/FRB Catalog 2 . The Catalog 2
+dataset was partitioned into train (∼3800), validation (∼150) and test (∼150) sets for the events
+with valid scattering timescale values and the events withN aNvalues of scattering timescale were
+discarded. Training and validation sets were used while training, and test was used to evaluate the
+trained model. We randomly sampled the events in the partitions from both repeating and non-
+repeating sources as the repeating sources also display variability in the scattering (e.g., A. Pandhi
+et al. 2026; S. K. Ocker et al. 2023). The complete set of hyperparameter values adopted for training
+the MT-GMDN model are detailed in Appendix C. The final model corresponds to the training step
+achieving the lowest validation loss which is then used for quantitative evaluation and inferences.
+We used the coefficient of determination (R 2) to assess model performance on the regression task,
+which is defined by
+R2 = 1− SSres
+SStot
+,
+where,
+•SS res = Residual sum of squares;
+•SS tot = Total sum of squares.
+The classification performance was quantified via a confusion matrix displayed in the Figure 7 and
+the resulting accuracy, recall, precision and F1-scores.
+3.1.Quantitative performance on the test set from CHIME/FRB Catalog 2
+For the regression task, we computedR 2 between the predicted conditional median scattering
+timescale value (e µ) and the Catalog 2 value for the test set. The best value ofR 2 was obtained
+12 simpulse: C++/python library for simulating pulses in radio astronomy
+
+Estimating Scattering Timescale of FRBs by Transformer9
+Figure 4.Scatter plot between the MT-GMDN predictions andfitburstmeasured values of scattering
+timescales at a reference frequency (ν ref ) of 400 MHz. The plot consists of events that have resolved
+scattering in CHIME/FRB Catalog 2 .
+to be 94% for the model trained with timeseries computed by spectral averaging discussed in the
+Section A.2 and only the model performance is discussed in this section. The performances of the
+models corresponding to timeseries by other methods are discussed in Appendix A.2. Figure 4 shows
+the comparison between the MT-GMDN predicted scattering timescale values against thefitburst
+measured values in CHIME/FRB Catalog 2 . The result shows a strong linear correlation with most
+of the points symmetrically distributed along they=xline.
+Along with the point estimate, we also constructed 95% confidence intervalse µ±1.96×σ for the
+point estimates. Figure 5 presents per sample comparison of MT-GMDN predictions against the
+fitburstmeasured cataloged values. The vast majority of samples havefitburstvalues within
+the confidence interval of the MT-GMDN point estimate. This indicates the model’s reliability not
+only on the point estimates but also on the well calibrated uncertainty bounds. As illustrated in
+Figure 5, the uncertainty associated with the point estimate scales withτ, which is consistent with
+the characteristic property of the exponential scattering tail. Thus the model was consistently able
+to recoverτvalues along with uncertainty for individual events across varying signal characteristics
+demonstrating its robustness.
+To quantitatively assess the classification performance by the MT-GMDN, we first constructed a
+receiver operating characteristic (ROC) curve as shown in Figure 6. This ROC curves yields an area
+under the curve (AUC) value of 0.87 representing an excellent classifier (D. Hosmer et al. 2013).
+
+10B. Kharel et al.
+Figure 5.Test set prediction performance with x-axis denoting discrete FRB samples and y-axis scattering
+timescale at a reference frequency of 400 MHz.fitburstmeasured values are shown as blue dots and
+MT-GMDN point estimates are represented by black dashed lines while the blue shaded region representing
+95% confidence interval. Orange squares denote the FRB samples which are out of the 95% confidence
+interval.
+Figure 7 shows a confusion matrix for the scattering event detection at decision threshold of 0.6
+(i.e. ifp 0 >= 0.6 thenτ= 0 elseτ >0). At our chosen threshold, recall value of 90% was achieved
+and the overall accuracy was 76%. The precision of 63% suggest that the model is sensitive to
+scattering, and it predicted scattering in profiles that were unresolved in CHIME/FRB Catalog 2 .
+This conservative approach is critical for ensuring that faint scattering signatures are not overlooked.
+The decision threshold is an adjustable parameter that can be tuned based on the specific objective
+of the analysis. For the most balanced performance, we can utilize the ROC curve to determine the
+optimal value of decision threshold.
+3.2.Quantitative performance on simulated data
+To analyze the robustness of the MT-GMDN predictions, we evaluated the performance of the
+model against a synthetic dataset generated withsimpulseframework. We observed a consistent
+systematic bias in the recoveredτvalues, where the model was overestimating the predictions relative
+to the injected ground truth. The systematic bias was observed when modeling withfitburst.
+This discrepancy likely originates from overestimation of the scattering effect within thesimpulse
+simulation backend and/or a fundamental morphological mismatch between the templates used by
+
+Estimating Scattering Timescale of FRBs by Transformer11
+Figure 6.Receiver operating characteristic curve for scattering detection by MT-GMDN at different
+decision threshold values.
+fitburstfrom which our training target labels were derived and numerical methods implemented
+in thesimpulsebackend.
+We accounted this systematic offset by a linear calibration of the model’s point estimate and upper
+and lower bound of the confidence interval. The linear calibration was obtained by modeling zero-
+noise dynamic spectra withfitburstfor the minimum and maximum values of scattering timescales
+in the simulated data and then calculating the mean offset factor between the measured and injected
+values. As illustrated in Figure 8, the systematic offset correction aligns the predictions with the
+ideal line (y=x), along with the injected target values falling entirely within the predicted 95%
+confidence interval. Furthermore, the MT-GMDN captures the measurement uncertainty which are
+represented by the error bars. These uncertainties scale proportionally with theτvalues and is
+physically expected as higherτvalues dominate the pulse morphology and suppresses the signal
+to noise of the burst. The successful capture of the target values with heteroskedastic uncertainty
+confirms that the MT-GMDN provides both accurate point estimate and reliable confidence interval
+for scattering timescale.
+3.3.MT-GMDN vs.fitburston simulated data
+The process of model fitting withfitburstinvolves two steps. At first, a model without scattering
+is fitted and the parameters obtained from the first fit is then used to create a model with scattering.
+Chi-square (χ2) statistic for each of the fit is computed. Theseχ 2 statistics are then used to obtain
+F-statistic
+F= χ2
+1 −χ 2
+2
+χ2
+2
+Ndof,2
+∆Nfit
+,
+
+12B. Kharel et al.
+Figure 7.Confusion matrix for the scattering event detection at a detection threshold value ofp 0 = 0.6.
+Here no-scatter refers to unresolved scattering rather than physical absence of scattering.
+.
+whereN dof,2 is the number of degrees of freedom in the complex model with scattering and ∆N fit
+is the difference in the number of free parameters between the two models. Using the F-statistic,
+p-value is obtained which represents the improvement in the fit quality after the introduction of the
+scatter broadening parameter in the model.
+To compare the robustness of our MT-GMDN againstfitburst, we created common sets of broad-
+band synthetic events and applied bothfitburstand MT-GMDN methods to recover theτvalues.
+fitburstperformed exceptionally well on the data sets where the signal to noise of the events were
+high and so did MT-GMDN. However, in the low SNR data set where the scattering tails often get
+mixed up with the background noise, MT-GMDN outperformsfitburstwhich is illustrated in Fig-
+ure 9. To quantify the performance difference betweenfitburstand MT-GMDN we again employed
+R2 score as a metric for comparison.R 2 score of 39% was obtained forfitburstmeasured values
+while theR 2 score was 68% for MT-GMDN predicted values. Moreover, Figure 9 (Left) forfitburst
+measurement shows significant number of events for which thep-value of F-test are significantly high
+thereby failing to reject the null hypothesis that the non-scattering model is better fit for data. For
+some of the events, target values fall out of the 95% confidence interval and uncertainties do not
+scale well with noise levels andτvalues. Figure 9 (Right) shows that all the target values fall within
+the confidence interval predicted by MT-GMDN with uncertainties scaling well with noise levels
+andτvalues. The 95% confidence intervals are very broad for MT-GMDN method as compared to
+
+Estimating Scattering Timescale of FRBs by Transformer13
+Figure 8.Scattering timescale recovery for synthetic broadband pulses generated bysimpulsewith intrinsic
+widths of 1 ms. The vertical error bars denote 95% confidence interval with all of the target values within
+the interval. The MT-GMDN model achievesR 2 score of 92% on the point estimate of theτvalues.
+Measurement uncertainty scales withτjustifying the inherent difficulty in characterizing the morphology of
+the highly scattered profiles.
+fitburstat very low signal to noise values of the synthetic bursts (<8 for bursts withsimpulse
+injected value of>15 ms), however the point estimates and lower bounds are robust as compared to
+fitburst.
+Besides the performance on recoveringτvalues from data, MT-GMDN also has computational
+advantage.fitburstrelies on non-linear least squares optimization for each event which is an
+iterative process and the algorithm time complexity scales up with the number of frequency channels
+(Nν), time samples (N t) and number of iterations to converge. After the convergence,fitburst
+computes exact Hessian and inverts it to obtain the covariance matrix and hence uncertainty. This
+operation also scales withN ν andN t. However, once trained, MT-GMDN has the time complexity of
+O(1) regardless of the complexity of a burst. It has been observed that MT-GMDN achieves inference
+speed of approximately four orders of magnitude (10 4) faster thanfitburston the retrieval ofτ
+value and the corresponding uncertainty, enabling real time parameter estimation and uncertainty
+quantification.
+3.4.MT-GMDN vs. MCMC on simulated data
+MCMC can be used to sample from the posterior distribution in Bayesian approach of parameter
+estimation when marginal likelihood (evidence) over all the possible values of parameters in high
+dimensional parameter space becomes intractable. We used the same mathematical model as used
+
+14B. Kharel et al.
+Figure 9.Comparison offitburstmeasured values ofτon synthetic data against MT-GMDN predictions.
+The synthetic data set consists of broadband pulses with maximum SNR for the event with minimum
+scattering. Fluence for each of the event is held constant such that the SNR gets lower for the events with
+higher scattering due to the redistribution of radiation energy across time in exponentially decaying tail. Left:
+fitburstmeasurement with the vertical bars representing 95% confidence interval, the size of the markers
+corresponding to relative SNR and the colorbar representsp-value of F-test for scattering vs non-scattering
+model fit. Right: MT-GMDN predictions with vertical bars capturing 95% confidence interval with the
+marker size corresponding to relative SNR while the marker color representing the probability of scattering.
+A linear correction factor was applied to bothfitburstand MT-GMDN methods. The maximum signal to
+noise value of the synthetic data was 20 corresponding to the left most point in the plots and minimum was
+4 corresponding to the right most point in the plots.
+byfitburstto model the scatter broadening in pulse profile (M. M. McKinnon 2014) given as
+Tkn =
+ νk
+νr
+−δ
+exp
+ σ2
+2τ 2
+k
+− (tkn −t 0)
+τk
+
+1 + erf
+ tkn −(t 0 +σ 2/τk)
+σ
+√
+2
+
+.(8)
+Here,T kn is the pulse profile value atk th channel andn th time bin.σis the Gaussian width of
+the pulse,t 0 is arrival time of the pulse,τ k is scattering timescale andδis the index of scattering
+accounting for frequency dependence of scattering and was set to 4 which is the empirical standard
+value for FRBs.ν r is the reference frequency which was fixed to 400 MHz for our analysis.
+The spectrum was modeled by using the running power law model given as
+Fk =
+ νk
+νr
+γ+βln (
+νk
+νr )
+.(9)
+Here,γis spectral index andβis spectral running.
+Finally, a two dimensional dynamic spectrumD kn was then modeled by combining Equations 8
+and 9 as
+Mkn =AF kTkn,(10)
+withA= 10 α, the amplitude of overall wave packet characterized by global amplitude parameterα.
+
+Estimating Scattering Timescale of FRBs by Transformer15
+Figure 10.Dynamic spectrum of a synthetic FRB with modeled by MCMC method. The injected pulse
+had an intrinsic width of 1 ms and scattering timescale of 2 ms.
+To evaluate the MT-GMDN performance against MCMC on estimating the scattering timescale,
+we needed to create complete model of each dynamic spectrum in this evaluation. An example of
+a model generated by MCMC method is shown in Figure 10. Figure 11 illustrates the parameter
+distributions along with their corresponding 95% credible intervals for the simulated FRB previously
+displayed in Figure 10.
+We modeled 50 simulated FRBs with MCMC using lognormal distribution as prior for theτand
+extracted the posterior distribution forτby combining all MCMC chains. The heteroskedasticity was
+incorporated in the MCMC modeling by passing the noise value of a dynamic spectrum directly to
+the Gaussian likelihood of the MCMC. The sampler used was “No-U-Turn Sampler” (M. D. Hoffman
+& A. Gelman 2011) with a burn-in period of 2000 and 4 parallel chains. The comparison plot for
+MCMC method and MT-GMDN methods is shown in Figure 12.
+Some of the key metrics comparing the performance of MCMC versus MT-GMDN on both point
+estimate and uncertainty are summarized in the Table 1. MT-GMDN performs slightly better on
+root mean square error (RMSE) andR 2 score indicating improved predictive accuracy and better
+explained variance than MCMC. Both of the approaches also demonstrate negligible bias in the point
+estimation with MT-GMDN slightly better than MCMC. The significant difference between MT-
+GMDN and MCMC methods is on the the uncertainty modeling behaviors. MT-GMDN exhibits over-
+coverage, potentially due to conservative estimation of variance in the mixture density framework.
+However, under-coverage in uncertainty by the MCMC method indicates narrow predictive intervals
+reflecting its limitations in capturing the full variability of the data. Despite MCMC producing
+narrower uncertainty intervals, its under-coverage indicates that these intervals are not reliable while
+MT-GMDN prioritize more conservative but statistically consistent uncertainty estimates at the
+expense of sharpness. MT-GMDN thus demonstrates competitive or superior point-estimates and
+lower bounds of the uncertainty interval.
+3.5.Heteroskedastic uncertainty modeling by MT-GMDN
+To assess the uncertainty estimation nature of MT-GMDN based on the amount of noise in a
+dynamic spectrum, we analyze the correlation between the predicted uncertainty parameter (σ) and
+SNR of some simulated bursts. Higher SNR samples are expected to yield more precise estimates
+
+16B. Kharel et al.
+Figure 11.Posterior distribution of some of the model parameters in Equation 10 generated by MCMC
+method for a simulated FRB shown in the Figure 10. The central vertical line in the corner plots represent
+median or the point estimate while the first and third vertical lines denote the 95% credible interval. The
+posterior distributions are obtained by combining the samples from all MCMC sampler chains. The simulated
+burst had width of 1 ms and scattering time of 2 ms and MCMC method successfully recovered those values
+as seen in the corner plots forτ r as scattering time andσas the width.
+while lower SNR events are expected to produce broader uncertainty interval. This implies a negative
+correlation between predictive uncertainty and SNR of FRB events.
+Figure 13 shows the variation of uncertainty parameterσwith SNR for two representative cases of
+scattering with scattering timescales of 5 ms (left) and 10 ms (right). As the scatter plots suggest non-
+linear relationship betweenσand SNR, we implemented Spearman correlation method to quantify the
+correlation in terms of correlation coefficientρ. We found very strong negative correlations between
+σand SNR for both cases with statistical significance test yieldingp-values ofp= 9.8×10 −18 for the
+
+Estimating Scattering Timescale of FRBs by Transformer17
+Figure 12.Comparison of MCMC vs MT-GMDN performance on the simulated dataset. The size of the
+markers denote the SNR of corresponding dynamic spectrum and it ranges from 20 to 4 with larger size
+denoting higher SNR. The error bars for MT-GMDN predictions represent 95% confidence interval and the
+error bars for MCMC estimates represent 95% credible interval. The pulse width of all the bursts were set
+to 1 ms. Both the MCMC and MT-GMDN estimations were systematic bias corrected as introduced by
+simpulse.
+T able 1.MT-GMDN vs. MCMC Comparison Metrics
+Metric Equation MT-GMDN MCMC Comments
+RMSE
+h
+1
+N
+PN
+i=1(ˆyi −y i)2
+i1/2
+7.62 7.83 Lower is better
+R2 1−
+PN
+i=1(yi−ˆyi)2
+PN
+i=1(yi−¯y)2 0.71 0.69 Higher is better
+Bias 1
+N
+PN
+i=1(ˆyi −y i) -0.003 -0.068 Ideal≈0
+95% Coverage 1
+N
+PN
+i=1 I(yi ∈[l i, ui]) 1 0.89 Ideal≈0.95
+MIW 1
+N
+PN
+i=1(ui −l i) 19.69 2.49 Lower is better if calibrated
+Note—RMSE: Root mean square error, MIW: Mean interval width, ˆy i: Point estimate,y i:
+Target,u i: Upper bound estimate,l i: Lower bound estimate
+
+18B. Kharel et al.
+Figure 13.Relationship between predicted uncertainty parameter (σ) and SNR for two representative
+cases. Left plot displays the variation ofσwith SNR for simulated events with width of 1 ms andτof 5 ms
+while the right plot is for simulated events with width of 1 ms andτof 10 ms.
+case withτ=5 ms andp= 8.28×10 −23 for the case withτ=10 ms. This confirms that observed
+correlations are highly unlikely by chance. This statistically significant correlation result confirms
+that MT-GMDN produces heteroscedastic uncertainty estimates consistent with observational noise
+properties.
+4.DISCUSSIONS
+This work demonstrates that FRB morphology can be directly used by a deep learning framework
+to efficiently and precisely estimate astrophysical parameters such asτwithout relying on explicit
+pulse-shape fitting. The proposed MT-GMDN framework models the full conditional distribution
+p(τ|x) capturing both resolved scattering and heteroskedastic uncertainty in a statistically principled
+manner.
+One of the key results is that the model predicts significant fraction of false positives on the test
+data set from CHIME/FRB Catalog 2 as seen in Figure 7. This property of the model should not
+be interpreted as purely an error because the catalog reportedτ= 0 values are only the lower
+limits but not physically exact zeros. Figure 9 and Appendix E clearly demonstrate that for low
+SNR and very subtle scattering events the traditional scattering measurement methods might fail.
+However, MT-GMDN appears to be more sensitive to subtle temporal asymmetries due to low level
+scattering signatures which are not captured by traditional fitting approaches when operating near
+the instrumental resolution limit or low SNRs.
+The choice of conditional median as the primary point estimate ofτinstead of mean has been
+motivated by various factors. One of the main reasons being its robustness to a heavy-tailed lognormal
+distribution. While the mean is strongly influenced by the large scattering tails, the median often
+faithfully represents typical scattering timescale imposed by the data. Also, the median of the
+lognormal corresponds to the exponentiated mean of the underlying normal distribution which allows
+a convenient construction of the confidence intervals on the point estimation ofτ.
+
+Estimating Scattering Timescale of FRBs by Transformer19
+5.LIMITATIONS AND FUTURE WORKS
+Despite our MT-GMDN yielding promising results, there are still several limitations that motivates
+future work. The first limitation is that the model was trained on a very small size of training data
+set and there were modest number of samples with highτvalues (>100 ms). This may hinder the
+model’s performance on accurately characterizing highly scattered events. Furthermore, the model
+was trained exclusively on total intensity data from CHIME/FRB Catalog 2, generalization to high
+resolution CHIME/FRB data (baseband data) and also cross instrumental generalization remains
+to be investigated. Another notable constraint is the model’s maximum temporal window (context
+length) of 162 time samples. This limits the characterization of events requiring larger temporal
+extent.
+To enhance the model performance, future work will involve training the model by augmenting the
+CHIME/FRB catalog dataset with synthetic bursts injected into real telescope noise. We also plan
+to incorporate high resolution data sets in the training process allowing the model to better capture
+subtle burst structures. Additionally, we plan to extend the model architecture to estimate other
+morphological characteristics beyond the current implementation.
+6.CONCLUSION
+In this work, we have presented a Multimodal Transformer Based Generic Mixture Density Network
+to infer an astrophysical parameterτfrom burst morphology encoded in a dynamic spectrum. The
+model jointly estimates the probability of unresolved scattering and the conditional distribution ofτ
+and thus yielding robust point estimates alongside well-calibrated uncertainty bounds.
+The introduction of multimodal framework that leverages complementary information from both
+temporal domain and spectral domain solves the fundamental challenge of limited dataset to train
+the transformer based architecture. Our probabilistic mixture density formulation provides a robust
+solution to handle zero-inflated data set during training thus allowing accurate modeling of both scat-
+tered and unresolved scattered signals. The successful application of the model on real CHIME/FRB
+test data set and the synthetic test data set demonstrates the robustness and scientific utility of our
+framework.
+The proposed framework offers a non-parametric alternative to classical scattering pipelines and
+can be implemented to automate the large-scale scattering inference. The classical methods are still
+useful for verification purposes.
+ACKNOWLEDGMENTS
+We acknowledge that CHIME is located on the traditional, ancestral, and unceded territory of the
+Syilx/Okanagan people.
+We are grateful to the staff of the Dominion Radio Astrophysical Observatory, which is operated
+by the National Research Council of Canada. CHIME is funded by a grant from the Canada Foun-
+dation for Innovation (CFI) 2012 Leading Edge Fund (Project 31170) and by contributions from
+the provinces of British Columbia, Qu´ ebec and Ontario. The CHIME/FRB project is funded by a
+grant from the CFI 2015 Innovation Fund (Project 33213) and by contributions from the provinces
+of British Columbia and Qu´ ebec, and by the Dunlap Institute for Astronomy and Astrophysics at
+the University of Toronto. Additional support is provided by the Canadian Institute for Advanced
+Research (CIFAR), McGill University and the McGill Space Institute thanks to the Trottier Family
+Foundation, and the University of British Columbia. The CHIME/Pulsar instrument hardware is
+
+20B. Kharel et al.
+funded by the Natural Sciences and Engineering Research Council (NSERC) Research Tools and
+Instruments (RTI-1) grant EQPEQ 458893-2014.
+M.N. is a Fonds de Recherche du Quebec - Nature et Technologies (FRQNT) postdoctoral fellow.
+M.W.S acknowledges support from the French government under the France 2030 investment plan,
+as part of the Initiative d’Excellence d’Aix-Marseille Universit´ e - AMIDEX (AMX-23-CEI- 088). P.S.
+acknowledges the support of an NSERC Discovery Grant (RGPIN-2024-06266).
+Software:Numpy(C. R. Harris et al. 2020),Matplotlib(J. D. Hunter 2007),PyTorch(A. Paszke
+et al. 2019),torchvision( TorchVision maintainers and contributors 2016),pandas(T. pandas devel-
+opment team 2020),seaborn(M. L. Waskom 2021),fitburst(E. Fonseca et al. 2024),simpulse(K.
+Smith 2005)
+DATA AND SOFTWARE AVAILABILITY
+The source code used in this work is publicly available on GitHub 13.
+APPENDIX
+A.BREAKDOWN OF MODEL ARCHITECTURE
+A.1.Dynamic Spectrum Transformer
+The dynamic spectrum transformer ingests dynamic spectrum which is tokenized alongn-
+dimensional time axis with each token beingd-dimensional frequency vector:
+xDS ∈R n×d.
+This choice of dynamic spectrum input preserves the frequency details for each time stamp and allows
+Figure 14.Illustration of the tokenization scheme for a dynamic spectrum. Each time stamp acts as a
+distinct token and the frequency intensities vector at that time stamp serves as token embedding referred
+to as d-dimensional frequency vector.
+the self attention mechanism to model the long range temporal dependencies along with frequency
+dependent temporal smearing.
+13 https://github.com/kharelb/Scattering-Timescale-Estimation-With-Transformers
+
+Estimating Scattering Timescale of FRBs by Transformer21
+Figure 15.Timeseries (pulse profile) created by different dimensionality reduction techniques along the
+frequency dimension.
+The dynamic spectrum transformer is similar to the standard transformer encoder (A. Vaswani
+et al. 2023) consisting of two encoder layers with each encoder layer containing 4 self-attention heads
+which performs full self-attention. We experimented with higher number of heads (8, 16) but there
+was no significant change in the performance of the model yielding the similar values ofR 2 as given
+by 4 heads.
+A.2.Timeseries Transformer
+We can compute timeseries from a dynamic spectrum by performing dimensionality reduction along
+the frequency axis. Some of the timeseries computation methods include simple spectral averaging,
+projection onto principal frequency components using principal component analysis (PCA), and
+quantile computation across frequency channels. Timeseries obtained by different approaches as
+discussed are shown in Figure 15. Timeseries data thus can be represented as
+xTS ∈R n.
+The timeseries representation of the dynamic spectrum captures global temporal asymmetry and
+scattering tails while supressing frequency-dependent structure and thus provides a complementary
+information to the dynamic spectrum.
+The projection layer in timeseries transformer projects each scalar timeseries value tod-dimensional
+vector with a simple feed forward network. Each projected vector corresponding to each time sample
+in timeseries serves as token embedding which is illustrated in Figure 16.
+
+22B. Kharel et al.
+Figure 16.Illustration of the projection layer where each time sample is mapped tod-dimensional learnable
+embedding vector by a simple feed forward neural network.
+The timeseries transformer has the same number of encoder layers and attention heads as the
+dynamic spectrum transformer. This transformer thus focuses on capturing pulse asymmetry, tail
+decay structure, temporal sub-components and burst duration variations.
+A.3.Positional encoding
+To make both of the transformers aware of temporal position, positional embedding vectors were
+added to both dynamic spectrum representation token embeddings and timeseries representation
+token embeddings. The same positional embeddings were used for both transformers.
+˜xDS =x DS +r
+˜xTS =x TS +r
+Upon experimenting, learnable positional embedding yielded better result in our case than sinu-
+soidal positional embedding introduced by A. Vaswani et al. (2023).
+A.4.Latent representation and fusion
+Each transformer generates a sequence of context rich embeddings of the same shape as input:
+zDS ∈R n×d,z TS ∈R n×d.
+These two feature rich latent representation outputs from the encoders are fused by concatenation:
+z= [z DS;z TS]∈R n×2d
+This strategy preserves the modality specific information and also prevents interference between the
+temporal and spectral features extracted.
+A.5.Projection and attention pooling
+The fused encoder outputs are then passed through linear projection layer to produce output
+˜z=W T z+b,(A1)
+
+Estimating Scattering Timescale of FRBs by Transformer23
+Figure 17.A schematic diagram of regression head. Thed-dimensional output from the preceding attention
+pooling layer is passed through a linear layer to obtain the parameters of the mixture density as outputs.
+where ˜z∈R n×d andWandbare weights and bias associated with the linear transformation.
+We utilize an attention based pooling mechanism to aggregate the output from the last projection
+layer to a single vector for regression head. We first project each vector from ˜zcorresponding to time
+step to a scalar score using learnable linear transformation
+e=W T ˜z+b,
+whereWandbare learnable parameters. The learned scores are then normalized across the temporal
+dimension using the softmax function to obtain attention weightsα t:
+αt = exp(et)Pn
+t=1 exp(et)
+Finally, a weighted sum is performed to produce a global representation
+h=
+nX
+t=1
+αt ˜zt.
+This approach allows the model to weight different time stamps dynamically based on their relevance.
+A.6.Regression head
+The regression head accepts a latent vectorh∈R d from the preceding attention pooling layer.
+The latent vector is then passed through a linear layer to give an output ˜h. It is then fed into three
+parallel linear heads as shown in Figure 17 which are responsible for distinct distribution parameters
+of the Bernoulli and lognormal distributions in the mixture density. The three outputs from the
+regression head are further discussed below.
+Bernoulli head (f p0):It predicts the probability of zero scattering timescale i.e. the Bernoulli
+probability of the mixture density.
+p0 =σ(f p0(˜h))
+Whereσis standard sigmoid function
+σ(x) = 1
+1 + exp(−x).
+
+24B. Kharel et al.
+Location head (f µ):It predicts the location parameter of the lognormal distribution in the mixture
+density.
+µ=f µ(˜h)
+Scale head (f σ):It predicts the scale parameter of the lognormal in the mixture density.
+σ= softplus(f σ(˜h))
+Where,
+softplus(x) = ln(1 +e x)
+B.OPTIMIZATION FUNCTION
+The optimization task in our case is maximizing the likelihood with respect to the mixture density
+given by Equation 5. So our objective (error) function as seen in Equation 7 is
+E(θ) =
+NY
+i=1
+( KX
+k=1
+πk(xi)fk(τi|xi;g k(xi))
+)
+.(B2)
+Where,θare the weights of the neural network. Using Equations 6, Equation B2 becomes
+E(θ) =
+NY
+i=1
+{p0(xi;g θ(xi))δ(τi) + (1−p 0(xi;g θ(xi))fLN(τi|xi;g θ(xi)}.(B3)
+Ifp(τ i|xi;g θ(xi)) is the probability of observing scattering timescaleτ i for a given samplex i then
+there arises two cases:
+Case I:τ i = 0:
+p(τi|xi;g θ(xi)) =p 0(xi;g θ(xi))
+Case II:τ i >0:
+p(τi|xi;g θ(xi)) = (1−p 0(xi;g θ(xi))fLN(τi|xi;g θ(xi)
+Thus the objective function is:
+E(θ) =
+NY
+i=1
+p(τi|xi;g θ(xi)) (B4)
+Instead of maximizing the above expression directly, it becomes computationally efficient to maximize
+the log transformed value of the above expression. Since, the logarithm is a monotonically increasing
+function, maximizing above expression is equivalent to maximizing the log transformed value. Thus
+our objective function can be written as
+E(θ) =
+NX
+i=1
+ln{p(τ i|xi;g θ(xi))}.(B5)
+Maximizing above equation is equivalent to minimizing the negative of it, so the objective function
+becomes:
+E(θ) =−
+NX
+i=1
+ln{p(τ i|xi;g θ(xi))}.(B6)
+Now, let us derive the logarithm of probabilities for both casesτ i = 0 andτ i >0
+
+Estimating Scattering Timescale of FRBs by Transformer25
+Case I:τ i = 0:If probability under the model:
+p0(τi = 0|xi;g θ(xi)) =p 0,i
+Then,
+ln{p0(xi;g θ(xi))}= lnp 0,i (B7)
+Case II:τ i >0:In this case:
+p0(τi >0|x i;g θ(xi)) = (1−p 0,i)fLN(τi|xi;g θ(xi))
+=⇒lnp 0(τi >0|x i;g θ(xi)) = ln(1−p 0,i) + lnf LN(τi|xi;g θ(xi))
+But since,
+fLN(τi|xi;g θ(xi)) = 1
+τiσ
+√
+2π exp
+
+−(lnτ i −µ i)2
+2σ2
+i
+
+=⇒lnf LN(τi|xi;g θ(xi)) =−ln(τ i)−ln(σ i)− 1
+2 ln(2π)− (lnτ i −µ i)2
+2σ2
+i
+So,
+lnp 0(τi >0|x i;g θ(xi)) = ln(1−p 0,i)−ln(τ i)−ln(σ i)− 1
+2 ln(2π)− (lnτ i −µ i)2
+2σ2
+i
+(B8)
+Finally, our error function given by Equation B6 normalized for data size becomes
+E(θ) =− 1
+N
+NX
+i=1
+ln{p(τ i|xi;g θ(xi))} (B9)
+With,
+ln{p(τ i|xi;g θ(xi))}=
+
+
+
+lnp 0,i, τ i = 0,
+ln(1−p 0,i)−ln(τ i)−ln(σ i)− 1
+2 ln(2π)− (lnτ i−µi)2
+2σ2
+i
+, τ i >0
+(B10)
+Thus the Equation B9 is our final objective function which is minimized during training by gradient
+descent method.
+C.IMPLEMENTATION DETAILS AND HYPERPARAMETERS
+In this section, we provide the specific configuration and hyperparameter settings used during
+training to ensure the reproducibility of our results. The model architecture was implemented with
+deep learning frameworkPyTorch(A. Paszke et al. 2019) and was trained onNVIDIA A100 Tensor
+CoreGPU provided byDolly Sods 14. All the model architectural parameters were set through
+manual tuning on the validation dataset. The checkpoint that achieved the minimum validation loss
+was the best model with robust configuration for generalization presented in Table 2.
+14 A high performance computing cluster at West Virginia University.
+
+26B. Kharel et al.
+T able 2.MT-GMDN Hyperparameter Configuration
+Category Hyperparameter Value Description
+Architecture Transformer Heads 4 Multi-head attention count
+Encoder Layers 3 Number of stacked transformer blocks
+Embedding Dim (d model) 256 Latent vector size
+FFNN Dimension 2048 Feed-forward hidden layer size
+Dropout Rate 0.1 Regularization to prevent overfitting
+MDN Hidden Units [256,256] Neurons in the mixture density head
+Training Batch Size 32 Number of samples per iteration
+Learning Rate 1×10 −4 Learning rate for optimizer
+Weight Decay 0.09L 2 regularization penalty
+Max Epochs 400 Total training iterations
+Optimizer AdamW Optimization algorithm
+Data Temporal Window 162 Maximum input time samples
+Frequency Channels 256 Spectral channels of dynamic spectra
+Note—The hyperparameters for both dynamic spectrum and timeseries transformers are
+same.
+D.MODEL PERFORMANCE WITH DIFFERENT TIMESERIES APPROACHES
+The estimation of scattering timescale with MT-GMDN relies on reduction of two dimensional
+dynamic spectrum into a corresponding one dimensional timeseries. While there are different statis-
+tical approaches to generate timeseries from a dynamic spectrum, in this work we utilized spectral
+mean, frequency quantiles, and first principal frequency component using principal component anal-
+ysis (PCA) and evaluated their performance after training. The best performing model was achieved
+on spectral mean approach and is explained in Section 3.
+Figure 18 presents the evaluation of different alternative approaches other than spectral mean on
+the real test data set. The results suggests that these methods peform reliably at low scattering
+timescales but they struggle for pulses exhibiting significant scattering tails.
+E.MODEL COMPARISON WITH SOME INDIVIDUAL SYNTHETIC BURSTS
+Here, we present a comparison betweensimpulsegenerated pulses,fitburstmeasured values and
+corresponding p-values of F-test for scattering detections and the estimates from the MT-GMDN.
+
+Estimating Scattering Timescale of FRBs by Transformer27
+Figure 18.Evaluation of MT-GMDN performance across four different timeseries extraction methods.
+All of the examples in the Figure 19 have intrinsic width of 1 ms and same fluence values while
+noise levels vary between the bursts. p-values fromfitburstmeasurements dictates the existence of
+scattering in a burst while prediction probability of scattering dictates the presence of scattering by
+MT-GMDN approach. Examining these individual bursts with aforementioned methods provides an
+insight on how MT-GMDN performs across different burst profiles. We can observe that MT-GMDN
+maintains prediction accuracy ofτvalues in various regimes wherefitburstreturns non significant
+p-values (p>0.05) or even whenfitburstfails to detect a burst in a highly scattered low SNR
+profile.
+
+28B. Kharel et al.
+Figure 19.Each panel includes two sub-panels with the first sub-panel containing a simulated dynamic
+spectrum and the corresponding timeseries. While the second sub-panel describes real injectedτvalue, the
+MT-GMDN point estimate with 95% confidence interval, and thefitburstfit statistics. The uncertainty
+provided for thefitburstmeasurement here corresponds to the 1σlimits. All theτvalues are referenced
+at 400 MHz.
+F.SOME FRBS WITH STRONG NOISE AND RADIO FREQUENCY INTERFERENCE
+To demonstrate significance of MT-GMDN, we present a set of representative FRBs shown in the
+Figure 20 from the CHIME/FRB Catalog 2 that are affected by noise and radio frequency interference
+(RFI). Due to the strong noise and heavy RFI, extracting any physical information such asτis very
+challenging by traditional methods discussed before. Despite the challenges, MT-GMDN produces
+visibly stable predictions with increased uncertainty to lower quality observations as displayed in
+Figure 20.
+
+Estimating Scattering Timescale of FRBs by Transformer29
+Figure 20.Representative FRBs from the CHIME/FRB Catalog 2 where traditional methods failed to
+extract physical parameters due to strong noise and RFI. Each panel includes two sub-panels with the first
+sub-panel (left) containing a dynamic spectrum and the corresponding timeseries, while the second sub-panel
+(right) contains MT-GMDN estimates. The estimates include probability of scattering, point estimate forτ
+value and its 95% predictive interval.
+G.ALTERNATIVE GAMMA MIXTURE DENSITY FORMULATION
+As seen above from results, the lognormal formulation can produce wide upper confidence bounds
+for events with higher scattering and/or lower signal to noise. This is because, the variance is
+computed in the log scale and then transformed back to linear scale. A very small variation ofσ
+in log scale can lead to large variation in the linear scale. One alternative to resolve the inflated
+confidence interval upper bound can be the use of distribution in the mixture density formulation
+with lighter tail than lognormal. Also the distribution should be strictly positive and operating in
+linear scale.
+Gamma distribution satisfies all of the properties of alternative distribution discussed above. In this
+section, we examine the effect of distribution on confidence interval width by replacing the lognormal
+with the gamma distribution in the mixture density formulation in Equation 5. Gamma distribution
+for a random variablexis given by
+f(x;α, β) = βαxα−1e−βx
+Γ(α) ,(G11)
+whereαis the shape parameter,βis rate parameter and Γ(α) is the Gamma function. Following
+Section B, we can easily compute the error function by replacingf 2(x) in Equation 6 by the Gamma
+distribution. The logarithm term in Equation B10 thus gets modified to
+logp(τ i |x i) =
+
+
+
+logp 0,i, τ i = 0,
+log(1−p 0,i) +α i logβ i −log Γ(α i) + (αi −1) logτ i −β iτi, τ i >0.
+(G12)
+
+30B. Kharel et al.
+Figure 21.Test set prediction performance with x-axis denoting discrete FRB samples and y-axis scattering
+timescale at a reference frequency of 400 MHz. The mixture density formulation here implements the Gamma
+distribution instead of the Lognormal distribution.fitburstmeasured values are shown as blue dots and
+MT-GMDN point estimates are represented by black dashed lines while the blue shaded region representing
+95% confidence interval. Orange squares denote the FRB samples which are out of the 95% confidence
+interval.
+The neural network was then trained to estimate the parameters of the Gamma distribution and
+the Bernoulli’s parameter in the mixture density formulation. Point estimate was computed by the
+median of the target distribution with the upper and the lower bounds defined by 0.025 and 0.975
+quantiles respectively. Figure 21 shows per sample comparison of MT-GMDN predictions against the
+fitburstmeasured values after replacing the Lognormal distribution by the Gamma distribution in
+mixture density formulation for the test data set.R2-score of 88% was achieved which represents slight
+degradation in the point estimation with the Gamma distribution method. However, it can be clearly
+seen from Figures 5 and 21 that the width of the confidence interval in Gamma distribution method
+produces much more narrower confidence intervals than that of Lognormal distribution method. This
+can be quantified by the MIW defined in the Table 1. The MIW with the Gamma distribution is
+32.74 while with the Lognormal distribution is 56.38. The classification performances with both the
+Gamma and Lognormal distributions in the mixture density formulation remained almost identical
+since Bernoulli’s distribution was used in both of the cases for classification.
+
+Estimating Scattering Timescale of FRBs by Transformer31
+Thus the Gamma component can significantly reduce the inflated confidence intervals for the high
+scattering and/or low signal to noise dynamic spectrum at the expense of slightly degradedR 2-score
+in the point estimate.
+REFERENCES
+Agarwal, D., Aggarwal, K., Burke-Spolaor, S.,
+Lorimer, D. R., & Garver-Daniels, N. 2020,
+Monthly Notices of the Royal Astronomical
+Society, 497, 1661, doi: 10.1093/mnras/staa1856
+Bhat, N. D. R., Cordes, J. M., & Chatterjee, S.
+2003, ApJ, 584, 782, doi: 10.1086/345775
+Bishop, C. M., & Bishop, H. 2024, Deep Learning:
+Foundations and Concepts (Springer),
+doi: 10.1007/978-3-031-45468-4
+CHIME/FRB Collaboration, Amiri, M., Bandura,
+K., et al. 2018, ApJ, 863, 48,
+doi: 10.3847/1538-4357/aad188
+CHIME/FRB Collaboration, Amiri, M., Bandura,
+K., et al. 2019, Nature, 566, 230,
+doi: 10.1038/s41586-018-0867-7
+Chime/FRB Collaboration, Abbott, T., Andersen,
+B. C., et al. 2026, ApJS, 283, 34,
+doi: 10.3847/1538-4365/ae3828
+Connor, L., & van Leeuwen, J. 2018, The
+Astronomical Journal, 156, 256,
+doi: 10.3847/1538-3881/aae649
+Cordes, J. M., & McLaughlin, M. A. 2003, ApJ,
+596, 1142, doi: 10.1086/378231
+Cordes, J. M., Ocker, S. K., & Chatterjee, S. 2022,
+Astrophys. J., 931, 88,
+doi: 10.3847/1538-4357/ac6873
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., et al.
+2021, An Image is Worth 16x16 Words:
+Transformers for Image Recognition at Scale,
+https://arxiv.org/abs/2010.11929
+Fonseca, E., Pleunis, Z., Andersen, B. C., et al.
+2024, The Astrophysical Journal Supplement
+Series, 272, 7, doi: 10.3847/1538-4365/ad27d6
+Harris, C. R., Millman, K. J., van der Walt, S. J.,
+et al. 2020, Nature, 585, 357,
+doi: 10.1038/s41586-020-2649-2
+Hoffman, M. D., & Gelman, A. 2011, arXiv
+e-prints, arXiv:1111.4246,
+doi: 10.48550/arXiv.1111.4246
+Hosmer, D., Lemeshow, S., & Sturdivant, R. 2013,
+Applied Logistic Regression: Third Edition
+(wiley), doi: 10.1002/9781118548387
+Hunter, J. D. 2007, Computing in Science &
+Engineering, 9, 90, doi: 10.1109/MCSE.2007.55
+Jonas, J., & MeerKAT Team. 2016, in MeerKAT
+Science: On the Pathway to the SKA, 1,
+doi: 10.22323/1.277.0001
+Kharel, B., Fonseca, E., Brar, C., et al. 2025,
+Repeating vs. Non-Repeating FRBs: A Deep
+Learning Approach To Morphological
+Characterization,
+https://arxiv.org/abs/2509.06208
+LeCun, Y., Bengio, Y., & Hinton, G. 2015,
+Nature, 521, 436
+Lorimer, D. R., Bailes, M., McLaughlin, M. A.,
+Narkevic, D. J., & Crawford, F. 2007,Science,
+318, 777, doi: 10.1126/science.1147532
+Lorimer, D. R., & Kramer, M. 2004, Handbook of
+Pulsar Astronomy, Vol. 4 (Cambridge, UK ;
+New York: Cambridge University Press)
+Macquart, J.-P., Bailes, M., Bhat, N. D. R., et al.
+2010, PASA, 27, 272, doi: 10.1071/AS09082
+McKinnon, M. M. 2014, Publications of the
+Astronomical Society of the Pacific, 126, 476,
+doi: 10.1086/676975
+Ocker, S. K., Cordes, J. M., & Chatterjee, S. 2021,
+ApJ, 911, 102, doi: 10.3847/1538-4357/abeb6e
+Ocker, S. K., Cordes, J. M., Chatterjee, S., et al.
+2023, MNRAS, 519, 821,
+doi: 10.1093/mnras/stac3547
+pandas development team, T. 2020,
+pandas-dev/pandas: Pandas, latest Zenodo,
+doi: 10.5281/zenodo.3509134
+Pandhi, A., Nimmo, K., Andrew, S., et al. 2026,
+ApJL, 1000, L53, doi: 10.3847/2041-8213/ae52f8
+Paszke, A., Gross, S., Massa, F., et al. 2019, in
+Advances in Neural Information Processing
+Systems 32 (Curran Associates, Inc.), 8024–8035
+Sherman, M., & DSA-110 Collaboration. 2023, in
+American Astronomical Society Meeting
+Abstracts, Vol. 241, American Astronomical
+Society Meeting Abstracts #241, 239.04
+Shin, K., Leung, C., Simha, S., et al. 2025,
+Astrophys. J., 993, 208
+
+32B. Kharel et al.
+Shivraj Patil, S., Main, R. A., Fonseca, E., et al.
+2025, arXiv e-prints, arXiv:2509.06721,
+doi: 10.48550/arXiv.2509.06721
+Smith, K. 2005, simpulse: C++/python library for
+simulating FRBs and pulsars,,
+https://github.com/kmsmith137/simpulse
+Taylor, J. 1997, Introduction to Error Analysis,
+the Study of Uncertainties in Physical
+Measurements, 2nd Edition
+TorchVision maintainers and contributors. 2016,
+TorchVision: PyTorch’s Computer Vision
+library,, https://github.com/pytorch/vision
+GitHub
+Vaswani, A., Shazeer, N., Parmar, N., et al. 2023,
+Attention Is All You Need,
+https://arxiv.org/abs/1706.03762
+Waskom, M. L. 2021, Journal of Open Source
+Software, 6, 3021, doi: 10.21105/joss.03021
+Williamson, I. P. 1974, MNRAS, 166, 499,
+doi: 10.1093/mnras/166.3.499
+Xu, S., & Zhang, B. 2016, ApJ, 832, 199,
+doi: 10.3847/0004-637X/832/2/199
+Yang, Tsung-Ching, Hashimoto, Tetsuya, Hsu,
+Tzu-Yin, et al. 2025, A&A, 693, A85,
+doi: 10.1051/0004-6361/202450823

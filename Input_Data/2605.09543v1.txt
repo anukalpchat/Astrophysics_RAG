@@ -1,0 +1,938 @@
+Title: Accelerating 3D Non-LTE Synthesis with Graph Neural Networks
+Authors: A. Vicente Arévalo, A. Asensio Ramos, C. J. Díaz Baso
+Published: 2026-05-10
+Categories: astro-ph.SR, astro-ph.IM
+
+Astronomy&Astrophysicsmanuscript no. aa60077-26©ESO 2026
+May 12, 2026
+Accelerating 3D Non-LTE Synthesis with Graph Neural Networks
+A. Vicente Arévalo1, A. Asensio Ramos2, C. J. Díaz Baso3,4
+1 Institut für Sonnenphysik (KIS), Georges-Köhler-Allee 401A, 79110 Freiburg, Germany
+2 Instituto de Astrofísica de Canarias, C/Vía Láctea s/n, E-38205 La Laguna, Tenerife, Spain
+3 Institute of Theoretical Astrophysics, University of Oslo, P.O. Box 1029 Blindern, N-0315 Oslo, Norway
+4 Rosseland Centre for Solar Physics, University of Oslo, P.O. Box 1029 Blindern, N-0315 Oslo, Norway
+May 12, 2026
+ABSTRACT
+Context.Spectropolarimetric interpretation of chromospheric lines requires solving the radiative transfer problem under non-local
+thermodynamic equilibrium (non-LTE) conditions. The atomic level populations must be computed self-consistently with the radiation
+field. Traditional inversion codes employ 1.5D approximations for computational tractability, neglecting horizontal radiative transfer
+that becomes significant near magnetic structures and dynamic chromospheric features.
+Aims.We present a method to solve the 3D statistical equilibrium (SE) populations of any atom using Graph Neural Networks (GNNs),
+extending prior work in 1.5D to the full 3D domain. The goal is to develop a fast surrogate model that fully accounts for horizontal and
+vertical radiative coupling while being robust to changes in the underlying grid, enabling future 3D non-LTE inversions.
+Methods.We discretize the solar atmosphere as a directed graph, where nodes encode local physical properties (temperature, velocity,
+magnetic field, electron density, etc.) and edges encode geometric distances between spatial points. An Encode-Process-Decode GNN
+architecture propagates information across the 3D domain to capture the radiative coupling efficiently. The network is trained on a
+Bifrostradiation-MHD simulation using Caiipopulations computed withMulti3Das ground truth.
+Results.The trained GNN accurately predicts populations of the five-level Caiiatom plus continuum. Correlations exceed 0 .99 in the
+photosphere and mid-chromosphere; errors increase in the upper chromosphere, where non-local effects dominate but remain unbiased
+with Gaussian distributions. Inference is ∼ 106 faster than traditional iterative SE solvers. Spectral synthesis of the Caii8542 Å line
+yields intensity profiles with ≲ 2% mean residuals relative to the full 3D solution, opening up the option of more realistic inversions of
+strong chromospheric lines.
+Conclusions.The 3D GNN framework bypasses the computational bottleneck of iterative SE solvers while preserving essential
+non-LTE physics, including horizontal radiative transfer. The method is readily extensible to other atoms and paves the way toward
+routine 3D non-LTE inversions.
+Key words.Sun: chromosphere – Radiative transfer – Methods: numerical – Methods: data analysis – Line: formation
+1. Introduction
+The accurate modeling of solar chromospheric spectra requires
+a rigorous treatment of non-Local Thermodynamic Equilibrium
+(non-LTE) radiative transfer. In these tenuous layers, the plasma
+density is too low for collisions to enforce thermal equilibrium,
+and the atomic level populations become strongly coupled to the
+radiation field. Since photons can travel large distances before
+being absorbed, the state of the plasma at any given point depends
+on the physical conditions across a vast surrounding volume. This
+non-local coupling necessitates the simultaneous solution of the
+Radiative Transfer (RT) equation and the Statistical Equilibrium
+(SE) equations in full 3D geometry.
+Several massively parallel codes have been devel-
+oped to tackle this computationally intensive prob-
+lem, including Multi3D (Leenaarts & Carlsson 2009),
+PHOENIX/3D (Hauschildt & Baron 2010), and PORTA
+(Štˇepán & Trujillo Bueno 2013). These codes typically
+employ iterative schemes, such as Multi-level Accelerated
+Lambda Iteration (MALI; Rybicki & Hummer 1991), to find
+a self-consistent solution for the radiation field and atomic
+populations. While they provide the gold standard for synthetic
+spectra, their high computational cost (often requiring up to
+millions of CPU hours per snapshot) limits their application to a
+small number of static snapshots or simplified test cases.
+This computational bottleneck is one of the primary
+obstacles for 3D spectropolarimetric inversions. Inversion
+codes like NICOLE (Socas-Navarro et al. 2015), SNAPI
+(Mili´c & van Noort 2018), DeSIRe (Ruiz Cobo et al. 2022)
+or STiC (de la Cruz Rodríguez et al. 2019) infer atmospheric
+properties by iteratively fitting synthetic spectra to observations.
+Because they must execute the forward model hundreds of times
+per pixel, they are forced to rely on the 1.5D approximation,
+treating each pixel as an independent column and neglecting
+horizontal radiative transfer. However, this assumption breaks
+down in the dynamic chromosphere, where structures like
+fibrils and shock fronts exhibit strong horizontal gradients.
+Ignoring 3D radiative effects can introduce significant biases
+in the inferred temperature and magnetic field stratification
+(Štˇepán et al. 2022; Jaume Bestard et al. 2021; Bjørgen et al.
+2019). Furthermore, 3D radiative transfer introduces non-local
+scattering effects that smooth the source function spatially
+and are essential for reproducing characteristic chromospheric
+features such as H α fibrils, which are notably absent in 1.5D
+synthesis (Leenaarts et al. 2012).
+To make 3D inversions tractable, one would need a forward
+model orders of magnitude faster than current iterative solvers.
+Ideally, this forward model should also be differentiable to seam-
+Article number, page 1
+arXiv:2605.09543v1  [astro-ph.SR]  10 May 2026
+
+A&A proofs:manuscript no. aa60077-26
+lessly incorporate it into standard optimization methods used in
+inversions (e.g., Díaz Baso et al. 2025).
+Recent advances in deep learning suggest a way forward.
+Chappell & Pereira (2022) pioneered this approach withSun-
+nyNet, a Convolutional Neural Network (CNN) that predicts 3D
+non-LTE populations for Hα with a speedup of ∼ 105 over tra-
+ditional codes. While groundbreaking, CNNs rely on regular
+Euclidean grids where spatial information is implicitly encoded
+in the pixel spacing. This can limit their generalization to ob-
+servations or simulations with different spatial resolutions or
+non-uniform grids. We are aiming to remove that grid depen-
+dence while allowing for arbitrary graph topologies. To enable
+routine 3D inversions across multiple instruments with varying
+pixel scales, the forward model must be able to handle arbitrary
+spatial sampling without requiring retraining.
+Graph Neural Networks (GNNs) offer a more geometrically
+robust alternative. As demonstrated by Vicente Arévalo et al.
+(2022) in the 1.5D regime, GNNs treat the atmosphere as a flexi-
+ble graph where nodes represent spatial points, and edges encode
+the physical distance explicitly. This decouples the learning pro-
+cess from the grid topology: the network learns the physics of
+radiative propagation with distance rather than patterns on a fixed
+pixel array.
+In this work, we extend this GNN framework to the full 3D
+domain for the Caiiatom as our primary target. The Caiiinfrared
+triplet (8498, 8542, 8662 Å) serves as an ideal testbed; these lines
+are commonly used chromospheric diagnostics in modern solar
+telescopes due to their strong sensitivity to local temperature and
+magnetic fields (e.g.,Asensio Ramos et al. 2017; Díaz Baso et al.
+2019; Yadav et al. 2021). Crucially, their formation is influenced
+by 3D radiative transfer effects. By explicitly modeling the 3D
+spatial connectivity, our architecture provides a fast, geometry-
+agnostic surrogate for the SE equations that naturally accounts
+for horizontal radiative transfer, paving the way for routine 3D
+non-LTE inversions.
+2. Theoretical background
+In the solar chromosphere, the low plasma density decouples
+the radiation field from local thermal conditions, invalidating
+the assumption of Local Thermodynamic Equilibrium (LTE). To
+accurately model this regime, one must determine the atomic
+populations n by solving the equations of Statistical Equilibrium
+(SE):
+X
+j,i
+n jP ji −n i
+X
+j,i
+Pi j =0,(1)
+where the first term represents transitions into level i from all
+other levels j, and the second term represents transitions out of
+level i. The total transition rate Pi j = Ci j + Ri j includes both local
+collisional terms (Ci j) and non-local radiative rates ( Ri j). Each
+radiative rate depends on the mean intensity ¯J, which is the inte-
+gral of the specific intensity Iλ over all angles and frequencies of
+that transition. Specifically, Ri j = Bi j ¯Jνi j for radiative excitation
+(where Bi j is the Einstein coefficient), making the rates inherently
+non-local since ¯J depends on the radiation field from distant atmo-
+spheric layers. For resonance lines like Caii8542 Å, scattering
+typically dominates over pure absorption in the chromosphere.
+This means photons can be scattered multiple times across large
+spatial scales before being thermalized, creating strong coupling
+between spatially separated atmospheric regions—the essence of
+the 3D non-LTE problem.
+At the same time, the specific intensity is governed by the
+radiative transfer equation:
+dIλ
+dτλ
+=I λ −S λ,(2)
+where the source function S λ ≡ε λ/ηλ is the ratio of emissivity
+to absorption, and τλ is the optical depth of the computed ray.
+Because ελ and ηλ depend linearly on the populations n, Eqs. (1)
+and (2) form a coupled, non-linear system: the level populations
+determine the radiation field, which, in turn, determines the popu-
+lations.
+Traditional 3D non-LTE codes (e.g., Multi3D) solve this
+circular dependency via computationally expensive iterative
+schemes like the acceleratedΛ-iteration. However, we note that
+if we had a method to instantaneously know non-LTE popula-
+tions, the emergent spectrum can be synthesized in a single step
+by applying the formal solution of Eq. (2). Additionally, such
+a single formal solution can be trivially parallelized, contrary
+to the full non-LTE problem. As a consequence, having a fast
+predictor of the level populations for the given physical condi-
+tions can potentially accelerate non-LTE synthesis by a large
+margin. We propose to bypass the iterative bottleneck by using
+a GNN to produce level populations at every position in the 3D
+model, leveraging information in the surroundings of the point.
+This allows us to predict self-consistent populations directly and
+compute spectra via a single formal solution.
+The following section describes the specific GNN architecture
+and graph construction strategy employed to efficiently approxi-
+mate this population predictor while maintaining computational
+tractability for 3D domains.
+3. Methodology and architecture
+Building on the success of Vicente Arévalo et al. (2022), who
+demonstrated that GNNs can accurately predict 1.5D non-LTE
+populations with orders-of-magnitude speedup while maintain-
+ing grid flexibility, we extend this approach to map the physical
+parameters of the three-dimensional solar atmosphere to the level
+populations of a Caiimodel atom. While the previous approach
+modeled 1.5D semi-infinite atmospheres using optical depth as a
+distance metric, the 3D nature of the current problem necessitates
+significant changes in graph construction, dimensionality, con-
+nectivity, and encoded parameters to capture horizontal radiative
+transfer effects while maintaining computational efficiency. We
+describe them in the following.
+3.1. The GNN framework
+Using the same approach followed by Vicente Arévalo et al.
+(2022), we discretize the solar atmosphere not as a regular Carte-
+sian grid, but as a directed graph where edges encode information
+flow from surrounding context nodes toward the central column
+being inferred. The set of nodes of the graph represents the prop-
+erties of the atmosphere (either physical properties or the inferred
+populations) at particular points, and the set of edges represents
+the radiative coupling between them. This graph-based represen-
+tation gives flexibility to handle arbitrary geometries and essential
+non-local dependencies for the non-LTE problem.
+We adopt the Encode-Process-Decode architecture
+(Battaglia et al. 2018), implemented using the Pytorchlibrary
+(Paszke et al. 2019). The inference pipeline proceeds in three
+distinct stages (for a visual 1D representation we refer the reader
+to Fig. 1 of Vicente Arévalo et al. (2022)):
+Article number, page 2
+
+Vicente Arévalo et al.: Fast 3D Non-LTE Populations with GNNs
+Encoder: The physical properties at each node and the geometric
+relationships between them (edges) are projected into a higher-
+dimensional latent space. Two independent Multi-Layer Percep-
+trons (MLPs), fv and fe, transform the input feature vectors pi
+and edge attributes xi j into latent representations vi and ei j of
+dimensiond=128:
+vi =f v(pi)e i j =f e(xi j)
+Process: The core computation occurs through N message-
+passing steps, allowing information to propagate across the do-
+main. In this work, we use N =16 steps. At each step t, edge
+and node states are updated sequentially. First, an edge model f t
+E
+updates the edge features based on the concatenated states of the
+connected nodes and the edge, with a residual connection:
+et+1
+i j =e t
+i j +f t+1
+E (ei j,v i,v j)
+This edge model is another MLP that is shared for all the edges
+in the graph, but different for each message-passing step. Subse-
+quently, an aggregator model fA aggregates the incoming "mes-
+sages" (updated edge information) from all neighboring nodes
+vt
+k into one message et+1
+j to then use it to update the node with
+another MLP modelf V:
+et+1
+j =
+X
+k
+f t+1
+A (vt
+k,e t+1
+k j )→v t+1
+j =v t
+j +f t+1
+V (vt
+j,e t+1
+j ),
+where P represents a permutation-invariant aggregation function
+(in our case scatter_mean to reduce gradient explosion1 when
+back-propagating 2 during training).
+Like f t
+E, the f t
+A and f t
+V models are shared across all nodes
+in the graph, but differ at each message-passing step. This
+mechanism mimics the physical propagation of radiation: the
+message-passing steps literally propagate the radiation field
+through the atmospheric graph, where the local state of a node is
+iteratively updated by the incoming radiation (messages) from
+neighboring regions. The choice of N =16 message-passing
+steps represents a significant reduction compared to the original
+1.5D work, where N∼ 100 was required (Vicente Arévalo et al.
+2022). We attribute this to the richer 3D connectivity, which
+allows each step to capture more context and physically
+meaningful interactions, thereby reducing the required network
+depth and total parameter count.
+Decoder: Finally, a decoder MLP fn projects the final latent node
+states back into the physical space. The output is the normalized
+population of each atomic level of Caii(five bound levels plus
+Caiii):
+ni =f n(vN
+i )
+3.2. Graph Construction
+Each node i is initialized with an 11-dimensional feature vector
+pi containing the local thermodynamic and magnetic properties:
+temperature ( T), velocity vector in Cartesian coordinates ( v),
+magnetic field vector also in Cartesian coordinates (B), number
+densities of electrons (ne), gas pressure (pgas), and mass density
+(ρ). Crucially, we also include the vertical geometric heightz as an
+1 By gradient explosion we are referring to the numerical instability
+occurring when large error gradients accumulate and cause divergent
+weight updates when back-propagating.
+2 The recursive application of the chain rule to compute objective func-
+tion gradients to optimize the weights of the model.
+explicit input feature to help the network learn height-dependent
+stratifications.
+A major departure from the 1.5D approach is the definition of
+edge attributes. In 1.5D, the optical depth distance∆τ naturally en-
+codes opacity. However, calculating 3D optical distances requires
+solving the same non-LTE problem we aim to bypass. For that
+reason, we encode the geometric Euclidean distance |ri j| in the
+edges. While less physically informative than optical depths∆ τ,
+the network learns to infer opacity structures effectively from the
+combination of geometric distance and local densities provided
+in the nodes.
+Transitioning from 1.5D to 3D requires a fundamental redef-
+inition of the graph topology. In 1.5D, nodes were sequentially
+connected along the vertical optical depth scale, with only one
+connection to and from previous and next nodes. In 3D, we must
+account for lateral radiation transfer and adopt a more elaborate
+graph-building strategy.
+A fully connected graph within the subvolume would grow as
+O(n2), where n is the number of nodes considered in the graph,
+leading to excessive memory consumption even for small neigh-
+borhoods. To address this, we adopt a strategy focused on infer-
+ring populations only for the central column of each subvolume,
+which benefits from the richest context. We define the stride S
+(the sampling interval along x and y) and connectivity radius R
+(maximum distance for edge connections) before describing the
+pruned connectivity scheme below. Since our primary goal is
+to infer the populations for the central column, we implement
+a pruned connectivity scheme, retaining only those edges that
+originate or terminate at a node within the central column. Fig-
+ure 1 shows a sample graph to illustrate the graph topology. This
+“star-like” connectivity significantly reduces the graph density,
+while preserving the direct radiative coupling between the target
+node and its 3D environment. This optimization allows us to pro-
+cess larger context volumes during training and inference without
+exceeding GPU memory limits.
+4. Training
+4.1. T raining data
+For training the graph neural network, a dataset with fully
+known physical parameters and a 3D radiative transfer solution
+is required. We use a snapshot of the “enhanced network”
+simulation carried out with the Bifrost radiation-MHD code
+(Carlsson et al. 2015) . The snapshot provides 3D volumes of
+the physical quantities, together with the non-LTE populations
+computed using Multi3D (Leenaarts & Carlsson 2009) for a
+five-level Caiimodel atom plus continuum treated in com-
+plete frequency redistribution. The simulation domain spans
+24 × 24 × 14.4 Mm3 (from the photosphere up to the corona),
+discretized on a grid of 504 × 504 × 496 points. As already
+described, we used T, v, B, ne, pgas, ρ, and z as input nodes in
+the GNN, while the Caiilevel populations ni (i =0 , . . . ,5) are
+used as outputs. The six levels correspond to the five bound
+states of Caii(4 2S 1/2, 32D3/2, 32D5/2, 42P1/2, 42P3/2) plus the
+Caiiiground state. Feature scaling is critical for the proper
+convergence of the neural model since some of the input variables
+and all output variables span more than 10 orders of magnitude
+from the photosphere to the high chromosphere. We apply
+distinct normalization strategies for the input physical features pi
+and the output populationsn i:
+Input features: Variables with relatively linear behavior (e.g.,
+temperature) are standardized to zero mean and unit variance.
+Article number, page 3
+
+A&A proofs:manuscript no. aa60077-26
+X Y
+Z
+(a) 3D Isometric View
+X
+Y
+Z
+(b) T op-Down View (XY)
+XY
+Z
+(c) Side View (XZ)
+Context Nodes T arget Column
+Fig. 1:Schematic representation of the 3D graph topology and
+connectivity scheme. Red nodes indicate the central column
+where atomic populations are inferred, while blue nodes represent
+the surrounding physical context required to capture non-local
+3D radiative transfer effects. This illustration corresponds to±2
+neighbors, stride S =1, and radii R =3. (a) Isometric 3D view of
+a sample subvolume. (b) Top-down (XY) projection illustrating
+the “star-like” connectivity. (c) Side (XZ) projection showing the
+vertical stratification and how radii R and distance to the center
+affects the connectivity.
+Quantities that span several orders of magnitude, such as
+densities, are first transformed to a logarithmic space (after
+dividing by the mean µx) before rescaling: ˆx= log10(x/µx).
+Magnetic field and velocity components are scaled with the
+normal scaler as ˆx= x/σx, with σx being the standard deviation
+of the feature. Height (z) is given in Mm without normalization.
+Target populations: The atomic populations are normalized us-
+ing a logarithmic transformation. We first compute the fractional
+population relative to the total calcium abundance, then compress
+the dynamic range:
+nfrac
+i = niP
+j n j
+→ˆn frac
+i = 1
+k log10
+
+nfrac
+i
+µ(nfrac
+i )
+ (3)
+where k =4 .0 and µ is the mean over the feature 3. This trans-
+formation emphasizes variations in minority-level populations
+(common in the upper part of the atmosphere) without losing
+information about the dominant levels.
+A point to note here is that as physical quantities span several
+orders of magnitude from the photosphere to the corona, normal-
+izing with a global µ and σ would bias the normalization toward
+3 The k value is chosen empirically to approximately normalize the
+output variance to unity
+lower, denser regions. To capture the stratification properly, the
+normalizations are calculated with the mean and variance at each
+specific height (µ(z), σ(z)). This happens in the data preparation
+stage (before training) and is done with the statistics of the full
+dataset.
+Training on the entire simulation domain simultaneously is
+not optimal (i.e., unmanageable graph size, local minima avoid-
+ance from mini-batch training, speed of the minimization, . . . ).
+Instead, we construct graphs from subvolumes centered on the
+target column. We select neighbors within a defined range (e.g.,
+±4 columns in x and y) from the central column, and to improve
+the network’s ability to handle different spatial scales and reduce
+the graph size, we employ a striding technique during training.
+That means we randomly select a stride S∈ { 1, 2, 3, 4, 5} and
+subsample the grid, skipping S nodes. The connectivity radius R
+is dynamically adapted based on the stride to maintain physical
+contextR=R 0 2S
+3 , withR 0 =5.
+The training graphs were therefore constructed using the fol-
+lowing steps:
+– We select one central column where the populations are in-
+ferred.
+– We randomly chose a stride size S which will determine the
+spatial subsampling of the original grid.
+– We select N neighboring columns in each direction, where
+the separation between adjacent columns will be determined
+by the stride, effectively having a ((2N +1) × (2N +1) ×N z)
+nodes in the graph. The N is fixed in our architecture and is
+chosen to be N =4. So our graphs always have 11 × 11 × 55
+nodes, regardless of the physical volume spanned.
+– We construct a graph, connecting the nodes within the dynam-
+ically computed radiiR.
+– Finally, we remove the connections that do not start or end at
+a node in the central column as described in Sec. 3.2
+These graphs obtained for subvolumes are separated into
+training and testing. The testing is obtained from the region x =
+[358, 484] and y =[358 , 484]. This corresponds to ∼ 8% of the
+available columns, which are never used during training. It is
+worth noticing that, given the fact that we are only predicting the
+central column of the graph, and due to the striding technique, we
+are losing some columns close to the edges. Since the graphs with
+S =4 and N =4 use columns 16 pixels away from the central
+column, we therefore remove from the training all columns with
+x,y≤16 andx,y≥488.
+4.2. Loss function and optimization
+We use a standard mean squared error (MSE) loss function on the
+transformed values. Training was performed on a single NVIDIA
+H100 GPU and required approximately 50 hours. We used a batch
+size of 16 subgraphs and trained for 120 epochs. The training and
+validation loss curves exhibit the expected behavior: the training
+loss decreases monotonically while the validation loss gets flat
+after approximately 40 epochs. The best model was selected
+based on the lowest validation loss to prevent overfitting.
+We use the Adam optimizer ( Kingma & Ba 2014) with an
+initial learning rate of 3 × 10−4. To ensure convergence to a
+precise solution, we employ a multi-step learning rate scheduler.
+The learning rate is decayed by a factor of γ =0 .5 at specific
+milestones (epochs 20, 40, 90, and 115), allowing the network to
+settle into a minimum after an initial exploration phase. We point
+out that additional physics-informed terms could be included in
+the loss function to better constrain the solution. For example, one
+could add a regularization to enforce P
+i ni = nT . We preferred
+Article number, page 4
+
+Vicente Arévalo et al.: Fast 3D Non-LTE Populations with GNNs
+to train simply with the MSE and leave the effect of physics-
+informed terms for a later study.
+5. Inference
+Once the training is complete, we evaluate the model’s inference
+capabilities with a fixed stride of S =4. We obtain high-fidelity
+reconstruction on the atomic population maps throughout the
+entire volume. For completeness, the error estimation of our
+model has also been done in this entire volume reconstruction,
+but identical statistical properties are found when tested only in
+the testing set. As illustrated in Fig. 2, the inferred populations
+capture the complex spatial morphology throughout the full solar
+atmosphere, reproducing the granulation patterns in the lower
+photosphere and the intricate fibril structures in the chromosphere.
+A quantitative assessment of the correlation plots (Fig. 3) shows
+that the model achieves correlations of > 0.99 for all the levels
+throughout the photosphere and mid-chromosphere. Furthermore,
+the error maps (Fig. 2) reveal that the majority of the inference
+error is concentrated in the higher layers of the computational
+domain for the Caiipopulations, and toward the lower layers for
+the Caiii. As a visual aid, we marked with magenta the edges of
+the panels at the heights at which the relative population is largest
+for each atomic level.
+We attribute the observed behavior to two primary factors:
+– Relative error sensitivity: The absolute population densities
+in the upper atmosphere drop by several orders of magnitude.
+Consequently, even small absolute deviations in the network’s
+prediction result in larger relative errors when compared to
+the dense, lower layers. The inverse can be said about Caiii,
+which is relatively more abundant in the upper region and
+magnifies the errors in the lower layers.
+– Physics complexity: The upper layers are optically thinner,
+and non-LTE and 3D RT effects are more pronounced. There-
+fore, the mapping between physical conditions and atomic
+populations is significantly more non-local and non-linear at
+these heights, presenting a harder challenge for the network
+compared to deeper regions, where populations are closer to
+LTE.
+5.1. Error estimation
+To rigorously assess the source of these discrepancies, we strat-
+ified the atmosphere into three distinct regimes (lower, middle,
+and top) based on the height z. Each regime corresponds to a
+region where different ionization stages dominate (e.g., Caiivs
+Caiii).
+The histograms in Fig. 4 quantify the error distribution across
+these heights. We observe the following trends:
+– Lower regime (z< 2 Mm): The network achieves very good
+precision. The physics here is dominated by LTE or weak
+non-LTE effects, which are easier to capture.
+– Middle regime (2 Mm ≤z< 4 Mm): This region, correspond-
+ing roughly to the chromosphere where Caiilines are formed,
+shows a broader error distribution but remains well-centered
+around zero.
+– Top regime (z≥ 4 Mm): The errors are larger here, consistent
+with the transition to the corona where Caiipopulations are
+negligible. Accordingly, this is where Caiiierrors are the
+lowest.
+Crucially, the histograms demonstrate that in the normalized
+space (which the network optimizes directly), the error distri-
+butions remain Gaussian across all regimes, confirming that the
+network has converged to a robust solution.
+5.2. Comparison between different strides
+To evaluate how node separation influences prediction accuracy,
+we utilized the dynamic connection stride capability of our graph
+construction (as detailed in Sect. 4). We perform inference on
+the same test map using fixed stride values within the window
+S∈ { 1, 2, 3, 4, 5} and compared the resulting performance. Note
+that we use strides larger than those used during training, and the
+network generalizes well. Although some outliers are found with
+relative errors up to ∼ 50%, we checked and those relative errors
+may be misleading since they correspond to the bottom left part
+of the scatter plots in Fig. 3, where the populations are low, and
+therefore small deviations (in absolute terms) can lead to a very
+high relative error estimations.
+The analysis yielded the following observations:
+– Contextual improvement: Increasing the stride and, conse-
+quently, the physical context, improved the accuracy of the
+prediction up toS∼4.
+– Diminishing returns: The most significant performance im-
+provement was observed when increasing the stride from
+S =1 to S =2, while subsequent increases provided dimin-
+ishing returns.
+– Performance limit: At S =5, the results worsened slightly
+but with minimal differences. We expect to find worse results
+if S is increased too much because the sampling around the
+column of interest becomes too sparse.
+We conclude that optimal performance is achieved withN =4
+selected neighbors at a stride of S =4. This configuration allows
+the network to effectively capture a context of±16 columns, cor-
+responding to a physical area of approximately ∼ 1.5 × 1.5 Mm2,
+roughly 2 arcsec2. We acknowledge that this behavior can be bi-
+ased by the training strategy, where only strides from S =1 → 5
+were introduced. Obviously, including different number of neigh-
+bors and different strides can potentially lead to different out-
+comes. However, we note that non-local effects are expected to
+have a limited action distance (limited by when one finds∆ τ > 1
+at horizontal directions), so that including further pixels from the
+central column might become irrelevant. A precise determination
+of this distance would require computing optical depths through-
+out the full simulation cube in all directions, a computationally
+demanding task that we consider an important avenue for other
+work. As a reference, the photon mean free path in the lower solar
+chromosphere is of order ∼ 100 km (Judge et al. 2015). In the
+horizontal direction, photons could potentially travel over larger
+distances before being absorbed, as the chromosphere density is
+lower and the variation is less in the horizontal direction. Nev-
+ertheless, the performance of our model saturates empirically
+for context radii R∼ 1500 km (> 10 vertical mean free paths),
+suggesting that the dominant contribution of horizontal non-local
+effects on the populations is captured within this scale, even if
+not all horizontal radiative coupling is fully enclosed.
+6. Line synthesis
+The ultimate validation of this method lies in demonstrat-
+ing that predicted populations yield spectra indistinguishable
+from those computed with full 3D radiative transfer. Because
+Article number, page 5
+
+A&A proofs:manuscript no. aa60077-26
+nCaII (i = 0)
+CaII (i=0)
+CaII (i=1)
+CaII (i=2)
+CaII (i=3)
+CaII (i=4)
+CaIII
+10.2 10.5 10.8 11.1 11.4
+log10( n(z=0.0 Mm))
+3.0 4.5 6.0 7.5
+log10( n(z=1.3 Mm))
+0.0 1.5 3.0 4.5
+log10( n(z=3.2 Mm))
+1
+ 0 1 2
+log10( n(z=6.7 Mm))
+0.015
+ 0.000 0.015
+Error (dex)
+0.06
+ 0.00 0.06
+Error (dex)
+0.08
+ 0.00 0.08
+Error (dex)
+0.05
+ 0.00 0.05
+Error (dex)
+Fig. 2:Spatial maps of the inference errors of the predicted Caiipopulations at different atmospheric heights z∼ [0, 1, 3, 7] Mm. Top
+row: ground-level Caiipopulations at various heights for context. Second-to-Bottom rows: error maps between the GNN predictions
+and the Multi3D ground truth. The color scale shows the errors on the dex scale (log(xpred) −log (xtrue)). Columns correspond to
+increasing height from the photosphere (left) to the upper chromosphere (right). Magenta borders highlight the height at which each
+atomic level reaches its peak population, indicating where that level dominates the ionization balance.
+Article number, page 6
+
+Vicente Arévalo et al.: Fast 3D Non-LTE Populations with GNNs
+10 4
+10 1
+102
+105
+108
+1011
+Predicted
+CaII(i=0): R2 = 0.99967
+y=x
+CaII(i=1): R2 = 0.99991
+10 4
+10 1
+102
+105
+108
+1011
+Predicted
+CaII(i=2): R2 = 0.99994
+ CaII(i=3): R2 = 0.99980
+10 3
+ 101 105 109
+Original
+10 4
+10 1
+102
+105
+108
+1011
+Predicted
+CaII(i=4): R2 = 0.99983
+10 3
+ 101 105 109
+Original
+CaIII: R2 = 0.99974
+0
+2
+4
+6
+8
+10
+12
+Height [Mm]
+Fig. 3:Scatter plots of predicted versus ground-truth Caiilevel
+populations, color-coded by geometric height. High density along
+the diagonal indicates excellent correlation.
+our inferred populations already encode the essential 3D non-
+LTE physics—such as horizontal scattering and geometric ef-
+fects—computing the emergent spectrum requires only a single
+formal solution of the radiative transfer equation along the line
+of sight, entirely bypassing the iterative SE equations. To demon-
+strate this, we synthesized the Caii8542 Å spectral line for our
+test set using the Lightweaver framework (Osborne & Mili´c
+2021).
+The resulting monochromatic maps at the core of the line
+(upper left panel for the target value and upper right panel for the
+predicted) are shown in Fig. 5 alongside the mean profiles (lower
+panel). The monochromatic maps look almost identical both in
+appearance and in their intensity values across all wavelengths.
+Some small differences can be found, though, in the regions
+with more intensity. The mean profile obtained with the GNN
+almost perfectly overlaps with the target mean profile. Both are
+different from the equivalent non-LTE profile computed in a 1.5D
+approximation (i.e., column by column). For comparison, we also
+show the LTE profile, which shows the typical emission core
+produced by the increased temperature in chromospheric layers.
+To quantify our errors further, Fig. 6 presents the error distri-
+bution of the synthesized spectra both across wavelengths (upper
+panel) and spatially (lower right panel). The errors introduced
+by the GNN approximation are negligible, with > 99% of the
+intensities having relative errors below 5% (see lower left panel
+of Fig. 6). It is clear that the errors are larger in the line core,
+where more variability is expected. However, most of the points
+are still recovered with < 10% relative error with 68% proba-
+0.00
+0.05
+0.10
+0.15
+0.20
+CaII (i=0)
+Residuals (Original)
+Bottom (z < 2) Mm
+Middle (2 < z < 4) Mm
+T op (z >= 4) Mm
+0
+2
+4
+6
+8
+×105 Population Distribution
+0.0
+0.1
+0.2
+CaII (i=1)
+0
+2
+4
+6
+×105
+0.00
+0.05
+0.10
+0.15
+0.20
+CaII (i=2)
+0
+2
+4
+6
+×105
+0.00
+0.05
+0.10
+0.15
+CaII (i=3)
+0
+2
+4
+6
+8
+×105
+0.00
+0.05
+0.10
+0.15
+CaII (i=4)
+0
+2
+4
+6
+8
+×105
+40
+ 20
+ 0 20 40
+Relative Error (%)
+0.0
+0.1
+0.2CaIII
+10 4
+ 10 1
+ 102 105 108 1011
+Population
+0
+2
+4
+×105
+Fig. 4:Left panels show the error distributions for predicted Caii
+populations, stratified by atmospheric regime. blue: lower heights
+(z< 2 Mm); green: mid-chromosphere (2 ≤z< 4 Mm); red:
+upper layers (z≥ 4 Mm). Right panels show the distribution of the
+density of those populations. Solid lines outline the population
+of the 3D NLTE solution, and striped areas show the inferred
+distribution from the GNN solution.
+bility. Concerning the spatial distribution of the errors, although
+some spatial clustering is visible, the overall magnitude remains
+small and shows no clear correlation with specific morphological
+features, suggesting the errors are not systematically biased by
+atmospheric structure. This analysis confirms that the 3D GNN is
+a viable surrogate for expensive 3D RT calculations in the context
+of forward modeling and inversions.
+7. Conclusions
+We have presented a novel approach to significantly accelerate
+3D non-LTE radiative transfer problems using Graph Neural Net-
+works. By discretizing the solar atmosphere as a 3D graph (where
+nodes encode local physical conditions and edges represent ra-
+diative coupling) we trained a model that efficiently predicts the
+statistical equilibrium populations of the Caiiatom from local
+thermodynamic parameters and their spatial context.
+The GNN architecture successfully captures the 3D spatial
+dependencies inherent in the non-LTE problem. Our “star-like”
+connectivity scheme allows efficient aggregation of information
+from surrounding columns while avoiding the prohibitive memory
+cost of a fully connected graph. The dynamic striding technique
+employed to construct the graph also allowed us to make the
+technique robust for different grid sizes, potentially expanding
+Article number, page 7
+
+A&A proofs:manuscript no. aa60077-26
+Fig. 5:Synthesized maps at the center of the Caii8542 Å line for the Multi3D, predicted, LTE and 1D non-LTE populations. The
+second last row shows the mean profile over the synthesized region for theMulti3D, the predicted, and the LTE/non-LTE populations.
+its usability in observational data. The model achieves high fi-
+delity in reproducing populations computed by Multi3D on the
+Bifrost simulation, with excellent performance in the photo-
+sphere and mid-chromosphere. A slight degradation in the upper
+chromosphere (where non-local effects are strongest) is expected,
+but the errors remain unbiased and Gaussian-distributed.
+Critically, the inference speed is estimated to be ∼ 106 faster
+than traditional iterative solvers4. This acceleration is essential for
+future inversion codes that aim to incorporate 3D radiative transfer
+effects. Furthermore, spectral synthesis of the Caii8542 Å line
+using predicted populations yields intensity profiles in excellent
+agreement with the ground truth, with residual errors well below
+typical observational noise.
+An important caveat of this method is that the simulation,
+while state-of-the-art, is constrained by specific initial and bound-
+ary conditions that may not capture phenomena such as flaring
+regions, highly dynamic jets, or quiet-Sun conditions at their ex-
+tremes. Deploying the model for real inversions would therefore
+require training on a more diverse set of simulations sampling a
+broader parameter space. We note that, in our experience from
+previous work with graph neural networks (Vicente Arévalo et al.
+2022), these architectures tend to be remarkably robust and can
+generalize well beyond the strict boundaries of their training data.
+Nevertheless, we would not recommend their use for conditions
+significantly outside the training distribution without first val-
+idating performance on representative examples. We view the
+extension of training or testing with more diverse training sets
+4 This is a conservative estimation assuming 250 kh for the 3D NLTE
+solution and ∼ 10 min for the GNN inference. Inference can be as fast
+as 2 min, and 3D NLTE solutions can take up to millions of CPU h.
+as an important avenue, since it requires a complete 3D NLTE
+solution to accomplish.
+This work opens the possibility of integrating this ap-
+proach of forward modeling into an inversion framework. Our
+approach enables a strategy analogous to DeSIRe or Hazel
+(Asensio Ramos et al. 2008) for 3D: by predicting the 3D atomic
+populations (or departure coefficients in the case ofDeSIRe) from
+a model atmosphere, the non-LTE inversion problem can be ef-
+fectively reduced to an LTE-like optimization. The GNN acts as
+a fast surrogate for the SE equations, allowing standard inversion
+codes to retrieve 3D atmospheric properties by simply modifying
+the source function and opacity, thereby bypassing the prohibitive
+cost of full 3D radiative transfer. This architecture can also be
+extended to predict full Stokes synthesis. Finally, expanding the
+training set to include energetic events from 3D flare simulations
+(e.g., Cheung et al. 2019; Hansteen et al. 2015) will be crucial
+for generalization to active region conditions.
+Another avenue of improvement is to generalize it to the po-
+larized case. In the atomic density matrix formalism, the diagonal
+elements ρ0
+0 represent the level populations, while off-diagonal
+elements ρK
+Q,0 encode atomic polarization induced by anisotropic
+radiation or magnetic fields. Our current architecture predicts
+only the diagonal elements of the density matrix,ρ0
+0 (i.e., the level
+populations), which enables the synthesis of Stokes I. Extending
+our model, arguably including magnetic fields, to predict the off-
+diagonal elements ρK
+Q,K could open the possibility of performing
+full-Stokes polarized non-LTE radiative transfer including the
+Zeeman splitting and quantum interferences (Hanle effect). We
+leave this idea for future work.
+Finally, we also leave for the future the synthesis of lines with
+strong partial redistribution effects. This would require recomput-
+Article number, page 8
+
+Vicente Arévalo et al.: Fast 3D Non-LTE Populations with GNNs
+Fig. 6:Error distribution of the synthetic Caii8542 Å line. First panel is the wavelength distribution, with percentiles 5, 16, 84, 95
+with a double axis on the right side representing the mean line profile over the test set. Second row shows the histogram of the error
+distribution (wavelength aggregated) of the synthetic profiles and a map of the mean error across all the wavelengths on every pixel
+of the synthesized map.
+ing the populations using this formalism and retraining the model.
+Once the populations are computed, the formal solution will be
+more time-consuming because it needs to take into account the
+redistribution function. However, huge gains can still be obtained
+with respect to the full calculation.
+Acknowledgements.A V A acknowledges support from the Deutsche Forschungs-
+gemeinschaft (DFG), project number 538773352. AAR acknowledges funding
+from the Agencia Estatal de Investigación del Ministerio de Ciencia, Innovación
+y Universidades (MCIU/AEI) under grant “Polarimetric Inference of Magnetic
+Fields” and the European Regional Development Fund (ERDF) with reference
+PID2022-136563NB-I00/10.13039/501100011033. Part of this research was also
+supported by the Research Council of Norway through its Centres of Excellence
+scheme, project number 262622. We thank the kind advice and contributions
+from Chris Osborne with the usage of the Lightweaver framework. We also
+kindly appreciate the insights on the synthesis process provided by Tanausú del
+Pino Alemán. We acknowledge the community effort devoted to the development
+of the following open-source packages: PyTorch (Paszke et al. 2019), PyTorch
+Geometric, NumPy, and Matplotlib. This research has made use of NASA’s
+Astrophysics Data System Bibliographic Services.
+References
+Asensio Ramos, A., de la Cruz Rodríguez, J., Martínez González, M. J., & Socas-
+Navarro, H. 2017, A&A, 599, A133
+Asensio Ramos, A., Trujillo Bueno, J., & Landi Degl’Innocenti, E. 2008, ApJ,
+683, 542
+Battaglia, P. W., Hamrick, J. B., Bapst, V ., et al. 2018, arXiv e-prints,
+arXiv:1806.01261
+Bjørgen, J. P., Leenaarts, J., Rempel, M., et al. 2019, A&A, 631, A33
+Carlsson, M., Hansteen, V . H., Gudiksen, B. V ., Leenaarts, J., & De Pontieu, B.
+2015, Astronomy & Astrophysics, 585, A4
+Chappell, B. A. & Pereira, T. M. D. 2022, A&A, 658, A182
+Cheung, M. C. M., Rempel, M., Chintzoglou, G., et al. 2019, Nature Astronomy,
+3, 160
+de la Cruz Rodríguez, J., Leenaarts, J., Danilovic, S., & Uitenbroek, H. 2019,
+A&A, 623, A74
+Díaz Baso, C. J., Asensio Ramos, A., de la Cruz Rodríguez, J., da Silva Santos,
+J. M., & Rouppe van der V oort, L. 2025, A&A, 693, A170
+Díaz Baso, C. J., Martínez González, M. J., Asensio Ramos, A., & de la Cruz
+Rodríguez, J. 2019, A&A, 623, A178
+Hansteen, V ., Guerreiro, N., De Pontieu, B., & Carlsson, M. 2015, ApJ, 811, 106
+Hauschildt, P. H. & Baron, E. 2010, A&A, 509, A36
+Jaume Bestard, J., Trujillo Bueno, J., Št ˇepán, J., & del Pino Alemán, T. 2021,
+ApJ, 909, 183
+Judge, P. G., Kleint, L., Uitenbroek, H., et al. 2015, Solar Physics, 290, 979–996
+Kingma, D. P. & Ba, J. 2014, CoRR, abs/1412.6980
+Leenaarts, J. & Carlsson, M. 2009, in Astronomical Society of the Pacific Confer-
+ence Series, V ol. 415, The Second Hinode Science Meeting: Beyond Discovery-
+Toward Understanding, ed. B. Lites, M. Cheung, T. Magara, J. Mariska, &
+K. Reeves, 87
+Leenaarts, J., Carlsson, M., & Rouppe van der V oort, L. 2012, ApJ, 749, 136
+Mili´c, I. & van Noort, M. 2018, A&A, 617, A24
+Osborne, C. M. J. & Mili´c, I. 2021, ApJ, 917, 14
+Paszke, A., Gross, S., Massa, F., et al. 2019, PyTorch: An Imperative Style,
+High-Performance Deep Learning Library
+Ruiz Cobo, B., Quintero Noda, C., Gafeira, R., et al. 2022, A&A, 660, A37
+Rybicki, G. B. & Hummer, D. G. 1991, A&A, 245, 171
+Socas-Navarro, H., de la Cruz Rodríguez, J., Asensio Ramos, A., Trujillo Bueno,
+J., & Ruiz Cobo, B. 2015, A&A, 577, A7
+Štˇepán, J., del Pino Alemán, T., & Trujillo Bueno, J. 2022, Astronomy & Astro-
+physics, 659, A137
+Vicente Arévalo, A., Asensio Ramos, A., & Esteban Pozuelo, S. 2022, ApJ, 928,
+101
+Štˇepán, J. & Trujillo Bueno, J. 2013, A&A, 557, A143
+Yadav, R., Díaz Baso, C. J., de la Cruz Rodríguez, J., Calvo, F., & Morosin, R.
+2021, A&A, 649, A106
+Article number, page 9

@@ -1,0 +1,1393 @@
+Title: Vision-Language Model Ensembles Achieve Human-Expert Accuracy for Galaxy Merger Classification
+Authors: Marco Chiaberge, Elias Stengel-Eskin, Massimo Stiavelli, Colin Norman
+Published: 2026-05-29
+Categories: astro-ph.GA, astro-ph.IM
+
+Draft version June 2, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX631
+Vision-Language Model Ensembles Achieve Human-Expert Accuracy for Galaxy Merger Classification
+Marco Chiaberge, 1, 2 Elias Stengel-Eskin, 3 Massimo Stiavelli, 4, 2 and Colin Norman 4, 2
+1Space Telescope Science Institute for the European Space Agency (ESA), ESA Office, 3700 San Martin Drive, Baltimore, MD, USA
+2The William H. Miller III Department of Physics & Astronomy, Johns Hopkins University, Baltimore, MD, USA
+3The University of Texas at Austin, Department of Computer Science, Austin, Texas, USA
+4Space Telescope Science Institute, 3700 San Martin Drive Baltimore, MD 21218, USA
+ABSTRACT
+We present a proof-of-concept study demonstrating that an ensemble of Vision–Language Models
+(VLMs) combined using a Bayesian statistical framework can classify galaxy merger morphologies with
+accuracy comparable to trained human experts. We deploy 15 VLM classifier configurations, spanning
+four model architectures (Gemma-4 E2B, Gemma-4 E4B, Qwen2.5-VL, and Qwen3-VL) tested with
+up to four prompt engineering strategies each. We evaluate their performance against a truth-known
+sample of 41 VELA+SUNRISE mock galaxy images from Lambrides et al. (2021). The VLM ensemble
+achieves 83.3% accuracy on confident classifications (merger probabilityp M ≥0.8 orp M ≤0.2), with
+5 misclassified galaxies. The ensemble recovers the population merger fraction to within 0.66σof the
+truth (fM = 0.52±0.09 vs. true value of 0.585). Bayesian weighting improves overall accuracy by 17.1
+percentage points over simple majority voting, with sensitivity improving by 29.2 percentage points.
+The VLM ensemble produces 5 misclassified galaxies (2 false positives, 3 false negatives), comparable to
+the 6 misclassifications (5 false positives, 1 false negative) reported for human classifiers by Lambrides
+et al. (2021). The apparent differences in error profiles are not statistically significant given the sample
+size of 41 galaxies. VLMs also produce more moderate per-galaxy merger probability distributions
+(27% uncertain) than the more polarized human distributions (15% uncertain), though this difference
+is also consistent with statistical fluctuation. These results establish VLMs as scalable, reproducible
+alternatives to human classifiers within a Bayesian probabilistic merger-fraction framework, with direct
+applications to large galaxy samples from current and future surveys.
+1.INTRODUCTION
+Significant galaxy mergers throughout cosmic time
+play a fundamental role in theories of galaxy evolu-
+tion (e.g. Conselice 2014). Observational estimates
+of merger rates have not converged, with studies us-
+ing overlapping fields and similar wavelength coverage
+yielding disparate results (Mantha et al. 2018; Duncan
+et al. 2019). Robustly identifying systems undergoing
+ongoing (pre-coalescence) or recently completed (post-
+coalescence) mergers is therefore critical for constrain-
+ing galaxy evolution models, particularly at cosmic noon
+(1.5≤z≤2.5) where star formation rates peak (Madau
+Corresponding author: Marco Chiaberge
+marcoc@stsci.edu
+& Dickinson 2014) and where AGN activity also reaches
+a maximum (e.g. Ueda et al. 2014; Aird et al. 2015).
+Visual identification of galaxy mergers from imaging
+data remains a labor-intensive task traditionally per-
+formed by human experts. Human visual classification
+campaigns require substantial coordinated effort (e.g.,
+Galaxy Zoo; Lintott et al. 2008; Willett et al. 2013),
+and individual classifiers exhibit substantial variability
+in their merger assessments Lambrides et al. (2021, here-
+inafter L21). L21 demonstrated that this variability is
+not merely noise: the bias introduced by human classifi-
+cation is a function of the intrinsic merger fraction of the
+sample, meaning that the standard approach of compar-
+ing science and control samples under the assumption
+of equal bias is internally inconsistent. They proposed a
+Bayesian framework that explicitly measures each clas-
+sifier’s class-dependent accuracies using a truth-known
+mock sample, and propagates those measured biases into
+arXiv:2606.00415v1  [astro-ph.GA]  29 May 2026
+
+2Chiaberge et al.
+a probabilistic model to estimate the population merger
+fraction and per-galaxy merger probabilities.
+Automated methods offer an alternative to human
+classification. Non-parametric morphological statistics
+(Abraham et al. 1994; Conselice et al. 2000; Lotz et al.
+2004) can exhibit misclassification rates as high as 20–
+30% at high redshifts (Huertas-Company et al. 2015).
+Deep-learning classifiers (Dieleman et al. 2015; Acker-
+mann et al. 2018; Pearson et al. 2019; ´Ciprijanovi´ c et al.
+2020, 2021) achieve lower misclassification rates within
+their training domain but require task-specific training
+and do not generalize reliably across redshift or survey
+depth. For example, Pearson et al. (2019) found that a
+CNN trained on SDSS observations achieved 91.5% ac-
+curacy on that same data set, but accuracy dropped to
+64.6% when the network was applied across data sets,
+and to only 53.0% when classifying simulated EAGLE
+images with the observation-trained network. Machine-
+learning classifiers trained on human-labeled data also
+inherit any systematic biases present in the training set.
+Forthcoming surveys make these methodological re-
+quirements increasingly demanding in practice. Cur-
+rent HST legacy programs such as CANDELS (Gro-
+gin et al. 2011; Koekemoer et al. 2011) already provide
+∼50,000 galaxies toz∼3; JWST programs such as
+CEERS (Finkelstein et al. 2023) and PRIMER (Don-
+nan et al. 2024) extend morphological coverage toz >4;
+Euclid and the Vera Rubin Observatory will further in-
+crease the surveyed volume of galaxy samples, while the
+planned Roman Space Telescope (Spergel et al. 2015)
+High Latitude Wide Area Survey, which will deliver
+HST-like near-infrared imaging over∼2,400 deg 2, en-
+abling morphological studies of hundreds of millions of
+galaxies across cosmic time. In the radio, SKA sur-
+veys will need similar morphological classifications. At
+scales of millions of galaxies, assembling a stable hu-
+man classifier panel with individually calibrated accu-
+racy measurements following the L21 framework is lo-
+gistically impractical. More fundamentally, a classifier
+validated only against other human labels is anchored to
+the same subjective judgments that a simulation-based
+bias-correction framework is designed to overcome, mak-
+ing the combination of a reproducible algorithmic en-
+semble with a truth-known mock calibration set not just
+convenient but necessary.
+Recent work in multimodal AI has shown that system-
+atic disagreement among diverse visual agents carries
+exploitable information about classification difficulty:
+Sivakumaran et al. (2025) demonstrate that multi-agent
+disagreement can be leveraged to identify ambiguous
+cases and improve ensemble decisions for tool-using vi-
+sion–language models. In this work, we exploit this prin-
+ciple in a new context: we deploy an ensemble of general-
+purpose, instruction-following Vision-Language Models
+(VLMs — large language models with native multimodal
+vision capabilities) whose individual classifiers deliber-
+ately span a range of classification behaviors through
+prompt variation, from merger-biased to isolated-biased,
+rather than converging on a single classification strat-
+egy. Rather than resolving inter-classifier disagreement
+directly, we channel it through the Bayesian framework
+of L21, which models each classifier’s individual bias
+pattern explicitly and uses it as a calibrated weight in
+the merger fraction likelihood. Our central question is
+whether this combination — a diverse VLM ensemble
+embedded in a bias-aware probabilistic framework —
+can serve as a viable substitute for human classifiers for
+galaxy merger identification, and if so, whether it can be
+scaled to the very large galaxy samples expected from
+current and future surveys (HST legacy fields, JWST,
+Roman Space Telescope).
+The present paper is framed as a proof-of-concept
+calibration study. Because scientific reproducibility re-
+quires that identical inputs yield identical classifica-
+tions over time, we restrict ourselves to locally runnable,
+open-weight VLMs with fixed checkpoints, rather than
+API-based frontier models whose weights and behav-
+iors can change without notice. We use the same class
+of VELA+SUNRISE truth-known mock galaxy sample
+(Ceverino et al. 2014; Ceverino et al. 2015; Simons et al.
+2019) employed in the L21 framework to measure how
+accurately small, locally runnable VLMs can reproduce
+merger versus non-merger classifications. We then ap-
+ply the full Bayesian ensemble machinery of L21 and
+compare the resulting classification accuracy to the 14
+human classifiers reported in that work.
+This paper is organized as follows. Section 2 describes
+the mock galaxy sample. Section 3 presents the VLM
+ensemble and Bayesian methods. Section 4 reports the
+results. Section 5 discusses implications and limitations.
+Section 6 summarizes our conclusions. Throughout, the
+research was conducted using a human-directed AI col-
+laboration model, with large language models assisting
+in code development, statistical analysis, and drafting
+under close human supervision; this workflow is de-
+scribed in more detail in Appendix A.
+2.DATA: MOCK GALAXY SAMPLE
+We validate our VLM classifier ensemble using the
+same mock galaxy images used in L21. More details can
+be found in the original paper by those authors. The
+images are taken from the VELA zoom-in hydrodynam-
+ical simulations (Ceverino et al. 2015) processed through
+the SUNRISE dust-radiative transfer code (Snyder et al.
+
+VLM-Based Galaxy Merger Classification3
+2015; Simons et al. 2019). As in L21, we treat both
+pre-coalesced and post-coalesced systems as mergers. In
+that framework, a mock galaxy is labeled as merger if
+either it underwent a significant merger within the pre-
+vious 100 Myr, or it has a companion within 35 kpc.
+Mock Hubble ACS/WFC3 images were created for each
+galaxy in three bands (ACS/WFC F435W, ACS/WFC
+F775W, WFC3-IR F160W) and noise-added to simulate
+the 3DHST reduction of the GOODS-S field (Simons et
+al. 2019). Each galaxy is presented to the VLM classi-
+fiers as a two-panel composite image (Figure 4 and Ap-
+pendix C) showing the WFC3/IR F160W near-infrared
+band and an RGB composite (r: F160W, g: F775W, b:
+F435W); Appendix C provides a worked example of the
+resulting VLM classification output for one such system.
+Our working sample comprises 41 galaxies with known
+intrinsic merger states: 24 true mergers and 17 isolated
+systems. Following L21, we additionally include a set of
+9 fake mergers (i.e. close projected pairs created by su-
+perimposing images of two mock isolated galaxies with
+a random separation of less than 8 ′′) to assess how well
+classifiers distinguish chance alignments from true inter-
+actions. The fake mergers are included in the computa-
+tion of individual classifier accuracies (merger recall rM,
+non-merger recall r i) but are excluded from the merger
+fraction analysis, to exactly replicate the same experi-
+ment as in the original work utilizing human classifiers.
+The true merger fraction of our working sample is f M
+= 24/41 = 0.585. The galaxy IDs, redshifts (spanning z
+= 1.0–3.5), and intrinsic types are drawn from the same
+mock galaxy catalog used in L21. The use of the same
+simulation suite enables a direct, controlled comparison
+between VLM and human classifier performance.
+3.METHODS
+3.1.VLM Classifier Ensemble
+We employ an ensemble of 15 VLM classifier config-
+urations to assess galaxy merger status. The ensem-
+ble comprises four VLM architectures (see Appendix B
+for more details) — Gemma-4 E2B (2B effective pa-
+rameters), Gemma-4 E4B (4B effective parameters),
+Qwen2.5-VL 7B, and Qwen3-VL 4B — evaluated with
+up to four prompt engineering strategies each: balanced,
+open, optimal, and strict. Qwen2.5-VL uses only three
+strategies (open, optimal, strict), yielding 15 total con-
+figurations (Table 1). All models use 4-bit quantiza-
+tion (Q4 K M or Q4 K XL) for efficient local inference
+viallama.cpp; additional implementation and inference
+details, including model files and runtime configuration,
+are provided in Appendix B. A key design choice in this
+proof-of-concept is to work at effectively zero marginal
+cost using only small, publicly available models that can
+run on a single consumer-grade machine. All inference
+is performed locally, without commercial APIs or cloud
+GPU resources, so that the entire pipeline can be re-
+produced on standard consumer hardware; using fixed,
+locally hosted checkpoints avoids the version drift inher-
+ent to API-based models. This deliberately restricts us
+to modest VLM architectures, and the resulting perfor-
+mance should therefore be interpreted as a conservative
+baseline for what can be achieved with off-the-shelf mod-
+els under minimal computational assumptions. This en-
+semble size of 15 classifiers is directly comparable to the
+14 human classifiers employed by L21, enabling a robust
+apples-to-apples comparison between VLM and human
+classification performance.
+Each VLM classifier independently evaluates galaxy
+images and assigns a binary classification: merging or
+non-merging. The merging class encompasses major
+mergers, minor mergers, and major disturbances, while
+the non-merging class includes minor disturbances and
+systems showing no evidence of gravitational interac-
+tions (Table 2). This classification scheme follows the
+framework of L21 for direct comparability.
+3.2.Prompt Engineering Strategy
+Prompt engineering is the primary lever for control-
+ling model behavior. All prompts require the model
+to output a structured JSON object with fixed fields
+(primary label, collapsed label, num apparent galaxies,
+confidence, notes evidence, reasoning summary, and
+warnings). Structured output is essential for automated
+parsing and prevents models from hedging with free-
+form prose. We emphasize that this strategy is an es-
+sential aspect of this project.
+A central design goal is to force each model to base
+its classification strictly on observable morphological ev-
+idence rather than prior probability or stylistic pref-
+erence. The prompt explicitly instructs the model to
+enumerate specific visual features (tidal tails, multiple
+nuclei, asymmetry, chaotic star formation) as positive
+evidence before assigning a label. Models without this
+instruction default to no evidence for ambiguous cases,
+inflating false negatives.
+We evaluate four prompt variants designed to elicit
+systematically different classification behaviors. The
+optimal prompt was developed first through iterative
+refinement, encoding specific morphological criteria in-
+tended to achieve the best single-model performance.
+From this baseline, we created the open and strict vari-
+ants to deliberately span a range of classification be-
+haviors: the open prompt requires only one suggestive
+morphological feature to trigger a merging classification,
+favoring merger detection at the expense of false posi-
+
+4Chiaberge et al.
+T able 1.VLM Classifier Configurations
+ID Model Eff. Parameters Quantization Prompt Strategies
+1–4 Gemma-4 E2B 2B 4-bit (Q4 K XL) balanced, open, optimal, strict
+5–8 Gemma-4 E4B 4B 4-bit (Q4 K M) balanced, open, optimal, strict
+9–11 Qwen2.5-VL 7B 4-bit (Q4 K M) open, optimal, strict
+12–15 Qwen3-VL 4B 4-bit (Q4 K M) balanced, open, optimal, strict
+Note—E2B and E4B refer to the 2B and 4B effective-parameter Gemma-4 on-device models, respectively. Further
+implementation details are provided in Appendix B
+T able 2.Five-Category Primary Classification Schema and Binary Collapse
+Primary Label Collapsed Label Description
+no evidence non-merging Smooth, symmetric morphology; single nucleus; no tidal features
+disturbance minor non-merging Single core; mild, ambiguous asymmetry or clumpiness; no clear tidal features
+disturbance major merging Single core; strong asymmetry, tidal tail, or irregular envelope
+merging minor merging Two resolved cores; clearly unequal mass ratio
+merging major merging Two comparable bright nuclei in close proximity or shared envelope
+Note—Primary labels follow the scheme of L21, with a binary collapse into merging vs. non-merging for the purposes of this
+analysis.
+tives, while the strict prompt requires two or more un-
+ambiguous features, favoring reliable detections at the
+expense of missed mergers. After initial testing revealed
+that even the optimal prompt produced merger-biased
+behavior for some models, we introduced the balanced
+prompt as a deliberately neutral variant: it symmetri-
+cally emphasizes both merger and non-merger evidence,
+removes language that could bias the model toward ei-
+ther class, and explicitly instructs the model to enumer-
+ate features supporting both classifications before de-
+ciding. This four-strategy framework ensures that the
+ensemble spans a wider and more regular range of classi-
+fication behaviors than any single prompt could achieve.
+As discussed in Section 5.3, the actual classification be-
+havior depends on the interaction between prompt and
+model architecture, and the intended effect is not always
+achieved.
+Two independent prompt families were developed:
+one anchored to the Gemma-4 E2B model and one for
+the Qwen models. The same four-strategy framework
+was applied to both Gemma families and Qwen3. For
+Qwen2.5-VL we also tested a balanced prompt variant,
+but its performance was nearly indistinguishable from
+the optimal prompt, so we retain only the open, opti-
+mal, and strict strategies for the final ensemble.
+3.3.Bayesian Statistical Framework
+We adopt the Bayesian statistical framework of L21
+to combine classifications from multiple VLM classifiers
+while accounting for their individual accuracies. For
+each classifieri, we define two accuracy parameters: the
+sensitivityr M,i (probability of correctly identifying a
+true merger) and the specificityr I,i (probability of cor-
+rectly identifying a true isolated galaxy).
+The classifier accuracies are estimated directly from
+performance on the full mock galaxy sample including
+fake mergers, following L21 (their Equations 13 and 14).
+For a classifier withn M true mergers correctly identified
+out ofN M total true mergers, andn I true isolated galax-
+ies correctly identified out ofN I total isolated systems
+(including fakes):
+rM,i = nM,i
+NM,i
+,(1)
+rI,i = nI,i
+NI,i
+.(2)
+These fixed accuracy values are then used in a
+Bayesian model to estimate the population merger frac-
+tionf M and per-galaxy merger probabilitiesp M,j. The
+likelihood for the observed classifications, marginalizing
+over the unknown true state of each galaxy (Lambrides
+et al. 2021, cf. Equations 17–18), is
+P(obs|f M,{r M,i},{r I,i}) =
+Y
+j
+
+fM
+Y
+i
+P(obs ij |merger)
++ (1−f M)
+Y
+i
+P(obs ij |isolated)
+
+.(3)
+HereP(obs ij = merger|true merger) =r M,i and
+P(obs ij = merger|true isolated) = 1−r I,i. We imple-
+ment the Bayesian model in Stan, interfaced via R (R
+
+VLM-Based Galaxy Merger Classification5
+Core Team 2024; Stan Development Team 2024), and
+run four Hamiltonian Monte Carlo chains with 2000 it-
+erations per chain and 1000 warmup iterations. Con-
+vergence was verified using the Gelman–Rubin diag-
+nostic ( ˆR= 1.002 forf M) and effective sample size
+(neff>1600), both indicating excellent convergence.
+The per-galaxy merger probabilityp M is computed
+via Bayes’ theorem (Lambrides et al. 2021, Equation
+18):
+pM,j =P(merger|obs j)
+= fM
+Q
+i P(obs ij |merger)
+fM
+Q
+i P(obs ij |merger) + (1−f M)Q
+i P(obs ij |isolated) .
+(4)
+Following L21, we define confident classifications as
+those withp M ≥0.8 (confident mergers) orp M ≤0.2
+(confident isolated); intermediate values (0.2< p M <
+0.8) are considered uncertain. The accuracy is defined as
+the fraction of confident classifications that are correct.
+3.4.Treatment of Classifier Accuracies
+The Bayesian framework requires specification of clas-
+sifier accuraciesr M,i (sensitivity) andr I,i (specificity)
+for each classifier. We fix these accuracies to their
+maximum-likelihood estimates from the calibration sam-
+ple (Equations 1–2), treating them as known constants
+in the MCMC inference. The only free parameter sam-
+pled is the merger fractionf M.
+We adopt this fixed-accuracy approach for the follow-
+ing reason. The mock galaxy calibration sample is ap-
+proximately balanced between mergers and isolated sys-
+tems (24 mergers, 18 isolated), providing unbiased esti-
+mates of classifier performance on both classes. Given
+these well-measured accuracies, the observed vote pat-
+terns on any sample—whether the same mock galaxies
+or a new sample of real galaxies—can be used to infer
+the merger fractionf M without ambiguity.
+The alternative approach, implemented by L21, sam-
+plesr M,i andr I,i as parameters with informative Beta
+priors derived from calibration. While this ostensi-
+bly propagates calibration uncertainty into the infer-
+ence, it introduces a degeneracy: the observed vote pat-
+terns cannot distinguish between a high merger fraction
+and high classifier sensitivity, since both produce more
+“merger” votes. By fixing accuracies to their calibration
+values, we anchor the inference to an external measure-
+ment and break this degeneracy.
+We verify our choice by comparing results from both
+approaches in Section 4.6.
+4.RESULTS
+4.1.Individual VLM Classifier Accuracies
+Table 3 presents the sensitivity (r M), specificity (r I),
+and raw accuracy for each of the 15 VLM classifier
+configurations. Although we refer to these four vari-
+ants as “open,” “balanced,” “optimal,” and “strict,”
+these labels describe design intent within the two an-
+chor models (Gemma-4 E2B and Qwen2.5-VL) rather
+than architecture-independent operating points, and the
+realizedr M andr I values can shift when the same
+prompts are applied to Gemma-4 E4B or Qwen3-VL.
+The classifiers exhibit a diverse range of accuracies, with
+mean sensitivity⟨r M ⟩= 54.4% and mean specificity
+⟨rI ⟩= 53.8%. Individual sensitivities range from 12.5%
+(Qwen3-VL strict) to 91.7% (Gemma-4 E2B open),
+while specificities range from 11.5% (Qwen3-VL open)
+to 80.8% (Qwen2.5-VL optimal). This diversity mirrors
+the variation observed among the 14 human classifiers
+in L21 and underscores the importance of the Bayesian
+weighting scheme (Figure 1).
+The specific prompt variant strongly modulates the
+sensitivity and specificity of each VLM classifier. Open
+prompts tend to produce higher sensitivity but lower
+specificity (merger-biased), while strict prompts yield
+higher specificity but lower sensitivity (isolated-biased).
+The Gemma-4 family responds predictably and approx-
+imately monotonically to prompt strictness, making it
+the most controllable family for calibration purposes.
+Qwen3-VL is highly instruction-following but exhibits
+extreme swings across prompt variants (anr M–rI dy-
+namic range of about 71 percentage points), whereas
+Qwen2.5-VL shows minimal sensitivity to prompt fram-
+ing, with its behavior dominated by internal priors
+rather than the detailed wording of the instructions.
+4.2.Merger Fraction Recovery
+The Bayesian ensemble successfully recovers the true
+merger fraction of the mock galaxy sample. We estimate
+fM = 0.52 (+0.09/−0.10), which is within 0.66σof the
+true merger fraction of 0.585 (24/41 galaxies). Figure 2
+shows the posterior distribution of the merger fraction,
+demonstrating that the true value falls well within the
+68% credible interval (0.43–0.62). This result is directly
+comparable to the recovery by L21, who obtainedf M =
+0.52±0.08 for the same true fraction of 0.585 using 14
+human classifiers on the same 41 galaxies.
+4.3.Classification Performance: Majority Vote vs.
+Bayesian Weighting
+Table 4 compares the classification performance before
+(majority vote) and after (Bayesian weighting) applying
+the statistical framework to the 41-galaxy working sam-
+ple.
+
+6Chiaberge et al.
+T able 3.Individual VLM Classifier Performance
+ID Model Promptr M rI FP FN
+1 Gemma-4 E2B balanced 0.792 0.462 14 5
+2 Gemma-4 E2B open 0.917 0.269 19 2
+3 Gemma-4 E2B optimal 0.833 0.423 15 4
+4 Gemma-4 E2B strict 0.667 0.538 12 8
+5 Gemma-4 E4B balanced 0.333 0.654 9 16
+6 Gemma-4 E4B open 0.500 0.577 11 12
+7 Gemma-4 E4B optimal 0.875 0.423 15 3
+8 Gemma-4 E4B strict 0.333 0.692 8 16
+9 Qwen2.5-VL open 0.375 0.538 12 15
+10 Qwen2.5-VL optimal 0.292 0.808 5 17
+11 Qwen2.5-VL strict 0.333 0.769 6 16
+12 Qwen3-VL balanced 0.208 0.731 7 19
+13 Qwen3-VL open 0.833 0.115 23 4
+14 Qwen3-VL optimal 0.792 0.385 16 5
+15 Qwen3-VL strict 0.125 0.692 8 21
+– – Mean 0.544 0.538 – –
+Note—rM = merger recall (sensitivity);r I = non-merger recall (specificity); FP = false positives (isolated galaxies classified
+as mergers); FN = false negatives (mergers classified as isolated). Accuracies are computed on the 50-galaxy calibration
+sample (24 mergers, 26 non-mergers including 9 fake mergers), identical to the sample used by L21. Individual sensitivities
+range from 12.5% (Qwen3-VL strict) to 91.7% (Gemma-4 E2B open), while specificities range from 11.5% (Qwen3-VL open)
+to 80.8% (Qwen2.5-VL optimal).
+T able 4.Ensemble Classification Performance: Majority Vote vs. Bayesian Weighting
+Metric Majority Vote Bayesian Weighted Change
+Overall Accuracy 65.9% (27/41) 82.9% (34/41) +17 pp
+Sensitivity (rM) 58.3% (14/24) 87.5% (21/24) +29.2 pp
+Specificity (rI) 76.5% (13/17) 76.5% (13/17) +0.0 pp
+Note—Performance metrics computed on the 41-galaxy sample (24 mergers, 17 isolated). Bayesian classification uses the
+thresholdp M >0.5. pp = percentage points.
+The Bayesian framework provides a substantial im-
+provement over simple majority voting. Overall accu-
+racy increases from 65.9% to 82.9% (+17.1 percentage
+points). Sensitivity improves dramatically from 58.3%
+to 87.5% (+29.2 percentage points), indicating that
+Bayesian weighting correctly recovers many true merg-
+ers that the majority vote misses. Specificity remains
+unchanged at 76.5%, demonstrating that the framework
+maintains its performance on isolated galaxies while sub-
+stantially improving merger detection.
+4.4.Per-Galaxy Classification Performance
+Following L21, we assess classification performance us-
+ing confident classifications (p M ≥0.8 orp M ≤0.2).
+Table 5 summarizes the results.
+Of the 41 galaxies, 30 (73%) receive confident classifi-
+cations (Figure 3): 16 as confident mergers (p M ≥0.8)
+and 14 as confident isolated (p M ≤0.2). The re-
+maining 11 galaxies (27%) fall in the uncertain range
+(0.2< p M <0.8). This yields an accuracy of 83.3%
+(25/30 confident classifications correct) with 5 misclas-
+sified galaxies (Table 6), closely matching the 85% accu-
+racy and 6 misclassifications reported by L21 for human
+classifiers. The completeness—the fraction of true merg-
+ers classified withp M ≥0.8—is 58.3% (14/24).
+Table 7 presents the complete per-galaxy classifica-
+tion results, comparing majority-vote predictions with
+Bayesian-weighted probabilities for all 41 galaxies.
+4.5.Comparison with Human Classifiers
+Table 8 presents a direct comparison between our
+VLM ensemble results and the human classifier per-
+formance reported in L21, using identical confidence
+thresholds. While L21 sampled classifier accuracies as
+parameters, we fix accuracies to their calibration values
+(Section 3.4); as shown in Section 4.6, this methodolog-
+ical choice does not affect the estimated merger fraction
+
+VLM-Based Galaxy Merger Classification7
+Figure 1.Distribution of merger recallr M and non-merger recallr I for the 15 VLM classifiers. The ensemble spans a broad
+range of sensitivity–specificity trade-offs, a key ingredient for Bayesian weighting.
+T able 5.Confident Classification Results
+Category Total Correct Wrong Purity
+Confident Mergers (pM ≥0.8) 16 14 2 87.5%
+Confident Isolated (pM ≤0.2) 14 11 3 78.6%
+Total Confident 30 25 5 83.3%
+Uncertain (0.2< p M <0.8) 11 — — —
+Note—Following L21, we assess classification performance using confident classifications only (p M ≥0.8 orp M ≤0.2). The
+completeness—fraction of true mergers classified withp M ≥0.8—is 58.3% (14/24).
+
+8Chiaberge et al.
+Figure 2.Posterior distribution of the merger fractionf M inferred from the VLM ensemble. The true value (vertical line) lies
+well within the 68% credible interval.
+T able 6.Misclassified Galaxies
+Galaxy True Classp M Classification Error Type
+08 Merger 0.006 Confident Isolated False Negative
+33 Merger 0.024 Confident Isolated False Negative
+44 Merger 0.022 Confident Isolated False Negative
+18 Isolated 0.835 Confident Merger False Positive
+22 Isolated 0.835 Confident Merger False Positive
+Note—The three false negatives are true mergers with near-zerop M values, likely late-stage post-coalescence systems with
+faint merger signatures. The two false positives are isolated galaxies with morphological features the ensemble interpreted as
+merger evidence.
+Figure 3.Per-galaxy merger probabilitiesp M for the 41 mock galaxies. Confident mergers (p M ≥0.8), confident isolated
+systems (pM ≤0.2), and uncertain cases are indicated, with misclassified galaxies highlighted.
+
+VLM-Based Galaxy Merger Classification9
+T able 7.Per-Galaxy Classification Results
+Galaxy ID True Class MV Pred MV Correctp M Bayes Pred Bayes Correct Confidence
+00 Isolated Isolated Yes 0.006 Isolated Yes Confident
+01 Isolated Merger No 0.678 Merger No Uncertain
+02 Isolated Isolated Yes 0.010 Isolated Yes Confident
+04 Isolated Isolated Yes 0.006 Isolated Yes Confident
+05 Merger Merger Yes 0.877 Merger Yes Confident
+06 Merger Merger Yes 0.929 Merger Yes Confident
+07 Merger Merger Yes 0.934 Merger Yes Confident
+08 Merger Isolated No 0.006 Isolated No Confident*
+10 Isolated Isolated Yes 0.678 Merger No Uncertain
+11 Merger Merger Yes 0.898 Merger Yes Confident
+12 Merger Isolated No 0.508 Merger Yes Uncertain
+14 Isolated Isolated Yes 0.006 Isolated Yes Confident
+15 Merger Isolated No 0.508 Merger Yes Uncertain
+16 Merger Merger Yes 0.961 Merger Yes Confident
+18 Isolated Merger No 0.835 Merger No Confident*
+20 Isolated Isolated Yes 0.010 Isolated Yes Confident
+22 Isolated Merger No 0.835 Merger No Confident*
+24 Merger Isolated No 0.508 Merger Yes Uncertain
+25 Merger Isolated No 0.887 Merger Yes Confident
+26 Isolated Isolated Yes 0.010 Isolated Yes Confident
+27 Isolated Isolated Yes 0.006 Isolated Yes Confident
+28 Merger Merger Yes 0.929 Merger Yes Confident
+30 Isolated Isolated Yes 0.119 Isolated Yes Confident
+31 Merger Isolated No 0.508 Merger Yes Uncertain
+32 Merger Merger Yes 0.894 Merger Yes Confident
+33 Merger Isolated No 0.024 Isolated No Confident*
+35 Isolated Isolated Yes 0.051 Isolated Yes Confident
+36 Merger Isolated No 0.297 Isolated No Uncertain
+37 Merger Merger Yes 0.899 Merger Yes Confident
+38 Merger Merger Yes 0.866 Merger Yes Confident
+40 Merger Merger Yes 0.929 Merger Yes Confident
+41 Merger Isolated No 0.887 Merger Yes Confident
+43 Isolated Merger No 0.797 Merger No Uncertain
+44 Merger Isolated No 0.022 Isolated No Confident*
+46 Merger Merger Yes 0.823 Merger Yes Confident
+47 Isolated Isolated Yes 0.205 Isolated Yes Uncertain
+49 Merger Isolated No 0.508 Merger Yes Uncertain
+50 Merger Isolated No 0.887 Merger Yes Confident
+51 Isolated Isolated Yes 0.088 Isolated Yes Confident
+52 Isolated Isolated Yes 0.006 Isolated Yes Confident
+53 Merger Merger Yes 0.508 Merger Yes Uncertain
+Note—MV = majority vote; Bayes Pred uses the thresholdp M >0.5 for mergers. Misclassified confident galaxies are marked
+with *. Galaxies 18 and 22 (isolated,p M ≥0.8) are false positives; 08, 33, 44 (mergers,p M ≤0.2) are false negatives.
+
+10Chiaberge et al.
+but does influence the per-galaxy probability distribu-
+tions.
+Both analyses use identical confidence thresholds and
+the same 41-galaxy VELA+SUNRISE mock galaxy
+sample, enabling direct comparison. The VLM ensemble
+achieves comparable accuracy with fewer false positives
+but more false negatives, reflecting a more conservative
+classification behavior.
+The VLM ensemble achieves an accuracy of 83.3%,
+closely matching the 85% achieved by trained human
+classifiers, with 5 misclassified galaxies versus 6 for hu-
+mans. Critically, the error profiles differ qualitatively:
+human classifiers produced 5 false positives (isolated
+galaxies confidently misclassified as mergers) and only
+1 false negative, while the VLM ensemble produces 2
+false positives and 3 false negatives.
+The VLM ensemble achieves lower completeness than
+human classifiers (58.3% vs. 85%), because its per-
+galaxyp M values are less polarized and more often fall
+into the uncertain region. However, the statistical sig-
+nificance of this difference is marginal (Fisher’s test p =
+0.055), and is discussed in Section 5.3.
+4.6.Fixed vs. Sampled Classifier Accuracies
+We tested an alternative model following L21 exactly,
+in which classifier accuraciesr M,i andr I,i are sam-
+pled as parameters with informative Beta priors derived
+from calibration performance. Comparing the two ap-
+proaches reveals systematic differences (Table 9).
+The inferred population merger fraction is nearly iden-
+tical between the two treatments (f M = 0.52±0.09
+for fixed accuracies vs.f M = 0.51±0.08 for sam-
+pled accuracies), sof M itself is robust to this modeling
+choice. However, the per-galaxy posteriors differ: the
+sampled-accuracy model attains lower accuracy on con-
+fident classifications (74.4% vs. 83.3%), with 10 rather
+than 5 misclassified galaxies and many fewer uncertain
+cases (2 vs. 11). In particular, four true mergers move
+from the intermediate-probability (“uncertain”) regime
+under the fixed-accuracy model (p M = 0.51–0.79) to
+confidently isolated classifications under the sampled-
+accuracy model (pM = 0.08–0.23). Overall classification
+accuracy is higher for the fixed-accuracy model (83.3%
+vs. 74.4%), while completeness is higher for the sampled-
+accuracy model (66.7% vs. 58.3%).
+The sampled-accuracy model produces more polarized
+per-galaxy probability distributions, with fewer galaxies
+in the uncertain range (0.2< p M <0.8): only 5% of
+galaxies fall in the uncertain range compared to 27%
+for the fixed-accuracy model. This behavior resembles
+the highly polarized distributions reported for human
+classifiers in L21, where∼73% of galaxies receivedp M
+values near 0 or 1. We discuss the origin of this behavior
+in Section 5.4.
+5.DISCUSSION
+5.1.VLMs as Viable Alternatives to Human Classifiers
+Our results demonstrate that, when embedded in the
+Bayesian framework of L21 and applied to the iden-
+tical truth-known mock sample, an ensemble of Vi-
+sion–Language Models attains galaxy-merger classifica-
+tion accuracy comparable to that of trained human ex-
+perts. The VLM ensemble achieves 83.3% accuracy
+on confident classifications with 5 misclassified galax-
+ies, closely matching the 85% accuracy and 6 misclas-
+sifications for the human classifiers of L21. This com-
+parison is methodologically robust: both studies use the
+same mock galaxy sample from VELA+SUNRISE sim-
+ulations, the same Bayesian statistical framework, the
+same confidence thresholds, and comparable numbers
+of classifiers (15 VLMs vs. 14 humans). The near-
+identical performance suggests that current small VLMs
+have reached a level of visual pattern recognition suffi-
+cient for galaxy morphology classification, without any
+task-specific training.
+The Bayesian framework of L21 proves equally effec-
+tive for combining VLM classifications as for human
+classifications. The improvement from majority vot-
+ing to Bayesian-weighted classification (+17.0 percent-
+age points in overall accuracy, +29.2 percentage points
+in sensitivity) demonstrates the importance of account-
+ing for individual classifier accuracies, particularly given
+the substantial variation in performance across different
+VLM configurations.
+The error profiles of VLM and human classifiers dif-
+fer qualitatively. Human classifiers produced 5 false
+positives and only 1 false negative, while the VLM en-
+semble produces 2 false positives and 3 false negatives
+with our fixed-accuracy approach. When we apply the
+sampled-accuracy method of L21 to the VLM ensemble
+(Section 4.6), the error counts increase to 4 false posi-
+tives and 6 false negatives, but the asymmetry persists:
+VLMs produce more false negatives than false positives,
+while humans show the opposite pattern. This suggests
+a qualitative difference in classification behavior, with
+VLMs being more conservative (missing mergers) and
+humans being more liberal (over-identifying mergers),
+though the current sample is too small to establish this
+trend as statistically significant (see Section 5.3).
+5.2.Impact of Prompt Engineering and Ensemble
+Diversity
+
+VLM-Based Galaxy Merger Classification11
+T able 8.Comparison of VLM Ensemble vs. Human Classifiers from L21
+Metric This Work (VLMs) Lambrides et al. (Humans)
+Number of galaxies 41 41
+Number of classifiers 15 14
+True merger fraction 59% 59%
+Estimatedf M 0.52±0.09 0.52±0.08
+fM within 1σof truth Yes (0.66σ) Yes
+Confidence thresholdp M ≥0.8 /≤0.2p M ≥0.8 /≤0.2
+Accuracy (confident only) 83.3% 85%
+Misclassified galaxies 5 6
+False positives 2 5
+False negatives 3 1
+Completeness (pM ≥0.8) 58.3% 85%
+Uncertain classifications 11 (27%)∼6 (15%)
+T able 9.Comparison of fixed-accuracy and sampled-
+accuracy models.
+Metric Fixed Sampled
+Merger fraction (f M) 0.52±0.09 0.51±0.08
+Accuracy 83.3% 74.4%
+Completeness 58.3% 66.7%
+Misclassified galaxies 5 10
+False positives 2 4
+False negatives 3 6
+Uncertain classifications 11 (27%) 2 (5%)
+Mean ∆rM (sampled−fixed) +0.047
+Mean ∆rI (sampled−fixed) +0.117
+Note—Accuracy is computed on confident classifications
+only (pM ≥0.8 orp M ≤0.2); galaxies with intermediate
+probabilities are excluded. The fixed-accuracy model holds
+classifier accuracies constant at their calibration values; the
+sampled-accuracy model treats them as parameters with
+Beta priors following L21. ∆r M and ∆rI indicate the mean
+difference between sampled posterior means and fixed
+calibration values across all 15 classifiers.
+Our results confirm that prompt design has a sub-
+stantial, systematic effect on individual VLM classifier
+performance. The diversity of prompt strategies is a
+feature rather than a liability of the ensemble. The
+four strategies produce systematically different classifi-
+cation behaviors: open prompts yield meanr M = 65.6%
+and meanr I = 37.5% (merger-biased), optimal prompts
+achieve meanr M = 69.8% and meanr I = 51.0% (bal-
+anced), balanced prompts produce meanr M = 44.4%
+and meanr I = 61.5% (isolated-biased), and strict
+prompts yield meanr M = 36.5% and meanr I = 67.3%
+(isolated-biased). This diversity ensures that the 15-
+classifier ensemble contains complementary classifiers
+spanning the fullr M–rI trade-off space, which is pre-
+cisely the property that makes Bayesian ensemble com-
+bination effective.
+As a cross-check, we compared the 12-classifier en-
+semble (omitting the balanced prompts) to the full 15-
+classifier ensemble and found no material change in the
+recovered merger fraction, overall accuracy, or complete-
+ness; the small differences in confident-classification ac-
+curacy (at the level of a single galaxy out of 41) are con-
+sistent with small-number fluctuations. This indicates
+that the Bayesian weighting scheme correctly down-
+weights poorly calibrated classifiers and up-weights well-
+calibrated ones. The balanced-prompt classifiers, de-
+spite their individually moderate performance, con-
+tribute marginally to the ensemble through the diver-
+sity of their error patterns. The Gemma-4 family re-
+sponds predictably and proportionally to prompt strict-
+ness, making it the most controllable family for calibra-
+tion purposes. Qwen3-VL is highly instruction-following
+but exhibits extreme swings across prompt variants
+(rM–rI dynamic range of 71 percentage points). In con-
+trast, Qwen2.5-VL exhibits minimal responsiveness to
+prompt framing: a balanced prompt produced merger
+and non-merger recalls essentially identical to the op-
+timal variant, reinforcing the picture that this model’s
+behavior is largely governed by internal priors rather
+than subtle changes in instruction wording.
+5.3.The Completeness–Purity Trade-off
+The primary difference between VLM and human clas-
+sification is completeness: 58.3% for VLMs versus 85%
+for humans. However, a Fisher’s exact test comparing
+these proportions (14/24 vs. 20/24) yieldsp= 0.055, in-
+dicating that the difference is not statistically significant
+at conventional levels, and larger samples are needed
+to confirm whether this gap is genuine. The lower
+VLM completeness arises because VLMs place more
+galaxies in the uncertain category (27% vs.∼15%), re-
+
+12Chiaberge et al.
+flecting more moderatep M values from the 15-classifier
+ensemble—though this difference is also not statistically
+significant given the sample size.
+The three false negatives (08, 33, 44) are true merg-
+ers with near-zero inferredp M values (0.006, 0.024, and
+0.022), suggesting that the ensemble was driven toward
+the wrong answer by a majority of classifiers, rather
+than being merely uncertain. Visual inspection of these
+galaxies reveals common morphological features that
+challenge VLM classification. These galaxies are late-
+stage post-coalescence systems where merger signatures
+are faint, consistent with the known post-merger classi-
+fication challenge documented in L21.
+The two false positives (18, 22) are isolated galaxies
+withp M values just above the confident threshold (0.835
+for both), indicating they sit near the decision boundary.
+The apparent difference in false positive rates (2/17 for
+VLMs vs. 5/17 for humans) is not statistically signif-
+icant with these sample sizes. Similarly, the difference
+in false negative rates (3/24 vs. 1/24) cannot be dis-
+tinguished from statistical fluctuation. Consequently,
+claims about differing failure modes between VLM and
+human classifiers must remain tentative until validated
+on larger samples.
+For applications where false positives are costly (e.g.,
+spectroscopic follow-up of merger candidates), the VLM
+ensemble’s low absolute false positive count (2 galax-
+ies) may be acceptable. For applications requiring high
+completeness, thep M threshold for confident mergers
+can be lowered, or the ensemble can be augmented with
+additional high-sensitivity classifiers.
+5.4.Fixed vs. Sampled Classifier Accuracies
+Section 4.6 presented results from the sampled-
+accuracy model of L21, in which classifier accuracies
+(rM,r I) are inferred jointly with the true galaxy classes
+rather than fixed at calibration values. As in L21, the
+sampled model produces overconfident classifications:
+nearly all galaxies receivep M values near 0 or 1, with
+only 5% of galaxies remaining uncertain compared to
+27% in the fixed model. This overconfidence arises from
+a feedback loop in the joint inference: galaxies with po-
+larized votes are confidently assigned a true class match-
+ing the majority, which inflates the inferred accuracies
+of classifiers who agreed with that majority. Higher in-
+ferred accuracies in turn drive more extreme probability
+assignments, reinforcing the cycle. This feedback loop
+is amplified by the coherence of our ensemble: when
+most classifiers agree on a galaxy, the sampled model
+infers true classes with high confidence, maximizing the
+credit assigned to the agreeing classifiers and therefore
+inflating their inferred accuracies, which in turn drives
+overconfident per-galaxy probability assignments.
+We therefore recommend the fixed-accuracy approach
+for applications where the calibration sample is approx-
+imately balanced between classes. Fixing accuracies
+to calibration values anchors the inference to an ex-
+ternal measurement, breaks thef M–accuracy degener-
+acy, and produces better-calibrated per-galaxy uncer-
+tainties. The sampled-accuracy approach may be ap-
+propriate when there is reason to believe classifier per-
+formance differs systematically between the calibration
+and inference samples—for example, if real galaxy im-
+ages have substantially different noise properties or mor-
+phological characteristics than the synthetic calibration
+images—but users should be aware that it may produce
+overconfident classifications.
+5.5.Challenges: Post-merger Systems
+A recurring challenge across all model-prompt com-
+binations is the classification of post-merger systems:
+galaxies that have coalesced into a single morphological
+object but retain internal signatures of a recent interac-
+tion. These systems represent a structurally ambiguous
+category where even human classifiers disagree, as doc-
+umented in L21, who found that all but one of their
+misclassified galaxies are post-mergers, with accuracy
+dropping significantly atz >2.0 where merger features
+have faded. The three VLM false negatives (08, 33, 44),
+withp M values of 0.006, 0.024, and 0.022 respectively,
+are consistent with this known challenge; their near-zero
+probabilities suggest that the ensemble of VLM classi-
+fiers, like human experts, is systematically misled by the
+morphological ambiguity of late-stage coalescences.
+5.6.Practical Advantages and Limitations of VLM
+Classification
+VLM-based classification offers several practical ad-
+vantages over human classification that are directly rel-
+evant to large-scale galaxy morphology studies. VLMs
+can process thousands of galaxy images per hour with-
+out fatigue or inter-session variability. Under fixed
+model weights and prompt, outputs are reproducible,
+enabling fully auditable analyses. Prompt engineering
+allows fine control over ther M–rI trade-off in a measur-
+able and systematic way that is not possible with hu-
+man classifiers. Finally, VLMs produce structured out-
+puts with explicit evidence lists and confidence scores,
+facilitating post-hoc error analysis. In this proof-of-
+concept we deliberately restrict ourselves to small, lo-
+cally runnable open-weight VLMs, so the results re-
+ported here should be interpreted as a conservative lower
+bound; larger or more capable future models are likely
+
+VLM-Based Galaxy Merger Classification13
+to improve both individual classifier performance and
+ensemble completeness.
+Several important limitations must be noted. First,
+our validation is performed on mock galaxy images from
+a single simulation suite (VELA+SUNRISE); if real
+galaxy morphologies differ systematically from the sim-
+ulations — due to higher dust content, different merger
+timescales, or redshift-dependent surface brightness ef-
+fects — VLM performance may degrade. L21 note the
+same concern for human classifiers. However, the clas-
+sifier biases measured here reflect not only the image
+properties but also the intrinsic interpretation styles of
+each model—whether a classifier is conservative or lib-
+eral in identifying merger features. These interpretation
+biases are driven by model architecture and prompt de-
+sign rather than image-specific characteristics, suggest-
+ing they may be more stable across domains than the
+absolute accuracy values. If the relative biases (e.g.,
+which classifier is more sensitive, which is more specific)
+are preserved when moving to a different image domain,
+the Bayesian framework may still provide partial cor-
+rection benefits even without full recalibration. Never-
+theless, for quantitatively reliable merger fraction esti-
+mates, recalibration on domain-matched mock images
+remains the recommended practice.
+5.7.Implications for Large-Scale Surveys
+The proof-of-concept presented here is directly appli-
+cable to ongoing and planned imaging surveys. A pre-
+calibrated VLM ensemble can be deployed on any new
+survey field without additional human labeling: each
+model-prompt combination acts as a virtual classifier
+with a known (r M,r I) pair, and the full classification
+pipeline can be re-run identically whenever the mock
+calibration set or priors are updated — producing ver-
+sioned, auditable merger catalogs that are not possible
+with frozen human vote collections.
+The Roman Space Telescope (Spergel et al. 2015) rep-
+resents the most demanding future case. Its projected
+wide-area near-infrared imaging footprint, expected to
+yield morphological measurements for hundreds of mil-
+lions of galaxies across cosmic time, makes human-based
+per-classifier calibration across the full survey footprint
+effectively impossible. A VLM ensemble integrated into
+a Roman data pipeline would produce per-galaxyp M
+values with a fully characterized and reproducible se-
+lection function, shifting the primary bottleneck from
+human throughput to the fidelity of the simulation cal-
+ibration set. This is a challenge that will improve pro-
+gressively with the next generation of hydrodynamical
+simulations. Large-volume surveys from Euclid and the
+Vera Rubin Observatory likewise stand to benefit from
+scalable, reproducible morphological classification using
+VLM ensembles.
+6.CONCLUSIONS
+We have demonstrated that an ensemble of Vision-
+Language Models, combined using the Bayesian statis-
+tical framework of L21, can classify galaxy merger sta-
+tus with accuracy comparable to trained human experts.
+Our principal findings are as follows.
+The VLM ensemble achieves an accuracy of 83.3% on
+confident classifications (p M ≥0.8 orp M ≤0.2) us-
+ing identical methodology and thresholds to L21, closely
+matching the 85% achieved by human classifiers. The
+VLM ensemble produces 5 misclassifications, compa-
+rable to the 6 reported for human classifiers. VLMs
+place more galaxies in the uncertain category (27% vs.
+∼15%) and produce fewer false positives (2 vs. 5), which
+may suggest less overconfident classification behavior—
+however, these differences are not statistically significant
+given the sample size of 41 galaxies and warrant further
+investigation with larger samples.
+The estimated merger fraction (f M = 0.52±0.09)
+is within 0.66σof the true value (0.585), demonstrat-
+ing successful recovery of population-level merger statis-
+tics, with excellent MCMC convergence ( ˆR= 1.002,
+n eff>1600). Bayesian weighting improves overall clas-
+sification accuracy by +17.0 percentage points over sim-
+ple majority voting, with sensitivity improving by +29.2
+percentage points. We find that fixing classifier accu-
+racies to their calibration values, rather than sampling
+them as parameters following L21, produces better-
+calibrated per-galaxy probabilities and avoids a degen-
+eracy between the inferred merger fraction and classifier
+accuracies. This methodological refinement yields 83.3%
+accuracy compared to 74.4% with the sampled-accuracy
+approach. Prompt engineering significantly impacts in-
+dividual classifier performance, with open prompts pro-
+ducing merger-biased classifiers and strict prompts pro-
+ducing isolated-biased classifiers; the diversity of all four
+prompt strategies benefits the Bayesian ensemble. Us-
+ing 15 VLM classifiers, directly comparable in num-
+ber to the 14 human classifiers in L21, enables a ro-
+bust apples-to-apples comparison demonstrating that
+VLMs have reached human-level performance for galaxy
+merger classification.
+These results establish VLMs as viable alternatives to
+human classifiers for galaxy morphology studies, offering
+comparable accuracy, reduced false positives, computa-
+tional scalability, and full reproducibility. The primary
+limitation is lower completeness (58.3% vs. 85%), which
+can be addressed through threshold adjustment, ensem-
+ble augmentation, or hybrid human-VLM approaches.
+
+14Chiaberge et al.
+A natural next step is to deploy this framework on
+large observational samples from HST legacy surveys
+and JWST. Longer term, larger locally deployable open-
+weight VLMs offer substantially richer visual represen-
+tations while remaining fully reproducible under fixed
+weights. Using locally hosted models with frozen check-
+points is essential for scientific reproducibility, since
+API-accessible frontier models can be updated, fine-
+tuned, or deprecated without notice, making it impos-
+sible to guarantee that classifications or merger-fraction
+inferences can be exactly reproduced at a later date.
+Improved individual model capability is expected to
+translate into higher per-classifier accuracies within the
+Bayesian ensemble framework, making the testing of
+larger open-weight architectures a natural next step to-
+ward closing the completeness gap identified here. Be-
+yond merger identification, the same VLM-based frame-
+work could be extended to other morphology-driven
+tasks such as strong and weak gravitational lens iden-
+tification in large imaging surveys, where reproducible
+visual classification is equally critical.
+ACKNOWLEDGMENTS
+We thank Erini Lambrides for providing the mock
+galaxy images used in this work, and the original version
+of the MCMC Bayesian analysis code. We acknowledge
+extensive use of Claude (Anthropic) for code develop-
+ment, statistical analysis, and manuscript preparation:
+Claude Opus 4.5 through Johns Hopkins University’s
+HopGPT interface (v2.6.0), and Perplexity, primarily
+using Claude Sonnet 4.6. MC wishes to thank Stephan
+McCandliss for helpful discussions.
+REFERENCES
+Abraham, R. G., Valdes, F., Yee, H. K. C., & van den
+Bergh, S. 1994, ApJ, 432, 75
+Ackermann, S., et al. 2018, MNRAS, 479, 415
+Aird, J., et al. 2015, MNRAS, 451, 1892
+Ceverino, D., Primack, J., & Dekel, A. 2015, MNRAS, 453,
+408, doi: 10.1093/mnras/stv1603
+Ceverino, D., et al. 2014, MNRAS, 442, 1545
+´Ciprijanovi´ c, A., Snyder, G. F., Nord, B., & Peek, J. E. G.
+2020, Astronomy and Computing, 32, 100390,
+doi: 10.1016/j.ascom.2020.100390
+´Ciprijanovi´ c, A., et al. 2021, MNRAS, 506, 677
+Conselice, C. J. 2014, ARA&A, 52, 291
+Conselice, C. J., Bershady, M. A., & Jangren, A. 2000,
+ApJ, 529, 886, doi: 10.1086/308300
+Dieleman, S., Willett, K. W., & Dambre, J. 2015, MNRAS,
+450, 1441
+Donnan, C. T., McLure, R. J., Dunlop, J. S., et al. 2024,
+MNRAS, 533, 3222, doi: 10.1093/mnras/stae2037
+Duncan, K., et al. 2019, ApJ, 876, 110
+Finkelstein, S. L., et al. 2023, ApJL, 946, 13
+Grogin, N. A., et al. 2011, ApJS, 197, 35
+Huertas-Company, M., et al. 2015, ApJS, 221, 8
+Koekemoer, A. M., et al. 2011, ApJS, 197, 36
+Lambrides, E., et al. 2021, ApJ, 919, 43
+Lintott, C. J., et al. 2008, MNRAS, 389, 1179
+Lotz, J. M., Primack, J., & Madau, P. 2004, AJ, 128, 163
+Lu, C., et al. 2026, Nature, 651, 914
+Madau, P., & Dickinson, M. 2014, ARA&A, 52, 415
+Mantha, K. B., et al. 2018, MNRAS, 475, 1549
+Pearson, W. J., et al. 2019, A&A, 626, A49
+R Core Team. 2024, R: A Language and Environment for
+Statistical Computing, R Foundation for Statistical
+Computing, Vienna, Austria.
+https://www.R-project.org/
+Schwartz, M. D. 2026, arXiv e-prints, arXiv:2601.02484,
+doi: 10.48550/arXiv.2601.02484
+Simons, R. C., et al. 2019, ApJ, 874, 59
+Sivakumaran, M., et al. 2025, arXiv e-prints,
+arXiv:2512.07132. https://arxiv.org/abs/2512.07132
+Snyder, G. F., Lotz, J., Moody, C., et al. 2015, MNRAS,
+451, 4290, doi: 10.1093/mnras/stv1231
+Spergel, D., et al. 2015, arXiv e-prints.
+https://arxiv.org/abs/1503.03757
+Stan Development Team. 2024, Stan Modeling Language
+Users Guide and Reference Manual, Stan Development
+Team. https://mc-stan.org/
+Ueda, Y., et al. 2014, ApJ, 786, 104
+Willett, K. W., et al. 2013, MNRAS, 435, 2835
+
+VLM-Based Galaxy Merger Classification15
+APPENDIX
+A.USE OF LARGE LANGUAGE MODELS
+Beyond the VLM-based galaxy classification that is the subject of this study, this work was developed through
+extensive collaboration with Claude (Anthropic). Claude Opus 4.5 was accessed through Johns Hopkins University’s
+HopGPT interface (v2.6.0) for extended analytical discussions, code development, and manuscript drafting. Perplexity,
+primarily using Claude Sonnet 4 with occasional use of its “Best” mode, assisted with literature searches and quick
+queries. The AI assistants contributed to multiple aspects of this project:
+Code development. A new R implementation of the L21 Bayesian framework, including the Stan MCMC model, data
+ingestion pipelines, statistical analysis functions, and visualization code, was developed iteratively through dialogue
+with Claude. The authors provided specifications, reviewed outputs, identified bugs, and guided refinements.
+Statistical analysis. Claude Opus 4.5 assisted with interpreting MCMC diagnostics, computing confidence intervals,
+performing Fisher’s exact tests for significance assessment, and ensuring that statistical claims were appropriately
+caveated given the small sample sizes.
+Manuscript preparation. Drafts of text, tables, and figure captions were generated and refined through iterative
+dialogue. The authors provided domain expertise, verified scientific accuracy, identified logical inconsistencies, and
+made editorial decisions about framing and emphasis.
+Critical review. Claude served as a sounding board for methodological choices, flagged potential over-interpretations
+of small-number statistics, and helped ensure consistency between numerical results and textual claims throughout
+the manuscript.
+The interaction model was collaborative: the authors posed questions, provided data and context, evaluated AI-
+generated outputs, and made all final decisions about scientific content. The AI assistant functioned as a highly
+capable research assistant rather than an autonomous agent—generating candidate text and code that was then
+critically evaluated, corrected, and approved by the human authors. All scientific conclusions and interpretations
+represent the judgment of the authors, who take full responsibility for the content of this work.
+This approach is in the spirit of Schwartz (2026), who recently demonstrated that an AI assistant can contribute
+substantively to original physics research under close human supervision. Our workflow contrasts with fully automated
+research pipelines such as “The AI Scientist” (Lu et al. 2026), which aim to automate the entire scientific lifecycle from
+idea generation to manuscript production. In this work, AI tools function strictly as collaborators and accelerators:
+the authors designed the research questions, executed all code, validated every result, and made all scientific and
+editorial decisions, with the AI assistants providing candidate code and text that were then critically reviewed and
+edited.
+B.VLM IMPLEMENTATION AND INFERENCE DETAILS
+We employ four locally runnable vision–language model families in this work. The Gemma-4 E2B and E4B configura-
+tions denote the 2B and 4B effective-parameter on-device models, respectively; these models use per-layer embeddings
+(PLE) to maximize parameter efficiency, so the total number of loaded weights is larger than the quoted effective
+parameter count. All models are used in 4-bit GGUF quantized form for efficient local inference. The specific GGUF
+model files are:
+•gemma-4-E2B-it-UD-Q4 K XL.gguf
+•gemma-4-E4B-it-Q4 K M.gguf
+•Qwen Qwen2.5-VL-7B-Instruct-Q4 K M.gguf
+•Qwen3-VL-4B-Instruct-Q4 K M.gguf
+For multimodal inference we additionally load the corresponding vision projection files:mmproj-F16.gguffor the
+Gemma-4 E2B/E4B and Qwen3-VL-4B models, andmmproj-Qwen Qwen2.5-VL-7B-Instruct-f16.gguffor Qwen2.5-
+VL-7B. All model and projector GGUF files were obtained from publicly available Hugging Face model hubs.
+
+16Chiaberge et al.
+Figure 4.Example mock galaxy image (galaxy 07). Left: WFC3/IR F160W image (rest-frame optical atz∼1–2) shown as
+a grayscale or heat-map intensity map. Right: RGB composite combining F160W, F775W, and F435W, highlighting clumpy,
+asymmetric star formation. This is the same system used in the example VLM classification in Appendix C, where both
+Qwen2.5-VL and Gemma-4 E4B assign the primary labeldisturbance major, collapsing to the binarymergingclass.
+Qwen2.5-VL is evaluated with three prompt strategies (open, optimal, strict), while the other families use four (bal-
+anced, open, optimal, strict), yielding 15 classifier configurations in total. All vision projector (mmproj) components
+run at FP16 precision.
+All models were run usingllama.cpp(version 8857, builda6cc43c28), compiled for CPU-only operation on a Linux
+x86 64 machine with GNU 13.3.0. The server was launched with--ctx-size 8192and--n-predict 2048; the
+generation limit was essential to prevent silent output truncation in verbose prompt variants, which otherwise caused
+JSON parse errors on galaxies that elicited long reasoning chains. This configuration represents a conservative lower
+bound on performance that would be achievable with GPU-accelerated inference or larger locally deployable models.
+C.EXAMPLE VLM PROMPT AND RESPONSE FOR A MERGER
+This appendix illustrates the full classification output for a clear merger system (galaxy 07) using the Qwen2.5-VL
+model with the optimal prompt (Section 3.2). The input is the two-panel postage stamp (F160W heatmap and RGB
+composite), and the model is queried via a localllama.cpp-compatible API.
+C.1.Qwen2.5-VL, Optimal Prompt
+You are an expert extragalactic astronomer.
+The galaxy at the center of the image is the target and it is at z between 1 and 2,
+so you are seeing rest-frame optical structure.
+Your task is to visually classify the system following Lambrides et al. (2021).
+IMAGE INPUTS:
+You are shown TWO images of the same galaxy:
+1. Near-IR image (WFC3-IR, heat colormap): Rest-frame optical at z=1-2. Displayed
+using a DS9 heat colormap where black/dark = faint emission and
+red/orange/yellow/white = bright emission. Most sensitive for detecting faint,
+low surface brightness features like tidal tails, shells, and plumes.
+Use this as the PRIMARY image for identifying merger signatures.
+
+VLM-Based Galaxy Merger Classification17
+2. RGB composite (Near-IR + optical WFC3-UVIS): The blue channel shows rest-frame
+UV at z=1-2, tracing young star formation. Use this to identify:
+- Blue star-forming clumps (normal in spiral arms)
+- Whether clumpy structure follows a spiral pattern (normal) or is chaotic (potential merger)
+REQUIRED REASONING STEPS | follow these in order:
+Step 1: Describe the near-IR morphology. Note any elongation, asymmetry,
+clumpiness, or extensions, however subtle.
+Step 2: Count distinct brightness peaks in the INNER region (central ~1/4
+of the image). Are there 1 or 2+ nuclei? If 2+, go directly to the
+LATE-STAGE COALESCENCE rules below.
+Step 3: Describe the RGB star formation pattern. Is it organized (spiral arms)
+or chaotic/off-arm?
+Step 4: For every morphological feature you noted in Steps 1-3, explicitly ask:
+"Could this feature be caused by a recent merger or tidal interaction?"
+Answer YES, UNCERTAIN, or NO for each feature.
+HOW TO ANSWER YES vs UNCERTAIN vs NO:
+- Answer YES only if the feature is clearly and unambiguously present
+above the noise level. It must be a real, significant feature |
+not a marginal hint or something that could be explained by PSF,
+noise, or galaxy inclination alone.
+- Answer UNCERTAIN if the feature is marginally visible, ambiguous,
+or could plausibly be explained by resolution limits, noise, or
+a normal undisturbed galaxy.
+- Answer NO if the feature is absent or clearly explained by normal
+galaxy structure.
+Use these as guidance:
+- Clearly irregular or one-sided elongation (not just inclined disk)→YES
+- Mild elongation consistent with an inclined disk→UNCERTAIN or NO
+- Clumps that are clearly off-axis or chaotic (not along any plausible
+arm structure)→YES
+- Clumps that are unresolved or ambiguous at this redshift/resolution
+→UNCERTAIN (do NOT default to YES just because spiral arms
+cannot be confirmed)
+- Faint one-sided extension or plume clearly above noise→YES
+- Marginal asymmetry that could be noise→UNCERTAIN
+- Asymmetric or lopsided outer envelope, clearly one-sided→YES
+- Off-center or elongated core within an otherwise smooth envelope→YES
+- Irregular, patchy light clearly not following any spiral pattern→YES
+- Symmetric spiral arms with clumps along them→NO
+- Perfectly smooth, symmetric radial brightness profile→NO
+Step 5: Assign the label using this gate:
+- If at least one feature in Step 4 was answered YES→the label
+must be disturbance_major, merging_minor, or merging_major.
+
+18Chiaberge et al.
+Do NOT assign disturbance_minor or no_evidence.
+- If no feature was answered YES but one or more were UNCERTAIN→
+assign disturbance_minor with confidence medium or low.
+Do NOT escalate to disturbance_major or merging based on
+UNCERTAIN answers alone.
+- If ALL features in Step 4 were NO→consider disturbance_minor or
+no_evidence, applying the no_evidence positive-confirmation rule below.
+PRIMARY CLASSES:
+- merging_major: an ongoing major merger (approximately similar galaxy sizes),
+including clear interacting pairs or systems with strong tidal features.
+USE THIS when you see 2+ bright cores connected by diffuse emission, or a
+strongly asymmetric system with multiple nuclei in a common envelope.
+- merging_minor: an ongoing minor merger (approximately 1:4 size ratio or more unequal),
+including clearly interacting pairs with a much smaller companion.
+USE THIS when a smaller satellite is clearly present near the main galaxy,
+even if the connecting bridge is faint.
+- disturbance_major: a post-merger or strongly disturbed system, likely within
+~100 Myr of coalescence, with strong asymmetries and/or tidal debris.
+USE THIS when the overall morphology is irregular, lumpy, or has clear tidal
+features, even if you can no longer count distinct nuclei.
+- disturbance_minor: a mildly disturbed system with weak asymmetries or features
+that could be due to minor interactions or internal processes.
+ONLY assign this when no feature in Step 4 was answered YES. Use when
+UNCERTAIN answers are present (set confidence to medium or low), or when
+subtle real asymmetries exist that do not rise to the level of disturbance_major.
+- no_evidence: RESERVED for systems that show POSITIVE evidence of regularity.
+To assign no_evidence you must be able to confirm at least one of the following:
+(a) A smooth, symmetric brightness profile consistent with an elliptical or
+spheroidal galaxy | smooth radial falloff, no secondary peaks, no asymmetry, OR
+(b) A clear spiral galaxy with well-organized, symmetric arms (star-forming
+clumps along the arms are normal and do NOT disqualify this).
+A single bright concentrated source with no confirmation of a smooth profile
+is NOT sufficient for no_evidence. If you cannot positively confirm (a) or (b),
+assign disturbance_minor at minimum.
+COUNTING CORES:
+- Count the number of distinct bright cores/nuclei visible in the near-IR image.
+- 1 core, regular morphology→likely no_evidence or disturbance_minor.
+- 1 core, irregular/asymmetric envelope→likely disturbance_major (apply Step 4 gate).
+- 2+ cores in a common envelope, even if bridge is faint→likely merging_major.
+- 2+ components with clear separation and no connecting emission→merging_minor
+or separate galaxies; look for tidal features to decide.
+SPECIAL CASE | LATE-STAGE COALESCENCE (double or multiple nucleus in smooth envelope):
+- Some mergers show NO tidal tails, NO disturbed outer morphology, and NO
+
+VLM-Based Galaxy Merger Classification19
+irregular envelope. The outer isophotes may look smooth and symmetric,
+like a relaxed elliptical galaxy. Do NOT let this fool you.
+- Carefully inspect the INNER region (central ~1/4 of the image) for two or more
+resolvable brightness peaks, even if they are close together.
+- If you can see two or more distinct local brightness maxima within a shared smooth
+stellar envelope | even if the separation is small | this is a late-stage
+coalescence. Classify as merging_major if the brightness peaks are similar.
+Classify as merging_minor if the secondary peak(s) are less than about 4 times
+fainter than the main one.
+- The key diagnostic is: smooth outer envelope + double/multiple inner nucleus =
+MERGER, not isolated galaxy.
+- Do NOT require tidal tails or outer disturbance to classify this as a
+merger. A double/multiple nucleus alone is sufficient.
+IMPORTANT CONSIDERATIONS:
+- Multiple galaxies in a common irregular envelope should be classified as mergers
+("trainwreck" mergers), even if no single bright bridge is obvious.
+- A "trainwreck" can appear as ONE irregular, clumpy structure with multiple
+bright peaks. Multiple peaks in a common envelope = merging_major.
+- Spiral clumps aligned along arms are NOT merger evidence. But chaotic,
+off-arm clumps or multiple distinct cores embedded in a diffuse irregular
+structure ARE merger evidence.
+- Absence of a bright connecting bridge does NOT automatically rule out a merger.
+Bridges can be very faint. If other features (asymmetry, tidal tails, multiple
+nuclei in one envelope) are present, classify as merging or disturbance.
+- Small asymmetries such as a slightly offset nucleus inside a regular, undisturbed
+galaxy should not be interpreted as evidence for a merger.
+- Mild elongation consistent with a disk galaxy seen at an inclination angle is
+NOT a merger signature. Only flag elongation as suspicious if it is one-sided,
+irregular, or inconsistent with a simple inclined disk.
+- At z=1-2, limited resolution means spiral structure is often unresolvable.
+Do not treat unresolved clumpiness as merger evidence unless the clumps are
+clearly chaotic or off-axis.
+- Post-mergers should be classified as disturbance_major or merging_major.
+Collapsed classes:
+- merging = merging_major, merging_minor, disturbance_major
+- non_merging = disturbance_minor, no_evidence
+Think step by step in your own internal reasoning before giving the final answer.
+At the very end, output a single JSON object with exactly this schema:
+{
+"primary_label": "one of merging_major, merging_minor, disturbance_major, disturbance_minor,
+no_evidence",
+"collapsed_label": "one of merging, non_merging",
+"num_apparent_galaxies": 1,
+"confidence": "one of high, medium, low",
+"justification": "brief factual summary",
+"reasoning_summary": "one short sentence, under 160 characters"
+}
+
+20Chiaberge et al.
+Rules for the final JSON:
+- Output only one JSON object at the end.
+- Do not use markdown code fences.
+- num_apparent_galaxies must be an integer.
+- justification must be short and factual.
+- reasoning_summary must be concise, readable prose.
+- collapsed_label must be consistent with primary_label using the mapping above.
+- reasoning_summary must be one short sentence under 160 characters.
+- Keep the entire JSON compact.
+C.2.Gemma-4 E4B, Optimal Prompt
+SYSTEM_PROMPT = """
+You are an expert astronomer specializing in galaxy morphology. Your task is to classify HST
+galaxy images using the Lambrides et al. (2021) morphology scheme.
+You will be shown:
+1. a single-band HST WFC3/IR F160W image, which is the primary image for identifying morphology
+and faint low-surface-brightness tidal structure
+2. an HST optical color composite, which is useful for identifying spatially coherent color
+structure, star-forming regions, companions, and disturbed features
+Base your decision only on visible morphological evidence in the provided images. Do not assume
+any prior probability for mergers or non-mergers. Do not use expected class balance in your
+reasoning.
+Classify the galaxy into exactly one of these labels:
+- no_evidence: smooth, regular morphology with no visible signs of interaction or disturbance
+- disturbance_minor: weak or ambiguous irregularity; possible asymmetry or extension, but not
+strong enough to support a clear merger-related interpretation
+- disturbance_major: strong asymmetry, tidal structure, or post-merger disturbance clearly
+inconsistent with an isolated regular galaxy, even if no obvious companion is visible
+- merging_minor: clear ongoing interaction with a much smaller companion
+- merging_major: clear ongoing interaction between galaxies of comparable size
+Interpretation guidance:
+- Use the WFC3/IR F160W image as the primary basis for morphology and for detecting faint diffuse
+tidal structure.
+- Use the optical color composite as supporting evidence for color structure, star-forming
+regions, possible companions, and whether disturbed features are spatially coherent.
+- A galaxy may be classified as disturbance_major even when only one dominant galaxy is obvious,
+if the disturbance or tidal structure is strong.
+- Reserve disturbance_minor for weak, borderline, or ambiguous cases.
+- Do not infer merger-related structure from noise, compression artifacts, isolated clumps, or
+extremely subtle asymmetry alone.
+Confidence:
+- high: morphology strongly supports the label
+- medium: label is plausible but some ambiguity remains
+- low: image quality or morphology is too unclear for a firm classification
+
+VLM-Based Galaxy Merger Classification21
+First, write a detailed visual analysis describing morphology, asymmetry, companions, tidal
+features, and why the chosen label is preferred over nearby alternatives.
+Then end with exactly one JSON object on a single line, with no code fences and no extra text
+after it:
+{"primary_label": "<label>", "confidence": "<high|medium|low>", "num_apparent_galaxies": <integer>,
+"notes_evidence": "<key visual observations>", "reasoning_summary": "<one sentence conclusion>"}
+"""
+USER_TEXT = (
+"Inspect the galaxy image and classify it using the Lambrides et al. (2021) scheme. "
+"Pay attention to faint, diffuse, low-surface-brightness tidal structure, including reddish
+features. "
+"Write your full visual analysis first, then end with exactly one JSON object."
+)
+C.3.Qwen2.5-VL, Optimal Prompt Classification output
+[1/1] Processing: r07.png (RGB)
+disturbance_major→merging (high)
+Classification for: r07.png
+Primary label: disturbance_major
+Collapsed label: merging
+Num galaxies: 1
+Confidence: high
+Justification: The galaxy exhibits strong asymmetry and irregular, extended
+light structures indicative of a recent merger or strong
+tidal interaction.
+Summary: Irregular morphology and chaotic star formation confirm a
+strongly disturbed system consistent with a major merger.
+C.4.Gemma-4 E4B, Optimal Prompt Classification output
+For comparison, the same galaxy classified with the Gemma-4 E4B model and the optimal prompt yields a nearly
+identical decision and evidence list:
+Classification for: r07.png
+[1/1] Processing: r07.png (RGB)
+disturbance_major→merging (high)
+Classification for: r07.png
+Primary label: disturbance_major
+Collapsed label: merging
+Num galaxies: 1
+Confidence: high
+Justification: The galaxy exhibits significant asymmetry, an irregular
+
+22Chiaberge et al.
+outer envelope, and chaotic star formation patterns,
+indicating a strongly disturbed state.
+Summary: The system shows clear morphological asymmetry and chaotic
+star formation, classifying it as a strongly disturbed galaxy.
+These examples demonstrate that both models converge on the same primary label (disturbance major), collapsed
+merger label, and high-confidence attribution, with free-text justifications that focus on asymmetry, irregular envelopes,
+and chaotic star formation.

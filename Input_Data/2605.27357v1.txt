@@ -1,0 +1,1936 @@
+Title: Gaussian Process Reconstruction of Cosmological Parameters with Gravitational Wave Sirens using Machine Learning
+Authors: Gourab Nandi, Anish Ghoshal, David F. Mota
+Published: 2026-05-26
+Categories: astro-ph.CO, gr-qc, hep-ph, hep-th
+
+Gaussian Process Reconstruction of
+Cosmological Parameters with
+Gravitational Wave Sirens using
+Machine Learning
+Gourab Nandi a Anish Ghoshal b David F. Mota c
+aDepartment of Physics, Indian Institute of Technology Bombay, Mumbai 400076, India
+bDepartment of Physics and Astronomy, University of Sussex,
+Brighton, BN1 9RH, United Kingdom
+cInstitute of Theoretical Astrophysics, University of Oslo,
+P.O. Box 1029 Blindern, N-0315 Oslo, Norway
+E-mail: gourabsony87@gmail.com, A.Ghoshal@sussex.ac.uk, d.f.mota@astro.uio.no
+Abstract.Future gravitational wave (GW) standard siren catalogues will probe the late-time
+expansion history of the Universe across redshift ranges largely inaccessible to traditional
+electromagnetic observations. To determine how effectively this background distance informa-
+tion can distinguish between viable cosmological models, we introduce a model-independent
+reconstruction framework utilizing Gaussian Process Regression (GPR). Analyzing mock
+LISA and Einstein Telescope (ET) catalogues across six fiducial backgrounds-ΛCDM, CPL,
+CPL+Λ, interacting dark matter, interacting dark energy and axion inspired early dark energy.
+We reconstruct the comoving distance and its derivatives. Crucially, we propagated the full
+GP covariance, including derivative cross-covariances, to robustly evaluate diagnostics such
+as H(z), q(z) andOm(z). While our analysis demonstrates that GW bright standard sirens
+faithfully recover fiducial expansion histories, applying pointwise marginal Hellinger distance
+reveals that background measurements alone do not provide decisive statistical separation
+among models. Instead, derivative sensitive diagnostics pinpoint specific redshift windows
+(e.g., z≃1.6−1.8 for ET and z≃2.6−2.9 for LISA) where future catalogues will maximize
+their discriminatory power. As machine learning methodologies become increasingly integral
+to astrophysics and cosmology, this Bayesian GPR pipeline offers a principled, nonparametric
+approach to precisely identifying where the most valuable cosmological information lies.
+Keywords:cosmology: observations, gravitational waves, distance scale, dark energy, meth-
+ods: statistical, Gaussian Processes regression
+arXiv:2605.27357v1  [astro-ph.CO]  26 May 2026
+
+Contents
+1 Introduction 1
+2 Analysis pipeline and mock standard-siren catalogues 3
+2.1 Fiducial cosmological models 4
+2.2 Mock gravitational wave standard siren catalogs 7
+2.2.1 LISA configuration 8
+2.2.2 Einstein Telescope configuration 9
+3 Gaussian Process Reconstruction framework 11
+3.1 Gaussian Process formalism and kernel choice 12
+3.2 Hyperparameter inference 13
+3.3 Reconstruction of derivatives 14
+3.4 Cosmological observables and diagnostic quantities 15
+3.5 Structure of the predictive covariance matrix 16
+4 Reconstructed cosmological diagnostics 18
+4.1 First-order diagnostics 19
+4.2 Second-order diagnostics 20
+4.3 Ratio-based diagnosticκ(z) 22
+4.4 Redshift-dependent reconstruction precision 23
+4.4.1 Optimal reconstruction redshift and detector comparison 25
+5 Pointwise marginal Hellinger distance analysis 27
+5.1 Results 27
+6 Summary and conclusions 30
+A Relative reconstruction precision for alternative cosmologies 35
+B Detector-specific pointwise Hellinger distance plots 39
+C Higher-order covariance structure 42
+1 Introduction
+The advent of gravitational wave (GW) astronomy, inaugurated by the landmark detections
+of the LIGO Scientific and Virgo Collaborations [ 1–3] has opened an entirely new observa-
+tional window onto the Universe. Gravitational wave standard sirens are highly compelling
+cosmological probes. Because the luminosity distance to a binary merger is encoded directly
+in the waveform, they provide self-calibrated distance measurements that require no external
+calibration against an electromagnetic distance ladder [e.g., 4–6]. This property makes stan-
+dard sirens very suitable to test the expansion history of the Universe. This is complementary
+and orthogonal in its systematic uncertainties to conventional distance indicator pathway
+[7, 8]. Standard siren cosmology has already been demonstrated with both bright and dark
+siren analyses of the present LIGO–Virgo events [ 9–12]. These methods, along with their
+– 1 –
+
+variants, have also been implemented to extract expansion-history information from GW
+source-population features features [13].
+The scientific case for GW cosmology is further sharpened by the mounting tensions
+afflicting the standard ΛCDM model. Most prominent is the Hubble tension: a statistically
+significant discrepancy between the value of H0 inferred from Planck CMB anisotropies and
+the value measured via Cepheid-calibrated Type Ia supernovae currently standing at the 4–5σ
+level [e.g., 14, 15]. Further inconsistencies including the S8 tension between weak lensing and
+CMB inferred matter clustering amplitudes [ 16, 17] and the preference of baryon acoustic
+oscillation data for nonzero dark energy evolution as hinted by recent DESI results [18] suggest
+that the concordance model may require revision [see 19, for a review of proposed solutions].
+Against this observational backdrop, robust and model-independent probes of the late-time
+expansion history are indispensable.
+Future GW observatories are poised to deliver precisely such probes. The Einstein
+Telescope (ET), a proposed third-generation ground-based interferometer, is expected to
+detectO(105) binary neutron star (BNS) mergers per year out toz∼2 [20, 21], while the Laser
+Interferometer Space Antenna (LISA) will observe massive black hole binary (MBHB) mergers
+extending to z∼5 [22–24]. Together these two detectors span a wide and complementary
+redshift baseline. Forecasts for future standard-siren cosmology show that such data can
+provide competitive constraints on H0 and dark energy parameters [ 25–30]. Cross-correlation
+methods further extend this programme to dark sirens and to tests of GW propagation with
+galaxy surveys [ 31]. The next question is not only whether H0 or H(z) can be recovered,
+but whether the same bright standard-siren data contain enough information to distinguish
+cosmological models through diagnostics that depend on derivatives of the expansion history.
+Previous GPR analyses of future GW bright standard sirens, including Shah et al. [ 32] and
+Mukherjee et al. [ 33], demonstrated that a machine-learning reconstruction can recover H(z)
+and H0 from realistically generated ET and LISA catalogues. Their emphasis, however was
+on the Hubble history itself. We extend prior work by testing whether GPR can accurately
+reconstruct cosmological parameters that depend on higher derivatives of the luminosity
+distance. Furthermore, we assess the statistical power of these reconstructed parameters
+to distinguish between competing cosmologies when full reconstruction uncertainties are
+propagated. Exploiting such catalogues for precision cosmography therefore requires analysis
+methods capable of reconstructing continuous cosmological functions and their derivatives
+directly from discrete noisy distance measurements, while avoiding restrictive parametric
+assumptions on the underlying expansion history.
+Gaussian Process Regression (GPR) has emerged as the method of choice for this
+task. In this context GPR is a Bayesian machine-learning method: a Gaussian Process
+defines a prior over smooth functions given training data, produces a statistically consistent
+posterior over the function and its derivatives, and returns a principled nondiagonal covariance
+that characterizes the full reconstruction uncertainty [e.g., 34–38]. GPR has already been
+applied successfully to reconstruct H(z) from cosmic chronometers and supernovae to test
+the consistency of ΛCDM and to explore modified gravity and dark sector models [e.g.,
+33, 39–41]. More broadly, nonparametric and machine-learning reconstructions have been
+pursued using complementary tools such as principal components and genetic algorithms
+[42, 43]. In all these applications a key methodological requirement is the retention of the
+full predictive covariance matrix including cross-covariances between the function and its
+derivatives when propagating uncertainties to derived observables. Recent Bayesian and
+nonparametric reconstruction studies in related gravitational-wave and cosmological-inference
+– 2 –
+
+settings provide complementary examples of this broader programme [44, 45].
+In this work we apply GPR to mock gravitational wave standard siren catalogues to
+perform a model-independent reconstruction of late-time cosmological diagnostics. Using
+realistically generated mock luminosity distance data for six fiducial cosmological models—the
+concordance ΛCDM, two CPL dark energy variants [ 46, 47] calibrated against current CMB
+[15, 48], DESI [ 18] and PantheonPlus [ 49] data, interacting dark matter and dark energy
+scenarios and an axion-inspired early dark energy model implemented via AxiCLASS [50–53]—
+we reconstruct the comoving distance and its first two derivatives and deriveH(z),q(z),Om(z),
+wtot(z) and the ratio-based diagnostic κ(z) = E′(z)/E(z). Our mock catalog generation
+methodology closely follows the approach of Mukherjee et al. [ 33] and Shah et al. [ 32] to
+which we refer the reader for further details. The analysis is performed separately for the ET
+and LISA detector configurations each with physically motivated redshift-dependent noise
+prescriptions. Building on the Bayesian GP strategy of Ref. [33], we marginalize over the kernel
+hyperparameters (σf,ℓ) with the emcee ensemble sampler [54] and propagate this uncertainty
+through the derived diagnostics. Rather than focusing exclusively on constraining H0 our
+primary goal is to quantify the ability of next-generation GW observations to discriminate
+between competing cosmological models through higher-order kinematical diagnostics.
+An important outcome is not only whether the models can be ruled apart but also where
+the information begins to appear. The reconstructed diagnostics show redshift-dependent
+hints of discrimination: model differences become most visible in selected redshift ranges and
+in derivative-sensitive quantities, even when the final statistical separation remains limited.
+After full covariance propagation these features generally fall short of robust model separation,
+revealing a practical limitation of background-expansion observables alone rather than a
+failure of the reconstruction procedure. To make this statement quantitative, we assess model
+separation with the pointwise marginal Hellinger distance, a symmetric, bounded measure
+that tests whether the reconstructed one-point marginal distributions of different models
+are actually separated without relying on bin-dependent χ2 summaries. Throughout, we
+retain the relevant joint GP predictive covariance blocks for the reconstructed comoving-
+distance derivatives; this is essential because neglecting derivative cross-correlations leads
+to a systematic underestimate of the confidence regions for the derived diagnostics. Thus,
+the machine-learning element in this work is the Bayesian, nonparametric GPR framework
+itself, together with MCMC sampling of its kernel hyperparameters, rather than a black-box
+classifier.
+The paper is structured as follows:Section 2 describes the fiducial cosmological models
+and the procedure for generating mock GW standard siren catalogues. Section 3 presents the
+GPR framework including the kernel choice, hyperparameter inference, derivative reconstruc-
+tion, and covariance structure. Reconstruction results for all diagnostics are presented and
+discussed in Sec. 4. The pointwise marginal Hellinger distance analysis is presented in Sec. 5.
+We summarize our conclusions and outline future directions in Sec. 6.
+2 Analysis pipeline and mock standard-siren catalogues
+Our analysis is structured around a sequence of modular steps designed to minimize biases
+from specific modeling assumptions or individual mock realizations. This systematic ap-
+proach enables a transparent comparison of reconstructed diagnostics across different fiducial
+cosmologies.
+– 3 –
+
+1. We generate realistic mock catalogs of gravitational wave bright siren events based
+on fiducial background cosmological models. These catalogs incorporate appropriate
+instrumental uncertainties and observational errors to provide luminosity distance
+measurements over a broad redshift range. This is essential for probing the late-time
+expansion history of the Universe. We consider two distinct detector configurations for
+this purpose: the space-based LISA detector and the ground-based Einstein Telescope.
+2. To ensure the reconstruction results do not depend solely on a single assumed background
+we consider multiple fiducial cosmological scenarios. These include the concordance
+ΛCDM model as well as several extensions involving evolving dark energy, dark sector
+interactions and axion-inspired modifications. This approach allows us to assess how
+sensitive the reconstruction is to different underlying cosmological dynamics.
+3. We construct and analyze multiple independent realizations for each fiducial cosmological
+model to avoid biases tied to any single mock catalog. The reconstruction is performed
+separately for each instance so the resulting ensemble can be used to characterize the
+mean behavior and its associated uncertainties.
+4. Starting from the mock luminosity distance data, we reconstruct the comoving distance
+and its first two derivatives using GPR and derive the Hubble parameter alongside
+higher-order model-agnostic diagnostics. The full reconstruction framework is presented
+in Sec. 3 and the resulting diagnostic reconstructions are discussed in Sec. 4.
+5. Particular emphasis is placed on consistent uncertainty propagation throughout the
+pipeline, retaining the relevant joint Gaussian Process predictive covariance blocks
+rather than propagating diagonal variances alone. The methodological importance of
+this choice is demonstrated in Sec. 3.5.
+6. Finally, we quantify the pointwise statistical distinguishability of reconstructed diagnos-
+tics across different fiducial models using a Gaussian approximation to the pointwise
+marginal Hellinger distance at each redshift. This moves the analysis beyond qualitative
+visual comparisons, while avoiding the stronger claim that the full functional posterior
+covariance across redshift has been reduced to a single separation measure.
+This overall strategy renders the analysis largely insensitive to specific modeling assump-
+tions or individual mock realizations. The framework thereby allows a robust comparison of
+reconstructed diagnostics across different fiducial models and provides a transparent method
+to assess the discriminatory power of gravitational wave standard sirens in testing late-time
+cosmology.
+2.1 Fiducial cosmological models
+To generate mock gravitational wave standard siren catalogs we must assume an underlying
+background cosmological model that governs the expansion history of the Universe. There is
+currently no unique or observationally preferred model for late-time cosmic acceleration, espe-
+cially in light of existing tensions and anomalies. We therefore consider a set of representative
+fiducial cosmological models that span a broad range of physically motivated scenarios. This
+selection allows us to assess the robustness of our reconstruction procedure against variations
+in the assumed background cosmology.
+– 4 –
+
+Six fiducial cosmologies and why they are used.We selected these six specific
+backgrounds because they represent distinct, physically motivated departures from the
+concordance expansion history. The set contains a baseline cosmology, time varying dark
+energy, a mixed CPL plus vacuum sector, two interacting dark sector cases and an early
+scalar field model. This gives a controlled test of whether the Gaussian Process reconstruction
+responds mainly to changes in the background shape, to low redshift normalization or to high
+redshift evolution.
+ΛCDM, CPL and CPL+Λmodels:
+As a baseline we adopt the standard ΛCDM cosmology since it provides an excellent fit
+to a wide array of current observations. We also consider two CPL-type dark energy fiducials.
+The first is the standard CPL model in which the dark energy equation of state evolves as
+[46, 47]
+w(z) =w 0 +wa
+z
+1 +z.(2.1)
+The second is a CPL+Λ variant in which the dark energy sector contains a CPL component
+together with an additional constant vacuum term. Its effective wDE(z) therefore differs from
+that of the pure CPL case even though both belong to the same CPL family. For these models
+only parameters governing the background expansion enter the construction of gravitational
+wave luminosity distances. Parameters associated with the primordial power spectrum and
+recombination history are fixed to their Planck 2018 best fit values to compute a consistent
+background evolution using CLASS [50, 51]. The fiducial late-time parameter values adopted
+for ΛCDM and the pure CPL case are taken from the CSB constraints of Shah et al. [ 32], as
+summarized in Mukherjee et al. [33]. They are reported in Table 1.
+Key parameters for quick comparison.The parameters that most directly shape the late
+time distance relation are H0, Ωm0, w0 and wa. The remaining parameters keep the CLASS
+background calculation consistent with the source fits and are not varied independently in
+the reconstruction.
+Table 1:Fiducial cosmological parameters adopted for theΛCDM and CPL models. The late-
+time parameters correspond to the CSB compilation—Planck 2018 CMB, Pantheon Type Ia
+supernovae and BAO measurements from 6dFGS, SDSS MGS and BOSS DR12—and are
+quoted from Shah et al. [32], as also summarized in Mukherjee et al. [33]. The primordial-sector
+parameters are fixed to the Planck 2018 best fit values [15].
+Parameter ΛCDM CPL
+H0 [km s−1Mpc−1] 67.72 +0.42
+−0.41 68.34+0.83
+−0.88
+Ωm0 0.3102+0.0054
+−0.0057 0.3064+0.0079
+−0.0081
+w0 −1−0.9571 +0.078
+−0.082
+wa 0−0.2904 +0.33
+−0.28
+τreio 0.054 0.054
+ns 0.965 0.965
+ln(1010As) 3.044 3.044
+Interacting Dark Matter - Dark Energy Model
+Beyond phenomenological dark energy models we also consider scenarios involving
+nongravitational interactions within the dark sector. We specifically include an interacting
+dark matter (IntDM) model and an interacting dark energy (IntDE) model. In both cases
+– 5 –
+
+the background evolution is governed by the modified continuity equations [55–57]
+˙ρcdm + 3Hρcdm =Q,(2.2)
+˙ρde + 3H(1 +w)ρde =−Q,(2.3)
+where Q denotes the energy transfer rate between the dark matter and dark energy fluids.
+For the IntDM scenario the interaction is proportional to the dark matter energy density,
+Q = ξHρcdm, while for the IntDE scenario it is proportional to the dark energy density,
+Q =ξHρde, where ξis a dimensionless coupling constant. A positive ξcorresponds to energy
+transfer from dark energy to dark matter. In the mock catalog generation we use ξ=−0.00050
+for IntDM andξ= 0.067 for IntDE, as listed in Table 2. The background expansion history
+is computed self-consistently within CLASS for both interaction kernels. The IntDM fiducial
+parameters are taken from the interacting dark sector constraints of Pan et al. [ 57], based on
+a combined analysis of CMB, JLA Type Ia supernovae, baryon acoustic oscillation, cosmic
+chronometer and local H0 prior data. The IntDE case uses a separate fiducial CLASS input,
+so its background parameters are not assumed to be identical to IntDM. The two interacting
+scenarios therefore differ both in whether the interaction term is proportional to ρcdm or
+ρde and in their fiducial parameter choices. For comparison we also list the corresponding
+parameters for the CPL+Λ case from the w0waΛCDM fit of Notari et al. [ 58], based on
+Planck18 TTTEEE+lensing, DESI BAO and DES-SNYR5 supernova data. The adopted
+values are reported in Table 2.
+Interaction parameters.The new physical ingredient is the energy transfer rate Q. The
+two interacting models use different choices for whether Q followsρcdm or ρde, with different
+fiducial values ofξand different background parameter choices.
+Axion-inspired Early Dark Energy Model
+Finally, we include an axion-inspired scalar field model [ 53, 59] of early dark energy
+to explore physically motivated departures from the concordance paradigm. This model
+introduces additional dynamical degrees of freedom that modify the background expansion
+history at intermediate redshifts. The background evolution for this scenario is implemented
+using the AxiCLASS extension of CLASS [50–53, 59]. The fiducial parameter values are taken
+from the AxiCLASS best fit paper Smithetal input file, corresponding to the n-free early
+dark energy best fit of Smith et al. [ 53]. This fit uses CMB, baryon acoustic oscillation,
+Type Ia supernova luminosity distance and SH0ES H0 data. The values are summarized in
+Table 3.
+Scalar field parameters.For this model the key additional quantities are the axion index
+naxion, the critical scale factor ac, the axion fraction faxion(ac) and the initial displacement
+Θi. These parameters control when the scalar field becomes dynamically important and how
+strongly it changes the background expansion.
+The background evolution equations are implemented self-consistently within CLASS
+and its extensions for all fiducial cosmological models [ 50–52]. Using the resulting expansion
+histories we compute the redshift dependence of the Hubble parameter and the corresponding
+luminosity distance to serve as theoretical inputs for generating mock gravitational wave
+standard siren observations. By adopting fiducial parameters inferred from existing observa-
+tional data rather than arbitrary choices we ensure that the mock catalogs are realistic and
+representative of viable cosmological scenarios.
+– 6 –
+
+Table 2:Fiducial parameter values for the interacting dark matter (IntDM) model, the
+interacting dark energy (IntDE) model, and the CPL+Λmodel. The IntDM fiducial values are
+taken from the interacting dark sector analysis of Pan et al. [ 57], which combines CMB, JLA
+Type Ia supernovae, baryon acoustic oscillation, cosmic chronometer and local H0 prior data.
+The IntDE entries are fixed values used for the mock catalog generation; in that caseΩ cdmh2
+is derived fromΩ mh2−Ωbh2, and no τvalue is listed because the input uses reio none. The
+coupling entries are the fixed values used for the mock catalog generation. The CPL+Λcolumn
+is taken from the w0waΛCDM fit of Notari et al. [ 58], using Planck18 TTTEEE+lensing,
+DESI BAO and DES-SNYR5 supernova data. Where uncertainties are shown they denote the
+quoted source1σintervals.
+Parameter IntDM IntDE CPL+Λ
+Ω cdmh2 0.11722+0.00066
+−0.001280.14608 0.1196±0.00098
+Ωbh2 0.02236+0.00016
+−0.000320.00020 0.02238±0.00014
+τ0.0573 +0.0078
+−0.0154 — 0.05442 +0.0071
+−0.0076
+ns 0.9772+0.0036
+−0.0079 0.9766 0.9654 +0.0039
+−0.0038
+ln(1010As) 3.058 +0.016
+−0.032 3.124 3.044 +0.014
+−0.015
+w0 — —−0.4342 +0.16
+−0.41
+wa — —−2.359 +1.8
+−0.61
+Ω Λ — — 0.237 +0.26
+−0.054
+Ωm0 0.2988+0.0044
+−0.0087 0.297 —
+Ω CPL — — 0.448 +0.057
+−0.28
+ξ−0.00050 0.067 —
+H0 [km s−1Mpc−1] 68.56 +0.37
+−0.74 70.18 67.32 +0.62
+−0.65
+2.2 Mock gravitational wave standard siren catalogs
+We utilize the fiducial cosmological models described in Sec. 2.1 to generate mock catalogs
+of gravitational wave standard siren events for both the space-based LISA detector and the
+ground-based Einstein Telescope. These two detectors probe overlapping but distinct redshift
+windows and are subject to different dominant noise sources which makes their combined
+data particularly powerful for model-independent reconstruction.
+The observed luminosity distance for each simulated event at redshift zi is obtained by
+perturbing the fiducial value with a stochastic error drawn from a Gaussian distribution:
+dobs
+L (zi) =d fid
+L (zi) +N
+(
+0, σ2
+dL(zi)
+)
+.(2.4)
+Here dobs
+L is the mock observed luminosity distance, dfid
+L is the fiducial luminosity distance
+predicted by the chosen cosmological model, and N (0,σ2
+dL) denotes a Gaussian random error
+with zero mean and varianceσ2
+dL. The total uncertainty σdL(zi) in this expression is assembled
+from independent noise contributions specific to each detector configuration as detailed below.
+We generateNmock≡Nreal = 50 independent mock realizations for each cosmological model.
+Here Nmock denotes the number of independent simulated catalogs used to estimate the
+ensemble-level reconstruction behavior. This choice ensures that the reported uncertainties
+are not dominated by any single noise realization. All realizations for a given detector employ
+the identical redshift sampling strategy so the mock catalogs for different fiducial models
+differ only in their underlying cosmological evolution rather than their observational selection
+or noise prescriptions.
+– 7 –
+
+Table 3:Fiducial cosmological parameters for the axion scalar field (early dark energy)
+model implemented using AxiCLASS. The fiducial entries are fixed best-fit values from the
+best fit paper Smithetal AxiCLASS input file, corresponding to the n-free best fit of Smith
+et al. [ 53] to Planck CMB, BAO, Pantheon Type Ia supernova and SH0ES H0 data. The third
+column lists the corresponding posterior mean and1 σuncertainty quoted in Table I of Smith
+et al. [ 53]. The mock catalog generation itself uses only the fixed best-fit values in the second
+column.
+Parameter Fiducial value Source mean and 1σ
+Ωbh2 0.02251 0.02261±0.00024
+Ω cdmh2 0.1320 0.1290 +0.0041
+−0.0045
+H0 [km s−1Mpc−1] 72.81 71.45 +1.10
+−1.40
+τ0.068 0.070±0.014
+ns 0.9860 0.9853 +0.0073
+−0.0079
+As 2.191×10−9 (2.196±0.055)×10−9
+Neff 3.0328 fixed
+mν[eV] 0.06 fixed
+Axion/scalar field parameters
+naxion 2.6 3.16 +0.18
+−1.16
+log10(ac)−3.531−3.558 +0.110
+−0.053
+faxion(ac) 0.132 0.103±0.035
+Θi 2.72 2.49 +0.52
+−0.01
+2.2.1 LISA configuration
+LISA is highly sensitive to massive black hole binary (MBHB) mergers, which can provide
+bright standard sirens at high redshift. We adopt a baseline catalog with Nev = 80 events
+over the intervalz∈(0, 5]. Their redshifts are drawn from an interpolated Beta distribution
+constructed following the practical procedure of Mukherjee et al. [33] from redshift information
+presented in Fig. 1 of Tamanini et al. [ 24]. That forecast is based on LISA MBHB population
+models, including no-delay high-mass-seed scenarios discussed by Klein et al. [ 23]. curve itself
+as a physical bright siren probability density. It is used only as a Monte Carlo sampling proxy
+on a finite redshift interval. The choice of Nev = 80 MBHB events follows the∼10 year LISA
+bright-siren scenario used by Mukherjee et al. [ 33]; the original Tamanini et al. forecast gives
+tens of redshift-identified MBHB standard sirens over a shorter mission, with the number
+depending on the assumed seed formation and accretion model. In the event count study
+discussed later we also extend the LISA sample to Nev = 160 to test the scaling of the
+reconstruction precision. Electromagnetic counterpart identification for MBHB mergers,
+required for spectroscopic host redshifts, is expected for a significant fraction of these events
+via associated multi-messenger emission [24, 60].
+The total LISA luminosity distance uncertainty combines four independent contributions
+that each capture a distinct physical source of observational error [24, 61–64]:
+σLISA
+dL (z) =
+√
+σ2
+inst(z) +σ2
+lens(z) +σ2pv(z) +σ2
+ph z(z).(2.5)
+Here σinst is the instrumental distance uncertainty, σlens is the weak-lensing magnification
+uncertainty,σpv is the host-galaxy peculiar-velocity contribution, and σph z is the contribution
+induced by photometric redshift errors.
+– 8 –
+
+The instrumental noise is modeled as follows:
+σinst(z) = 0.05dL(z)
+dref
+L
+dL(z).(2.6)
+The reference distance dref
+L = 36.6 Gpc corresponds approximately to the luminosity distance
+at z = 4 in the calibration cosmology used for this LISA error prescription. This specific
+formulation reflects the signal-to-noise-ratio dependent precision of parameter estimation
+derived from the GW waveform.
+The weak lensing contribution is modeled following an established fitting formula [65, 66]:
+σlens(z) = 0.066dL(z)
+∆
+[
+1−(1 +z)−1/4
+1/4
+]1.8
+.(2.7)
+The delensing factor ∆ accounts for the partial removal of lensing magnification using
+weak shear maps. We adopt ∆ = 2 to represent a 50% reduction in the lensing noise
+achievable through future photometric surveys. This treatment uses weak lensing as an
+externally specified distance-error contribution. In a full cosmological inference however the
+magnification distribution depends on the cosmological parameters and its scatter can itself
+constrain structure growth, especially σ8 [67]. We therefore interpret σlens here only as part
+of the mock distance-noise model, not as a likelihood for lensing magnifications.
+The peculiar velocity of the host galaxy contributes an additional layer of uncertainty
+[61, 68]:
+σpv(z) =d L(z)
+[
+1 + c(1 +z) 2
+H(z)d L(z)
+]
+vrms
+c .(2.8)
+Herec is the speed of light, H(z) is the Hubble parameter evaluated in the fiducial cosmology,
+and vrms is the root-mean-square peculiar velocity of the host galaxy. We assume vrms =
+500 km s−1. This specific term forms the dominant noise contribution at low redshift where
+peculiar motions represent a significant fraction of the overall Hubble flow.
+Finally, an additional photometric redshift uncertainty is included for events at z >2
+where host galaxies are identified photometrically rather than spectroscopically [69, 70]:
+σph z(z) =
+
+
+
+⏐⏐⏐⏐
+ddL
+dz
+⏐⏐⏐⏐×0.03 (1 +z), z >2,
+0, z≤2.
+(2.9)
+Here 0.03(1 +z) is the assumed one-sigma photometric redshift error. Since dL(z) = (1 +
+z)dC(z), where dC(z) is the comoving distance, the derivative entering this propagation
+is ddL/dz = dC + (1 +z)d′
+C. This is the luminosity-distance uncertainty induced by the
+photometric redshift error of the host. This piecewise formulation inherently assumes that
+precise spectroscopic identification remains broadly feasible at z≤2. When electromagnetic
+counterparts or spectroscopic host identifications are incomplete, galaxy-catalog and cross-
+correlation methods provide an alternative route to statistical redshift information [ 27, 28,
+31, 71–73].
+2.2.2 Einstein Telescope configuration
+The Einstein Telescope represents a proposed third-generation ground-based detector capable
+of observing binary neutron star (BNS) mergers out toz∼2 [20, 21]. We distributeNev = 1000
+– 9 –
+
+events over the intervalz∈[0.07,2.0] following the expected BNS merger rate density [74]:
+R(z) =
+
+
+
+(1 +z) 2.7 z≤1,
+(1 +z)−0.9z >1.
+(2.10)
+This distribution tracks the cosmic star formation history while incorporating a time delay
+correction for the interval between initial star formation and the eventual binary merger. The
+corresponding redshift probability density for detected events takes the following form:
+p(z)∝4πd2
+C(z)R(z)
+H(z) (1 +z) .(2.11)
+Here dC(z) is the comoving distance, H(z) is the fiducial Hubble parameter, and the factor
+(1 +z)−1converts the source-frame merger rate to the observer frame. The omitted overall
+constants, including the speed of light, are absorbed when the distribution is normalized.
+This function is normalized over the detection window and evaluated on the fiducial CLASS
+background. We draw specific events by inverse cumulative distribution function (CDF)
+sampling of Eq. (2.11): the normalized probability density is integrated to form a cumulative
+probability, and uniform random numbers are mapped to redshifts by inverting that cumulative
+function. This substantially larger event count compared to the LISA configuration reflects
+the high detection rate expected for ET given its sensitivity to the much more frequent BNS
+population. The choice of Nev = 1000 BNS events reflects not the total ET detection rate
+(∼105 yr−1) but the expected number of bright sirens—events with a confirmed electromagnetic
+counterpart enabling a host galaxy spectroscopic redshift. Following Zhao et al. [ 75] and
+Belgacem et al. [ 76], we adopt 1000 events as a benchmark corresponding to a multi-year ET
+observing run assuming an EM counterpart identification fraction of order 10%, consistent
+with the rates inferred from GW170817 [ 3]. This difference creates a qualitatively different
+reconstruction regime characterized by denser sampling confined to a lower redshift range.
+Future catalogue construction can refine this benchmark with population and phase-space
+information for low-mass compact objects and formation-channel classification [ 77]. Future
+high-energy and multi-messenger facilities are expected to improve counterpart discovery and
+follow-up for such bright siren samples [78–80].
+The total ET luminosity distance uncertainty combines two independent contributions:
+σET
+dL (z) =
+√
+σ2
+inst(z) +σ2
+lens(z).(2.12)
+The instrumental component relies on a redshift-dependent fitting formula calibrated to the
+ET sensitivity curve for BNS mergers [33, 64, 75]:
+σinst(z) =F(z)d L(z),F(z) = 0.1449z−0.0118z 2 + 0.0012z3.(2.13)
+This polynomial fitting formula captures the redshift dependence of the SNR averaged
+instrumental uncertainty for BNS events which naturally grows as the signal weakens at
+higher redshifts. This approach supersedes the simple flat approximation of σinst = 0.25dL
+and produces a significantly more realistic redshift-dependent noise floor. The fractional error
+sits at approximately 1.4% near z∼0.1 before rising to∼20% at z∼1.5 and finally reaching
+∼25% near the upper edge of the ET detection window at z = 2. We model the weak lensing
+contribution as follows:
+σlens(z) = 0.05zdL(z).(2.14)
+– 10 –
+
+Peculiar velocity and photometric redshift contributions remain subdominant for ET given
+its restricted redshift range and the assumed spectroscopic identification of BNS host galaxies
+via electromagnetic counterparts. We therefore exclude these terms from the total uncertainty
+budget. The instrumental term dominates at low redshift while the lensing contribution grows
+linearly withzand becomes the leading source of uncertainty beyondz∼1.
+We summarize the key properties and error model differences between these two detector
+configurations in Table 4 for easy reference.
+Table 4:Summary of LISA and ET configurations used for mock catalog generation.
+Property LISA Einstein Telescope
+Redshift range (0,5] [0.07,2.0]
+Events per catalog 80 1000
+Source type MBHB BNS
+Redshift dist. Interpolated Beta proxy BNS merger rate
+σinst 0.05(dL/dref
+L )dL F(z)d L, Eq. (2.13)
+σlens Eq. (2.7) 0.05zd L
+σpv Yes No
+σph-z Yes (z >2) No
+Figure 1:Adopted redshift distributions for mock event generation. Left: Interpolated Beta
+distribution constructed from the data presented in Fig. 1 of Tamanini et al. [ 24] and used only
+as a sampling proxy for the fiducial LISA MBHB catalog. Right: BNS merger rate redshift
+densityp(z)from Eq. (2.11) for the ET configuration.
+The two panels show that the mock catalogues sample complementary regions of redshift
+space. The LISA proxy has support over a wider range and keeps a high redshift tail. The ET
+distribution is more concentrated at low and intermediate redshift. This difference explains
+why LISA is useful for testing the expansion history at larger z while ET mainly strengthens
+the reconstruction where the catalog is dense.
+3 Gaussian Process Reconstruction framework
+In this section we present the Gaussian Process Regression (GPR) framework adopted for the
+nonparametric reconstruction of cosmological observables from gravitational wave standard
+– 11 –
+
+siren data [34]. Gaussian Processes provide a probabilistic description of functions that allows
+for a consistent reconstruction of a function and its derivatives directly from data without
+assuming any specific functional form. This inherent flexibility makes GPR particularly well
+suited for model-independent studies of the cosmic expansion history.
+3.1 Gaussian Process formalism and kernel choice
+Our notation follows the standard GP regression construction [ 81]. Closely related GP
+reconstructions of cosmological distances, expansion histories and dark-energy diagnostics
+have been developed in Refs. [34–41, 82].
+A Gaussian Process (GP) is defined as a collection of random variables where any finite
+subset follows a multivariate normal distribution. A function f(z) drawn from a Gaussian
+Process is fully specified by its mean function µ(z) and its covariance function or kernel
+k(z,z′):
+f(z)∼GP
+(
+µ(z), k(z,z′)
+)
+.(3.1)
+Here z and z′denote redshifts, f(z) is the continuous function to be reconstructed from the
+standard-siren data, µ(z) is the prior mean function, and k(z,z′) is the covariance kernel that
+specifies how function values at two redshifts are correlated. We assume a vanishing mean
+function µ(z) = 0 throughout this work to ensure a cosmology-independent reconstruction
+since any nonzero mean can always be absorbed into the data.
+Given a set of training inputsZ= {zi}with corresponding observationsyand noise
+covariance matrix C, the prior covariance matrix is k(Z, Z) with elements k(zi,zj). Here
+ydenotes the measured distance data used as GP training targets, while C contains their
+observational covariances. The joint prior distribution of the training data and the function
+evaluated at test pointsZ ⋆={z⋆
+j}is:
+Σ =
+(
+k(Z,Z) +C k(Z,Z ⋆)
+k(Z⋆,Z)k(Z ⋆,Z⋆)
+)
+.(3.2)
+Conditioning on the observed data yields the predictive distribution for the reconstructed
+functionf(Z ⋆), with posterior mean ¯f(Z⋆):
+¯f(Z⋆) =k(Z ⋆,Z) [k(Z,Z) +C] −1y,(3.3)
+with the accompanying predictive covariance
+cov[f(Z⋆),f(Z ⋆)] =k(Z ⋆,Z⋆)−k(Z⋆,Z) [k(Z,Z) +C] −1k(Z,Z⋆).(3.4)
+The choice of kernel function heavily influences the generalization properties and smooth-
+ness of the final reconstruction. The squared exponential (SE) kernel takes the form:
+kSE(z,˜z) =σ2
+f exp
+[
+−(z−˜z)2
+2ℓ2
+]
+.(3.5)
+Hereσf is the signal-amplitude hyperparameter,ℓis the correlation length scale in redshift, and
+˜zdenotes a second redshift argument. Although the SE kernel is mathematically convenient
+because it is infinitely differentiable, this smoothness can be too restrictive for cosmological
+reconstruction. It strongly correlates neighboring redshifts and can therefore over-smooth
+real features in the expansion history, producing confidence intervals that are artificially tight.
+– 12 –
+
+Cosmological distance data are sparse and noisy, especially for standard sirens, so it is useful
+to choose a kernel whose differentiability is sufficient for the required diagnostics but not
+unlimited.
+The Mat´ ern family provides this intermediate option: it gives a controlled degree of
+smoothness while retaining analytic covariance functions for half-integer values ofν[82, 83].
+In cosmology this is useful because one often wants model-independent reconstructions of
+H(z) and derivative diagnostics without imposing the very smooth behavior built into the
+SE kernel. The differentiability is governed by the parameter ν= p + 1/2, where p is a
+non-negative integer:
+kν=p+1/2(z,˜z) =σ2
+f exp
+(
+−
+√2p+ 1|z−˜z|
+ℓ
+)
+×p!
+(2p)!
+p∑
+i=0
+(p+i)!
+i!(p−i)!
+(
+2√2p+ 1|z−˜z|
+ℓ
+)p−i
+.(3.6)
+In this expression i is the summation index and p fixes the order of the half-integer Mat´ ern
+kernel. The kernel must satisfyν >nto reconstruct annth order derivative. In the present
+work the strongest requirement comes not only from reconstructing d′′
+C(z), but from its
+covariance block Cov[d′′
+C(z),d′′
+C(z′)], which requires the kernel derivative k(2,2) and hence four
+total differentiations of k(z,z′). We therefore adopt the Mat´ ernν= 9/2 kernel (p = 4), which
+supplies this fourth-order differentiability while remaining less restrictive than the infinitely
+differentiable SE kernel:
+k(z,˜z) =σ2
+f exp
+(
+−3|z−˜z|
+ℓ
+) [
+1 + 3|z−˜z|
+ℓ + 27(z−˜z)2
+7ℓ2
++ 18|z−˜z|3
+7ℓ3 + 27(z−˜z)4
+35ℓ4
+]
+.(3.7)
+This specific selection ensures sufficient differentiability for calculating higher-order diagnostics
+while successfully avoiding the over-correlation associated with the SE kernel [82, 83].
+3.2 Hyperparameter inference
+The Mat´ ernν= 9/2 kernel (3.7) contains two free hyperparameters: the signal variance σf
+and the length scale ℓ. They control the amplitude and correlation range of the reconstructed
+function respectively. Their values are not prescribeda prioribut are instead directly inferred
+from the data.
+We infer the hyperparameters from the GP marginal likelihood. For fixed ( σf,ℓ),
+analytically marginalizing over the latent function values gives the standard GP evidence [ 34]:
+lnp(y|Z, σf,ℓ) =−1
+2y⊤[k(Z,Z) +C] −1y−1
+2 ln det[k(Z,Z) +C]−n
+2 ln 2π,(3.8)
+Here the training points are the input redshiftsZ= {zi}n
+i=1 at which the mock standard-
+siren catalog provides measured distance valuesyand observational covariance C; thus n
+is the number of such training redshifts. The first term in Eq. (3.8) measures how well a
+chosen kernel with hyperparameters (σf,ℓ) fits the data, the log-determinant term penalizes
+overly flexible covariance structures and the final term is the Gaussian normalization. This
+– 13 –
+
+objective therefore balances data fit against model complexity to penalize kernels that might
+overfit noisy data. We use Eq. (3.8) as the likelihood term in a Markov Chain Monte Carlo
+(MCMC) marginalization over (σf,ℓ), thereby propagating hyperparameter uncertainty to
+the reconstructed diagnostics. We implement this with the emcee ensemble sampler [54] using
+log-uniform priors over physically motivated ranges. We use the posterior samples to compute
+an ensemble of GP reconstructions and we incorporate the resulting spread into the reported
+uncertainties. We find that hyperparameter marginalization increases the reported confidence
+intervals by approximately 10 to 30% relative to holding the hyperparameters fixed near a
+representative posterior value. This confirms it is a nonnegligible yet subdominant source of
+uncertainty compared to the underlying data noise.
+The two hyperparameters play qualitatively distinct roles in shaping the reconstructed
+precision. The signal varianceσf enters the kernel as a global amplitude factor,
+k(z,˜z) =σ2
+fK
+(|z−˜z|
+ℓ
+)
+,(3.9)
+whereK denotes the dimensionless Mat´ ern kernel shape as a function of the scaled redshift
+separation. The signal variance σf therefore primarily changes the overall signal-to-noise
+balance and the vertical scale of the posterior uncertainty. The length scale ℓby contrast
+governs the correlation range in redshift space and therefore affects theshapeof the precision
+curve. Below the first low-redshift events the GP has no anchoring data and derivative uncer-
+tainties are extrapolation dominated. Once the first events are included the reconstruction
+enters an interpolation regime and the precision curve reaches its minimum slightly above
+this low-redshift anchor. Thus σf mainly affects how precise the reconstruction isat z∗,
+while ℓand the location of the first events influencewhere z∗occurs. Since ET (zmin = 0.07)
+and LISA (effective zmin∼0.1–0.2 from the Beta distribution) have similar low-redshift
+anchoring regions, the resulting z∗values are close despite their different event counts and
+noise prescriptions. This interpretation is empirical for the mock catalogues studied here and
+is discussed in detail in Sec. 4.4.1.
+3.3 Reconstruction of derivatives
+A key property of Gaussian Processes is that their derivatives are themselves Gaussian
+Processes. This mathematically allows for a statistically consistent reconstruction of derivatives
+directly from the kernel function without assuming any additional functional form.
+More precisely, for a GP with kernel k(z,z′), the predictive mean of the m-th derivative
+is obtained by differentiating the kernelmtimes with respect to the first argument:
+¯f(m)(Z⋆) =k (m,0)(Z⋆,Z) [k(Z,Z) +C] −1y,(3.10)
+where k(m,n)(z,z′) denotes the kernel differentiated m times with respect to z and n times
+with respect to z′. Setting m = 0 recovers Eq. (3.3). The joint predictive covariance between
+the m-th and n-th derivatives is obtained by differentiating the corresponding kernel blocks
+[83]:
+cov
+[
+f(m),f (n)
+]
+=k (m,n)(Z⋆,Z⋆)−k(m,0)(Z⋆,Z) [k(Z,Z) +C] −1k(0,n)(Z,Z⋆),(3.11)
+which reduces to Eq. (3.4) for m = n = 0. The specific cases required in this work are
+m,n∈{0, 1, 2}, yielding the predictive means for dC, d′
+C and d′′
+C and the covariance and
+– 14 –
+
+cross-covariance blocks of the joint predictive covariance matrix. The kernel derivatives
+k(m,n)(z,z′) for m +n≤4 are computed analytically from the Mat´ ernν= 9/2 kernel of
+Eq. (3.7), which is sufficiently differentiable for this purpose by construction. Retaining the
+joint covariance blocks—rather than only the diagonal variances—is essential for consistent
+uncertainty propagation to derived cosmological observables, as we discuss in detail in Sec. 3.5.
+3.4 Cosmological observables and diagnostic quantities
+Distance and expansion rate.The primary reconstructed quantity is the comoving
+distance:
+dC(z) = dL(z)
+1 +z ,(3.12)
+where dL(z) denotes the luminosity distance inferred from gravitational wave standard sirens.
+Throughout this reconstruction we assume a spatially flat FLRW background, for which
+the line-of-sight comoving distance obeys d′
+C(z) =c/H(z). We therefore obtain the Hubble
+parameter from the first derivative ofd C as follows:
+H(z) = c
+d′
+C(z).(3.13)
+Its first derivative encodes additional information about the underlying expansion dynamics:
+H′(z) =−cd′′
+C(z)
+[d′
+C(z)]2.(3.14)
+We useH(z) and its derivatives to construct a set of kinematical and dynamical diagnostic
+quantities widely used to test deviations from the concordance ΛCDM model.
+•Deceleration parameterq(z):
+q(z) =−1−(1 +z)d′′
+C(z)
+d′
+C(z).(3.15)
+A transition fromq >0 toq <0 signals the onset of accelerated expansion.
+•Dimensionless Hubble parameterE(z):
+E(z) = H(z)
+H0
+.(3.16)
+This quantity removes the explicit dependence on H0 and provides a model-independent
+characterization of the overall expansion history.
+•Om diagnosticO m(z):
+Om(z) = E2(z)−1
+(1 +z) 3−1.(3.17)
+This expression is the standard Om(z) null diagnostic written in terms of E(z) [84]. It
+implicitly assumes a spatially flat universe with Ω Λ0 = 1−Ωm0 in the ΛCDM limit and
+therefore carries a degree of model dependence. It is not the physical matter fraction
+Ωm(z); rather, it reduces to the present-day matter density parameter Ω m0 only for
+spatially flat ΛCDM. Any significant redshift evolution consequently signals departures
+from the concordance scenario.
+– 15 –
+
+•Total effective equation of statew tot(z):
+wtot(z) =−1−2
+3(1 +z) d′′
+C(z)
+d′
+C(z).(3.18)
+This quantity is the total effective equation of state of the cosmic fluid inferred from the
+background expansion, not the dark-energy equation of state. In spatially flat ΛCDM
+it is approximately−Ω Λ0 today (about−0.7 for Ω Λ0≃0.7), approaches zero at high
+redshift during matter domination, and approaches −1 only asymptotically in the far
+future. Alternative models may exhibit nontrivial redshift evolution.
+3.5 Structure of the predictive covariance matrix
+The covariance structure is central to the physical interpretation of the reconstruction,
+not merely a numerical detail. The diagnostics used below are nonlinear functions of the
+reconstructed derivatives. For example, H′(z), q(z), wtot(z) and κ(z) depend on the ratio
+d′′
+C/d′
+C. Their uncertainties therefore depend not only on the individual variances of d′
+C and
+d′′
+C, but also on how these two quantities co-vary at the same and different redshifts. If these
+off-diagonal terms are discarded, the propagated confidence regions can be biased. This would
+directly affect the later model-comparison step: underestimated uncertainties can create
+artificial separation between cosmologies, while overestimated uncertainties can hide real but
+weak differences.
+We therefore compute the joint predictive covariance matrix of the reconstructed co-
+moving distance and its first two derivatives. In block form this covariance can be written
+as
+ΣGP =
+
+
+C00 C01 C02
+C10 C11 C12
+C20 C21 C22
+
+,[C mn]ij = Cov
+[
+d(m)
+C (zi),d (n)
+C (zj)
+]
+,
+where m,n = 0, 1, 2 correspond respectively to dC, d′
+C and d′′
+C. The blocks with i̸=j encode
+correlations between different redshift points, while the off-diagonal blocks with m̸=n encode
+correlations between different derivative orders. In the diagnostic sampling step, the most
+important sub-block is
+Σ12 =
+(
+Cov[d′
+C,d′
+C] Cov[d′
+C,d′′
+C]
+Cov[d′′
+C,d′
+C] Cov[d′′
+C,d′′
+C]
+)
+,
+which is the block structure used to jointly sample d′
+C and d′′
+C. For a derived diagnostic
+g(d′
+C,d′′
+C), the linearized propagated variance contains the term 2(∂g/∂d′
+C)(∂g/∂d′′
+C)Cov(d′
+C,d′′
+C).
+A diagonal-only treatment would omit this term entirely.
+Figure 2 illustrates representative covariance blocks, all evaluated at pairs of redshifts
+(z,z′):
+Cov[dC,dC],Cov[d ′
+C,d′
+C],Cov[d ′′
+C,d′′
+C],Cov[d ′
+C,d′′
+C].
+The covariance structure exhibits extended off-diagonal correlations that reflect the nonlocal
+nature of Gaussian Process inference. Derivative covariances display increasingly oscillatory
+behavior and amplified amplitudes toward higher redshift, arising directly from the repeated
+differentiation of the kernel function.
+The auto covariance blocks are symmetric under z↔z′, as required for any covariance
+between the same quantity evaluated at two redshifts. Their largest amplitudes occur when
+both arguments lie near the high redshift edge, where the reconstruction is least anchored by
+– 16 –
+
+(a) Cov[dC(z), dC(z′)]
+ (b) Cov[d′
+C(z), d′
+C(z′)]
+(c) Cov[d′′
+C(z), d′′
+C(z′)]
+ (d) Cov[d′
+C(z), d′′
+C(z′)]
+Figure 2:Representative blocks of the Gaussian Process predictive covariance ma-
+trix for a reconstructed mock catalog. (a) Cov[dC(z),dC(z′)]. (b) Cov[d′
+C(z),d′
+C(z′)].
+(c) Cov[d′′
+C(z),d′′
+C(z′)]. (d) Cross-covariance Cov[d′
+C(z),d′′
+C(z′)]. The extended off-diagonal
+structure and increasingly oscillatory behavior for higher derivatives illustrate the nonlocal
+and strongly correlated nature of Gaussian Process reconstructions.
+the data. The cross covariance block Cov[d′
+C(z),d′′
+C(z′)] is different. It need not be symmetric
+by itself since exchanging the two axes also exchanges the derivative order. Moreover, it is
+not expected to peak on the diagonal z =z′. For a stationary even kernel such as the Mat´ ern
+kernel used here, Cov[d′
+C(z),d′′
+C(z′)] involves an odd total derivative of the kernel with respect
+to the separation z−z′, so the same-redshift contribution is suppressed and the extrema
+occur at finite separation. This explains the tilted positive and negative bands in panel (d):
+a curvature fluctuation at one redshift changes the inferred slope most strongly at nearby,
+but not identical, redshifts. The finite redshift range, the low-redshift anchor dC(0) = 0, and
+the weaker high-redshift data constraints then amplify and shift these lobes toward the less
+constrained high-redshift region. Thus the off-diagonal maximum in the mixed block is a
+feature of derivative GP inference, not a numerical artifact. These structures also explain
+the rapid growth of uncertainties observed for higher-order derivatives at large redshift and
+motivate our preference for diagnostics that avoid third-order differentiation, as discussed
+further in Appendix C.
+– 17 –
+
+4 Reconstructed cosmological diagnostics
+We present the Gaussian Process reconstructions of the cosmological diagnostic quantities
+defined in Sec. 3.4 using mock gravitational wave standard siren catalogs. We discuss the results
+for the ΛCDM fiducial model 1 in detail while the qualitatively similar findings for alternative
+cosmologies are presented in Appendix A. Unless stated otherwise, the reconstruction figures
+use the full ensemble of Nmock = 50 independent mock realizations defined in Sec. 2.2; the
+shorthand “Nmocks50” denotes this choice. The primary goal of this section is to examine
+the qualitative behavior and uncertainty properties of each diagnostic as a function of redshift
+before we introduce the quantitative distinguishability measure detailed in Sec. 5. Shaded
+regions throughout these plots denote confidence intervals obtained from joint Gaussian
+Process covariance propagation.
+Figure 3 provides an overview of the reconstruction pipeline by illustrating the recon-
+structed luminosity distance dL(z) alongside the derived Hubble parameter H(z) and its
+derivativeH′(z) for a representative ΛCDM mock catalog. The figure shows that the GP first
+follows the distance data smoothly and then transfers this information into the reconstructed
+expansion rate. The median curves track the fiducial CLASS prediction well in the region
+where the mock events provide support. The main loss of precision appears in H′(z), where
+the confidence band opens rapidly after z∼3. This identifies derivative amplification as the
+first major limitation of the pipeline.
+1The shorthand “LCDM” appearing in some figure labels and file names denotes the same ΛCDM fiducial
+model.
+– 18 –
+
+Figure 3:Gaussian Process reconstruction from a representativeΛCDM mock gravitational
+wave standard siren catalog. The upper row shows the distance reconstruction at left and the
+Hubble parameter at right. The lower panel shows the derivative of the Hubble parameter.
+Top left: reconstructed luminosity distance dL(z)with the GP median shown as a solid blue
+line. The shaded bands show the1 σthrough3σconfidence regions. The dashed black curve
+is the fiducial CLASS prediction and the points are the mock data. Top right: derived Hubble
+parameterH(z)with1σand2σconfidence regions. Bottom:H ′(z)with the rapid growth of
+uncertainty at high redshift.
+4.1 First-order diagnostics
+We begin our analysis with the Hubble parameter H(z) which encodes the overall expansion
+history of the Universe and is derived directly from the first derivative of the reconstructed
+comoving distance. We revisit H(z) here specifically in the context of model comparison even
+though it was already shown in Fig. 3 as a pipeline validation.
+Figure 4 displays the reconstructed H(z) together with 1σand 2σconfidence regions
+compared directly to the fiducial background evolution. The reconstructed median closely
+follows the fiducial model over a broad redshift range to demonstrate that the Gaussian Process
+framework can successfully recover the underlying expansion history in a model-independent
+manner. These uncertainties naturally increase with redshift, reflecting both the sparsity
+of high-redshift standard siren events and the cumulative propagation of distance errors
+throughout the reconstruction pipeline.
+The Hubble parameter provides a robust and smooth characterization of the expansion
+history but its reconstructed confidence regions overlap substantially across the different
+– 19 –
+
+Figure 4:Gaussian Process reconstruction of the Hubble parameter H(z). The solid line
+shows the reconstructed median while shaded regions correspond to1 σand2 σconfidence
+intervals from joint covariance propagation. The dashed curve represents the fiducial CLASS
+evolution.
+fiducial cosmological models considered here at intermediate and high redshift. An important
+caveat applies at low redshift z→0: the six fiducial cosmologies adopt different values of H0
+(ranging from 67.32 to 72.81 km s−1Mpc−1, see Tables 1–3) and since the GP reconstruction is
+highly precise at low redshift it cleanly resolves these offsets. Any apparent model separation
+seen in H(z) near z∼0 therefore reflects the differing input H0 values rather than genuinely
+distinct expansion dynamics and should not be interpreted as discriminatory power over the
+underlying cosmological models. This point is quantified explicitly via the pointwise marginal
+Hellinger distance analysis in Sec. 5.1. At intermediate and high redshift, where the H0 offset
+becomes subdominant, the reconstructed confidence regions overlap substantially across all
+fiducial models, demonstrating that first-order diagnostics lack the discriminatory power to
+distinguish between the cosmological scenarios examined in this work.
+4.2 Second-order diagnostics
+We consider diagnostic quantities that depend on the second derivative of the reconstructed
+comoving distance to probe more subtle features of the late-time expansion history. These
+quantities include the deceleration parameter q(z) alongside the Om diagnostic Om(z) and
+the total effective equation of statew tot(z).
+Figure 5 presents the detailed reconstructions of these three specific quantities. These
+diagnostics exhibit enhanced sensitivity to departures from the concordance ΛCDM model
+– 20 –
+
+Figure 5:Gaussian Process reconstruction of second order cosmological diagnostics. The
+upper row shows the deceleration parameter at left and the Om diagnostic at right. The lower
+panel shows the total effective equation of state. Top left: deceleration parameter q(z). Top
+right: Om diagnostic Om(z). Bottom: total effective equation of state wtot(z). Shaded regions
+show the1σand2σconfidence intervals from joint covariance propagation.
+when compared directly to H(z). Deviations from a constant Om(z), or from the fiducial
+total equation-of-state history wtot(z), serve as clear signatures of nonstandard expansion
+dynamics. The panels show that the nonlinear transformations do not introduce a visible
+bias in the median reconstruction. The q(z) curve captures the transition from accelerated to
+decelerated expansion. The wtot(z) curve shows the same evolution in equation of state form
+and moves toward the matter dominated value near zero at larger redshift. The Om(z) panel
+remains close to the expected constant value for ΛCDM over the best constrained part of the
+range. At high redshift all three panels become dominated by wide confidence regions, so
+median level differences are not sufficient for model separation.
+The uncertainties associated with these quantities grow rapidly with redshift due to
+the inherent amplification of errors through higher-order derivatives. The reconstructed
+median curves display nontrivial redshift evolution but the corresponding confidence regions
+remain broad and overlapping across all fiducial models which strongly motivates the rigorous
+quantitative analysis presented in Sec. 5.
+– 21 –
+
+4.3 Ratio-based diagnosticκ(z)
+Higher-order kinematical diagnostics like the cosmological jerk parameter involve third
+derivatives of the reconstructed comoving distance and are therefore will be dominated by
+large uncertainties within a Gaussian Process framework. We therefore use the following ratio-
+based diagnostic as a numerically stable consistency check on the second-order reconstruction:
+κ(z)≡E′(z)
+E(z) =−d′′
+C(z)
+d′
+C(z).(4.1)
+This quantity is directly related to the deceleration parameter through
+κ(z) =1 +q(z)
+1 +z ,(4.2)
+and equivalently to the total effective equation of state through
+κ(z) =3
+2
+1 +w tot(z)
+1 +z .(4.3)
+These identities follow from Eqs. (3.15) and (3.18) together with the relation H′/H =E′/E.
+Geometrically κ(z) measures the logarithmic slope of E(z) so that κ(z) = dlnE/dz . At
+fixed redshift it is algebraically equivalent to q(z) and wtot(z) and therefore does not add
+independent background information.
+In the ΛCDM model during matter domination E(z)∝(1 +z)3/2 and therefore κ(z) =
+3/[2(1 +z)]. As dark energy begins to dominate E(z) varies more slowly and κ(z) moves
+toward zero. Its practical value is numerical rather than informational. Because κ(z) is a ratio
+of d′′
+C(z) to d′
+C(z) it remains better conditioned than higher-order kinematical diagnostics
+that require third-order differentiation although it still depends on the second derivative of
+the reconstructed comoving distance.
+Figure 6 shows the detailed reconstruction of κ(z). The reconstructed profile follows
+the expected ΛCDM behavior at low redshift and the confidence regions remain substantially
+narrower than those ofH′(z) across the full redshift range, confirming the numerical advantages
+discussed above. The plot shows that κ(z) remains positive and slowly decreases after the low
+redshift maximum, as expected for the logarithmic slope of E(z) in ΛCDM. Its uncertainty
+grows more gently than the uncertainty inH′(z) because the ratio cancels part of the common
+amplitude variation. At high redshift the interval is still broad, so κ(z) is most useful as a
+stable consistency check on the second order reconstruction.
+– 22 –
+
+Figure 6:Gaussian Process reconstruction of the ratio-based diagnosticκ(z) =E ′(z)/E(z).
+The solid line denotes the reconstructed median and shaded regions indicate1 σand2 σ
+confidence intervals.
+4.4 Redshift-dependent reconstruction precision
+We evaluate the redshift-dependent relative precision to appropriately quantify the statistical
+stability of the reconstructed diagnostics:
+P(z)≡ σ(z)
+|median(z)|,(4.4)
+where σ(z) denotes the 1 σuncertainty obtained from joint covariance propagation with
+hyperparameter marginalization. We compute the precision curves using the complete ensemble
+of mock realizations so the reported uncertainties accurately reflect both reconstruction
+variance and mock-to-mock fluctuations. We report the absolute uncertainty σ(z) in place of
+the ratio for the zero crossing diagnostics q(z), wtot(z), and κ(z) where the median may pass
+through zero.
+Figure 7 displays the precision curves for the ΛCDM fiducial cosmology for both detector
+configurations overlaid. The baseline LISA catalogs described in Sec. 2.2.1 use Nev = 80.
+Here we evaluate the curves at the maximum event counts explored in the scaling sweep
+corresponding to Nev = 1000 for ET and Nev = 160 for LISA. We find qualitatively similar
+behavior across all models and provide additional examples in Appendix A.
+– 23 –
+
+Figure 7:Redshift-dependent precision curves for all reconstructed cosmological diagnostics in
+theΛCDM fiducial model showing both the ET (blue, Nev = 1000) and LISA (red, Nev = 160)
+configurations overlaid. For H, H′andOm the ordinate is the relative precision σ/|median|;
+for q, wtot and κthe absolute uncertainty σis shown to avoid divergences near zero crossings.
+Vertical dashed lines mark the optimal redshift z∗(argmin of the precision metric) for each
+detector. Uncertainties correspond to1 σconfidence regions from joint covariance propagation
+with hyperparameter marginalization.
+Several important trends emerge from this evaluation. The Hubble parameter H(z)
+remains the most statistically stable diagnostic across the full redshift range for both detectors.
+It achieves sub-percent precision at low redshift and degrades gradually toward higher z which
+remains consistent with its strict dependence on the first derivative ofd C(z) alone.
+The derivativeH′(z) exhibits a contrasting rapid growth in relative uncertainty beyond
+z∼2 for LISA and beyond z∼1 for ET before eventually exceeding unity at high redshift.
+This serves as a direct consequence of the derivative amplification inherent to Gaussian
+Process differentiation as we discussed in Sec. 3.5.
+Second-order diagnostics such as q(z),Om(z) and wtot(z) display intermediate behavior.
+They are statistically informative at low to moderate redshift but become increasingly noise-
+dominated toward the highzboundary of the reconstruction window.
+The ratio-based diagnostic κ(z) demonstrates improved stability relative to H′(z) con-
+firming that avoiding explicit third-order differentiation successfully mitigates uncertainty
+amplification. These results clearly highlight that while reconstructed diagnostics may exhibit
+visible deviations between cosmological models the confidence regions remain broad and
+overlapping. This directly motivates the quantitative approach presented in the next section.
+– 24 –
+
+4.4.1 Optimal reconstruction redshift and detector comparison
+We identify the optimal redshiftz∗for each diagnostic as the location of the minimum precision
+metric within the detector redshift window:
+z∗= arg min
+z∈[zmin,zmax]
+P(z).(4.5)
+In words, we evaluate the precision curve P(z) over the allowed detector redshift range and
+choose the redshift where this curve is smallest. The notation arg min returns the location of
+that minimum, not the minimum value itself. Thus z∗identifies the precise redshift where the
+GP reconstruction achieves its tightest constraint on a given observable. It therefore serves as
+a useful figure of merit for comparing different detector configurations.
+Table 5 summarizesz ∗and the corresponding precision metric value for all diagnostics
+and both detector configurations assuming the ΛCDM fiducial cosmology. LISA achieves a
+lower and thus better precision metric than ET across all diagnostics. The LISA values are
+smaller by roughly a factor of two to three, more precisely about 2 .3–3.1 for the ΛCDM case,
+depending on the specific diagnostic. This ordering is a direct consequence of the distinct noise
+prescriptions for the two detectors. The LISA instrumental noise σinst = 0.05 (dL/dref
+L )dL
+(Eq. 2.6) is quadratically suppressed relative to the calibration scale dref
+L = 36.6 Gpc. Both
+detectors probe redshifts z≲ 2 where the luminosity distances remain below this reference
+scale. The LISA per-event fractional error remains far smaller than the ET value encoded
+byF(z) in this regime even though ET observes significantly more events. We must keep
+this asymmetry in mind when interpreting comparative precision statements. These results
+directly reflect the performance achievable under the specific mock error models adopted here.
+The relative ranking of the two detectors remains entirely contingent on those precise noise
+prescriptions.
+Table 5:Optimal reconstruction redshift z∗and precision metric value at z∗for all cosmolog-
+ical diagnostics comparing the ET ( Nev = 1000) and LISA ( Nev = 160) configurations for the
+ΛCDM fiducial cosmology. For H, H′andOm the metric is σ/|median|; for q, wtot and κit
+is the absoluteσ.
+Diagnostic Metricz ∗
+ET P(z∗
+ET)z ∗
+LISA P(z∗
+LISA)
+H σ/|med|0.210 0.01287 0.205 0.00414
+H′ σ/|med|0.400 0.14201 0.375 0.05172
+q σ0.316 0.10599 0.320 0.03753
+Om σ/|med|0.993 0.13275 0.871 0.05887
+wtot σ0.316 0.07066 0.320 0.02502
+κ σ0.364 0.07916 0.360 0.02799
+A striking feature is visible in both Table 5 and Fig. 7. The optimal reconstruction
+redshifts for ET and LISA are nearly coincident for most diagnostics. The ET minimum is
+sharply defined and shifts to a significantly lower redshift when we compare to the flat 25%
+noise approximation when using the redshift-dependent ET noise model of Eq. (2.13). The
+dashed vertical lines marking z∗
+ET and z∗
+LISA essentially overlap in Fig. 7 for H(z), q(z) and
+wtot(z). The primary exception is Om where both detectors find their minimum pushed to
+z∗∼0.9 to 1.0. This shift occurs due to the vanishing of the denominator (1 + z)3−1 as
+z→0. Another exception is H′(z) where the rapid growth of derivative uncertainties places
+the ET minimum at a somewhat higher redshift than LISA.
+– 25 –
+
+This near coincidence of z∗between two detectors with fundamentally different noise
+prescriptions, event rates and redshift windows is a nontrivial result. It does not imply similar
+astrophysical redshift populations for BNS and MBHB sources. The two distributions are
+visibly different in Fig. 1: ET peaks at z∼0.5–1.0 while the LISA proxy extends to much
+higher redshift. The key point is that z∗is controlled mainly by the low-redshift boundary of
+the catalog. For LISA the reconstruction is additionally stabilized at the origin by imposing
+the boundary condition dC(0) = 0. This auxiliary anchor is not treated as an observed bright
+siren event and it does not by itself determine z∗. The minimum appears slightly above the
+boundary once the first few nonzero redshift events allow the GP to move from extrapolation
+to interpolation and thereby fix the effective local correlation scale. ET behaves in the same
+way. Its catalog starts at zmin = 0.07 while the first LISA events lie near z∼0.1–0.2. Because
+these low-redshift anchoring regions are similar, the effective local correlation scale inferred
+by the GP is similar and z∗is close for the two detectors. Changes in noise amplitude shift
+the vertical level of the precision curve; in these mock catalogues they do not strongly shift
+the location of its minimum. We show in Appendix A that the same behavior persists across
+all six fiducial cosmological models. Within the detector setups and mock catalogs studied
+here this makes z∗a robust and largely model-insensitive figure of merit for gravitational
+wave standard siren reconstructions.
+A further distinction is worth drawing between two separate aspects of z∗stability: its
+near coincidence between ET and LISA and its stability across cosmological models within
+each detector.
+For LISA the stability of z∗across all six cosmological models is largely a consequence of
+the mock catalog construction. The 80 LISA events are drawn from a fixed interpolated Beta
+distribution constructed from the data presented in Fig. 1 of Tamanini et al. [ 24] following
+Mukherjee et al. [ 33]. As a result the lower boundary of the LISA event distribution is
+essentially identical across all six models. Since z∗is anchored near this lower boundary it
+converges to nearly the same value for all cosmologies. The stability ofz∗
+LISA across cosmologies
+is therefore expected by construction.
+For ET the situation is fundamentally different and the stability is genuinely non-
+trivial. The 1000 ET events are drawn from the redshift probability density p(z) ∝
+4πd2
+C(z)R(z)/[H(z)(1 +z)] (Eq. 2.11) which is evaluated self-consistently on the fiducial
+background of each cosmological model. The event redshift distribution is therefore genuinely
+distinct for each cosmology: ΛCDM, AXI CLASS and IntDM each produce different p(z)
+through their different H(z) and dC(z). Despite this the range of z∗
+ET across the six cos-
+mologies is only 0.060–0.084 for H, q, wtot and κ(Table 6). This tight stability is an earned
+emergent result. The ET lower cutoff zmin = 0.07 is set by the detector sensitivity floor and is
+identical across all cosmological models by construction. Since z∗is anchored near zmin rather
+than near the bulk of p(z), the cosmology-to-cosmology differences in the event distribution
+at higher redshift are subdominant for the location ofz ∗.
+Taken together these results reveal a useful separation between the scale of the recon-
+struction uncertainty and the location of its minimum. The signal varianceσf and the detector
+noise prescription mainly set theabsolute valueof the precision metric at z∗—this is why
+LISA achieves a roughly 3×better precision metric than ET across H, q, wtot and κ. The
+lengthscale ℓand the low-redshift boundary of the catalogue shape the precision curve near
+the transition from extrapolation to interpolation and therefore help set thelocationof z∗.
+The two effects are not mathematically independent, but in the mock catalogues considered
+here varying the noise level changes how precise the reconstruction isat z∗much more than
+– 26 –
+
+it changes the location ofz ∗.
+5 Pointwise marginal Hellinger distance analysis
+The reconstructed diagnostics presented in Sec. 4 demonstrate that second-order and ratio-
+based observables can in principle enhance sensitivity to nonstandard cosmological dynamics.
+However the substantial overlap between reconstructed confidence regions especially at
+intermediate and high redshifts makes it difficult to assess whether apparent differences
+between models are statistically significant based on visual inspection alone.
+To address this, we employ the pointwise marginal Hellinger distance as a robust
+metric for quantifying the statistical distinguishability of reconstructed diagnostics across
+different fiducial cosmological models at fixed redshift [ 85, 86]. For two continuous probability
+distributionsPandQ, the Hellinger distance is defined as
+H(P,Q) = 1√
+2
+[ ∫ ∞
+−∞
+(√
+p(x)−
+√
+q(x)
+)2
+dx
+]1/2
+,(5.1)
+where x is the value of the random variable whose distribution is being compared, and p(x)
+and q(x) are the probability density functions of P and Q respectively. In our application, x
+represents the value of the reconstructed diagnostic at fixed redshift, for example H(z),H′(z),
+q(z),Om(z), wtot(z) or κ(z). The Hellinger distance is bounded H(P,Q )∈[0, 1] with H = 0
+indicating identical distributions and H = 1 indicating orthogonal (fully distinguishable)
+distributions. It is symmetric, satisfies the triangle inequality and is more robust to binning
+choices than the commonly usedχ2 statistic.
+For each redshift we summarize the reconstructed marginal distribution of a diagnostic
+by a Gaussian with median µand standard deviation σ. Under this Gaussian marginal
+approximation, for distributions N (µ1,σ2
+1) andN (µ2,σ2
+2), Eq. (5.1) reduces to the closed
+form expression:
+H2(P,Q) = 1−
+√
+2σ1σ2
+σ2
+1 +σ2
+2
+exp
+(
+−(µ1−µ2)2
+4(σ2
+1 +σ2
+2)
+)
+.(5.2)
+This expression is evaluated independently at each redshift z where µi(z) and σi(z) are the
+reconstructed median and 1σuncertainty for fiducial modelsi = 1, 2. For nonlinear diagnostics
+such as q,Om, wtot and κthe exact sample distributions need not be perfectly Gaussian; the
+Hellinger curves should therefore be interpreted as compact Gaussian summaries of pointwise
+marginal distinguishability. They do not represent a Hellinger distance between the full
+functional GP posteriors across redshift, because the off-diagonal covariance between different
+redshift points is not folded into a single distribution-level model-separation statistic.
+5.1 Results
+We compute the pointwise marginal Hellinger distance between reconstructed diagnostics for
+all pairs of fiducial cosmological models and for each detector separately. Figure 8 shows
+summary panels for ET and LISA. The full detector-specific plots are collected in Appendix B
+and shown in Figs. 14 through 19.
+The behavior ofH(z) is distinct from the other diagnostics. For both detectors the point-
+wise marginal Hellinger distance is largest at very low redshift because the GP reconstruction
+resolves the different fiducial H0 values with high precision. This produces near-unity values
+– 27 –
+
+for several model pairs. It does not by itself imply strong separation of the late-time expansion
+dynamics. The detector-specificH(z) curves are shown in Fig. 14.
+The diagnostics q(z), wtot(z) and κ(z) track each other very closely and are nearly
+identical in practice. This is expected because at fixed redshift they are related by the affine
+maps
+κ(z) =1 +q(z)
+1 +z = 3
+2
+1 +w tot(z)
+1 +z .(5.3)
+The Gaussian pointwise marginal Hellinger distance is invariant under the same one-to-one
+affine transformation applied to both reconstructed distributions. In exact arithmetic the
+three curves would coincide. In practice finite sampling and numerical smoothing leave only
+very small residual differences. Their near coincidence is therefore a consistency check rather
+than a new source of independent information. This behavior is shown explicitly in Figs. 16,
+18 and 19.
+The detailed redshift dependence differs between the two detectors. For ET the q(z),
+wtot(z) and κ(z) curves remain modest over most of the range and rise most strongly near
+z∼1.7–1.9 close to the upper edge of the catalog. For LISA the same diagnostics show
+prominent low-redshift maxima for some model pairs, together with a broader high-redshift
+shoulder from z∼2.5 to z∼4 that crests around z∼3. The H′(z) andOm(z) diagnostics
+develop the sharpest high-redshift structure for both detectors. In Om(z) this is amplified
+by the denominator in Eq. (3.17) while H′(z) is more sensitive to fluctuations in d′′
+C(z) and
+to sign changes in that quantity. The corresponding detector-specific curves are shown in
+Figs. 15 and 17.
+Despite these detector-specific features, the overall conclusion is unchanged. Away from
+the low-redshift H(z) feature, all pairwise pointwise marginal Hellinger distances remain well
+below unity. The axion-inspired early dark energy model and the interacting dark matter
+scenario usually show the largest separation from ΛCDM, but the reconstructed distributions
+still overlap strongly. Background luminosity-distance data alone therefore do not provide
+genuine statistical separation between the six fiducial cosmologies considered here.
+These results show that κ(z) is best viewed as a numerically stable consistency check on
+q(z) and wtot(z). It tests the same second-order reconstruction without pushing the analysis
+to third-order differentiation. In the pointwise marginal Hellinger analysis it does not provide
+independent discriminating power. More generally no diagnostic achieves genuine statistical
+separation between the six fiducial cosmologies. GPR applied to background luminosity
+distance data therefore defines a practical benchmark on what these catalogs can and cannot
+distinguish.
+The pattern described above reflects a fundamental asymmetry between what controls
+the width of the reconstructed posteriors and what controls the separation between them.
+The posterior width is set by the noise amplitude and event count, both of which improve
+with larger, better catalogs. The physical model separation, however, is set by the difference
+in the functionalshapesof dL(z) across cosmologies. Increasing event counts or reducing
+noise narrows the reconstructed posteriors and can increase the pointwise marginal Hellinger
+distance for a fixed nonzero separation. It does not, however, change the underlying separation
+of the fiducial backgrounds themselves. When the dL(z) shapes are very similar, very large
+gains in precision are required before the Gaussian pointwise marginal Hellinger measure
+approaches genuine separation. In this sense the distinguishability is limited primarily by
+shape, with noise controlling how sharply that shape difference can be resolved. Genuine
+improvement in model discriminability therefore requires either accessing redshifts where the
+– 28 –
+
+(a)Einstein Telescope
+(b)LISA
+Figure 8:Summary of the pairwise pointwise marginal Hellinger distance curves for the ET
+and LISA reconstructions. The H(z)panels are dominated at low redshift by the differing
+fiducialH0 values. The q(z), wtot(z)and κ(z)panels are nearly identical in practice because
+these diagnostics are related by simple affine transformations at fixed redshift. Detailed
+detector-specific plots for all diagnostics are shown in Appendix B.
+models diverge more significantly (z∼3–5 where LISA’s reach becomes advantageous) or
+– 29 –
+
+incorporating observables that probe different sectors of the physics such as the growth rate
+fσ8(z) from redshift space distortions [ 87], which is sensitive to the perturbation sector and
+can break degeneracies that the background expansion history cannot.
+6 Summary and conclusions
+We have presented a model-independent reconstruction of late-time cosmological diagnostics
+from mock gravitational wave standard siren catalogs employing Gaussian Process Regression
+as the core inference framework. The analysis encompasses six fiducial cosmological models: the
+concordance ΛCDM, two CPL dark energy variants, interacting dark matter and dark energy
+scenarios and an axion-inspired early dark energy model investigated for two complementary
+forthcoming GW detectors LISA and the Einstein Telescope each assigned physically motivated
+redshift-dependent noise prescriptions. The adopted source redshift distributions are shown
+in Fig. 1, while the LISA and ET error models are defined in Eqs. (2.5) and (2.12). The
+central aim is to assess the discriminatory power of future GW standard siren observations
+from next-generation detectors. Our principal findings are as follows.
+1. Reconstruction fidelity.The Gaussian Process framework employing a Mat´ ernν= 9/2
+kernel with MCMC hyperparameter marginalization successfully recovers the underlying
+expansion history across all fiducial models and for both detector configurations. The
+reconstructed median follows the fiducial evolution closely and ΛCDM remains consistent
+with the reconstructed observables within inferred confidence regions in all cases. This
+behavior is illustrated by the reconstruction overview in Fig. 3 and by the detailed H(z)
+reconstruction in Fig. 4. The GP kernel and hyperparameter likelihood used for this
+result are given in Eqs. (3.7) and (3.8). The comparison across fiducial cosmologies shows
+that changing the background model mainly changes the median cosmological history,
+not the statistical hierarchy of the reconstruction. In the LISA precision comparison
+with Nev = 160, the direct Hubble reconstruction is the most robust diagnostic: the
+optimal relative precision for H(z) lies in the narrow range 0 .394%–0.421% across
+the six fiducial models, with z∗
+LISA = 0.165–0.205. The first derivative is less tightly
+constrained, with the best relative precision for H′(z) lying in the range 5.09%–6.55%
+at z∗
+LISA = 0.320–0.385. The derived diagnostics inherit this loss of precision: the
+best absolute uncertainties are 0.0355–0.0471 for q(z), 0.0237–0.0314 for wtot(z) and
+0.0267–0.0360 for κ(z), whileOm(z) reaches best relative precision 5.74%–6.12%. Thus
+the reconstructions teach us that the dominant limitation is derivative amplification and
+high-redshift uncertainty growth rather than a failure of the GP to track any particular
+fiducial background.
+2. Uncertainty propagation.Retaining the relevant joint Gaussian Process predictive
+covariance blocks, especially the cross-covariance between d′
+C and d′′
+C, is the central
+methodological requirement of this analysis. Neglecting these cross correlations leads to
+a systematic underestimate of the confidence regions for H(z),q(z),Om(z),wtot(z) and
+κ(z). MCMC marginalization over (σf,ℓ) broadens the inferred intervals by about 10
+to 30% and should also be included in realistic error budgets. This requirement follows
+from the derivative covariance expression in Eq. (3.11) and is visualized directly in
+Fig. 2. The higher derivative behavior shown in Fig. 20 explains why the main analysis
+avoids diagnostics that require third order differentiation.
+– 30 –
+
+3. Hierarchy of diagnostics.The Hubble parameter H(z) achieves sub-percent recon-
+struction precision at low redshift but shows limited discriminatory power in isolation.
+Second-order diagnostics (q,Om, wtot) enhance model sensitivity but suffer from rapid
+uncertainty growth at high z. The ratio-based diagnostic κ(z) = E′(z)/E(z) is best
+viewed as a numerically stable consistency check on q(z) and wtot(z). It repackages the
+same second-order information in logarithmic slope form and is useful because it avoids
+pushing the reconstruction to third-order differentiation. It should not be interpreted
+as an independent source of model separation. The definitions of these observables
+are given in Eqs. (3.13), (3.14), (3.15), (3.17), (3.18), and (4.1). Their reconstructed
+behavior is shown in Figs. 4, 5, and 6, while their precision hierarchy is summarized in
+Fig. 7.
+4. Complementarity and precision of LISA and ET.The two detector configurations probe
+the cosmic expansion history in complementary regimes. ET provides dense sampling
+at z≲ 2 owing to its large BNS event count while LISA extends the reconstruction to
+z∼5 with sparser but high-redshift events. Adopting a realistic redshift-dependent
+ET instrumental noise model σinst(z) =F(z)dL(z) withF(z) = 0.1449z−0.0118z2 +
+0.0012z3 yields substantially improved ET reconstruction precision at low redshift
+compared to the flat 25% approximation and shifts the ET optimal redshift z∗to
+significantly lower values. Under the adopted error prescriptions LISA achieves a
+lower precision metric than ET across all diagnostics and cosmologies owing to LISA’s
+quadratically suppressed per event noise at the relevant redshifts. In the updated
+precision summaries the improvement at z∗is typically a factor of 2–4, depending on
+the diagnostic and fiducial cosmology. The complementary redshift coverage is visible
+in Fig. 1. The instrumental noise terms are defined in Eqs. (2.6) and (2.13), and the
+resulting detector comparison is shown in Fig. 7.
+5. Model independence of the optimal reconstruction redshift.A central geometric inference
+result of this work is the near coincidence of the optimal reconstruction redshift z∗
+between ET and LISA across all six fiducial cosmological models for the most stable
+diagnostics. This convergence holds despite the two detectors having entirely different
+noise floors, event rates and redshift windows (see Appendix A) and crucially despite
+their event redshift distributions having qualitatively different shapes and centroids.
+The coincidence arises because z∗is set mainly by the low-redshift anchoring region
+rather than by the bulk of the source population. For LISA the boundary condition
+dC(0) = 0 stabilizes the reconstruction at the origin but it is not treated as an observed
+bright siren event. The minimum in uncertainty appears only after the first few nonzero
+redshift events fix the local GP correlation scale. ET behaves in the same way. Since
+ET (zmin = 0.07) and LISA (effective zmin∼0.1–0.2) enter this anchored interpolation
+regime at similar redshift their z∗values are close. This establishes z∗as a robust figure
+of merit determined mainly by the lower boundary of the event redshift distribution
+and by the local GP correlation scale. The signal variance σf and the noise prescription
+mainly control the amplitude of the precision curve and therefore the absolute precision
+at z∗, while the lengthscale ℓhelps shape the curve near zmin and therefore helps
+determine thelocationof z∗. In the mock catalogues studied here, changing the noise
+floor moves the absolute precision level much more than it moves z∗. The stability of
+z∗
+LISA across cosmologies is expected by construction since LISA events are drawn from
+a fixed empirical redshift distribution with a cosmology-independent lower boundary.
+– 31 –
+
+The corresponding stability of z∗
+ET is genuinely nontrivial since ET events are generated
+self-consistently from each cosmology’sH(z) and dC(z). This stability arises because
+zmin = 0.07 is fixed by the ET detector sensitivity floor regardless of cosmology and, since
+z∗is anchored nearzmin, the cosmology-to-cosmology variation in p(z) at higher redshift
+is subdominant for the location of z∗. The definition of z∗is given in Eq. (4.5). Its near
+coincidence between ET and LISA is visible in Fig. 7 and across the alternative cosmology
+precision curves in Figs. 9, 10, 11, 12, and 13. The role of the event distribution is set
+by the source redshift density in Eq. (2.11) and by the distributions shown in Fig. 1.
+6. Quantitative model distinguishability.The pointwise marginal Hellinger distance analysis
+gives a diagnostic map of where cosmological information enters the reconstruction.
+Denoting the pointwise marginal Hellinger distance by HHell, the largest values in H(z)
+occur at low redshift, with several pairs reaching HHell≃0.96–1.00 near z≃0.15–0.23
+for LISA and HHell≃0.73–0.98 near z≃0.17–0.21 for ET. These peaks mostly trace
+different fiducial H0 values and should not be interpreted as independent evidence
+for different late-time dynamics. The more physically interesting separation appears
+in derivative-sensitive diagnostics. For ET, H′(z) reaches pairwise distances as large
+as HHell≃0.64–0.87 around z≃1.66–1.72, while Om(z) reaches HHell≃0.61–0.81
+around z≃1.62–1.74. For LISA, the same structures move to higher redshift: H′(z)
+reachesHHell≃0.79–0.85 nearz≃2.67–2.81, andOm(z) reachesHHell≃0.74–0.80 near
+z≃2.62–2.85 for the most separated model pairs. The q(z) and wtot(z) diagnostics are
+more modest, typically peaking at HHell≃0.52 near z≃1.77 for ET and HHell≃0.61
+near z≃0.19–0.75 for LISA in the most favorable pairs, while κ(z) remains useful as a
+correlated logarithmic-slope consistency check. Thus the result is not featureless: the
+Hellinger curves identify specific redshift windows where model discrimination begins to
+emerge, even though the propagated one-point marginals remain overlapping enough to
+prevent robust background-only model separation. The distance measure is defined in
+Eqs. (5.1) and (5.2). The summary result is shown in Fig. 8, with the detector-specific
+panels collected in Figs. 14 through 19.
+Taken together these results establish that Gaussian Process reconstruction of grav-
+itational wave standard sirens provides a powerful and model-independent way of testing
+the concordance cosmological model. Our comparison demonstrates that the median recon-
+structions successfully recover the ΛCDM, CPL, CPL+Λ, IntDM, IntDE and AXI CLASS
+backgrounds well within their respective confidence regions. The differences between cos-
+mologies appear mainly as changes in the fiducial trend and in the width of the high-redshift
+confidence bands, while the ordering of diagnostic precision remains stable. Quantitatively,
+for LISA with Nev = 160, H(z) reaches a best relative precision of 0 .394%–0.421% across
+the six models, whereas H′(z) reaches 5.09%–6.55% andOm(z) reaches 5.74%–6.12%. The
+second-order diagnostics have best absolute uncertainties of order 10−2, but their intervals
+broaden rapidly at high redshift. Thus the reconstruction is faithful to each fiducial cosmology
+and, equally importantly, it shows where the first signs of model discrimination are expected
+to appear.
+The Hellinger analysis sharpens this point. Low-redshift separation in H(z) can be very
+large, reaching near-unity values for some model pairs, but this mainly reflects different fiducial
+H0 choices. The more informative windows occur in derivative-sensitive diagnostics: for ET,
+the strongest nontrivial separation appears around z≃1.6–1.8 in H′(z) andOm(z), while
+for LISA the corresponding leverage shifts to z≃2.6–2.9. In these windows the pointwise
+– 32 –
+
+marginal Hellinger distance reaches HHell≃0.8 for the most separated pairs, indicating that
+the reconstructed distributions are beginning to pull apart even though they have not reached
+decisive separation. This is the technical lesson of the analysis: background-only GPR does
+not simply return a null result, but identifies the redshift ranges and observables where future
+standard-siren catalogues should gain the most discriminatory power. κ(z) provides a stable
+logarithmic-slope check of the second-order reconstruction, although it should be interpreted
+together with q(z) and wtot(z) rather than as an independent model classifier, as follows from
+Eq. (4.2) and Fig. 8. The remaining limitation is physical and statistical: viable cosmologies
+have similar dL(z) shapes over much of the observed range, so stronger separation requires
+either tighter uncertainties in these redshift windows or additional
+Future outlook
+Several natural extensions follow from this work. The present analysis uses background
+standard siren distances. A first direction is to extend the covariance learning beyond
+background expansion data. One can train and validate GP kernels on perturbation sector
+observables or on joint background and perturbation data. This would allow the reconstruction
+to use information from both geometry and structure growth. It would also test whether
+models with similar luminosity distance histories can be separated through their perturbation
+dynamics.
+A second direction is to relax the stationarity of the GP kernel. In this work the
+hyperparameters (σf,ℓ) are sampled with emcee. Each sampled pair is constant over the full
+redshift range. This is consistent with the stationary Mat´ ern kernel used here but it may be
+restrictive for catalogs whose information content changes strongly with redshift. A natural
+extension is to train a neural network that takes redshift as input and returns σf(z) and ℓ(z).
+This would define a nonstationary GP with redshift dependent amplitude and correlation
+length. Such a model could adapt to dense low redshift regions and sparse high redshift
+regions within a single reconstruction. Other flexible parametric maps could also be explored
+but the covariance construction must still preserve positive definiteness.
+A third direction is to reduce the computational cost of repeated reconstructions. Exact
+GP regression scales as O(N 3) because the covariance matrix must be factorized through
+a Cholesky decomposition or an equivalent linear algebra operation. This cost becomes
+substantial for large mock ensembles, dense catalogs and repeated hyperparameter sampling.
+Neural operator surrogate models, including Fourier neural operators, provide a possible
+acceleration strategy. Such surrogates could learn the map from catalog realizations and noise
+prescriptions to reconstructed observables or posterior summaries. If trained and validated
+carefully, they would reduce wall clock time while preserving the accuracy needed for forecasts
+and model comparison.
+The motivation for these extensions is the same asymmetry identified above. The location
+of a reconstructed feature and its amplitude are controlled by different ingredients. For z∗
+the location is set by the low redshift anchoring scale and by the kernel lengthscale ℓ. The
+amplitude of the precision metric is set mainly by σf and the noise prescription. For the
+pointwise marginal Hellinger distance the physical separation is controlled by the shapes of
+dL(z). The posterior width is controlled by the noise. The stability of z∗across cosmologies
+follows because zmin is fixed by the detector sensitivity floor. Variations in p(z) at higher
+redshift have little leverage on z∗. Improvements in detector sensitivity therefore address only
+one part of the problem. New discriminatory power is more likely to come from perturbation
+observables and from a dedicated use of LISA’s high redshift reach where the background
+– 33 –
+
+histories diverge more strongly. These links between location and amplitude are displayed by
+the precision curves in Fig. 7, the kernel scaling in Eq. (3.9) and the Hellinger summary in
+Fig. 8.
+Acknowledgement
+Authors thank Rahul Shah, Tuhin Ghosh, William Giare and Shouvik Roychoudhury for
+helpful discussions. DFM thanks the Research Council of Norway for their support and the
+resources provided by UNINETT Sigma2-the National Infrastructure for High-Performance
+Computing and Data Storage in Norway. A.G. acknowledges the support from the Royal
+Society, UK, Funding Reference: NIF R1 253963.
+– 34 –
+
+A Relative reconstruction precision for alternative cosmologies
+This appendix presents the redshift-dependent precision curves σ/|median|(or absolute σ
+for zero-crossing diagnostics) for all fiducial cosmological models considered in this work,
+complementing Fig. 7, which shows the ΛCDM case in the main text. For each model, we
+display both the ET (Nev = 1000, blue) and LISA (Nev = 160, red) configurations overlaid in
+a single panel per diagnostic, with vertical dashed lines marking the optimal redshift z∗for
+each detector. The qualitative precision hierarchy— H(z) most stable, H′(z) least stable—is
+preserved across all models and both detector configurations.
+A central feature of these panels is the near-coincidence of the z∗
+ET (blue dashed) and
+z∗
+LISA (red dashed) lines forH,q,wtot andκacross all six cosmological models. The exceptions
+areOm, whose denominator suppresses the low-redshift minimum, and to a lesser extent H′,
+which is more sensitive to derivative noise. This alignment holds despite the two detectors
+having qualitatively different event redshift distributions with different shapes and centroids
+as shown in Fig. 1. The coincidence arises because z∗is anchored near the lower boundary
+zmin of the event distribution for both detectors. Below zmin the GP has no anchoring data
+and derivative uncertainties are extrapolation dominated. Just above zmin the first events
+provide genuine interpolation anchoring and the precision metric reaches its minimum. This
+transition is only weakly sensitive to the noise amplitude and to the shape and centroid of
+the event distribution at higher redshift for the mock catalogues considered here. Since ET
+(zmin = 0.07) and LISA (effective zmin∼0.1–0.2) share a similar lower boundary, z∗coincides
+between them for the most stable diagnostics across all models. The main exception is Om,
+where the denominator (1 +z)3−1→0 pushes the minimum to somewhat higher redshift
+for both detectors; H′also shows larger scatter because it is derivative-noise dominated. In
+every case LISA achieves the lower (better) absolute precision metric value consistent with
+the discussion in Sec. 4.4.1.
+The precision curves for each model are shown in Figs. 9 through 13. Figure 9 gives the
+AXI CLASS case. Figures 10 and 11 show the two CPL variants. Figures 12 and 13 show
+the interacting dark matter and interacting dark energy cases. Across these figures the same
+hierarchy is preserved. H(z) remains the most stable diagnostic, H′(z) remains the least
+stable and LISA generally reaches a lower precision metric than ET under the adopted noise
+prescriptions.
+– 35 –
+
+Figure 9:Precision curves for the AXI CLASS (axion/early dark energy) fiducial cosmology.
+Blue: ET ( Nev = 1000); red: LISA ( Nev = 160). Dashed vertical lines mark z∗for each
+detector and diagnostic. Note the near-coincidence ofz ∗
+ET andz ∗
+LISA forH,q,w tot, andκ.
+Figure 10:Same as Fig. 9 for the CPL fiducial cosmology.
+– 36 –
+
+Figure 11:Same as Fig. 9 for the CPL+Λfiducial cosmology.
+Figure 12:Same as Fig. 9 for the interacting dark matter (IntDM) fiducial cosmology. Note
+the distinctive feature in the ET H′,Om, wtot, and κpanels near z∼1.5, arising from the
+sign change ind ′′
+C associated with the matter–dark energy transition in this model.
+– 37 –
+
+Figure 13:Same as Fig. 9 for the interacting dark energy (IntDE) fiducial cosmology.
+Table 6 provides a complete summary of the optimal reconstruction redshifts z∗and
+precision metric values at z∗for all six cosmological models and both detector configurations,
+evaluated at the maximum event counts of the scaling sweep, namely Nev = 1000 (ET) and
+Nev = 160 (LISA). LISA achieves the lower precision metric in every case, consistent with the
+discussion in Sec. 4.4.1. The row labelled CPL denotes the standard CPL fiducial based on
+the CSB constraints discussed in Sec. 2.1. The near-coincidence of z∗values between ET and
+LISA for H, q, wtot, and κis evident across all models, confirming the model-independence
+of this figure of merit. The bottom panel quantifies this coincidence via ∆ z∗≡|z∗
+ET−z∗
+LISA|;
+values≤0.067 for H, q, wtot, and κconfirm that the precision minimum is anchored near
+zmin for both detectors and is therefore largely insensitive to detector configuration and
+cosmological model.
+– 38 –
+
+Table 6:Portrait summary of the optimal reconstruction redshift z∗and precision metric
+P(z∗)for all fiducial cosmological models and both detector configurations. In the ET and
+LISA blocks each entry is z∗/P(z∗). For H, H′andOm the metric is σ/|median|; for q,
+wtot and κit is the absolute σ. In the final block each entry is∆ z∗≡|z∗
+ET−z∗
+LISA|. This
+portrait layout contains the same information as the full detector comparison while avoiding a
+sideways page.
+Block ModelH H ′ qO m wtot κ
+Einstein Telescope (N ev = 1000): entries arez ∗/P(z∗)
+ET AXI CLASS 0.166/0.01312 0.362/0.17072 0.260/0.11639 0.905/0.13036 0.260/0.07759 0.302/0.09101
+ET CPL 0.206/0.01225 0.388/0.13581 0.316/0.09965 1.005/0.13218 0.316/0.06644 0.352/0.07470
+ET CPL+Λ 0.232/0.01408 0.378/0.15924 0.320/0.11750 0.895/0.14532 0.320/0.07834 0.368/0.08749
+ET IntDM 0.246/0.01270 0.378/0.13524 0.304/0.09640 0.987/0.14185 0.304/0.06427 0.350/0.07270
+ET IntDE 0.250/0.01454 0.374/0.18883 0.292/0.12977 1.025/0.15567 0.292/0.08651 0.340/0.09877
+ET ΛCDM 0.210/0.01287 0.400/0.14201 0.316/0.10599 0.993/0.13275 0.316/0.07066 0.364/0.07916
+LISA (N ev = 160): entries arez ∗/P(z∗)
+LISA AXI CLASS 0.195/0.00421 0.345/0.05551 0.285/0.03766 0.836/0.05760 0.285/0.02511 0.325/0.02885
+LISA CPL 0.195/0.00408 0.385/0.05190 0.320/0.03738 0.871/0.05738 0.320/0.02492 0.365/0.02783
+LISA CPL+Λ 0.165/0.00417 0.320/0.06547 0.295/0.04705 0.766/0.06047 0.295/0.03137 0.325/0.03595
+LISA IntDM 0.195/0.00394 0.360/0.05089 0.315/0.03549 0.846/0.05958 0.315/0.02366 0.345/0.02669
+LISA IntDE 0.200/0.00406 0.355/0.05235 0.305/0.03587 0.811/0.06121 0.305/0.02391 0.345/0.02708
+LISA ΛCDM 0.205/0.00414 0.375/0.05172 0.320/0.03753 0.871/0.05887 0.320/0.02502 0.360/0.02799
+Difference between detector optima: entries are∆z ∗
+∆z∗AXI CLASS 0.029 0.017 0.025 0.069 0.025 0.023
+∆z∗CPL 0.011 0.003 0.004 0.134 0.004 0.013
+∆z∗CPL+Λ 0.067 0.058 0.025 0.129 0.025 0.043
+∆z∗IntDM 0.051 0.018 0.011 0.141 0.011 0.005
+∆z∗IntDE 0.050 0.019 0.013 0.214 0.013 0.005
+∆z∗ΛCDM 0.005 0.025 0.004 0.122 0.004 0.004
+B Detector-specific pointwise Hellinger distance plots
+This appendix collects the detector-specific pointwise marginal Hellinger distance curves for all
+reconstructed diagnostics. Each figure shows ET and LISA side by side for the same quantity.
+The q(z), wtot(z) and κ(z) panels are nearly identical as discussed in Sec. 5.1 because these
+diagnostics are related by simple affine transformations at fixed redshift. The H′(z) and
+Om(z) panels show the strongest detector-dependent structure at high redshift, while the
+H(z) panels are dominated at low redshift by the differing fiducialH 0 values.
+Figure 14 shows the H(z) comparison and isolates the low redshift feature produced
+by the different fiducial H0 values. Figure 15 shows the stronger derivative sensitivity of
+H′(z). Figures 16, 18 and 19 show the nearly identical behavior of diagnostics related by
+affine maps. Figure 17 shows the Om diagnostic, whose high redshift structure is enhanced
+by the denominator in Eq. (3.17).
+– 39 –
+
+(a)ET
+ (b)LISA
+Figure 14:Pairwise pointwise marginal Hellinger distance curves for H(z). The near-unity
+values at very low redshift reflect the differing fiducial H0 values across cosmologies rather
+than divergence in the full expansion history.
+(a)ET
+ (b)LISA
+Figure 15:Pairwise pointwise marginal Hellinger distance curves for H′(z). Both detectors
+show sharp structure near the upper end of their reconstruction window, reflecting the greater
+sensitivity of this quantity to fluctuations ind ′′
+C(z).
+– 40 –
+
+(a)ET
+ (b)LISA
+Figure 16:Pairwise pointwise marginal Hellinger distance curves for the deceleration
+parameterq(z). For ET the main rise appears near z∼1.8. For LISA the structure is broader
+and extends overz∼2.5–4.
+(a)ET
+ (b)LISA
+Figure 17:Pairwise pointwise marginal Hellinger distance curves for the Om diagnostic
+Om(z). This quantity develops the most jagged high-redshift structure because the denominator
+(1 +z) 3−1and the reconstructed numerator can both enhance local fluctuations.
+– 41 –
+
+(a)ET
+ (b)LISA
+Figure 18:Pairwise pointwise marginal Hellinger distance curves for the total effective
+equation of state wtot(z). The detector dependence matches that of q(z)because the two
+diagnostics differ only by a redshift dependent affine transformation at fixedz.
+(a)ET
+ (b)LISA
+Figure 19:Pairwise pointwise marginal Hellinger distance curves for κ(z) =E′(z)/E(z).
+The pattern is nearly identical in practice to that of q(z)and wtot(z)because κ(z) = [1 +
+q(z)]/(1 +z) = 3[1 +w tot(z)]/[2(1 +z)]at fixed redshift.
+C Higher-order covariance structure
+For completeness, we present representative covariance blocks involving third derivatives of
+the reconstructed comoving distance. These quantities are not used directly in the analysis
+due to the rapid growth of uncertainties, but they illustrate the strong oscillatory behavior
+and amplified correlations arising from repeated kernel differentiation.
+These are cross covariance blocks, so an individual panel is not expected to be symmetric.
+The transpose relation is recovered only after the derivative order is exchanged. The alternating
+positive and negative regions at large redshift show that third derivative information is highly
+sensitive to small changes in the reconstructed slope. This is the visual reason why third
+order kinematical diagnostics are avoided in the main analysis. Figure 20 displays the two
+representative cross covariance blocks used to illustrate this instability.
+– 42 –
+
+(a) Cov[d′′′
+C (z), d′
+C(z′)]
+ (b) Cov[d′
+C(z), d′′′
+C (z′)]
+Figure 20:Predictive covariance blocks involving third derivatives of the reconstructed
+comoving distance. The pronounced oscillatory structure and large amplitudes toward high
+redshift explain the instability of third-order kinematical diagnostics and justify our preference
+for diagnostics requiring only up to second-order differentiation.
+References
+[1] B.P. Abbott et al.,Observation of gravitational waves from a binary black hole merger,
+Phys. Rev. Lett.116(2016) 061102.
+[2] B.P. Abbott et al.,GW170817: Observation of gravitational waves from a binary neutron star
+inspiral,Phys. Rev. Lett.119(2017) 161101.
+[3] B.P. Abbott et al.,Multi-messenger observations of a binary neutron star merger,
+Astrophys. J. Lett.848(2017) L12.
+[4] B.F. Schutz,Determining the Hubble constant from gravitational wave observations,Nature323
+(1986) 310.
+[5] D.E. Holz and S.A. Hughes,Using gravitational-wave standard sirens,Astrophys. J.629(2005)
+15.
+[6] B.P. Abbott et al.,A gravitational-wave standard siren measurement of the Hubble constant,
+Nature551(2017) 85.
+[7] H.-Y. Chen, M. Fishbach and D.E. Holz,A two per cent Hubble constant measurement from
+standard sirens within five years,Nature562(2018) 545.
+[8] S. Borhanian, A. Dhani, A. Gupta, K.G. Arun and B.S. Sathyaprakash,Dark sirens to resolve
+the Hubble–Lemaˆ ıtre tension,Astrophys. J. Lett.905(2020) L28.
+[9] M. Fishbach et al.,A standard siren measurement of the Hubble constant from GW170817
+without the electromagnetic counterpart,Astrophys. J. Lett.871(2019) L13 [1807.05667].
+[10] M. Soares-Santos et al.,First measurement of the Hubble constant from a dark standard siren
+using the Dark Energy Survey galaxies and the LIGO/Virgo binary–black-hole merger GW170814,
+Astrophys. J. Lett.876(2019) L7 [1901.01540].
+[11] B.P. Abbott et al.,A gravitational-wave measurement of the Hubble constant following the
+second observing run of advanced LIGO and Virgo,Astrophys. J.909(2021) 218 [1908.06060].
+– 43 –
+
+[12] R. Abbott et al.,Constraints on the cosmic expansion history from GWTC-3,Astrophys. J.949
+(2023) 76 [2111.03604].
+[13] W.M. Farr, M. Fishbach, J. Ye and D.E. Holz,A future percent-level measurement of the Hubble
+expansion at redshift 0.8 with advanced LIGO,Astrophys. J. Lett.883(2019) L42 [ 1908.09084].
+[14] A.G. Riess et al.,A comprehensive measurement of the local value of the Hubble constant with
+1 km s−1mpc−1uncertainty from the Hubble Space Telescope and the SH0ES team,
+Astrophys. J. Lett.934(2022) L7.
+[15] Planck Collaboration, N. Aghanim et al.,Planck 2018 results. VI. cosmological parameters,
+Astron. Astrophys.641(2020) A6.
+[16] C. Heymans et al.,KiDS-1000 cosmology: Multi-probe weak gravitational lensing and
+spectroscopic galaxy clustering constraints,Astron. Astrophys.646(2021) A140.
+[17] T.M.C. Abbott et al.,Dark energy survey year 3 results: Cosmological constraints from galaxy
+clustering and weak lensing,Phys. Rev. D105(2022) 023520.
+[18] DESI Collaboration, A.G. Adame et al.,DESI 2024 VI: Cosmological constraints from the
+measurements of baryon acoustic oscillations,arXiv e-prints(2024) [2404.03002].
+[19] E. Di Valentino, O. Mena, S. Pan et al.,In the realm of the Hubble tension — a review of
+solutions,Class. Quantum Grav.38(2021) 153001.
+[20] M. Maggiore et al.,Science case for the Einstein Telescope,J. Cosmol. Astropart. Phys.2020
+(2020) 050.
+[21] B.S. Sathyaprakash, B.F. Schutz and C. Van Den Broeck,Cosmography with the Einstein
+Telescope,Class. Quantum Grav.27(2010) 215006.
+[22] P. Amaro-Seoane et al.,Laser Interferometer Space Antenna,arXiv e-prints(2017)
+[1702.00786].
+[23] A. Klein et al.,Science with the space-based interferometer eLISA: Supermassive black hole
+binaries,Phys. Rev. D93(2016) 024003.
+[24] N. Tamanini, C. Caprini, E. Barausse et al.,Science with the space-based interferometer eLISA:
+Supermassive black hole binaries as standard sirens,J. Cosmol. Astropart. Phys.2016(2016)
+002.
+[25] C. Messenger and J. Read,Measuring a cosmological distance–redshift relationship using only
+gravitational wave observations of binary neutron star coalescences,Phys. Rev. Lett.108(2012)
+091101 [1107.5725].
+[26] S.M. Feeney, H.V. Peiris, A.R. Williamson, S.M. Nissanke, D.J. Mortlock, J. Alsing et al.,
+Prospects for resolving the Hubble constant tension with standard sirens,Phys. Rev. Lett.122
+(2019) 061105 [1802.03404].
+[27] S. Mukherjee, B.D. Wandelt, S.M. Nissanke and A. Silvestri,Accurate precision cosmology with
+redshift unknown gravitational wave sources,Phys. Rev. D103(2021) 043520 [2007.02943].
+[28] C. Cigarr´ an D´ ıaz and S. Mukherjee,Mapping the cosmic expansion history from
+LIGO–Virgo–KAGRA in synergy with DESI and SPHEREx,Mon. Not. R. Astron. Soc.511
+(2022) 2782 [2107.12787].
+[29] S.-J. Jin, S.-S. Xing, Y. Shao, J.-F. Zhang and X. Zhang,Joint constraints on cosmological
+parameters using future multi-band gravitational wave standard siren observations,Chinese
+Phys. C47(2023) 065104 [2301.06722].
+[30] S. Afroz, S. Mukherjee and G. Tasinato,Illuminating dark energy with bright standard sirens
+from future detectors,arXiv e-prints(2025) [2507.06340].
+– 44 –
+
+[31] S. Afroz and S. Mukherjee,Prospect of precision cosmology and testing general relativity using
+binary black holes–galaxies cross-correlation,Mon. Not. R. Astron. Soc.534(2024) 1283
+[2407.09262].
+[32] R. Shah, A. Bhaumik, P. Mukherjee and S. Pal,A thorough investigation of the prospects of
+eLISA in addressing the Hubble tension: Fisher forecast, MCMC and machine learning,
+J. Cosmol. Astropart. Phys.2023(2023) 038 [2301.12708].
+[33] P. Mukherjee, R. Shah, A. Bhaumik and S. Pal,Reconstructing the Hubble parameter with future
+gravitational wave missions using machine learning,Astrophys. J.960(2024) 61 [2303.05169].
+[34] M. Seikel, C. Clarkson and M. Smith,Reconstruction of dark energy and expansion dynamics
+using Gaussian processes,J. Cosmol. Astropart. Phys.2012(2012) 036.
+[35] T. Holsclaw, U. Alam, B. Sans´ o, H. Lee, K. Heitmann, S. Habib et al.,Nonparametric dark
+energy reconstruction from supernova data,Phys. Rev. Lett.105(2010) 241302.
+[36] V.C. Busti, C. Clarkson and M. Seikel,Evidence for a lower value forH 0 from cosmic
+chronometers data?,Mon. Not. R. Astron. Soc.441(2014) L11.
+[37] S. Yahya, M. Seikel, C. Clarkson, R. Maartens and M. Smith,Null tests of the cosmological
+constant using supernovae,Phys. Rev. D89(2014) 023503.
+[38] A. Shafieloo, A.G. Kim and E.V. Linder,Gaussian Process Cosmography,Phys. Rev. D85
+(2012) 123530.
+[39] T. Holsclaw, U. Alam, B. Sanso et al.,Nonparametric reconstruction of the dark energy equation
+of state,Phys. Rev. D84(2011) 083501.
+[40] M. Bilicki and M. Seikel,We do not live in the rh =ct universe,Mon. Not. R. Astron. Soc.425
+(2012) 1664 [1206.5130].
+[41] A. G´ omez-Valent and L. Amendola,H0 from cosmic chronometers and type Ia supernovae, with
+Gaussian processes and the novel weighted polynomial regression method,
+J. Cosmol. Astropart. Phys.2018(2018) 051 [1802.01505].
+[42] E.E.O. Ishida and R.S. de Souza,Hubble parameter reconstruction from a principal component
+analysis: minimizing the bias,Astron. Astrophys.527(2011) A49 [1012.5335].
+[43] R. Arjona and S. Nesseris,What can machine learning tell us about the background expansion of
+the universe?,Phys. Rev. D101(2020) 123525 [1910.01529].
+[44] A. Ghaleb, A. Malhotra, G. Tasinato and I. Zavala,Bayesian reconstruction of primordial
+perturbations from induced gravitational waves,Phys. Rev. D112(2025) 123538 [2505.22534].
+[45] Ruchika, P. Mukherjee and A. Favale,Revisiting Gaussian process reconstruction for cosmological
+inference: The generalised GP (Gen GP) framework,arXiv e-prints(2025) [2510.03742].
+[46] M. Chevallier and D. Polarski,Accelerating universes with scaling dark matter,
+Int. J. Mod. Phys. D10(2001) 213.
+[47] E.V. Linder,Exploring the expansion history of the universe,Phys. Rev. Lett.90(2003) 091301.
+[48] Planck Collaboration, N. Aghanim et al.,Planck 2018 results. V. CMB power spectra and
+likelihoods,Astron. Astrophys.641(2020) A5.
+[49] D. Brout et al.,The Pantheon+ analysis: Cosmological constraints,Astrophys. J.938(2022) 110.
+[50] J. Lesgourgues,The Cosmic Linear Anisotropy Solving System (CLASS) i: Overview,arXiv
+e-prints(2011) [1104.2932].
+[51] D. Blas, J. Lesgourgues and T. Tram,The Cosmic Linear Anisotropy Solving System (CLASS)
+ii: Approximation schemes,J. Cosmol. Astropart. Phys.2011(2011) 034.
+[52] V. Poulin, T.L. Smith and T. Karwal, “AxiCLASS: a version of CLASS for axion-like particles. ”
+GitHub repository, accessed 26 May 2026: github.com/PoulinV/AxiCLASS, 2026.
+– 45 –
+
+[53] T.L. Smith, V. Poulin and M.A. Amin,Oscillating scalar fields and the Hubble tension: A
+resolution with novel signatures,Phys. Rev. D101(2020) 063523 [1908.06995].
+[54] D. Foreman-Mackey, D.W. Hogg, D. Lang and J. Goodman,emcee: The MCMC hammer,
+Publ. Astron. Soc. Pac.125(2013) 306.
+[55] L. Amendola,Coupled quintessence,Phys. Rev. D62(2000) 043511 [astro-ph/9908023].
+[56] B. Wang, E. Abdalla, F. Atrio-Barandela and D. Pav´ on,Dark matter and dark energy
+interactions: Theoretical challenges, cosmological implications and observational signatures,
+Rep. Prog. Phys.79(2016) 096901 [1603.08299].
+[57] S. Pan, W. Yang, E. Di Valentino, E.N. Saridakis and S. Chakraborty,Interacting scenarios with
+dynamical dark energy: Observational constraints and alleviation of theH 0 tension,
+Phys. Rev. D100(2019) 103520.
+[58] A. Notari, M. Redi and A. Tesi,Consistent theories for the DESI dark energy fit,
+J. Cosmol. Astropart. Phys.2024(2024) 025 [2406.08459].
+[59] V. Poulin, T.L. Smith, T. Karwal and M. Kamionkowski,Early dark energy can resolve the
+Hubble tension,Phys. Rev. Lett.122(2019) 221301 [1811.04083].
+[60] T. Bogdanovi´ c, M.C. Miller and L. Blecha,Electromagnetic counterparts to massive black-hole
+mergers,Living Rev. Relativ.25(2022) 3 [2109.03262].
+[61] N. Tamanini,Late time cosmology with LISA: probing the cosmic expansion with massive black
+hole binary mergers as standard sirens,J. Phys. Conf. Ser.840(2017) 012029.
+[62] L. Speri, N. Tamanini, R.R. Caldwell, J.R. Gair and B. Wang,Testing the Hubble law with LISA
+standard sirens,Phys. Rev. D103(2021) 083526.
+[63] S. Marsat, J.G. Baker and T. Dal Canton,Exploring the Bayesian parameter estimation of
+binary black holes with LISA,Phys. Rev. D103(2021) 083011.
+[64] J. Ferreira, T. Barreiro, J. Mimoso and N.J. Nunes,Forecastingf(q)cosmology withλcdm
+background using standard sirens,Phys. Rev. D105(2022) 123531 [2203.13788].
+[65] C.M. Hirata, D.E. Holz and C. Cutler,Reducing the weak lensing noise for the gravitational wave
+Hubble diagram using the non-Gaussian lens reconstruction,Phys. Rev. D81(2010) 124046.
+[66] C. Shapiro, D.J. Bacon, M. Hendry and B. Hoyle,Delensing gravitational wave standard sirens
+with shear and flexion maps,Mon. Not. R. Astron. Soc.404(2010) 858.
+[67] V. Vaskonen,Weak lensing of bright standard sirens: prospects for σ8,Mon. Not. R. Astron. Soc.
+547(2026) stag353 [2601.06023].
+[68] B. Kocsis, Z. Frei, Z. Haiman and K. Menou,Finding the electromagnetic counterparts of
+cosmological standard sirens,Astrophys. J.637(2006) 27.
+[69] T. Dahlen et al.,A critical assessment of photometric redshift methods: A CANDELS
+investigation,Astrophys. J.775(2013) 93.
+[70] O. Ilbert et al.,Mass assembly in quiescent and star-forming galaxies sincez≃4from
+UltraVISTA,Astron. Astrophys.556(2013) A55 [1301.3157].
+[71] R. Gray et al.,Cosmological inference using gravitational wave standard sirens: A mock data
+analysis,Phys. Rev. D101(2020) 122001.
+[72] R. Gray et al.,Joint cosmological and gravitational-wave population inference using dark sirens
+and galaxy catalogues,J. Cosmol. Astropart. Phys.2023(2023) 023 [2308.02281].
+[73] S. Mukherjee and B.D. Wandelt,Beyond the classical distance–redshift test: cross-correlating
+redshift-free standard candles and sirens with redshift surveys,arXiv e-prints(2018)
+[1808.06615].
+– 46 –
+
+[74] R. Schneider, V. Ferrari, S. Matarrese and S.F. Portegies Zwart,Low-frequency gravitational
+waves from massive black hole binaries: predictions for LISA and pulsar timing arrays,
+Mon. Not. R. Astron. Soc.324(2001) 797.
+[75] W. Zhao, C. Van Den Broeck, D. Baskaran and T.G.F. Li,Determination of dark energy by the
+Einstein Telescope: Comparing with CMB, BAO, and SNIa observations,Phys. Rev. D83(2011)
+023005.
+[76] E. Belgacem, Y. Dirian, S. Foffa, E.J. Howell, M. Maggiore and T. Regimbau,Cosmology and
+dark energy from joint gravitational wave-GRB observations,J. Cosmol. Astropart. Phys.2019
+(2019) 015 [1907.01487].
+[77] S. Afroz and S. Mukherjee,The phase space of low-mass binary compact objects from
+LIGO–Virgo–KAGRA catalogue: hints on the chances of different formation scenarios,
+Mon. Not. R. Astron. Soc.544(2025) 4689 [2505.22739].
+[78] L. Amati et al.,THESEUS: a key space mission concept for multi-messenger astrophysics,
+Adv. Space Res.62(2018) 191 [1712.08153].
+[79] L. Piro et al.,Athena synergies in the multi-messenger and transient universe,Exp. Astron.54
+(2022) 23 [2110.15677].
+[80] V. Bhalerao, S. Vadawale, S. Tendulkar et al.,Daksha: On alert for high energy transients,
+Exp. Astron.57(2024) 24 [2211.12055].
+[81] C.E. Rasmussen and C.K.I. Williams,Gaussian Processes for Machine Learning, The MIT Press,
+Cambridge, MA (2006), 10.7551/mitpress/3206.001.0001.
+[82] E. ´O Colg´ ain and M.M. Sheikh-Jabbari,Elucidating co-moving Hubble constant tensions with
+Gaussian process reconstruction,Eur. Phys. J. C81(2021) 892.
+[83] M. Seikel and C. Clarkson,Optimising Gaussian processes for reconstructing dark energy
+dynamics from supernovae,arXiv e-prints(2013) [1311.6678].
+[84] V. Sahni, A. Shafieloo and A.A. Starobinsky,Two new diagnostics of dark energy,Phys. Rev. D
+78(2008) 103502.
+[85] E. Hellinger,Neue begr¨ undung der theorie quadratischer formen von unendlichvielen
+ver¨ anderlichen,Journal f¨ ur die reine und angewandte Mathematik136(1909) 210.
+[86] L. Le Cam and G.L. Yang,Asymptotics in Statistics: Some Basic Concepts, Springer, New York,
+2 ed. (2000), 10.1007/978-1-4612-1166-2.
+[87] S. Alam et al.,The clustering of galaxies in the completed SDSS-III Baryon Oscillation
+Spectroscopic Survey,Mon. Not. R. Astron. Soc.470(2017) 2617.
+– 47 –

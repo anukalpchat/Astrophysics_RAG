@@ -1,0 +1,2476 @@
+Title: Fast and Flexible Characterisation of Astronomical Light Curves Using Multi-Time Attention
+Authors: Yash Gondhalekar, Anais Möller, Paula Sánchez-Sáez
+Published: 2026-05-22
+Categories: astro-ph.IM, astro-ph.GA
+
+MNRAS000, 1–22 (2026) Preprint 26 May 2026 Compiled using MNRAS L ATEX style file v3.3
+Fast and Flexible Characterisation of Astronomical Light Curves Using
+Multi-Time Attention
+Y. Gondhalekar,1★ A. Möller,2 and P. Sánchez-Sáez3
+1Department of Physics & Astronomy, University College London, Gower Street, London WC1E 6BT, UK
+2Centre for Astrophysics and Supercomputing, Swinburne University of Technology, John St, Hawthorn, VIC 3122, Australia
+3European Southern Observatory, Karl-Schwarzschild-Str. 2, 85748 Garching bei München, Germany
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+We present an unsupervised, data-driven framework for rapid characterisation of astronomical photometric time series using
+a Multi-Time Attention Network. The model learns time-aware latent representations directly from irregular, partial light
+curves without heavy preprocessing. Through application on ZTF alert data retrieved with Fink, a community alert broker
+for Rubin LSST, we demonstrate that the model: (i) produces accurate interpolations with small bias (0.01 mag) and scatter
+(0.1 mag) even for sparse light curves, (ii) learns a temporally distributed latent space correlating with physically meaningful
+properties(duration,peaktime,variability,color)whilebeingrobusttounimportantpropertiessuchasobservedmagnitudeand
+number of observations, (iii) separates general SN and AGN samples despite data being heavily dominated by AGNs, and (iv)
+generalises to unseen classes: The long-period variable and TDE show good interpolation and sensible latent space placement;
+however, the model cannot capture RRLyrae’s∼0.4-0.5 day pulsation period, which is far below our model’s chosen two-day
+temporal resolution. Attention map analysis reveals the capability of multi-time attention to capture local structure. The model
+is extremely lightweight (a few hundred kilobytes) and has fast inference (∼0.01 and∼3×10−4 s per light curve on CPU and
+GPU, respectively) that is independent of the number of observations, unlike GP regression. Our approach offers flexible and
+scalablecharacterisation,withhighrelevanceintheRubinLSSTera.Wediscussfuturepossibilitiestoincorporateobservational
+uncertainties and symmetries for robustness and forecasting applications for real-time follow-up.
+Key words:methods: data analysis – methods:observational – supernovae:general – galaxies: active
+1 INTRODUCTION
+New wide-field astronomical surveys such as the Vera C. Rubin Ob-
+servatory’s Legacy Survey of Space and Time (LSST Ivezić et al.
+2019) and the Nancy Grace Roman Space Telescope’s High-latitude
+Time Domain Survey (Rose et al. 2021) will transform our under-
+standing of transient physics. LSST alone will detect≳106 super-
+novae(SNe)annually,whichisroughly100×morethanfromcurrent
+surveys combined (Bellm et al. 2019; Chambers et al. 2016; Tonry
+et al. 2018; Gaia Collaboration et al. 2016) and orders of magnitude
+morethancurrentlargesttypeIaSNsamples(Mölleretal.2022;DES
+Collaboration et al. 2024; Möller et al. 2024; Rigault et al. 2025).
+LSST’s immense type Ia SN sample will help improve cosmolog-
+ical constraints (Graziani et al. 2020; Vincenzi et al. 2024), while
+two orders of magnitude more superluminous SNe and tidal disrup-
+tion events (TDEs) will challenge our understanding of their energy
+sourcesandphysicalproperties(Villaretal.2018;Scovacricchietal.
+2016; Bricman & Gomboc 2020). Additionally, tens of millions of
+AGNs,anorderofmagnitudemorethanexistingsamples,willprobe
+variabilityfromminutetoyeartimescalesandhelpbetterunderstand
+their central engines (Ivezić et al. 2019).
+Photometric classification is essential as follow-up spectroscopy
+★ E-mail: yash.gondhalekar.25@ucl.ac.uk
+willbefeasibleforonlyatinyfraction(≲1%)ofthedetectionsfrom
+largesurveysduetolimitedtelescoperesources.Severalphotometric
+classificationmethodshavebeendeveloped,rangingfromthoseusing
+hand-curated features based on prior astrophysical knowledge (e.g.,
+D’Isanto et al. 2016; Mistry et al. 2024), extracting features through
+fitting parametric models to light curves (e.g., Möller et al. 2016;
+Villar et al. 2019; Sánchez-Sáez et al. 2021a; de Soto et al. 2024b;
+Leoni et al. 2022) or related template-fitting methods (e.g., Sako
+et al. 2011, 2018), physical modelling (e.g., Guillochon et al. 2018;
+Llamas Lanza et al. 2026), using host galaxy photometry for more
+rapid follow-ups (e.g., Kisley et al. 2023) or combining it with light
+curve data (e.g., Gagliano et al. 2023), to non-parametric feature
+extraction methods using principal component analysis (e.g., Ishida
+& de Souza 2013), Gaussian process (GP) regression (e.g., Boone
+2019) along with wavelet decomposition (e.g., Lochner et al. 2016;
+Alves et al. 2022).
+However, these methods face some limitations. Curating hand-
+engineered features is time-consuming and biased by our physical
+understanding of transient phenomena, which may not be optimal
+for complex subtype classification (e.g., Table 5 of Sánchez-Sáez
+et al. 2021a; Möller & de Boissière 2020) or for identifying anoma-
+lous events (Pruzhinskaya et al. 2026). Although model parameters
+are generally interpretable, parametric models suffer from computa-
+tionalexpense,thepossibilityofparameterdegeneracies(Villaretal.
+©2026 The Authors
+arXiv:2605.24095v1  [astro-ph.IM]  22 May 2026
+
+2Gondhalekar et al.
+2019;Möller&deBoissière2020),andmodelmisspecificationrisks
+for poorly understood transients or require class-dependent fits. GP
+regression, though popular for modeling astronomical light curves
+(Aigrain&Foreman-Mackey2023),suffersfromhighcomputational
+costandsensitivitytothechoiceofcovariancefunction,withnouni-
+versal guidance for handling diverse transient types while keeping
+low computational costs (see also section 5.5 of Boone 2019)1.
+These limitations motivate the choice of data-driven approaches
+using deep neural networks that learn ‘latent’ features from light
+curves (see also Demianenko et al. 2023). Several such approaches
+have been proposed (e.g., Charnock & Moss 2017; Muthukrishna
+et al. 2019; Pasquet et al. 2019; Möller & de Boissière 2020; Boone
+2021; Sánchez-Sáez et al. 2021b; Fraga et al. 2024), including those
+aiming to forecast future photometric behavior based on a few ob-
+servations for optimising the follow-up strategy (Sravan et al. 2020)
+or those using a combination of image data, alert photometry, and
+host information (Sheng et al. 2024). Attention-based architectures
+have shown particular promise (e.g., Pimentel et al. 2023; Allam &
+McEwen 2024). For example, Pimentel et al. (2023) demonstrated
+especially beneficial for classification using a few observations on
+real SNe data compared to traditional machine classifiers based on
+random forest or recurrent neural networks.
+We present an unsupervised approach using the Multi-Time At-
+tentionNetwork(mTANNarayanShukla&Marlin2021a),whichis
+basedontimeattentionandageneralisationofdiscretepositionalen-
+codingintransformermodelstocontinuous-time.mTANcanhandle
+irregularlyspacedvaluesintimeandbandwithoutanypreprocessing
+formissingvalues,andwhileitcanbeincorporatedinanydeepneu-
+ralnetwork,hereitisusedinanencoder-decoderarchitecture:itcan
+serve as a feature learner–low-dimensional representations of light
+curves–with the advantage that these representations directly repre-
+senttime,orasagenerativemodel.mTANsharesconceptualconnec-
+tionswiththetemporalmodulationapproachintroducedinPimentel
+et al. (2023) to learn continuous-time representations. However, our
+approach is structurally simpler: we directly compute attention over
+the learned time embeddings, whereas they learn a temporal mod-
+ulation using Fourier decomposition before attention, which offers
+more interpretability at the cost of additional computation.
+This paper focuses on whether mTAN learns physically inter-
+pretable latent features from light curves, which is an important
+precursortoanyclassificationmethod.Theselearnedfeaturescanbe
+particularlyvaluableforhandlingthecomplexityoftransientclassifi-
+cationarisingduetosubstantialoverlapamongdifferentclasses(e.g.,
+see Figure 19 of Villar et al. 2017) or even a debatable definition of
+classes themselves, like for SN IIP vs IIL. Another advantage is the
+added flexibility of combining our approach with any metric-based
+classificationmethod.Ourdataconsistsoflightcurvesbasedonreal
+detections rather than on simulations to avoid making assumptions
+about transient population diversity. Only the observed photometric
+time series is used without auxiliary information about redshift or
+otherpropertiesofhosts.Thispaperisstructuredasfollows.Section
+2.1.1 describes the data collection and quality filtering, Section 2.2
+provides theoretical details of the mTAN approach, our proposed
+modification, and training details. Section 3 presents our evalua-
+tion of the model, which includes testing generalisation to variable
+starsandfast-evolvingtransientsabsentduringtraining(Section3.8)
+and an interpretability test to better understand our model’s learning
+1 Faster linear-time variants of GP with physically motivated covariance
+function have been proposed (e.g., Foreman-Mackey et al. 2017); however,
+these generally assume one-dimensional settings.
+mechanism(Section3.6).Section4summarisesourfindingsandpo-
+tentialforfuturework,followedbyconcludingremarksinSection5.
+2 METHODS
+Section 2.1 describes details of the data set used, including the
+data collection (Section 2.1.1) and quality filtering of alerts (Sec-
+tion 2.1.2). Section 2.2 with theoretical details of the mTAN in
+Section 2.2.1, details of its integration with the encoder-decoder
+framework in Section 2.2.2, details of our methodological modifica-
+tion to the original mTAN in Section 2.2.3, and training details in
+Section 2.2.4.
+2.1 Data set preparation
+2.1.1 Data collection
+WepollpublicalertsfromtheZwickyTransientFacility(ZTF;Bellm
+et al. 2019) survey from 1st July 2021 to December 31st 2022 (1.5
+years) using the Fink broker, a community alert broker designed for
+time-domain science with Rubin LSST (Möller et al. 2021). ZTF
+alert data is based on difference imaging for measuring variations
+in flux and point-spread function photometry. We use the PSF-fit
+magnitudes (magpsf) and time of observation (jd) for𝑔and𝑟bands
+of alerts, but ignore uncertainties on magnitudes and do not correct
+for Milky Way or host extinction. Each alert contains a history of
+photometrymeasurementsforthelast30days,whichallowsbuilding
+light curves using multiple alerts from the same object. The typical
+cadence of ZTF light curves is around two days.
+We restrict our data collection to three types of alerts: (1) those
+with confirmed Transient Name Server (TNS) classifications of any
+SNe type: Type Ia and its subtypes (Ia-91T-like, Ia-91bg-like, Ia-
+CSM, Ia-pec, Iax/02cx-like), Types Ib and its subtypes (Ib-Ca-rich,
+Ib-pec,Ibn,Ib/c),Icanditssubtypes(Ic-BL,Ic-pec,Icn),TypeIIand
+theirsubclasses(II-pec,IIP,IIL,IIn,IIn-pec,IIb),andsuperluminous
+SN (SLSN-I, SLSN-II) (2) those flagged as an early supernova Ia
+candidatethroughtheclassifierwithinFink(Leonietal.2022;Möller
+et al. 2025), and (3) those with Milliquas (version 8 Flesch 2023)
+classificationsofthefollowingActiveGalacticNuclei(AGN)types:
+QSO(“Q”-type classes), type-I Seyfert (class “A”-type classes), BL
+Lac(class“B”-typeclasses),andtype-IISeyfert(class“N”-or“K”-
+typeclasses)–forthispurpose,theSIMBADlabelsfoundinFinkare
+crossmatched with the Milliquas database within 1′′2. Alerts in (1)
+are dominated by type Ia SNe (56%) and type II SNe (33%), and
+alertsin(2)aredominatedbyQSO(72%)andtype-ISeyferts(20%).
+Asourapproachisunsupervisedinnature,wedonotperformany
+further data curation to handle class imbalance, and we do not use
+supplementary information such as redshift. However, the class in-
+formationisusefulforanalyzingourresults,andthus,forsimplicity,
+wefocusonlyontheabovethreeclassesinsteadofallpossibletypes,
+even though our model can be applied to any type of light curve.
+2.1.2 Quality filtering
+Toincreasethequalityofthesamplephotometry,onlyalertspassing
+the following basic selection cuts are considered: real-bogus quality
+score > 0.65, number of bad pixels in a5×5pixel region = 0, a
+Full Width at Half Maximum≤5, elongation≤1.2, and absolute
+2 1621 alerts did not have a corresponding Milliquas match, so we set their
+class as ‘Unknown’.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN3
+101 102
+⟨L⟩
+0
+100
+200
+300
+400
+500Duration (days)
+AGN
+SN
+Early SN Ia
+0
+1500
+3000
+0
+800
+Figure 1.Distribution of duration (difference between the latest and earliest
+time of observation in days) and no. of observations, averaged across the
+𝑔and𝑟bands for all polled light curves, separated by three coarse types:
+SN, early SN Ia candidate, and AGN (see main text for included subtypes).
+The Early SN Ia candidates are denoted by gray-colored crosses situated
+near the bottom-left. The 1D histograms on top and bottom axes show the
+marginaldistributionsoftheaverageno.ofobservationsandaverageduration,
+respectively, where the y-axis shows the counts. A Gaussian kernel density
+estimate is overlaid on the histograms for visualisation purposes.
+value of difference magnitude≤0.1. Light curves are constructed
+by time-ordering the set of alerts that pass these criteria. As light
+curves with very few data points can not constrain the temporal
+evolution of transients effectively, and thus make evaluation of our
+model uninformative, we remove those that have fewer than three
+observations in either the𝑔or the𝑟band. Finally, we remove two
+other types of light curves: (a) those with object IDs starting with
+“ZTF18”andhavingoneoftheTNSSNetype,becauseFinkreceived
+datafromNovember2019onwardsfromZTF,somosttransientswith
+ZTF18 designations would no longer generate alerts by then, except
+in rare cases; indeed, most of them showed flat light curves, and
+(b) those whose visual inspection showed multiple detections at the
+sametime–atleasttensuchcasesarefound,botharisingduetoissues
+with template images used for difference imaging. Apart from these
+simple selection criteria, we donotperform any additional model-
+oriented preprocessing, such as interpolating using GP regression,
+projecting observations on an even grid, or grouping closely spaced
+observations in time in order to ensure the evaluation of the model
+remains transparent for less-than-ideal situations.
+The above quality filter criteria result in 15,652 (51,367) light
+curves corresponding to 437,935 (568,176) alerts, where values in-
+sidebracketsshowstatisticsbeforeapplyingthefiltercriteria.Ofthe
+15,652 light curves, 1389 have one of the SN classes, 10 are early
+SN Ia candidates, and the rest have one of the AGN classes. Thus,
+our dataset is biased towards AGN light curves.
+Figure 1 shows a comparison of the number of observations and
+thedurationoflightcurves.MostSNlightcurvesspanlessthanthree
+months, whereas most AGNs span more than three months, with a
+significant number that span more than a year, which is expected
+due to the nature of the variations of SNe and AGNs. Early SN
+Ia candidates lie at the lower-left end of the plot, around the same
+location as SN.
+In principle, SN and AGN classes can be linearly separated with
+goodaccuracybasedonasimplecutontheduration(and,optionally,
+thenumberofobservations),asAGNstendtohavelongerdurations.
+However,thereareatleasttwochallengeswiththissimpleapproach.
+First, this observed pattern would be unclear had the alerts been
+polled for only a few consecutive months, i.e., there is a contribu-
+tion of selection effect due to the time range for which the alerts
+are polled. Second, this approach would misclassify rare yet astro-
+physically important transients that do not follow the general trend
+of that class of transients: for example, SLSN and certain subtypes
+of SN II are expected to be long-lived but would get misclassified
+as AGN type. Third, the stochastic nature of AGN variability and
+the need for a5𝜎detection to trigger a ZTF alert can make AGN
+light curves appear transient-like when there is flaring activity or
+evenwhenthevariabilityamplitudesarelow,andsucheventsarenot
+unusual in AGNs (Sánchez-Sáez et al. 2021b). Thus, we motivate
+theuseofageneralisableandunsupervisedapproach–representation
+learning–for characterising light curves in our dataset.
+2.2 Approach
+2.2.1 The Multi-Time Attention Network: mTAN
+WeusetheMulti-TimeAttentionNetwork(mTAN)approach,which
+is based on time attention (Narayan Shukla & Marlin 2021a). It
+learns time embeddings without concatenating them with the input,
+butbylearningtoattendtoobservationsatdifferenttimesusingtem-
+poral similarity that is calculated from data, that is, without using
+fixed similarity kernels like those used in traditional GP regression
+or neural network interpolators with fixed kernel definitions (e.g.,
+Narayan Shukla & Marlin 2019). The guiding mechanism for atten-
+tion in mTAN is time embeddings of the query and the key, which
+arelearnedduringtraining.AttentioninmTANisdirectlycomputed
+overonlyobserveddatapoints,soitdoesnotrequireanypreprocess-
+ingorimputationtohandlemissingdata.Sincedifferentlightcurves
+may have different numbers of observed data points, computations
+are parallelized by masking unobserved data points.
+ThemTANcomputationstartswithlearningcontinuous-timeem-
+beddings through𝐻embedding functions (or heads),𝜙 ℎ (𝑡), each
+of which outputs a representation of size𝑑 𝑒. Embedding func-
+tions are defined using a combination of periodic terms:𝜙ℎ (𝑡) [𝑖]=
+sin(𝜔 𝑖ℎ ·𝑡+𝛼 𝑖ℎ )for0< 𝑖 < 𝑑 𝑒, and a linear term for the first
+dimension(𝑖=0):𝜔 0ℎ ·𝑡+𝛼 0ℎ.These(continuous)timeembedding
+functions can be viewed as a generalisation of the (discrete) posi-
+tional encodings in transformer networks. These time embedding
+functions are implemented using a one-layer fully connected layer
+followed by a sine function non-linearity. The expressivity of the
+resulting embeddings lies in the fact that time is expressed by learn-
+ing𝑑 𝑒 frequencies and phase shifts of sinusoids for each embedding
+function.
+The mTAN takes in a query time,𝑡, and the observed light curve
+(where the keys are the observed times and the values are the ob-
+served magnitudes, for instance), and outputs an embedding vector
+of dimension𝐽at the query time𝑡. Each dimension𝑗(𝑗 < 𝐽) of this
+mTANembeddingisobtainedinbroadlytwosteps.First,continuous-
+timefunctions,ˆ𝑥ℎ𝑑 (𝑡,s),areobtainedforeachdimensionofthetime
+series,𝑑,andtimeembedding,ℎ,bylearninganinterpolationkernel:
+MNRAS000, 1–22 (2026)
+
+4Gondhalekar et al.
+ˆ𝑥ℎ𝑑 (𝑡,s)=
+𝐿𝑑∑︁
+𝑜=1
+𝜅ℎ (𝑡, 𝑡 𝑜𝑑 )𝑥 𝑜𝑑 (1)
+where𝑥 𝑜𝑑 and𝑡 𝑜𝑑 denotetheobservedvaluesandtimes,respectively,
+for dimension𝑑, and𝜅 ℎ (𝑡, 𝑡 𝑜𝑑 )denotes the attention weights. Here,
+s=(t,x)={(t 1,x 1), ...,(t N,x N)}is the set of observed times,tn,
+and observed data (i.e., magnitudes),xn. The specific form of the
+kernel,𝜅 ℎ (𝑡, 𝑡 𝑜𝑑 ),isasoftmaxfunctionwithitsactivationdefinedby
+ascaledinnerproductofthetimeembeddingsoftheobservedtimes
+and the time embeddings of the query time,𝑡; thus, the similarity
+kernel depends only on the time embedding, which is learned from
+dataitself.Second,dimension𝑗ofthemTANembeddingisobtained
+using a linear combination of continuous time functions:
+mTAN(𝑡,s) [𝑗]=
+𝐻∑︁
+ℎ=1
+𝐷∑︁
+𝑑=1
+ˆ𝑥ℎ𝑑 (𝑡,s) ·𝑈 ℎ𝑑 𝑗 (2)
+where𝑈denotes the linear combination weights learned by the
+model; it is worth noting that𝑈does not depend on the input light
+curve but is learned globally across the training dataset and is fixed
+during inference. Such a formulation allows each dimension of the
+timeseries(i.e.,differentbandsofalightcurve)tousedifferenttime
+embeddings, but also allows information from different dimensions
+to be shared in the resulting mTAN embedding. Moreover, mTAN
+embeddings can be calculated for any continuous query time.
+The flexibility of mTAN lies in the fact that time embeddings
+are learnt in a data-driven manner rather than being fixed, which
+allows for expressing complex kernel functions (Narayan Shukla &
+Marlin2021a).Anotheraspectofflexibilityisthatthenon-lineartime
+embeddingintroducedbythesinefunctionsmeansthatthequeryand
+key time points are not necessarily required to be close together in
+timetogethighattentionweights(NarayanShukla&Marlin2021b).
+Since the mTAN outputs a continuous function of𝑡(due to the
+sine non-linearity), it can be useful to discretize its outputs onto a
+predefined set of reference time points,r=[𝑟 1, 𝑟2, ..., 𝑟 𝐾 ], which
+may be uniformly spaced but are not required to be. The mTAN
+canthenbe interfacedwithneuralnetworkssuch asrecurrentneural
+networks. The discretized mTAN (or mTAND, for short) then takes
+in a set of reference time points,r, along with the observed time
+series and applies mTAN𝐾times, each time using𝑟𝑘 as the query
+time point (𝑘=1to𝐾); note that the outputs at the𝐾query times
+arecomputedparallelyinsteadofsequentially.Thus,mTANDlearns
+representations of dimensions𝐾×𝐽for each observed light curve.
+An important aspect of these learned representations is that the
+notion of time is included in them, and thus, they encode data’s
+temporal structure in a meaningful manner. This is in contrast to
+several approaches based on self-supervised learning that use con-
+trastive pretext tasks, for example, (see, e.g., Fraikin et al. 2023, for
+an exception).
+In principle, mTAND can be incorporated into classification ar-
+chitecturesandcanbefollowedbyanyneuralnetworktoextractaux-
+iliary information from the regularly spaced latent representations
+produced by mTAND. In this work, we focus only on light curve
+representation and follow the mTAN paper by using mTAND in the
+encoder and the decoder of a Variational Autoencoder (VAE)-like
+framework and interfacing the outputs of mTAND with a bidirec-
+tional gated recurrent unit (GRU). The mTAN framework focuses
+more on capturing local structure, while the additional GRU com-
+ponent captures global structure in the light curve (Narayan Shukla
+& Marlin 2021a), which in general has proven more effective than
+purely attention-based architectures (Tan et al. 2025).
+2.2.2 The encoder-decoder framework
+Figure 2 provides an overview of the mTAND module and its role
+within the overall encoder-decoder framework used in this paper.
+First, define a set of latent states at𝐾reference time points:z=
+[z1,z 2, ...,z 𝐾 ]whereeachz 𝑘 canbesampledfrom𝑃(z 𝑘)=N (0, 𝐼),
+𝐼being the identity matrix (a multivariate standard normal distribu-
+tion).TheencoderconsistsofthemTANDmoduledescribedabove,
+which outputs representations evaluated at the𝐾reference points,
+followed by a bidirectional GRU with a single recurrent layer. The
+outputsoftheGRUarepassedthroughasetoffullyconnectedlayers
+toreturnthemeanandthevariancethatareusedtoconstructaGaus-
+sian distribution overzwith diagonal covariance. This distribution,
+q𝛾 (z|r,s), is the one that is expected to make the observed data
+likely when sampled from and input to the decoder component.
+Here,𝑁is the number of training examples, and𝛾denotes the
+parameters of the encoder model. Note that each𝑡𝑛 and𝑥 𝑛 in the
+tuple(t n,x n)further comprises of the observed times and data, re-
+spectively,foreachofthedimensions,𝑑,ofthelightcurve;however,
+we do not explicitly mention it for ease of notation.
+The structure of the decoder is the opposite of that of the encoder
+described above. The latent states sampled fromq𝛾 are first passed
+through a GRU decoder, and the resulting output, along with the
+observedtimesasthequery(intheencoder,theobservedtimesacted
+asthekey),arepassedtothemTANDmoduletoreturnasequenceof
+embeddings of length equal to the number of observed time points.
+Theseembeddingsarepassedthroughasetoffullyconnectedlayers,
+which are then used to parameterize the output distribution, also a
+Gaussian distribution with diagonal covariance, with mean given by
+the decoded light curve and a fixed variance.
+Let us call this output probability distribution𝑝𝜃 (x|z,t)where
+𝜃denotes the parameters of the decoder model. During training,
+the goal is to increase this probability, i.e., gradually improve the
+model’s ability to explain the training data. As is the case for VAEs,
+in practice, while optimising this probability, we also need to pull
+q𝛾 (z|r,s)closer to the prior distribution,𝑝(z), which regularises
+the encoder. Thus, the loss function is as follows:
+L (𝜃, 𝛾)=
+𝑁∑︁
+𝑛=1
+1Í
+𝑑 𝐿𝑑𝑛
+ 
+E𝑞𝛾 (z|r,s 𝑛 )
+
+log𝑝 𝜃 (x𝑛 |z,t 𝑛)
+
+−𝛽KL 𝐷KL
+ 𝑞𝛾 (z|r,s 𝑛) ∥𝑝(z) 
+!
+,(3)
+where
+𝐷KL
+ 𝑞𝛾 (z|r,s 𝑛) ∥𝑝(z)  =
+𝐾∑︁
+𝑘=1
+𝐷KL
+ 𝑞𝛾 (z𝑘 |r,s 𝑛) ∥𝑝(z 𝑖) (4)
+log𝑝 𝜃 (x𝑛 |z,t 𝑛)=
+𝐷∑︁
+𝑑=1
+𝐿𝑑𝑛∑︁
+𝑙=1
+log𝑝 𝜃 (𝑥𝑙𝑑𝑛 |z, 𝑡 𝑙𝑑𝑛 )(5)
+where𝐿 𝑑𝑛 is the number of observed data points for dimension𝑑
+of the𝑛 𝑡 ℎ training example,𝐷 KL denotes the Kullback-Leibler di-
+vergence,and𝛽 KL isahyperparametertocontroltheweightgivento
+theKLterm.WhilethetraditionalapproachoftrainingaVAEmaxi-
+mizestheevidencelowerbound,theabovelossfunctionnormalises 3
+the ELBO using𝐿𝑑𝑛 to prevent prioritising light curves with more
+3 This normalisation is performed as in the original mTAN paper. However,
+KLisaregulariseronthelatentspace,andthus,abetternormalisationwould
+be to not normalise the KL divergence term by the number of observations.
+In our case,|z|is not constant, unlike the original mTAN paper, but de-
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN5
+ATT
+t = 0 t = Δr
+Linear
+Linear
+...
+h1 hk...
+ATT ATT ATT...
+t = 2Δr t = tlast
+How many linear layers are there?
+Does nth linear layer only consider outputs from nth ref point?
+Find answers by printing shapes in model forward pass.
+Deep Neural 
+Network  (e.g., GRU)
+Linear
+...
+Stress in the figure that K is not 
+constant but dependent on the 
+light curve…write in caption if 
+not on figure…mTAND (Section 2.2.1)
+Input: Reference times, r (|r| = K)
+Output: Embeddings (K × J)
+q𝛾(z1|r1,s) q𝛾(z2|r2,s) q𝛾(zK|rK,s)...
+Latent state
+Deep Neural 
+Network  (e.g., GRU)
+mTAND
+mTAND
+Input: Observed times, t
+Output: Embeddings (|t|× J’)
+Linear
+Encoder
+Decoder
+(Section 2.2.2)
+(Section 2.2.3)
+}
+Figure 2.ArchitectureofmTANDanditsintegrationintotheencoder-decoderframework.Themodeltakesanirregularlysampledlightcurvedirectlyasinput.
+ATTdenotes an attention block implementing Equation 2.2.1, and the linear combination following it (Equation 2.2.1) produces the mTAN embedding. Unlike
+the original mTAN approach, the length,𝐾, of the reference times is not fixed but dependent on the input light curve.
+observations4. As this loss function does not use information about
+labels (the type of transient), the training of mTAN in such a setting
+is unsupervised in nature (see, Narayan Shukla & Marlin 2021a,
+for demonstration of using mTAN for supervised learning using an
+additional classification module).
+Although the VAE-based framework described above can have
+otherusesduringinference(suchasgeneratingnewsamplesoflight
+curves using only the decoder and sampling from a standard nor-
+mal prior), in this paper, we focus on studying the characteristics
+of encoded representations and interpolation (encoding followed by
+decoding of light curves).
+2.2.3 Modification to mTAN
+The original mTAN approach dealt with time series datasets span-
+ning a given duration of time with observations for each datum
+starting at the same time. Our astronomical transient light curves
+peak at different times, evolve on widely different time scales, and
+are sampled differently. As a result, using a predefined fixed num-
+ber of (equally-spaced) reference points based on the minimum and
+maximumobservedtimeacrosstrainingdata(asusedintheoriginal
+paper) is not optimal; this is because those would capture the tem-
+poral evolution of long-duration light curves (say, those evolving for
+a year) adequately well but would be too coarse for shorter-duration
+transients (say, those evolving over only several days).
+pends on the light curve duration. Hence, future work would include a better
+normalisation scheme that appropriately normalises, say, based on duration.
+4 Given the imbalance in the total duration of light curves in our data (see
+Figure 1), we tried normalising the contribution of ELBO based on both,
+the number of observations and light curve duration; however, we did not
+find improved validation performance during training and so did not use this
+approach.
+As light curves of arbitrary durations can be present during train-
+ing or inference, we modify the calculation of reference times by
+insteadfixingthetimeintervalbetweenadjacentreferencetimes(Δ𝑟
+or‘temporalresolution’)andallowingthenumberofreferencepoints
+to vary for each light curve depending on its time span or duration.
+Weuseatemporalresolutionoftwodays,whichisroughlybasedon
+thecadenceofZTFlightcurvesusedinthiswork.Thepresenceofa
+differentnumberofreferencetimepointsfordifferentlightcurvesin
+a batch is handled by masking for parallel computation. This modi-
+ficationoffixingthetimespacingbetweenadjacentreferencepoints
+rather than the number of reference points still allows a straightfor-
+ward comparison of the temporal dynamics of any two light curves,
+irrespectiveoftheirduration,becausetheywouldhavethesameref-
+erencetimes.Thisaspectiscrucialasourgoalistocharacteriselight
+curves but also to compare those evolving over vastly different time
+scales.
+2.2.4 Training
+Our code is a modification of the open-source implementation of
+mTAN5 and can be found here6. Hyperparameter values are taken
+fromtheoriginalmTANpaper.Thetimeembeddingdimension𝑑 𝑒 =
+128, the number of embedding functions𝐻=1(we tried using two
+heads, but it showed slightly worse validation performance during
+training), and𝐷=4(which is twice the number of dimensions of
+light curves since we have𝑔and𝑟bands; the ‘two times’ arises
+because the model is used in a VAE-like setup which outputs mean
+andvariance).ThehiddensizeoftheGRUencoder,𝐽=64,andthat
+oftheGRUdecoderis50,andweusealatentdimensionattheoutput
+5 https://github.com/reml-lab/mTAN
+6 https://github.com/Yash-10/astro-mtan
+MNRAS000, 1–22 (2026)
+
+6Gondhalekar et al.
+oftheencoder(aftertheGRU)oftwo,sinceourlightcurveshavetwo
+bands, but we note that the original mTAN paper used much larger
+values for realistic datasets.
+SinceweuseresolutionΔ𝑟=2daysasmentionedinSection2.2.3,
+the number of reference points𝐾is not fixed across the dataset, in
+general, but caters itself to the duration of individual light curves7.
+To handle variable lengths of queries, masking is used to ignore
+irrelevantqueriesforagivenlightcurve,similartoattentionmasking
+used to ignore unobserved data.
+64%ofthelightcurvesarerandomlychosen(withoutusingtypes)
+for training, 16% for validation, and the remaining 20% for testing–
+out of the 15,652 light curves obtained after quality filtering de-
+scribed in Section 2.1.2, this results in 10,016 for training, 2505 for
+validation, and 3131 for testing. Because our data is biased towards
+longerdurationlightcurves(seeFigure1),asemi-randomtruncation
+augmentation is introduced during training to increase the represen-
+tativeness of shorter duration light curves: a random percentage of
+observations to sample is selected between 30% and 70% followed
+by randomly selecting a starting observation and then selecting con-
+tinuous subsequent observations as observed in the original light
+curve. This augmentation is applied with 50% probability and the
+semi-randomness arises because it is only applied to light curves
+having at least ten observations in each band to prevent extremely
+sparse light curves.8
+The light curves are normalised using the following normalisa-
+tion scheme. The observed times in the training, validation, and
+testing dataset splits are normalised based on the minimum and
+maximum time across the training set using the min-max scheme
+( 𝑡−𝑚𝑖𝑛(𝑡)
+𝑚𝑎𝑥(𝑡) −𝑚𝑖𝑛(𝑡) ); before that, we shift the observed times of all
+light curves to start at zero, since the absolute times are not rele-
+vant for our purposes. The observed (apparent) magnitudes are nor-
+malised based on the peak magnitude of the individual light curves
+( mag−𝑚𝑖𝑛(mag)
+2.5 ), where𝑚𝑖𝑛(mag)is the peak magnitude across
+the𝑔and𝑟bands and the scaling factor makes it equivalent to the
+logarithm of peak flux divided by any observed flux in the light
+curve. Such a ‘global’ and ‘local’ normalisation of times and mag-
+nitudes, respectively, allows the model to focus on light curve shape
+and evolution trends in magnitude and time, while ignoring appar-
+ent brightness. This approach makes the model less susceptible to
+capturingredshiftsinceitensuresthatthemodeldoesnotlearnvery
+differentlatentrepresentationsfortransientsshowingsimilartempo-
+ral evolution, irrespective of their observed magnitudes.
+The Adam optimiser is used for optimising the training with a
+learning rate of1×10 −4 for both the encoder and the decoder and
+default momentum parameters:𝛽 1 =0.9and𝛽 2 =0.99. A batch
+size of 8 is used. Training is performed for 300 epochs. The model
+is validated on a separate validation dataset at each epoch, and the
+model with the smallest mean squared error between the observed
+andpredictedlightcurveissaved;thishappensatthe298thepoch.To
+7 The modifications described in Section 2.2.3 subsume the approach of
+using fixed𝐾when all light curves have equal or almost equal durations in
+the dataset.
+8 Note that random truncation introduces examples with a lesser number of
+observed data pointsandsmaller duration, but does not add examples with
+onlysmallduration.Althoughdensertemporalsamplingislessfrequenteven
+whenusingouraugmentationandfurtherincreasesthe‘heavy-tailed-ness’of
+the marginal distribution of the number of observations in Figure 1, the nor-
+malisationofthelossfunctionbythenumberofobservations(Equation2.2.2)
+ensures that the augmentation does not introduce additional data bias while
+stillvirtuallybalancingthepresenceofshort-andlong-durationlightcurves.
+avoid the common problem of vanishing KL term, a monotonic KL
+annealingscheduleisusedwherein𝛽 KL issettozeroforthefirstten
+epochs and is gradually increased to approach𝛽KL =1during sub-
+sequent epochs. Also, five samples from the distribution𝑞𝛾 (z|r,s 𝑛)
+areusedtocomputethelossfunctiondefinedinSection2.2.2during
+training, whereas a single sample is used for validation and testing.
+The common reparameterization trick that enables optimisation us-
+ing stochastic gradient methods is used to compute gradients. The
+fixed variance used for parametrizing the decoder’s output distribu-
+tion is set to0.012.
+The model size of the encoder and decoder networks is roughly
+340 KB and 250 KB, respectively, and is thus lightweight.
+3 RESULTS
+We evaluate the model on the test set. We first test the (a) decoding
+of our model to observed light curves (Section 3.1), and (b) two-
+dimensionalvisualisationoflatentspaceandcheckingforqualitative
+correlationswithbasicpropertiesoflightcurvesandnon-correlations
+with non-physical/trivial properties (Sections. 3.2.
+We then check whether the SN and AGN light curves are repre-
+sented in different areas in a UMAP and if there are correlations
+with observed light-curve properties in Section 3.3). In Sections 3.4
+and 3.5westudythesecorrelationsmoreindetailforSNandAGN,
+respectively.
+Followingthesetests,wevisualisethelearnedattentionweightsto
+interpretthemodel’slearningmechanism(Section3.6),thenperform
+a brief comparison of our model with GP regression (Section 3.7),
+including execution time during inference, and finally showcase ap-
+plication to variable stars and TDEs that the model wasnottrained
+on (Section 3.8).
+3.1 Light curve decoding
+The mTAND’s decoder models the output Gaussian distribution,
+𝑝 𝜃 (x|z,t), with its mean given by the decoded light curve, which
+corresponds to an interpolation over the observed light curve. Here,
+westudyhowwellthesedecodedlightcurvesreproducetheobserved
+light curves from the test set. Before discussing the results, we note
+that because we do not account for observational uncertainties, our
+interpolations are implicitly overconfident.
+Figure 3 shows that the mTAN model can accurately reproduce a
+wide variety of SN and AGN light curves not seen during training.
+In particular, the model residuals for all light curve observations
+acrossthetestsethaveasmallbias,mean∼0.01mag,andasmall,in
+absoluteterms,dispersionof∼0.1mag.Moreover,theinterpolations
+remaingoodevenforsparselightcurveswithfewobservations(first
+row rightmost, second row leftmost), which is not unexpected as
+the model does not strongly use information about the number of
+observations (Appendix A).
+The middle example in the third row shows an example where
+the general behaviour is not captured well, for which we do not
+have a clear explanation – these might indicate problems with the
+encoding, decoding, or both steps. For the last three examples, the
+general behaviour is captured, but short-time-scale features (e.g.,
+flare around the 300-day mark for ZTF19abgfgzy) are inadequately
+captured.
+More discussion of subclass-specific light curve features of tran-
+sients is presented in Section 3.3.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN7
+0 150 300 450
+Time (days)
+17
+18
+19 m
+g: RMSE = 0.10
+r: RMSE = 0.07
+ZTF19aasszjp - QSO
+0 150 300 450
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.07
+r: RMSE = 0.07
+ZTF18abkuccd - AGN
+0 150 300 450
+Time (days)
+16
+17
+18 m
+g: RMSE = 0.11
+r: RMSE = 0.08
+ZTF18aceytnk - QSO
+g
+r
+0 15 30 45
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.14
+r: RMSE = 0.10
+ZTF22aabbfre - (TNS) SN Ia
+0 30 60 90
+Time (days)
+17
+18
+19
+20 m
+g: RMSE = 0.06
+r: RMSE = 0.08
+ZTF21abghumo - (TNS) SN IIn
+0 20 40 60
+Time (days)
+16
+17
+18
+19 m
+g: RMSE = 0.11
+r: RMSE = 0.10
+ZTF22abjvyib - (TNS) SN II
+0 20 40 60
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.07
+r: RMSE = 0.07
+ZTF22aanmbrl - (TNS) SN II
+0 30 60 90
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.24
+r: RMSE = 0.05
+ZTF22aakaygk - (TNS) SN II
+0 10 20 30
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.36
+r: RMSE = 0.30
+ZTF21abrgbex - (TNS) SN IIb
+0 40 80
+Time (days)
+16
+17
+18
+19 m
+g: RMSE = 0.31
+r: RMSE = 0.22
+ZTF18admwqvn - BL Lac
+0 150 300 450
+Time (days)
+19
+20 m
+g: RMSE = 0.07
+r: RMSE = 0.08
+ZTF19abgfgzy - QSO
+Figure 3.Visualisation of a few test-set interpolations by our model. The dots denote observations (uncertainties not shown), and the solid lines denote the
+interpolations, with the blue and red colors corresponding to the𝑔and𝑟-bands, respectively. The root mean square deviation (RMSE) between the observed
+and predicted magnitudes for each band is shownin each panel. The title of each light curve panel shows the ZTF IDalong with its classification from TNS (for
+SNe) and Milliquas (for AGNs). More interpolation visualisations are shown in Figs. 6b and 7b.
+3.2 Visualisation of latent space
+As mentioned in Section 2.2.2, the mTAND encoder outputs the
+mean and variance parameters of the Gaussian distribution learned
+over latent variables, given a set of reference time points and the
+input light curve:q 𝛾 (z|r,s). To understand the structure of the
+learned latent space, we visualise the mean latent vector (of length
+|r|)foreachlightcurveinthetestsetanddiscussqualitativepatterns
+betweenpositioninthelower-dimensionalrepresentationofthelatent
+space, simple derived properties from light curves, and confirmed
+classificationsfromTNS/Milliquas.As|r|variesforeachlightcurve
+(seeSection2.2.3),weusezero-paddingtohavemeanlatentvectors
+ofthesamelengthandconcatenatethemacrossthelatentdimension
+(of size two; see Section 2.2.4) before projecting them onto a lower-
+dimensional space.
+The projection of the latent space in two dimensions is obtained
+using Uniform Manifold Approximation and Projection (UMAP),
+coloured by different light curve features whose choices are moti-
+vated below. The implementation of UMAP is taken from McInnes
+etal.(2018),usingthecosinesimilaritymetricandthedefaulthyper-
+parameters,includingalocalneighbourhoodsizeof15;thiscontrols
+the tradeoff between local and global manifold structure learned in
+the encodings, and different values may affect the clustering and its
+interpretation
+Figure 4 shows the latent space coloured by features wea priori
+expect our model to learn, which are astrophysically important or
+both. These hand-picked features are: (a) light curve duration, (b)
+time of peak magnitude since the first observation in the light curve
+(𝑡peak), (c) difference between the median of top and bottom five
+percentile magnitudes, and (d) peak colour (𝑔−𝑟) obtained using
+respective peak magnitudes. The heuristics for these choices are as
+follows:(a)and(b)becausethemTANDencodingsdirectlyrepresent
+time ((a) also because we zero-pad latent vectors corresponding to
+shorter duration light curves before UMAP projection), (c) because
+our magnitude normalisation scheme should still preserve the rela-
+tive magnitude evolution, and (d) because the colour information is
+preservedsinceournormalisationusespeakmagnitudeacross𝑔and
+𝑟bands.
+We find that the model learns the overall timescale of the light
+curvebutalsowhenthepeakoccurs 9.Thesmalldifferencesinoverall
+trends between the𝑔and𝑟bands for both features are because of
+minordifferencesinsamplinganddataquality.Mostlightcurveshave
+relatively small amplitudes, which is a property of our dataset, and
+thosethathavehigheramplitudesarevisiblyseparatedatthetopand
+top-right. Although not in the standard deviation of magnitudes are
+very similar, as expected, because both are measures of variability.
+Finally, the plot showing colour based on peak magnitude in the𝑔
+9 In general, it is more appropriate to conclude that the model learns a
+latent feature that correlates with the feature used for our analysis rather than
+learning the used feature directly; however, for simplicity in discussion, we
+would avoid this distinction.
+MNRAS000, 1–22 (2026)
+
+8Gondhalekar et al.
+and𝑟bandssuggeststhatthelatentspaceseparateslightcurveswith
+redder versus bluer colour.
+Finally,inAppendixA,weshowthatthelatentspacedoesnotshow
+strong correlations with features our model should not capture, such
+as peak and mean magnitudes and the total number of observations,
+or that any observed trends reflect underlying data characteristics.
+This is desirable for a classifier that must generalise across redshifts
+and survey depths.
+We conclude that the correlations between the positions of light
+curves in the latent space and our derived features demonstrate that
+the model has learned multivariate photometric properties of our
+data.
+3.3 SN and AGN latent space
+In the next two subsections, we provide an interpretation of why
+a light curve representation is mapped to a specific UMAP region.
+To achieve this, we colour the latent space projection using TNS
+and Milliquas classifications and compare the known photometric
+behaviour of supernova and AGN subtypes with what the model has
+learned.
+Beforediscussingthedetailedresults,wepointoutthattheUMAP
+visualisation of latent space separates the SN and AGN classes, as
+shown in Figure 4. This is despite the imbalance in the number
+of examples in our data and the use of partial light curves. This
+(unsupervised) separation of SN and AGN is because of differences
+intheirgeneralphotometricpropertiesshownbythegeneralanalysis
+in the previous subsection. In particular, the region of the projected
+latentspacewhereSNelieisoccupiedbylightcurveswithanoverall
+shorterdurationandslightlylargeramplitudesthanregionsoccupied
+by most AGNs.
+3.4 Supernovae
+Figure5showsthatdurationistheprimaryorganisingaxisoftheSN
+latentspace.Peakcolouranddeclinerateshowweakerbutpercepti-
+blecorrelations.Weusethesetrendsasareferenceframefortherest
+of this section.
+3.4.1 Subtype overlaps and their physical origin
+DifferentSNsubtypesoverlapinthelatentspaceforthreephysically
+distinct reasons, which we discuss in turn.
+Similar photometric timescales (SN Ia and SN Ibc).SNe Ia and
+Ibc share similar decline timescales and/or duration, causing their
+latent regions to overlap substantially. SNe Ibc lying near SN1 and
+SN2 (e.g., SN15) occupy these regions for this reason. Since the
+latent space does not strongly encode peak colour, the tendency of
+SNIbctoberedderatpeakdoesnotseparatethemfromSNIahere.
+SN1 and SN2 lie close despite a roughly 2.5 mag difference in peak
+brightness,whichconfirmsthatthemodeldoesnotrelyonobserved
+magnitude.
+Partial light curves missing discriminating features (SN II near
+SN Ia)SN II light curves that overlap with SN Ia typically lack
+plateau coverage in the polled window. SN7 (IIb) and SN8 decline
+rapidly without a visible plateau, producing SN Ia-like timescales
+and latent positions. By contrast, SN9 (showing an𝑟-band plateau),
+SN10 (IIP), and SN11 (a slow-declining IIn with plateau followed
+by faster decline) occupy a distinct region defined by long duration
+and slow decline rate, clearly separated from most SN Ia. A few
+SN Ia with slow, plateau-like𝑟-band declines lie nearer to these
+SN II than to the typical SN Ia. The latent space, therefore, does
+distinguishplateau-likeevolutionwhensufficientcoverageispresent
+inthepolledlightcurve.Wedonotusepeaktimesinthispartofthe
+discussion since plateaus near peaks can produce misleading peak
+time estimates.
+Absent luminosity information (SLSN).Without redshift or abso-
+lute magnitude, SLSN cannot be separated from their photometric
+counterparts at similar apparent timescales. Most SLSN occupy rel-
+ativelyemptyregionsneartheboundariesbetweentheSNandAGN
+subpopulations. SN17 (SLSN-II) and SN13 (SN IIn) lie close to-
+gether, which is physically understandable since SLSN-II are con-
+sidereda(moreluminous)subtypeofIIn(Gal-Yam2012).SN18lies
+near AGNs: inspection of its full light curve reveals post-peak ob-
+servationscontainingabroadsecondaryfeaturewithlowvariability,
+whichisphotometricallyAGN-likeatthatphase.Wefindnooverlaps
+betweenourSLSNandthosepresentintheALeRCE(Sánchez-Sáez
+et al. 2021a) or Superphot+ predictions of de Soto et al. (2024a),
+which precludes direct comparison.
+Early SN Ia candidates.The three early SN Ia candidates capture
+onlytheveryfirstdaysofSNIaevolution,showingnegligiblemagni-
+tude variation and very small durations (see also SN5). They cluster
+awayfromthemainSNIaregionbecausethemodelassociatestheir
+near-featureless,low-amplitudelightcurveswithadistinctcornerof
+the latent space. As more observations of such candidates accumu-
+late, their latent positions would be expected to migrate towards the
+main SN Ia population.
+3.4.2 Outlier positions as diagnostics
+A handful of objects lie far from their class’s main latent region,
+andtheirpositionsareinstructive.SN4(Ia)hasananomalouslylong
+eight-month decay with a very large amplitude, untypical of SN Ia
+in this sample, which places it in a sparsely populated outlier region
+not captured in Figure 5. SN6 contains noise-dominated late-time
+observations after the explosion, as we found by inspecting its full
+light curve, and expectedly drifts toward AGN. SN14 (SN IIn) lies
+nearhigh-amplitudeAGNs(Figure8).SN12(SNII)sitsinanoutlier
+region characterised by very long duration, low-to-moderate decline
+rate, and mildly red peak colour, qualitatively matching SN16 (SN
+Ic).
+SN3 represents a peculiar SN Ia (SN Iax) and its nearest neigh-
+boursinthelatentspacecontainSNIa,SNII,andSLSNsubtypes.It
+wasclassifiedasSNIIbytheALeRCEsupernovaclassifier(Sánchez-
+Sáezetal.2021a),whileSuperphot+(deSotoetal.2024b)assigned
+the highest probability to SN Ibc, followed by SN Ia, with a low
+probability to SN II (predictions from de Soto et al. 2024a). Our
+unsupervised placement is therefore intermediate between these ap-
+proaches.Althoughnotshown,twomoreSNIIinourtestsetoverlap
+withobjectspresentintheALeRCEandSuperphot+catalogues.The
+first,locatedintheclustercontainingSN9andSN10andsurrounded
+mainly by SN II, was classified as SN II by both approaches; our
+expected prediction agrees with both approaches. The second, sur-
+rounded by a mix of SN Ia, SN II, one SN Ibc, and one SLSN,
+was classified as SN II by ALeRCE, while Superphot+ gave a low-
+confidenceSNIa classificationwithSNIIasthe nextmostprobable
+class; our expected prediction aligns more closely with Superphot+
+in this case. Direct comparisons with other approaches should be
+interpreted with caution because our polled light curves, and thus
+the features available to each model, may differ from those used in
+other studies. We find no overlaps between our SN Ibc sample and
+the ALeRCE/Superphot+ catalogues, which precludes comparison
+for that subtype.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN9
+4 6 8 10 12 14
+UMAP 1
+4
+6
+8
+10
+12UMAP 2
+AGN
+SN
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+100 200 300 400
+Duration ( g, r) (days)
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+100 200 300 400
+tpeak (g, r) (days)
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+0.2 0.6 1.0 1.4 1.8
+Amplitude ( g, r)
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+-0.15 -0.05 0 0.3 0.6
+(g □ r)peak
+Figure 4.Visualisation of the latent space in two dimensions using UMAP. The top panel shows that the general population of SN (blue) and AGN (red) are
+separated in the latent space. The next panels show the latent space coloured by different light curve features. Each hexagon bin represents the mean feature of
+all light curves in that bin, and only bins with at least three light curves are shown. The features used to colour the latent space are: the average of observation
+time of peak magnitude in the𝑔and𝑟bands with respect to the first observation in the corresponding band (𝑡peak (𝑔, 𝑟)), average of light curve duration in
+the𝑔and𝑟bands, where duration in each band is based on the time of last and the first observation in that band (Duration(𝑔, 𝑟)); the same metric is used
+in Figure 1, average amplitude across both bands (A(𝑔, 𝑟)), and the colour calculated using respective peak magnitudes in𝑔and𝑟bands ((𝑔−𝑟)peak). For
+this and the remaining figures, wherever applicable, such hand-curated features may be correlated: for example, peak time will necessarily be constrained by
+duration,andlargerdurationmayincreasetheprobabilityofobservinghigh-amplitudetransients,especiallyforSNe.Thepatternswithaveragecolourobtained
+using our model interpolations and standard deviation in colour are similar to the colour at peak and amplitude, respectively.
+MNRAS000, 1–22 (2026)
+
+10Gondhalekar et al.
+4 6 8
+UMAP 1
+6
+8UMAP 2
+10 50 90
+Duration ( g, r) (days)
+(a)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+0.2 0.4 0.6
+∆m15 (g, r) (b)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+□0.2 0.0 0.7
+(g □ r)peak (c)
+Figure 5.LatentspacevisualisationforonlySNlightcurves,includingallitssubtypes.Onlybinswithatleastthreedatapointsareshown,andthussomeoutliers
+fromFigure6amaynotbeincluded.Thefeaturesusedare:themeanof𝑟-and𝑔-band(a)duration,(b)declinerate,definedasthedecreaseinmagnitude15days
+after peak time (Δ𝑚15) in either band, and (c)𝑔−𝑟colour at peak. As our mTAND model’s interpolations fill unobserved dimensions of light curves in either
+band, but are not continuous functions of time, the magnitude 15 days post-peak is calculated using linear interpolation on our individual band interpolations.
+The panels showing the decline rate and peak colour do not show clear patterns but suggest weak trends. For example, bluer peak colors tend to be separated
+from mildly red/no-colour light curves, and slow decline rates in both bands seem to be separated from faster decline rates in at least one band. The trends in
+these plots are used in Section 3.4 to explain the positions of SN light curves from Figure 6a. Finally, while these plots show the mean features in each bin, in
+Appendix C we show their1𝜎standard deviation, which, when compared with the mean features shown here, suggests that the variations in each bin are not
+huge.
+3.5 AGN
+WecorrecttheAGNlightcurvesattesttimebeforerunningtheinfer-
+enceusingtheALeRCElightcurvecorrectionpipeline 10 (Appendix
+A of Förster et al. 2021). The primary motivation for accounting
+for the reference flux through this correction is to reveal the actual
+apparent magnitudes for these non-transients. However, the refer-
+ence magnitude remained relatively constant for many AGNs11 and
+thus this correction should not have a major effect on the model’s
+test-timeresultsbecausethecorrectionrendersthenormalisedmag-
+nitudes (Section 2.2.4) agnostic to it. Out of the 2847 AGNs in the
+test set, 2359 had their light curves corrected, and 488 had their
+light curves uncorrected due to at least one of their alerts having a
+reference source farther than 1′′.4 or due to divergence in corrected
+magnitude calculation. Only the corrected AGNs are considered in
+the subsequent discussion for consistency.
+For this analysis, we exclude AGNs with durations shorter than
+3 months. For the class-specific discussion based on Figure 7, we
+additionally exclude objects for which a Milliquas classification was
+not found (the ‘Unknown’ class; Section 2.1.1).
+We now interpret the positions of AGNs in the latent space using
+the spatial trends in Figure 8. However, there are two caveats. First,
+AGNs in some regions of latent space show noticeable scatter in
+light curve features, and possible reasons for this are discussed in
+Appendix C. Second, Milliquas uses luminosity-based criteria for
+separating AGNs from QSOs (Flesch 2015), but since our model
+10 https://github.com/alercebroker/lc_correction
+11 ThisistrueforAGNswhosereferenceimagewasobtainedinaverybright
+orfaintepochcomparedtotheotherepochs.However,ifthetemplateisatthe
+middleofthemagnitudedistribution,itwillsignificantlychangetheresulting
+light curve.
+doesnotuseredshifts,someoverlapamongtheseclassesisexpected
+(see also Appendix C.1 of Sánchez-Sáez et al. 2021a). For these
+reasons, we focus on a broader latent space structure rather than a
+sharp class distinction.
+(A): Figure 7b highlights a handful of AGNs lying closer to SNe
+in the latent space than to the bulk AGN subpopulation12. As these
+regionsarescarcelypopulated,thisprecludestheuseofAGNfeatures
+to discuss their location.
+Remarkably, AGNs with durations longer than nearly all SNe in
+our sample are also placed here (e.g., AGNs 1, 2, 3). This suggests
+that their photometric evolution over the temporal interval shared
+withnearbySNeissufficientlysimilartoproducesimilarencodings.
+Nonetheless,suchcontaminationisrare,andadetailedcharacterisa-
+tion is left for future work.
+(B): These AGNs are characterised by high𝜎/𝜇(variability) and
+long durations (Figure 8), and contain the majority of BL Lacs in
+our sample (Figure 7a), consistent with their characteristic rapid
+variability. Very short blazar flares – such as the≈3-day flare in
+AGN4near𝑡≈310-340days–arenotrecoveredbytheinterpolation.
+Longer flares spanning∼1to a few weeks – such as those in AGN5
+(around𝑡∼200d), AGN6 (just after𝑡∼300d), and AGN7 (at
+around𝑡∼450d) – are captured more reliably but still imperfectly.
+Thesereflect challengesinencodingthe overdensityofobservations
+during rapid events.
+(C): This region is characterised by lower variability and shorter
+durations on average compared to region B (Figure 8), though with
+large scatter in duration (Figure C2a). Its distinction from region A
+likely reflects the fact that they have low variability or even large
+12 We verified that these AGNs remain separated from other AGNs across
+different UMAP runs with different seeds.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN11
+4 6 8 10 12 14
+UMAP 1
+4
+6
+8
+10
+12UMAP 2
+SN4
+SN5
+SN6
+SN7
+SN8
+SN9
+SN10
+SN11
+SN12
+SN13
+SN14
+SN1
+SN2
+SN3
+SN15
+SN16
+SN17
+SN18
+SN Ia
+SN II
+SN Ibc
+SLSN
+Early SN Ia
+(a)
+0 8 16 24
+Time (days)
+16
+17
+18
+19 m
+29, 0.94, -0.1
+SN1
+ZTF22abfvsbt - (TNS) SN Ia
+0 10 20 30
+Time (days)
+19
+20
+21 m
+29, -, 0.0
+SN2
+ZTF22aavctvq - (TNS) SN Ia
+0 25 50 75
+Time (days)
+16
+18 m
+77, 1.04, 0.8
+SN3
+ZTF22aafuind - (TNS) SN Iax[02cx-like]
+0 80 160 240
+Time (days)
+12
+15
+18 m
+245, 0.84, 0.0
+SN4
+ZTF22aafoqrd - (TNS) SN Ia
+g
+r
+0 2 4
+Time (days)
+18
+19 m
+4, -, -0.1
+SN5
+ZTF22aabwrov - (TNS) SN Ia
+0 150 300
+Time (days)
+18
+19 m
+258, -, 0.3
+SN6
+ZTF19aaapnxn - (TNS) SN Ia
+0 15 30
+Time (days)
+18
+19
+20 m
+35, 0.73, -0.1
+SN7
+ZTF21abidrcn - (TNS) SN IIb
+0 20 40
+Time (days)
+17
+18
+19
+20 m
+49, 0.71, 0.0
+SN8
+ZTF21abmwzxt - (TNS) SN II
+0 25 50 75
+Time (days)
+17
+18
+19 m
+80, 0.13, 0.2
+SN9
+ZTF21acafqtj - (TNS) SN II
+0 30 60 90
+Time (days)
+18
+19
+20 m
+68, 0.26, 0.2
+SN10
+ZTF22abhsxph - (TNS) SN IIP
+0 25 50 75
+Time (days)
+18
+19
+20 m
+87, 0.18, 0.2
+SN11
+ZTF22aagvxjc - (TNS) SN IIn
+0 60 120 180
+Time (days)
+16
+18
+20 m
+113, 0.29, 0.0
+SN12
+ZTF22aafxzfb - (TNS) SN II
+0 80 160 240
+Time (days)
+18
+20 m
+244, 0.13, 0.6
+SN13
+ZTF21abtdvpg - (TNS) SN IIn
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+483, 0.2, 0.3
+SN14
+ZTF21abulpnc - (TNS) SN IIn
+0 5 10 15
+Time (days)
+19
+20
+21 m
+12, -, 0.3
+SN15
+ZTF22abgroeo - (TNS) SN Ic-BL
+peak times, atypical of our SNe sample, which is mostly declining.
+BL Lacs AGN8 and AGN9 are unusually optically quiescent and
+therefore lie in this low-variability region.
+(D): Region D shares the long-duration characteristic of region
+B but has lower variability on average. AGN10 is a BL Lac whose
+𝜎/𝜇anddurationiscomparabletoregion-BAGNs.Thisdiscrepancy
+remainsunclear,butitmightoccurbecauseitslarge𝜎/𝜇isdrivenby
+its significant rising trend rather than the rapid flaring characteristic
+of region B.
+To conclude, we have elucidated through a few examples that the
+MNRAS000, 1–22 (2026)
+
+12Gondhalekar et al.
+0 40 80 120
+Time (days)
+15
+16
+17
+18 m
+138, 0.15, 0.3
+SN16
+ZTF22aapubuy - (TNS) SN Ic
+0 100 200 300
+Time (days)
+18
+19
+20
+21 m
+283, 0.04, 0.3
+SN17
+ZTF22aaacvyy - (TNS) SLSN-II
+0 150 300 450
+Time (days)
+19
+20
+21 m
+419, 0.19, -0.0
+SN18
+ZTF20aacbwbm - (TNS) SLSN-II
+(b)
+Figure 6.(a) Visualisation of the latent space like in Figure 4 but colored based on five SN subtypes based on TNS classifications (in decreasing order of
+prevalence in our dataset): (1) SN Ia and subtypes, (2) SN II and subtypes, (3) SN Ib and Ic; we also include the ‘SN I’ TNS class, (4) SLSN and subtypes,
+and (5) Early SN Ia candidates (see Section 2.1.1 for specific subtypes included). The gray contour shows the distribution of AGN data points, including all
+their subtypes. (b) The panels below show a few light curves of different SN subtypes located at different locations in the latent space. The title of each light
+curve panel shows the ZTF ID along with its spectroscopic classification from TNS. Also shown at the top-right of each light curve are the duration (in days),
+declinerate(Δ𝑚 15),bothaveragedacross𝑔and𝑟bands,andcolouratpeak,inthatorder.ThesearealsousedinFigure5and B1.Ahyphenforthedeclinerate
+indicates it could not be calculated because at least one band’s light curve terminated before 15 days after peak (see Figure 5 caption).
+AGN latent space correlates with duration, variability, and colour
+properties, and discussed how a tiny fraction of AGNs might reside
+closer to SNe due to larger similarities in their encodings than to
+other AGNs. This does not suggest that such AGNs are necessar-
+ily SNe-like, as that would require checking sensitivity to the local
+neighbourhoodsizeintheUMAPprojection(seeFigure4’scaption).
+Instead, it is likely a consequence of using alert light curves, where
+the5𝜎detection threshold can influence the observed durations and
+gapsinAGNlightcurves.Asaresult,durationmaynotbearelevant
+parameterforastrophysicalinterpretationofAGNs,eventhoughour
+model captures it.
+3.6 Visualisation of attention maps
+The mTAND model used in this paper is trained to learn to attend
+to irregularly spaced observations (key) and produce interpolations
+over a set of regularly spaced query points (query). The correspond-
+ing attention weights are denoted by𝜅in Equation 2.2.1. In this
+section,weusetheattentionweightslearnedbytheembeddingfunc-
+tion of the mTAND encoder (we use a single embedding function,
+𝐻=1; Section 2.2.4) to understand how its outputs attend to ob-
+servations. These are the outputs of the attention blocks (before the
+linear combination that produces the mTAN embedding) shown in
+Figure 2.
+Figure 9 visualises the attention weight maps for each band sep-
+arately for a few example light curves. Their visibly sparse and
+‘diagonal’-like pattern suggests that queries attend to temporally
+nearbyregions–thisisexactlywhatisexpectedofmTAND,aslonger-
+range dependencies are captured in its latent representation through
+the recurrent network following mTAND’s encoder.
+Theattentionweightsforthetwobandsdisplaydistinctpatterns,in
+thatagivenquerypointattendstodifferenttemporalregionsineach
+band,dependingonthelocationofobservationsforthatband,which
+illustrates how each dimension/band of the light curve is uniquely
+represented on the set of query times. These intermediate represen-
+tations of light curves are linearly combined using Equation 2.2.1
+to obtain the mTAND encoder’s latent representation, which thus
+explains how mTAN learns cross-band information.
+Finally, this exercise can help understand model failure modes by
+analyzing any correspondence between attention weights and per-
+observationinterpolationquality.Here,webrieflymentionthatfast-
+evolving observed features that tend to be missed by our interpo-
+lations receive lower attention. For example, this can be seen for
+ZTF19abgfgzy and ZTF19aagwxlv at𝑡≈310−340days in the
+𝑟-band, where the attention weights are diminished (see the vertical
+dotted lines).
+3.7 Comparison with GP regression
+Weimplement GPregression in bothwavelength andtime tohandle
+cross-bandcorrelations,followingtheapproachofBoone(2019)and
+the code implementation of Allam (2022). We use a Matérn 3/2 ker-
+nel, and evaluate GP predictions at the observed times13. Although
+GP regression explicitly accounts for observational uncertainties,
+mTAND currently does not. We therefore use RMSE rather than the
+commonly used𝜒 2 metric since it can be too strict for mTAND at
+thebrightestendsthathavesmalluncertainties.mTANDremovesthe
+restriction of GPs requiring a positive semidefinite covariance func-
+tion, making it more flexible by design (Narayan Shukla & Marlin
+2021b).
+Figure 10 compares the interpolation performance of mTAND
+and GP regression on three test-set light curves: two AGNs, one
+densely sampled and the other sparsely sampled, and an SN. GP
+regression produces better predictions than mTAND as shown by
+its smaller RMSE values, particularly for outlier observations. This
+is a consequence of the fact that the GP fits are optimised for each
+light curve, whereas mTAND learns a single fit model for all light
+curves; this could also explain why mTAND does not model outlier
+observationsaswell.Ontheentiretestset,themedianRMSEsforGP
+and mTAND are 0.03 and 0.26, respectively, with median absolute
+deviations of 0.01 and 0.09.
+Wealsodiscusscomputationalcosts.Asourgoalistocharacterise
+andclassifylightcurves,wecomparetheexecutiontimerequiredfor
+constructing (light curve-dependent) query times and encoding a
+light curve using mTAND versus performing a GP regression fit,
+both measured in identical CPU environments: Intel(R) Xeon(R)
+Gold6140CPUat2.30GHz.FormTAND,weuseabatchsizeof32
+to leverage its parallel processing capability, though we use a single
+process for loading data. mTAND requires 36 seconds (one minute
+with a batch size of one), and GP regression requires 41 seconds to
+execute its operations on the entire test set consisting of 3131 light
+curves; these values are the median over five independent runs. The
+similar runtimes of both GP and mTAND arise because, although
+exact GPs scale poorly with the number of observations (𝑂(𝑛3)),
+13 Althoughnotshownhere,evaluatingtheGPpredictionsonafineruniform
+time grid spaced apart by two days (equivalent to mTAND’s temporal reso-
+lution) produces spurious features at observational gaps for the two AGNs.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN13
+4 6 8 10 12 14
+UMAP 1
+4
+6
+8
+10
+12UMAP 2
+AGN1
+AGN2
+AGN3
+AGN4
+AGN5
+AGN6
+AGN7
+AGN8
+AGN9
+AGN10
+Quasar
+AGN
+BL Lac
+(a)
+0 150 300 450
+Time (days)
+17
+18
+19 m
+526, 0.23, 0.2
+AGN1
+ZTF21aazltbp - QSO
+g
+r
+0 50 100 150
+Time (days)
+17
+18
+19
+20 m
+151, 0.75, 0.4
+AGN2
+ZTF19aakxiwm - BL Lac
+0 60 120 180
+Time (days)
+18
+19
+20 m
+215, 0.29, 1.1
+AGN3
+ZTF18aakeosr - BL Lac
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+334, 0.33, 2.4
+AGN4
+ZTF19aagwxlv - BL Lac
+0 150 300 450
+Time (days)
+14
+16
+18
+20 m
+534, 0.60, 4.0
+AGN5
+ZTF18abtrubp - QSO
+0 150 300 450
+Time (days)
+18
+20 m
+504, -0.02, 2.3
+AGN6
+ZTF20acdcick - QSO
+0 150 300 450
+Time (days)
+18
+19
+20 m
+430, -0.05, 0.9
+AGN7
+ZTF18aalufuv - AGN
+0 50 100 150
+Time (days)
+18
+19 m
+153, 0.01, 0.4
+AGN8
+ZTF18acsptos - BL Lac
+0 50 100 150
+Time (days)
+19
+20 m
+103, 0.03, 0.4
+AGN9
+ZTF19aaaoiib - BL Lac
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+316, -0.22, 1.1
+AGN10
+ZTF18aaieyvr - BL Lac
+(b)
+Figure 7.Visualisation of the latent space like in Figure 4 but colored based on the following AGN subtypes based on Milliquas classifications (in decreasing
+order of prevalence in our dataset): (1) QSO, (2) Type I Seyfert (or AGN), and (3) BL Lac. As mentioned in the text (Section 3.5), we remove <3 month AGNs
+or those with no Milliquas match from this plot; this results in the removal of all four type II Seyferts in our data. The gray contour shows the distribution of SN
+data points, including all their subtypes. The panels below show a few light curves of different AGN subtypes located at different locations in the latent space.
+The title of each light curve panel shows the ZTF ID along with its Milliquas classification. Also shown at the top-right of each light curve are the duration (in
+days), mean color, and𝜎/𝜇amplitude, in that order, where the two metrics apart from mean colour are averaged across𝑔and𝑟bands. These are also used in
+Figure 8.
+MNRAS000, 1–22 (2026)
+
+14Gondhalekar et al.
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+100 200 300 400 500
+Duration ( g, r) (days)
+(a)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+0.5 1.0 1.5
+σ/µ (g, r) ( ×100) (b)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+-0.4 -0.2 0 0.35 0.7
+µg□r (c)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+□0.2 0.0 0.7
+(g □ r)peak
+(d)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+□0.2 0.0 0.7
+(g □ r)faint (e)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+□0.5 0.0 0.2 0.4
+(g □ r)peak □ (g □ r)faint (f)
+Figure 8.Figure description: Latent space visualisation for only AGN light curves, including all its subtypes. As mentioned in the text, AGNs with duration <3
+months are excluded. Only bins with at least three data points are shown. The features used are: the mean of𝑟- and𝑔-band (a) duration, (b) ratio of standard
+deviation and mean magnitude, a common variability measure (see, e.g., Kim et al. 2011), expressed as a percentage, (c) mean color, (d) peak color, (e) colour
+using respective faintest magnitudes, and (f) difference of (d) and (e). Since inspection of visual correlations is sensitive to value ranges, we have set colorbar
+ranges using robust clipping at the 2nd and the 98th percentiles. Because our model ignores observational uncertainties, measure (b) may serve as a proxy for
+excess variance, another standard AGN variability measure; however, the actual values are overestimated and thus are not comparable with the literature, since
+wehavenotincorporatederrorbars.Comments:DurationchangessmoothlyacrosstheAGNlatentspace,likeinFigure4.Onaverage,lightcurveswithalarger
+magnitude variation are separated from those with smaller magnitude variations. The average colour shows a weak separation between redder and bluer AGNs,
+and similarly the peak colour shows separation from the reddest AGNs at peak from others. The colour at the faintest ends of the light curve also shows weaker
+patterns. As a result, their difference shows that AGNs that are bluer when brighter are separated from others, and is in accordance with the commonly seen
+“bluer-when-brighter”trend.InAppendixC,weshowthe1𝜎standarddeviationoffeaturesineachbinoftheAGNlatentspaceandgenerallyfindnon-negligible
+scatterinbinscorrespondingtolow-duration,high-variationAGNs,orthosecorrespondingtoconsiderablyredandbluecolors.Nonetheless,thetrendsinthese
+plots are used in Section 3.5 to roughly understand the positions of AGN light curves from Figure 7a.
+most of our light curves have very few observations where GP costs
+remain reasonable. To investigate this further, we show in Figure 11
+thatGPindeedscalespoorlywiththeobservationcount,whereasthe
+execution time of mTAND remains unaffected by it.
+The top-left panel of the figure also shows that mTAND is slower
+than GP on CPU for light curves with fewer than∼80 observations,
+withamediantimeforsuchlightcurvesof0.023versus0.01seconds
+andamedianabsolutedeviationof0.006and0.001seconds,respec-
+tively.Thetop-rightpanelofFigure11showsthattheexecutiontime
+showsamilddependenceonlightcurveduration,whichmightbebe-
+causemTANDlearnstime-representativeencodingsthatcandepend
+onthetimespanofthelightcurve.Thereareaconsiderablenumber
+of long-duration and sparsely sampled light curves (Figure 1), and,
+taken together, these trends explain why mTAND is slower for light
+curveswithfewobservations:itisdrivenbytheiralsolongduration.
+For all other combinations of observation count and duration (low
+and high), we find the mTAND to be at least slightly faster than GP.
+For example, for light curves with <80 observations and <120-day
+durations, the median runtimes of mTAND and GP are 0.006 and
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN15
+0 20 40 60
+Time (days)
+16
+17
+18
+19 m
+ZTF22abjvyib - (TNS) SN II
+0 20 40 60
+Time (days)
+18
+19
+20 m
+ZTF22aanmbrl - (TNS) SN II
+Observed time ( g) (days)
+0
+20
+40
+60Query time (days)
+0 10 20 30 40 50 60 70
+Observed time ( r) (days)
+0
+20
+40
+60Query time (days)
+Observed time ( g) (days)
+0
+20
+40
+60Query time (days)
+0 10 20 30 40 50 60
+Observed time ( r) (days)
+0
+20
+40
+60Query time (days)
+0 150 300 450
+Time (days)
+19
+20 m
+ZTF19abgfgzy - QSO
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+ZTF19aagwxlv - BL Lac
+Observed time ( g) (days)0
+200
+400Query time (days)
+0 100 200 300 400 500
+Observed time ( r) (days)
+0
+200
+400Query time (days)
+Observed time ( g) (days)0
+200
+400Query time (days)
+0 100 200 300 400 500
+Observed time ( r) (days)
+0
+200
+400Query time (days)
+Figure 9.Examplevisualisationofattentionweightsforfourlightcurves,whereeachpanelshowsthelightcurvefollowedbytheattentionmapsforthe𝑔and𝑟
+bandsinthenexttworows.Eachattentionmapshowsthe(irregularlyspaced)observedtimesonthex-axisandthe(regularlyspaced)querytimesonthey-axis.
+Forreference,theverticalticksonthex-axisdenotethetimeatwhichanobservationwaspresent,andthedashedlinesdenotethe𝑦=𝑥line.Thecorresponding
+observed light curves, along with our model interpolations, are shown below each pair of attention maps. It is important to note that mTAND only attends to
+locations where an observation exists. The shading between ‘blocks’ in the attention map is such that the boundaries of the blocks are defined at the midpoint
+of adjacent observation times. As a result, the horizontal width of the blocks reflects irregular spacing between observations, and large-width blocks should not
+necessarily be interpreted as a query attending to a large number of observations.
+0.009 seconds, with median absolute deviations of 0.002 and 0.001
+seconds, respectively.
+However, the bottom panels show that, on the GPU, mTAND is
+faster than GP across all light curves, including those with very few
+observations, and that its execution-time dependence on duration is
+diminished.Onaper-light-curvebasis,itisatleastafew(5-10)times
+faster than on CPU; with a batch size of 32 across the entire test set,
+ittakesjustunderasecond,comparedwith36secondsonCPU.The
+GPU used is Tesla P100.
+3.8 Application to new variables and transients
+Here,wetestthegeneralisabilityofourmodelbyapplyingittolight
+curves with types not included in our training dataset. Specifically,
+MNRAS000, 1–22 (2026)
+
+16Gondhalekar et al.
+0 150 300 450
+Time (days)
+14
+16
+18
+20 m
+RMSEGP = 0.01
+RMSEmTAND = 1.20
+ZTF18abtrubp - QSO
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+RMSEGP = 0.03
+RMSEmTAND = 0.69
+ZTF19aagwxlv - BL Lac
+0 20 40 60
+Time (days)
+16
+17
+18
+19 m
+RMSEGP = 0.03
+RMSEmTAND = 0.83
+ZTF22abahblc - (TNS) SN Ia
+Figure 10.Examples of interpolations using mTAND and GP regression. The mTAND predictions are shown by solid lines and the mean GP predictions by
+dashedlinesfor𝑔-(bluecurves)and𝑟-bands(redcurves).TheRMSEsforbothapproachesaredenotedineachpanelandarecalculatedusingpredictionsfrom
+both bands.
+101 102
+2⟨L⟩
+0.00
+0.02
+0.04
+0.06
+0.08
+0.10
+Execution time (sec)
+mTAND encoder
+GP ﬁt
+0 100 200 300 400 500
+Duration (days)
+0.00
+0.02
+0.04
+0.06
+0.08
+0.10
+Execution time (sec)
+mTAND encoder
+GP ﬁt
+101 102
+2⟨L⟩
+0.00
+0.02
+0.04
+0.06
+0.08
+0.10
+Execution time (sec)
+mTAND encoder (GPU)
+GP ﬁt
+0 100 200 300 400 500
+Duration (days)
+0.00
+0.02
+0.04
+0.06
+0.08
+0.10
+Execution time (sec)
+mTAND encoder (GPU)
+GP ﬁt
+Figure 11.Execution time vs. total no. of observations in the light curve (left) and duration (right), for the mTAND encoder (includes design of light-curve-
+dependent query times and encoder forward pass) and for the GP regression fit, for all light curves in the test dataset. The first and second rows show CPU and
+GPU times for mTAND, respectively. The solid lines denote the running median. Here, we use a batch size of one for the mTAND predictions. For clarity, the
+y-axis limits are truncated to remove some outlier observations; these remove some GP examples but do not affect the discussion of results.
+we apply our model to RR Lyrae stars, long-period variable stars,
+and TDEs, and briefly discuss their interpolation performance and
+position in the model’s latent space. For a fair evaluation of the
+model’sgeneralisationcapabilitiestonewclasses,theobservedlight
+curves are truncated so as not to exceed their duration compared to
+the light curves seen during training.
+Figure 12 shows the interpolations for the three types of light
+curves and the corresponding locations our model positions them
+in the SNe + AGN latent space. The long-period variables and the
+TDEs show good decodings, with RMSEs similar to those seen in
+our previous analysis, despite these classes being absent from the
+training set. This generalisation is consistent with the fact that our
+modelistrainedtolearninterpolationsforarbitrarylightcurvesinan
+unsupervisedmanner,ratherthanleveragingclass-specifictemplates
+orpriorinformation.TheRRLyraeshowpoordecodingperformance
+for A–D, as the model could not capture its variability effectively–
+this is expected because its pulsation period (roughly 0.4-0.5 d) is
+much smaller than the temporal resolution of our model, which is
+two days.
+Despite most of them having similar durations, these sources
+occupy distinct regions in the latent space, which reconfirms that
+the model encodes variability patterns beyond duration alone. The
+RR Lyrae and the long-period variables lie away from SNe and
+towardsAGNs,andthattoo(exceptfor‘E’)preferablytowardshigh-
+variability and redder AGNs. For the long-period variable, this is
+understandable as they are known to be a source of contamination
+in variability-based AGN selection (MacLeod et al. 2011). Unlike
+the long-period variables, RR Lyrae are not closely clustered in the
+latent space. Part of the reason might be their poor interpolation
+performance discussed above. The TDEs are clearly separated from
+the variable stars. ‘I’ and ‘K’ lie at the edges of the AGN latent
+space, and ‘J’ lies within the SN latent space, partly due to its small
+duration. The location of these TDEs is also consistent with their
+characteristic blue colour since they lie far away from redder light
+curves (see Figure 4). We also checked that these lie far away from
+regions with a high variation in colour, which matches their typical
+behaviour of no colour evolution. Given the observational diversity
+of TDEs, it may be worthwhile to study how large samples of TDEs
+are arranged in the latent space.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN17
+0 150 300 450
+Time (days)
+14
+15
+16
+17 m
+g: RMSE = 0.41
+r: RMSE = 0.27
+ZTF17aaaebgd - (A)
+g
+r
+0 200 400
+Time (days)
+15
+16
+17 m
+g: RMSE = 0.38
+r: RMSE = 0.26
+ZTF18abadkhl - (B)
+0 200 400
+Time (days)
+15
+16
+17
+18 m
+g: RMSE = 0.47
+r: RMSE = 0.33
+ZTF18adalmbo - (C)
+0 150 300 450
+Time (days)
+14
+15
+16 m
+g: RMSE = 0.26
+r: RMSE = 0.18
+ZTF18abcosdx - (D)
+0 200 400
+Time (days)
+14
+15
+16 m
+g: RMSE = 0.12
+r: RMSE = 0.06
+ZTF18abklama - (E)
+0 150 300 450
+Time (days)
+14
+16 m
+g: RMSE = 0.15
+r: RMSE = 0.41
+ZTF18abryodl - (F)
+0 200 400
+Time (days)
+12
+14
+16 m
+g: RMSE = 0.10
+r: RMSE = 0.12
+ZTF18aabjjhq - (G)
+0 150 300 450
+Time (days)
+12
+14
+16 m
+g: RMSE = 0.13
+r: RMSE = 0.18
+ZTF18aaaaogd - (H)
+0 150 300 450
+Time (days)
+17
+18
+19
+20 m
+g: RMSE = 0.07
+r: RMSE = 0.09
+ZTF20aahmtso - (I)
+0 20 40
+Time (days)
+19
+20
+21 m
+g: RMSE = 0.12
+r: RMSE = 0.13
+ZTF25aclckzl - (J)
+0 150 300 450
+Time (days)
+18
+19
+20 m
+g: RMSE = 0.06
+r: RMSE = 0.09
+ZTF20accxwrk - (K)
+0 150 300 450
+Time (days)
+18
+20 m
+g: RMSE = 0.12
+r: RMSE = 0.13
+ZTF22aadesap - (L)
+4 6 8 10 12 14
+UMAP 1
+4
+6
+8
+10
+12
+14UMAP 2 A B
+C D
+E
+F G
+H
+I
+J
+K
+L
+Figure 12.Top: Interpolation visualisations of the three types of light curves with types not seen during training: RR Lyrae (A–E), long-period variable (F–H),
+and TDEs (I–L).Bottom: The gray contour shows the latent space of SN and AGN (Section 3.2) and the crosses denote the locations of the three new light
+curves in the latent space.
+4 DISCUSSION
+4.1 Summary and Outlook
+We have shown that our unsupervised mTAND approach is able to
+learn latent features that separate the general class of SNe and AGN
+populationsfrompartiallightcurvesobtainedfromZTF,despitethe
+significant class imbalance towards AGNs (90 vs. 10%). In partic-
+ular, the presence of correlations between positions of light curves
+in the latent space and derived features, such as peak magnitude
+epoch, light curve duration, magnitude variability, and overall and
+peak color, demonstrates that the latent space has learned multivari-
+atephotometric‘properties’ofourdata.Atthesametime,themodel
+is insensitive to unimportant features: peak and mean magnitude,
+and total number of observations. Duration, while informative for
+transient studies, can understandably be just an observational effect
+for objects such as AGNs, and since our latent space captures dura-
+tioninformation,non-transientcharacterisationshouldbeinterpreted
+with this caveat in mind.
+WithintheSNsubpopulation,durationwasfoundtobeoneofthe
+important features in organising the latent space. Different subtypes
+of SNe overlap in the latent space due to their similar photometric
+signatures. However, long-duration SNe II, early SN Ia candidates,
+andSLSNewereawayfromthegenericSNsubpopulation.TheAGN
+latentspacewaslessinstructivethanthatofSNeduetomorescatter
+intherelationbetweenlatentspacelocationandlightcurvefeatures–
+in fact, the finding by Sánchez-Sáez et al. (2021a) that more than 30
+featuresarerequiredtoseparateamongsomeAGNsubclasseshintsat
+this challenge. Moreover, as their spectroscopic classifications were
+based on luminosity, which the model did not have access to, the
+AGN analysis was focused on more general trends. A large fraction
+of Blazars were in regions of latent space corresponding to high
+variability. A few AGNs that were closer to SNe than the general
+AGN subpopulation were hypothesized to have SNe-like duration
+MNRAS000, 1–22 (2026)
+
+18Gondhalekar et al.
+andvariabilityorlongerdurationsbutsimilarvariabilityacrosstheir
+temporaloverlap;butthismayalsopartlyarisefromthe5𝜎detection
+threshold used to trigger an alert, which can cause low-amplitude
+AGN variability to appear as transients.
+We visualised the attention maps of the encoder network of
+mTAND and demonstrated that its multi-time attention mechanism
+captures the local structure of light curves, which is supplemented
+by the capture of longer-range temporal structure through a simple
+recurrentmodulefollowingtheencoder.Byvirtueoflearningunique
+attentionpatternsforeachband,weprovideahigh-levelexplanation
+of how mTAND learns cross-band information. We also found that
+our model’s inability to interpolate over fast-evolving temporal fea-
+turesarisesbecausetheencoderplaceslowattentiononthem.Unlike
+Pimenteletal.(2023),whoseattention-basedmodelfocusedonnear-
+peakSNeobservations(theirFigure12),ourmodeldoesnotseemto
+showsuchapreference.Thisdifferencemayreflectourdifferentdata
+characteristics–even though both studies used ZTF light curves–or
+biasesintroducedbytheirpretrainingonsyntheticlightcurveswhere
+the peaks should be better defined than sparsely-sampled real obser-
+vations.
+GP regression provided more accurate interpolations than
+mTAND, including outlier/fast-evolving features, possibly because
+GP fits were optimised for each light curve. Thus, GP can be a good
+choice for analysing specific types of objects for follow-up studies
+where prompt characterisation is not a priority, because of its sound
+statisticalgroundinganditsallowanceofphysicallymotivatedkernel
+choices.However,weobservedafewchallengeswithGPregression.
+First, they can produce spurious features at observational gaps that
+could bias downstream classification. Second, while kernel adjust-
+ments can improve GP interpolation accuracy, these modifications
+mustresultinasimplekerneltokeepcomputationalcostslow,which
+canmakeGPsuboptimalforhandlingawidevarietyoflightcurves.
+mTANDlearnsakernelfromdata,ratherthanbeingfixed,makingit
+moreflexible.Third,GP’scomputationalscalingbecameprohibitive
+for𝑛≳80 observations (Figure 11), while mTAND’s encoder run-
+timeremainedessentiallyinsensitiveto𝑛.Therefore,mTANDcanbe
+particularlyusefulforlarge-scaleapplications,suchasdatafromRu-
+bin, having an overwhelmingly large dataset and six different bands.
+mTAND’s runtime on CPU increased mildly with duration, likely
+duetoitstime-awareencoding,andhenceitbecameslowerthanGP
+forlongdurationbutsparselightcurves;however,onGPU,mTAND
+showed no dependence of execution time on duration and remained
+faster than GP for all light curves.
+To demonstrate the generalisability of mTAN to light curves be-
+yondthoseseenduringtraining,weappliedthemodeltolightcurves
+of RR Lyrae, long-period variable stars, and TDEs. RR Lyrae’s pe-
+riodic variability occurred at a much faster rate than the temporal
+resolution of our mTAND of two days (which is a hyperparameter),
+and thus, mTAND could not model its variability well. Kelly et al.
+(2014) similarly found the CARMA model to be suboptimal for RR
+Lyrae, although the reason was the non-stochastic nature of these
+light curves, which resulted in model misspecification; mTAND, by
+contrast, is less sensitive to such assumptions. mTAND could, how-
+ever, model the long-period variable and the TDE. The TDE was
+located in a sub-region of AGN latent space away from the redder
+lightcurvesandthosewithlargevariabilityincolour,whichmatched
+the TDE’s characteristic blue colour. Thus, the model could gener-
+alise to other transient classes by virtue of not using class-specific
+information during training. This aspect can be particularly valu-
+able for rare transients from Rubin LSST. We note, however, that
+this generalisation assumes that test-set light curves have durations
+comparable to those in the training set, as we observed degraded
+interpolation for sections of light curve at times well beyond those
+seen during training (≲1.5 years).
+We note that we have developed and used a modified version of
+mTANDwherethesetofquery(orreference)timesisnotfixedforall
+lightcurvesbutinsteadcaterstoeachlightcurveindependently.This
+approachwasprovenessentialinourinternalexperimentstoimprove
+overall interpolation quality since, unlike the fixed query approach,
+itcancapturefinertemporalstructuresforlightcurvesevolvingover
+long timescales but also those on much shorter timescales.
+mTAND’s encoder required 36 seconds on a CPU but just under
+a second on a GPU to process∼3k light curves. The model size of
+the mTAND is only a few hundred kilobytes for both the encoder
+and decoder. Hence, the primary advantage of the mTAND is being
+fastandlightweight,whilebeingusefulformodellingawidevariety
+of transients. Direct comparison with similar methods is challeng-
+ing due to differences in hardware (e.g., CPU cores used), runtime
+environments, and batch sizes. However, our mTAND encoder on
+CPU is∼80 times faster than the ‘t2’ time-series transformer model
+(at 1.5 seconds-per-light curve), even when evaluated with a batch
+size of one, and is roughly three times smaller (Allam & McEwen
+2024). A subsequent study (Allam et al. 2023) reported significant
+improvementsinthatmodel,whichreduceditssizeby∼18timesand
+inferencetimeby∼8usingtechniquessuchasdeepcompressionand
+quantization;however,ourcurrent(unoptimised)implementationre-
+mainsfaster.Finally,anotheradvantageofmTANDisitstemporally
+distributedlatentspace,unlikemostcontrastivelearningapproaches.
+Although we have not tested this idea, for example, this could open
+applications for phase-dependent analysis of light curves.
+4.2 Limitations and future directions
+The primary limitation is our neglect of observational uncertainties,
+which prevents the model from down-weighting noisier observa-
+tions. At least two types of uncertainties can be considered. First
+are the uncertainties on the observed magnitudes, whose inclusion
+should be straightforward in our VAE architecture (see e.g., Boone
+2021). Second, uncertainties arising from temporal sparsity can, in
+principle,becapturedbydrawingmultiplesamplesfromourVAEla-
+tentspace,buttheseuncertaintiesmaynotbeadequatelypropagated
+through mTAN. An improvement to mTAN to allow representing
+a heteroscedastic distribution of outputs conditioned on the latent
+state, as suggested by Narayan Shukla & Marlin (2021b), could be
+worth exploring.
+Onasimilarnote,amorerobustencodingcanbeobtainedfromour
+mTAND through multiple samplings from the posterior distribution
+overthelatentstatesthanasinglesampleusedhere.Inaddition,dueto
+our assumption of a Gaussian distribution for the posterior, possible
+multimodalitiesinthetrueposteriordistributionwillnotbecaptured,
+butwenotethatthisisaninherentchallengeforsuchneuralnetworks
+asatradeoffforthecomputationalefficiencytheyprovide.Finally,our
+datapreprocessingmadeourmTANDlesssensitivetoobservational
+effects that directly affect observed brightness, but a more general
+solution to this could be to incorporate such symmetries or other
+relevant host galaxy features in the model’s latent space (section 3.3
+ofBoone(2021)providesmoredetails).Thisadditionalinformation
+canimprovediscriminationamongtransientsubtypesmorethanour
+photometry-only approach, and even inform downstream parameter
+inference for huge samples of transients.
+The second set of limitations arises from some characteristics of
+our model. As noted above, our interpolations struggle to capture
+temporal features evolving over timescales similar to or faster than
+thechosentemporalresolutionofourmTAND.Wefindthatwithour
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN19
+two-day resolution,≲1-week features were challenging to capture,
+and potentially a larger encoder latent dimension may be relevant to
+capture fast variations, for example, increasing the latent dimension
+from 2 to 32 only marginally increased the model memory foot-
+print. Another idea for exploration is to exploit mTAN’s flexibility
+byinterfacingitsencoderwithalternativedeepneuralnetworks,such
+as convolutional or fully-connected networks, instead of the recur-
+rentarchitectureusedhere.Weacknowledgethatrapidvariabilityor
+short-lived events can be a defining characteristic of certain classes
+of transients, such as Blazars and early phases of some SNe, such as
+SN IIb and Ib/c. However, in this paper, we have shown that, at the
+levelofdataqualityofZTF,themTANDissuitableforapplicationto
+broadtransientclassificationtaskswhereoverallfeaturesareprimary
+discriminants.
+Another relevant task that can help in the efficient follow-up of
+transients is forecasting (extrapolation). In theory, this should be
+possiblesincethemTAND’sdecodercanbeconditionedonanygiven
+querytime,andbecauseitstimeembeddingcontainsanon-periodic
+term,whichcancaptureevolutionwithtime.However,thefullydata-
+driven nature of our approach means that the extrapolations may
+be scientifically meaningful only when trained on focused datasets
+and applied to similar transient classes. Given the fast inference
+of the mTAND model, it may be worthwhile for future work to
+testitssuitabilityforreal-timefollow-upusingearly-phaseevolution
+(see also, e.g., Sravan et al. 2020; Muthukrishna et al. 2022). For
+these purposes, the current mTAN architecture can, in principle, be
+modifiedtoapplytemporalmaskingtoitsdecodertobasepredictions
+only on past observations (see Vaswani et al. 2017).
+Finally, we leave for future work training for more epochs with
+data from other surveys, such as Rubin, particularly since our best
+modelwasobtainedtooclosetothechosenendofourmodeltraining.
+We also leave for future work the application of mTAND to specific
+objects (e.g., AGNs). Although detailed physical characterisation
+is beyond the scope of this paper, future studies could study the
+organisationoflatentspaceusingastrophysicalpropertiesratherthan
+potentially ambiguous classes (e.g., type IIs).
+5 CONCLUSIONS
+We have demonstrated a lightweight data-driven unsupervised rep-
+resentation learning method using a multi-time attention model
+(mTAND) that provides a scalable and flexible way of character-
+ising irregular, partial light curves. We used alert data from the Fink
+broker, which is one of the Rubin/ZTF brokers (Möller et al. 2021).
+For transparency of evaluation, we only applied minimal selection
+cuts for photometric data quality with no heavy model-specific pre-
+processing. The main methodological modification to the mTAND
+we made was to allow the set of query times for the attention mech-
+anism to fix the temporal resolution rather than to fix the number
+of query times. This is necessary to handle datasets containing light
+curves evolving on very different time scales.
+Our approach learns latent representations correlating with phys-
+ically meaningful features (duration, peak time, variability, colour)
+without supervision, while being robust to observed magnitude and
+observation count. By virtue of this, the model was able to separate
+SNeandAGNlightcurvesasawholedespiteheavyclassimbalance.
+Expected photometric overlaps among subtypes of SNe and AGN
+and anomalies in the latent space were elucidated.
+ThemTANDproducedgooddecodingsandlatentrepresentations
+of light curves to long-period variables and TDEs, classes that were
+unseen during training. Application to RR Lyrae, however, did not
+produce reasonable decodings due to its periodic variability occur-
+ring much faster than our model’s temporal resolution. Overall, the
+model shows potential for application when training samples may
+not be representative of the whole population within a given survey.
+The limitations in our current application of mTAND are the ig-
+norance of observational uncertainties, the inability to adequately
+capture evolution faster than our model’s temporal resolution, and
+lower interpolation accuracy than GP per-object fits. We have dis-
+cussed how some of these challenges can be addressed within the
+framework of our model.
+Fast, data-driven characterisation of transients is important for
+Rubin since it will detect a few million transients per night with
+large sky coverage and depth. Our model’s scalability arises from a
+few aspects. It required just under a second on a GPU (around half
+a minute on CPU) to process∼3k light curves, achieved execution
+times that remained invariant to the number of observations in the
+lightcurve(andalsotodurationwhenusedonaGPU),andthemodel
+occupies only of the order of few hundred kilobytes of memory at
+runtime.ThemainbenefitscomparedtoGPregressionareitsability
+to learn complex kernel functions in a data-driven manner, which
+mitigates the risk of model misspecification, and insensitivity of its
+runtime to observation count.
+The results here suggest that mTAND can serve as an effective
+classifier to rapidly identify strong candidates for follow-up based
+ongeneralphotometricfeatures,withprecisesubtypediscrimination
+(supervised classification) and uncertainty quantification as natural
+next steps. As time-domain astronomy enters a regime dominated
+by sheer data volume, methods such as mTAND can be beneficial
+for new discoveries and characterisation of both common and rare
+transientpopulationswhosephysicalunderstandinghasthusfarbeen
+elusiveduetostatisticalerrorsarisingfromlimitedclassifiedsample
+sizes.
+ACKNOWLEDGEMENTS
+This work was performed on the OzSTAR national facility at Swin-
+burne University of Technology. The OzSTAR program receives
+funding in part from the Astronomy National Collaborative Re-
+search Infrastructure Strategy (NCRIS) allocation provided by the
+Australian Government, and from the Victorian Higher Education
+State Investment Fund (VHESIF) provided by the Victorian Gov-
+ernment.This work was developed within the Fink community and
+madeuseoftheFinkcommunitybrokerresources.Finkissupported
+by LSST-France and CNRS/IN2P3. This research has made use of
+the SIMBAD database, operated at CDS, Strasbourg, France. AM
+research was supported by the Australian Research Council Dis-
+covery Early Research Award (DE230100055). Y.G. acknowledges
+the STFC Centre for Doctoral Training in Data Intensive Science
+and support from the UCL Research Excellence Scholarship (UCL-
+RES). Y.G. also acknowledges Ofer Lahav for discussions and for
+providing additional comments.
+DATA A V AILABILITY
+The code for designing and training the mTAN model, and other as-
+sociated scripts, is available athttps://github.com/Yash-10/
+astro-mtan.ThedatawasobtainedusingFink’sDataTransferser-
+viceforZTF:https://ztf.fink-portal.org/download,andis
+publicly available.
+MNRAS000, 1–22 (2026)
+
+20Gondhalekar et al.
+REFERENCES
+Aigrain S., Foreman-Mackey D., 2023, ARA&A, 61, 329
+Allam Jr. T., 2022, astronet: Multivariate Time-Series Classification of As-
+trophysical Transients using Deep Learning,https://github.com/
+tallamjr/astronet
+Allam T., McEwen J. D., 2024, RAS Techniques and Instruments, 3, 209
+Allam Jr. T., Peloton J., McEwen J. D., 2023, arXiv e-prints, p.
+arXiv:2303.08951
+Alves C. S., Peiris H. V., Lochner M., McEwen J. D., Allam T., Biswas R.,
+LSST Dark Energy Science Collaboration 2022, ApJS, 258, 23
+Bellm E. C., et al., 2019, PASP, 131, 018002
+Boone K., 2019, AJ, 158, 257
+Boone K., 2021, AJ, 162, 275
+Bricman K., Gomboc A., 2020, ApJ, 890, 73
+Chambers K. C., et al., 2016, arXiv e-prints, p. arXiv:1612.05560
+Charnock T., Moss A., 2017, ApJ, 837, L28
+DES Collaboration et al., 2024, ApJ, 973, L14
+D’Isanto A., Cavuoti S., Brescia M., Donalek C., Longo G., Riccio G., Djor-
+govski S. G., 2016, MNRAS, 457, 3119
+Demianenko M., Malanchev K., Samorodova E., Sysak M., Shiriaev A.,
+Derkach D., Hushchyn M., 2023, A&A, 677, A16
+Flesch E. W., 2015, Publ. Astron. Soc. Australia, 32, e010
+Flesch E. W., 2023, The Open Journal of Astrophysics, 6, 49
+Foreman-MackeyD.,AgolE.,AmbikasaranS.,AngusR.,2017,AJ,154,220
+Förster F., et al., 2021, AJ, 161, 242
+Fraga B. M. O., et al., 2024, arXiv e-prints, p. arXiv:2404.08798
+Fraikin A., Bennetot A., Allassonnière S., 2023, arXiv e-prints, p.
+arXiv:2310.04486
+GaglianoA.,ContardoG.,Foreman-MackeyD.,MalzA.I.,AleoP.D.,2023,
+ApJ, 954, 6
+Gaia Collaboration et al., 2016, A&A, 595, A1
+Gal-Yam A., 2012, Science, 337, 927
+Graziani R., et al., 2020, arXiv e-prints, p. arXiv:2001.09095
+Guillochon J., Nicholl M., Villar V. A., Mockler B., Narayan G., Mandel
+K. S., Berger E., Williams P. K. G., 2018, ApJS, 236, 6
+Ishida E. E. O., de Souza R. S., 2013, MNRAS, 430, 509
+Ivezić Ž., et al., 2019, ApJ, 873, 111
+KellyB.C.,BeckerA.C.,SobolewskaM.,SiemiginowskaA.,UttleyP.,2014,
+ApJ, 788, 33
+Kim D.-W., Protopapas P., Byun Y.-I., Alcock C., Khardon R., Trichas M.,
+2011, ApJ, 735, 68
+KisleyM.,QinY.-J.,ZabludoffA.,BarnardK.,KoC.-L.,2023,ApJ,942,29
+Leoni M., Ishida E. E. O., Peloton J., Möller A., 2022, A&A, 663, A13
+LlamasLanzaM.,KarpovS.,RusseilE.,QuintinE.,IshidaE.E.O.,Peloton
+J., Pruzhinskaya M. V., Möller A., 2026, A&A, 705, A144
+Lochner M., McEwen J. D., Peiris H. V., Lahav O., Winter M. K., 2016,
+ApJS, 225, 31
+MacLeod C. L., et al., 2011, ApJ, 728, 26
+McInnes L., Healy J., Saul N., Grossberger L., 2018, The Journal of Open
+Source Software, 3, 861
+Mistry D., Copperwheat C. M., Darnley M. J., Olier I., 2024, MNRAS, 527,
+8633
+Möller A., de Boissière T., 2020, MNRAS, 491, 4277
+Möller A., et al., 2016, J. Cosmology Astropart. Phys., 2016, 008
+Möller A., et al., 2021, MNRAS, 501, 3272
+Möller A., et al., 2022, MNRAS
+Möller A., et al., 2024, MNRAS, 533, 2073
+Möller A., et al., 2025, Publ. Astron. Soc. Australia, 42, e057
+Muthukrishna D., Narayan G., Mandel K. S., Biswas R., Hložek R., 2019,
+PASP, 131, 118002
+Muthukrishna D., Mandel K. S., Lochner M., Webb S., Narayan G., 2022,
+MNRAS, 517, 393
+Narayan Shukla S., Marlin B. M., 2019, arXiv e-prints, p. arXiv:1909.07782
+NarayanShuklaS.,MarlinB.M.,2021a,arXive-prints,p.arXiv:2101.10318
+NarayanShuklaS.,MarlinB.M.,2021b,arXive-prints,p.arXiv:2107.11350
+Pasquet J., Pasquet J., Chaumont M., Fouchez D., 2019, A&A, 627, A21
+Pimentel Ó., Estévez P. A., Förster F., 2023, AJ, 165, 18
+Pruzhinskaya M. V., et al., 2026, arXiv e-prints, p. arXiv:2603.29511
+Rigault M., et al., 2025, A&A, 694, A1
+Rose B. M., et al., 2021, arXiv e-prints, p. arXiv:2111.03081
+Sako M., et al., 2011, ApJ, 738, 162
+Sako M., et al., 2018, PASP, 130, 064002
+Sánchez-Sáez P., et al., 2021a, AJ, 161, 141
+Sánchez-Sáez P., et al., 2021b, AJ, 162, 206
+ScovacricchiD.,NicholR.C.,BaconD.,SullivanM.,PrajsS.,2016,MNRAS,
+456, 1700
+Sheng X., et al., 2024, MNRAS, 531, 2474
+Sravan N., Milisavljevic D., Reynolds J. M., Lentner G., Linvill M., 2020,
+ApJ, 893, 127
+TanA.,ProtopapasP.,Cádiz-LeytonM.,Cabrera-VivesG.,Donoso-OlivaC.,
+Becker I., 2025, arXiv e-prints, p. arXiv:2509.24134
+Tonry J. L., et al., 2018, PASP, 130, 064505
+Vaswani A., Shazeer N., Parmar N., Uszkoreit J., Jones L., Gomez A. N.,
+Kaiser L., Polosukhin I., 2017, arXiv e-prints, p. arXiv:1706.03762
+Villar V. A., Berger E., Metzger B. D., Guillochon J., 2017, ApJ, 849, 70
+Villar V. A., Nicholl M., Berger E., 2018, ApJ, 869, 166
+Villar V. A., et al., 2019, ApJ, 884, 83
+Vincenzi M., et al., 2024, ApJ, 975, 86
+de Soto K., et al., 2024a, Superphot+: Real-Time Fitting and Classification
+of Supernova Light Curves, doi:10.5281/zenodo.12519870,https://
+doi.org/10.5281/zenodo.12519870
+de Soto K. M., et al., 2024b, ApJ, 974, 169
+APPENDIX A: LATENT SPACE CORRELATION
+PATTERNS WITH EXTRANEOUS LIGHT CURVE
+FEATURES
+As mentioned in Section 3.2, the model is not expected to encode
+the peak magnitude (calculated across all bands) because it is sub-
+tracted from light curve magnitudes before training (Section 2.2.4),
+and the total number of observations across all bands, because the
+traininglossfunctionwasnormalisedusingthisterm(Section2.2.2).
+Inaddition,weexpectthemodel’slatentspacenottolearnthemean
+magnitude. Like peak magnitude, being robust to mean magnitude
+is important, as this can be a misleading feature for classifying tran-
+sients. Figure A1 shows the visualisation of the latent space, similar
+to Figure 4, but colored with these extraneous features.
+The peak and mean magnitudes do not show obvious correlations
+apart from some preference seen for very bright peak magnitudes.
+The average number of observations indicates that light curves to-
+wards the left in the projection have fewer observations, which can
+be viewed as a surrogate for duration.
+APPENDIX B: SN LATENT SPACE CORRELATIONS
+WITH REMAINING PROPERTIES
+Figure 5 showed the SN latent space colored by duration, decline
+rate, and colour at peak. Here in Figure B1, we show correlations
+with time of peak and amplitude.
+Thepeaktimecorrelatesspatiallyinthelatentspace,butnotethat
+our individual band peak times are sensitive to sampling and inac-
+curate in cases of light curves showing flatter peaks. The amplitude
+showssmoothcorrelation,andthesepatternsarequalitativelysimilar
+to the duration plot. The fact that the duration and amplitude plots
+show similar patterns is not unexpected, as the longer the SN evolu-
+tion is observed, the more the variation can be captured. Although
+not shown, the standard deviation of colour (𝜎g−r) and the standard
+deviation of magnitudes show qualitatively similar patterns to the
+amplitude plot shown here, where the former may be capturing the
+tendency of SNe to redden during decline.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN21
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+17.5 18.0 18.5 19.0
+mpeak (g, r)
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+10 20 30
+⟨L⟩
+4 6 8 10 12 14
+UMAP 1
+6
+8
+10
+12UMAP 2
+18 18.5 19 19.5
+µ (g, r)
+Figure A1.Same as Figure 4 but colored with different set of features. See Figure 4 caption for details. The features used to colour the latent space are: peak
+magnitude irrespective of the band (𝑚peak (𝑔, 𝑟); left; this is used for normalising magnitudes before training), average no. of observations in each band (⟨𝐿⟩;
+middle; also used in Figure 1, and the average of mean magnitude across both bands (𝜇(𝑔, 𝑟); bottom)).
+4 6 8
+UMAP 1
+6
+8UMAP 2
+2 10
+tpeak (g, r) (days)
+(a)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+0.5 1.0 1.5 2.0
+Amplitude ( g, r) (b)
+Figure B1.Same as Figure 5 but colored with two other properties: peak time and amplitude.
+APPENDIX C: STANDARD DEVIATION OF FEATURES IN
+LATENT SPACE
+Figure C1 shows the latent space of SN using the same features as
+in Figure 5 (except the magnitude decline rate), but instead of mean
+features in each bin, it denotes their1𝜎standard deviation. This
+allows us to understand the model’s ‘confidence’ in clustering light
+curves based on these features. When compared with Figure 5, we
+observethatwithrespecttothemeanvaluesinthebins,thestandard
+deviationsarenotlarge.Inparticular,whilethestandarddeviationof
+colourislargeatlocationsofthereddestSNe,itissmallformildlyred
+and blue SNe, which means that they are separated with reasonable
+certainty. Thus, the model indeed clusters light curves with similar
+features with good confidence, and the mean trends in the main text
+are generally reliable.
+Figure C2 shows the standard deviation in each bin of the AGN
+latent space. Comparing it with Figure 8, we see that some bins
+defined by relatively low-duration AGN light curves (duration≲
+200days) have comparable or larger standard deviation than their
+duration, whereas the bins defined by the longest-duration AGN
+light curves have lower relative scatter. The standard deviation in
+the variability is generally of similar scale to the variability for both
+high and low variability regions (Figure 8b). Similarly, the standard
+deviationintheaveragecolourisnotsmall,particularlyforthereddest
+and the bluest bins, and the standard deviation in the peak color,
+faintest color, and their difference are all considerable. There are
+followingpossiblereasonsforthisnon-negligiblescatter:(a)itmight
+occur because our model is trained to perform interpolations which
+tryto‘fit’asmanypointsaspossible,ratherthansmoothermodeling,
+which can lead to this behaviour for (stochastic) AGNs unlike for
+(non-stochastic) SNe, (b) the hyperparameter setting in the UMAP
+projection: in particular, the tradeoff between the local and global
+structure can be controlled when performing the UMAP projection
+and a smaller neighbourhood size could also reduce the scatter, (c)
+MNRAS000, 1–22 (2026)
+
+22Gondhalekar et al.
+it might also reflect data characteristics: for example, high𝜎/𝜇can
+arise due to changing mean trend, high variation around the mean,
+or both, since𝜇here is the overall mean magnitude rather than a
+running mean. Thus, although these features may not individually
+be good descriptive features to understand the ‘local’ clustering of
+AGN light curves, the mean trends in Figure 8 it is representative of
+what the model has learned generally on a ‘global’ level.
+This paper has been typeset from a TEX/LATEX file prepared by the author.
+MNRAS000, 1–22 (2026)
+
+Light curve characterisation with mTAN23
+4 6 8
+UMAP 1
+6
+8UMAP 2
+10 20
+σDuration ( g,r)
+(a)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+2 4 6
+σtpeak (g,r) (b)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+0.2 0.4 0.6 0.8
+σAmplitude ( g,r) (c)
+4 6 8
+UMAP 1
+6
+8UMAP 2
+0.1 0.2 0.3 0.4
+σ(g□r)peak
+(d)
+Figure C1.
+MNRAS000, 1–22 (2026)
+
+24Gondhalekar et al.
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+50 100 150
+σDuration ( g,r)
+(a)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+1 2 3
+σσ/µ (g,r) ( ×100) (b)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+0.2 0.4
+σµg□r (c)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+0.2 0.4 0.6
+σ(g□r)peak
+(d)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+0.25 0.50 0.75 1.00
+σ(g□r)faint (e)
+4 6 8 10 12 14
+UMAP 1
+5
+7
+9
+11
+13UMAP 2
+0.25 0.50 0.75 1.00
+σ(g□r)peak□(g□r)faint (f)
+Figure C2.
+MNRAS000, 1–22 (2026)

@@ -1,0 +1,942 @@
+Title: Reconstruction of Reionization Histories from 21 cm Power-Spectrum Evolution with Artificial Neural Networks
+Authors: Yu-Le Wang, Hayato Shimabukuro
+Published: 2026-05-20
+Categories: astro-ph.CO
+
+Research in Astronomy and Astrophysicsmanuscript no.
+(LATEX: main.tex; printed on May 21, 2026; 0:58)
+Reconstruction of Reionization Histories from 21 cm
+Power-Spectrum Evolution with Artificial Neural Networks
+Yu-Le Wang1,∗, Hayato Shimabukuro1
+South-Western Institute for Astronomy Research, Key Laboratory of Survey Science of Yunnan Province,
+Yunnan University, Kunming, Yunnan 650500, People’s Republic of China
+Received 20XX Month Day; accepted 20XX Month Day
+AbstractWe investigate whether the redshift evolution of the fixed-kdimensionless 21 cm
+power spectrum,∆ 2
+21(k, z), contains sufficient information to reconstruct reionization his-
+toriesx HI(z)with artificial neural networks. Using semi-numerical realizations generated
+within a restricted three-parameter 21cmFAST model family, we train a compact feed-
+forward network to learn the inverse mapping from power-spectrum trajectories to the neutral-
+fraction history over6≤z≤15. Fork= 0.1,0.5, and1.0hMpc −1, representative tests on
+an independent test set show that the midpoint redshiftz 50 is recovered more accurately than
+the duration∆z=z 75−z25:z 50 is reconstructed withMAE = 0.0046andRMSE = 0.0100,
+whereas∆zyieldsMAE = 0.0302andRMSE = 0.0378. This result indicates that fixed-k
+power-spectrum evolution carries stronger information about the timing of reionization than
+about the detailed width of the transition within the adopted prior. We further test an idealized
+foreground-free SKA1-Low-like thermal-plus-sample-variance noise model and find that the
+reconstruction remains stable in the favorable signal-to-noise regime considered here. These
+results demonstrate that neural networks can serve as prior-dependent inverse mapping for
+reconstructing reionization histories from 21 cm power-spectrum evolution.
+Key words:dark ages — reionization — first stars — methods: data analysis — cosmology:
+theory
+1 INTRODUCTION
+The Cosmic Dawn and the Epoch of Reionization mark the interval during which the first luminous sources
+transformed the intergalactic medium from a predominantly neutral state into an ionized one. A central
+goal of early-Universe astrophysics is therefore to reconstruct the redshift evolution of the volume-averaged
+neutral hydrogen fraction,x HI(z). That history encodes when the first galaxies became efficient ionizing
+sources, how rapidly ionized regions grew and merged, and how radiative feedback shaped subsequent
+⋆E-mail:wangyule@stu.ynu.edu.cn
+arXiv:2605.21012v1  [astro-ph.CO]  20 May 2026
+
+2 Wang & Shimabukuro
+structure formation. Byz≈6, reionization was largely complete, but the timing and duration of the transi-
+tion remain key open questions (e.g. Barkana & Loeb 2001; Robertson 2022).
+Recent observations have made this question increasingly concrete. On the galaxy side, JWST spec-
+troscopy is beginning to probe the luminosities, ionizing spectra, and local environments of sources
+well into the reionization era, while Lyα-based measurements—including absorption-line constraints from
+Gunn–Peterson troughs and damping wings, as well as luminosity-function and clustering studies of Lyα
+emitters—provide increasingly informative, though model-dependent, constraints on the neutral IGM at
+z≳6. Joint interpretations of these data have reinforced the view that the main phase of reionization may
+occur relatively late, with a substantial decline inx HI betweenz∼8andz∼6, and in some analyses
+even a comparatively sharp transition, although the inferred history is not unique (Fan et al. 2006; Dayal &
+Ferrara 2018; Madau 2017; Umeda et al. 2025; Umeda et al. 2025; Kageura et al. 2025).
+At the same time, these observables do not directly provide the full functionx HI(z). JWST primarily
+constrains the abundance, spectra, and ionizing efficiency of source populations, so converting those data
+into a global ionization history requires assumptions about escape fractions, source demographics, and the
+coupling between galaxies and the surrounding IGM (Dayal & Ferrara 2018; Madau 2017). Lyα-based
+probes are especially informative during the late stages of reionization, but their interpretation depends
+on absorption-line radiative transfer and on the environments of the background sources: Gunn–Peterson
+and damping-wing measurements are sensitive to neutral hydrogen along particular sightlines, whereas
+Lyαemitter statistics respond to both IGM transmission and galaxy evolution. In addition, the Lyαforest
+saturates rapidly as the neutral fraction rises, which limits the direct leverage of absorption measurements
+on the full reionization history and increases the importance of astrophysical systematics associated with
+circumgalactic gas and large-scale ionized topology (Fan et al. 2006; Umeda et al. 2025; Umeda et al. 2025;
+Kageura et al. 2025). The motivation for additional probes is therefore not that current measurements are
+inadequate, but that reconstructingx HI(z)benefits from observables that are complementary to them and
+that trace neutral hydrogen in the IGM more directly.
+In this context, the redshifted 21 cm signal is especially attractive. Because the differential brightness
+temperature depends on the density field, the neutral fraction, and the spin temperature relative to the cosmic
+microwave background, the 21 cm signal can in principle follow the evolution of the neutral IGM over a
+broad redshift range and remain sensitive to the growth, overlap, and patchiness of ionized regions (e.g.,
+Scott & Rees 1990; Madau et al. 1997; Furlanetto et al. 2004, 2006; Pritchard & Loeb 2012; Shimabukuro
+et al. 2023). For interferometric experiments such as LOFAR, HERA, and SKA, the power spectrum has
+become the natural and most practical summary statistic, because it captures this evolving morphology
+in a form that can be measured before high-fidelity imaging becomes routine (Furlanetto & Briggs 2004;
+Zaldarriaga et al. 2004; Morales & Wyithe 2010; Koopmans et al. 2015; DeBoer et al. 2017).
+Even in the 21 cm case, however, the scientific target of this paper,xHI(z), is not measured directly. The
+statistic used here is the redshift evolution of the fixed-kdimensionless power spectrum,∆ 2
+21(k, z), so the
+task is to infer a reionization-history trajectory from an observable power-spectrum trajectory. Within the
+adopted three-parameter 21cmFAST prior, this is a nonlinear inverse map rather than a direct measurement,
+and it is not obvious that the relation can be reduced to a simple analytic fitting formula. Forward-modeling
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 3
+frameworks based on 21cmFAST and related Bayesian inference pipelines provide an established way to
+constrain astrophysical parameters and average neutral fractions within explicit priors, but they are not the
+most direct tool for the proof-of-concept question posed here: whether this trajectory-to-trajectory inverse
+relation is sufficiently regular and informative to be learned within a restricted model family (Mesinger
+et al. 2011; Murray et al. 2020; Greig & Mesinger 2015).
+This motivates the use of a compact ANN as a flexible inverse mapping. Its role in the present study is
+not to provide a model-independent estimator, but to test whether fixed-ktrajectories of∆ 2
+21(k, z)retain
+enough information to reconstructx HI(z)within a restricted three-parameter 21cmFAST prior. Machine-
+learning methods have already been explored in several 21 cm contexts, including early ANN analyses of
+the 21 cm signal, CNN-based inference of reionization history from 21 cm images, ANN recovery of the
+H II bubble size distribution from the power spectrum, and nonlinear reconstruction of the 21 cm global
+signal from power-spectrum information (e.g. Shimabukuro & Semelin 2017; La Plante & Ntampaka 2019;
+Shimabukuro et al. 2022; Sikder et al. 2024; Shimabukuro 2025). In that spirit, we use the ANN here as
+a prior-dependent proof-of-concept tool and evaluate how well it reconstructsx HI(z)overz= 6–15from
+simulated trajectories spanningz= 6–30, both in the noiseless case and under an idealized foreground-
+free SKA1-Low-like thermal-plus-sample-variance noise model. The remainder of this paper introduces
+the 21 cm observables and target histories, describes the ANN framework, and then presents representative
+results for both noiseless and noisy cases.
+2 21CM SIGNAL, POWER SPECTRUM, AND TARGET REIONIZATION HISTORY
+This section summarizes the physical quantities used throughout this work and clarifies the inverse problem
+addressed in the following sections. We first review the basic physics of the cosmological 21 cm signal, then
+define the reionization historyx HI(z)as the target quantity to be reconstructed, and finally introduce the
+power spectrum as the interferometric observable used to infer it.
+2.1 21 cm brightness temperature
+The redshifted 21 cm hyperfine transition of neutral hydrogen is one of the most promising probes of the
+intergalactic medium during cosmic dawn and the epoch of reionization (Scott & Rees 1990; Madau et al.
+1997; Furlanetto et al. 2006; Pritchard & Loeb 2012). Its observability depends on the spin temperatureTS,
+which is regulated by radiative coupling to the CMB, collisional processes, and Lyαpumping through the
+Wouthuysen–Field mechanism (Wouthuysen 1952; Field 1958, 1959; Hirata 2006; Chen & Miralda-Escud´e
+2004, 2008). In the fiducial simulations used in this work, spin-temperature fluctuations are explicitly in-
+cluded. The associated X-ray heating parameters are fixed to the default 21cmFAST values and are not
+varied within the training prior. This is a deliberate simplification: for the present proof-of-concept we
+vary only the parameters that most directly control the timing and morphology of reionization, so that the
+network learns a restricted inverse map tox HI(z)rather than a broader joint heating-ionization problem.
+Accordingly, the factor1−T γ/TS is computed self-consistently in the forward model rather than being
+assumed to be unity over the redshift range used for the reconstruction.
+
+4 Wang & Shimabukuro
+For a gas element at redshiftzand comoving positionx, the differential 21 cm brightness temperature
+relative to the CMB can be approximated as (Mesinger 2019)
+δTb(z,x) ∼= 27(1 +δ)x HI(z,x)
+Ωb,0h2
+0.023
+ 0.15
+Ωm,0h2
+1 +z
+10
+1/2
+1− Tγ
+TS
+
+mK,(1)
+whereδis the baryon overdensity,x HI(z,x)is the local neutral hydrogen fraction,T γ is the CMB temper-
+ature, andT S is the hydrogen spin temperature. The corresponding local ionized fraction is1−x HI(z,x).
+For simplicity, we use the approximate form above and do not explicitly include the peculiar-velocity gra-
+dient term, since the purpose of this paper is not precision forward modeling of the full 21 cm signal but the
+inverse reconstruction of the global reionization history.
+Equation (1) makes clear that the 21 cm signal is intrinsically multivariate: it depends on the density,
+ionization, and thermal states of the gas, as well as on the radiation background. The mapping from a 21 cm
+statistic back to the global reionization history is therefore nonlinear and prior dependent. Throughout this
+work we assume a flatΛCDM cosmology consistent withPlanck2018, withΩ m = 0.315,Ω b = 0.049,
+h= 0.674,σ 8 = 0.811, andn s = 0.965(Planck Collaboration et al. 2020).
+2.2 Target reionization history
+The quantity reconstructed in this paper is the volume-averaged neutral fractionx HI(z), which we refer to
+as the reionization history. When convenient, we also use the ionized volume filling factor
+Q(z) = 1−x HI(z).(2)
+This is the natural target quantity for the present study, because it provides a compact description of the
+global progress of reionization and allows summary quantities such as the midpoint and duration to be
+defined straightforwardly.
+A useful approximate description of the global reionization history is given by the photon-counting
+equation (Madau 2017)
+dQ
+dt = ⟨˙nion⟩
+⟨nH⟩ − Q
+¯trec
+,(3)
+where⟨˙nion⟩is the emission rate of ionizing photons escaping into the IGM per unit proper volume,⟨nH⟩=
+1.89×10 −7(1 +z) 3 cm−3 is the cosmological mean hydrogen number density, and ¯trec is an effective
+recombination timescale (Madau et al. 1999). Equation (3) makes clear that reionization histories depend
+on both source efficiency and recombinations, so any inversion from 21 cm statistics necessarily remains
+sensitive to the adopted astrophysical prior.
+Since the midpoint and duration of reionization play an important role in the analysis below, we de-
+fine them explicitly here. Here, the “midpoint” simply means the epoch at which reionization is halfway
+complete, so that the IGM is 50% neutral on average. The midpoint redshiftz 50 is defined by
+xHI(z50) = 0.5,(4)
+and the reionization duration is defined as
+∆z≡z 75 −z 25,(5)
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 5
+wherex HI(z75) = 0.75andx HI(z25) = 0.25. We adopt these thresholds because they bracket the central
+50% of the transition, providing a simple measure of its width while avoiding excessive sensitivity to the
+slowly varying early and late tails of the history nearx HI ≈1andx HI ≈0. With this convention,∆zis
+always positive and quantifies the redshift width of the main reionization transition.
+Recent JWST-based analyses suggest that reionization may have been relatively late and rapid, with a
+steep decline inx HI towardz∼6–8 (Kageura et al. 2025; Umeda et al. 2025; Umeda et al. 2025). We use
+these studies only to motivate the compressed parameter ranges explored below, not as a claim that the true
+reionization history is uniquely determined.
+Figure 1 illustrates this motivation by comparing a more traditional reionization history with a late-
+reionization history inspired by recent observational analyses. The purpose of this comparison is only to
+indicate the type of target histories emphasized in the present work.
+6 8 10 12 14
+Redshift
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0xHI
+Best-fit model
+Fiducial model
+Fig. 1: Comparison between a more traditional reionization history and a late-reionization history motivated
+by recent JWST-based analyses (Umeda et al. 2025; Kageura et al. 2025). The black solid curve shows
+a best-fit late-reionization model, while the blue dashed curve shows a fiducial faint-galaxy-dominated
+history. Symbols denote observationally inferred neutral fractions from the cited studies.
+2.3 21 cm power spectrum as the observable
+For interferometric observations, the 21 cm power spectrum is the natural summary statistic, because radio
+arrays measure Fourier modes of the sky brightness rather than the sky-averaged signal directly (Furlanetto
+& Briggs 2004; Zaldarriaga et al. 2004; Morales & Wyithe 2010; Koopmans et al. 2015). Following
+
+6 Wang & Shimabukuro
+Furlanetto et al. (2006) and Mesinger (2019), we define the brightness-temperature fluctuation field as
+δT21(x) =δT b(x)− ⟨δT b⟩,(6)
+and its power spectrum by
+⟨δT21(k1)δT ∗
+21(k2)⟩= (2π) 3δD(k1 −k 2)P21(k1).(7)
+The dimensionless power spectrum is then
+∆2
+21(k) = k3
+2π2 P21(k),(8)
+which has units ofmK 2.
+The 21 cm power spectrum is sensitive to the evolving topology of ionized regions, the global neutral
+fraction, and the thermal state of the IGM. Its scale dependence is therefore physically informative: on rela-
+tively large scales, the signal is more directly related to the growth and overlap of ionized bubbles, whereas
+on smaller scales it becomes increasingly sensitive to local morphology and substructure (Zaldarriaga et al.
+2004; Furlanetto et al. 2006; Morales & Wyithe 2010; Koopmans et al. 2015).
+In this work, we focus on the redshift evolution of the dimensionless 21 cm power spectrum at fixed
+wavenumber, denoted by∆ 2
+21(k, z). The scale dependence of this statistic reflects the characteristic sizes
+of ionized regions and the evolving contrast between neutral and ionized gas. On relatively large scales, the
+power spectrum is more directly linked to the global progress of reionization, whereas on smaller scales it
+becomes increasingly sensitive to local morphology and substructure (Zaldarriaga et al. 2004; Furlanetto
+et al. 2006; Morales & Wyithe 2010; Koopmans et al. 2015). This scale dependence is important for in-
+terpreting how different Fourier modes trace the evolving ionization structure of the intergalactic medium.
+Figure 2 shows the redshift evolution of∆ 2
+21(k, z)for the fixed-ktrajectories considered in this work.
+6
+7 8 9 10 11 12 13 14 15 
+Redshift z
+100
+101
+102
+2(k) [mK2]
+ 
+k = 0.1h Mpc 1 
+k = 0.5h Mpc 1 
+k = 1.0h Mpc 1
+Fig. 2: Redshift evolution of the dimensionless power spectrum∆ 2
+21(k, z)for the fixed-ktrajectories con-
+sidered in this work.
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 7
+With the target quantityxHI(z)defined above and the observable∆ 2
+21(k, z)introduced here, the present
+work studies the inverse mapping
+∆2
+21(k, z)− →x HI(z).(9)
+We do not attempt a model-independent reconstruction; instead, this inverse relation is examined within a
+restricted but physically motivated three-parameter 21cmFAST model family.
+3 ARTIFICIAL NEURAL NETWORK
+The inverse problem considered in this work is to reconstruct the reionization historyx HI(z)from the
+redshift evolution of the dimensionless 21 cm power spectrum at fixed wavenumber. The central question
+is, therefore, how accurately the reionization history can be reconstructed from a fixed-k21 cm power-
+spectrum trajectory for the restricted set of histories generated by the three-parameter 21cmFAST setup
+adopted here.
+We use a feed forward ANN as a mapping that maps the redshift evolution of∆ 2
+21(k, z)at fixedkto
+the target reionization history. The point of this section is therefore not to review generic deep learning
+concepts, but to describe the specific mapping used to test whether the inverse map is sufficiently regular
+within this restricted three-parameter 21cmFAST setup. By the universal approximation theorem, even a
+network with a single hidden layer can represent a wide class of smooth nonlinear maps (Hornik et al.
+1989), which is adequate for the restricted problem considered here.
+3.1 Data Preparation
+We generate the dataset with 21cmFAST v3.4 (Mesinger et al. 2011; Park et al. 2019; Murray et al. 2020),
+which uses the excursion set formalism (Furlanetto et al. 2004) to evolve the density and ionization fields
+and compute the corresponding 21cm signal. We vary only three astrophysical parameters and sample them
+with Latin hypercube sampling (LHS), following the parameterization widely used in 21cmFAST-based
+inference studies (Greig & Mesinger 2015):
+(1)HII EFF FACTOR(ζ): the ionizing efficiency of highzgalaxies. Higher values tend to speed up
+reionization.
+(2)ION Tvir MIN(Tvir): minimum virial temperature of star forming haloes, given inlog 10 units.
+(3)R BUBBLE MAX(Rmfp): Mean free path in Mpc of ionizing photons within ionized regions.
+Motivated by the late reionization scenarios discussed in Section 2.3, we restrict the parameter ranges
+to those listed in Table 1. This compression is deliberate: it lets us ask how much information fixedk
+power-spectrum evolution carries inside a narrow but astrophysically motivated family of histories. In par-
+ticular, we vary only the three parameters that most directly regulate the ionization-side reionization history
+in this setup—HII EFF FACTOR,ION Tvir MIN, andR BUBBLE MAX—while keeping the X-ray heat-
+ing sector fixed at the default 21cmFAST values. The aim is to isolate a prior-dependent inverse problem
+forx HI(z): if X-ray heating parameters were also varied,∆ 2
+21(k, z)would respond to both thermal and
+ionization histories, broadening the allowed trajectory family and introducing additional heating-ionization
+degeneracies that are beyond the scope of this proof-of-concept. Consequently, the analysis does not test
+
+8 Wang & Shimabukuro
+whether the network can disentangle a broad heating-ionization degeneracy; instead it probes a restricted
+inverse problem conditioned on an ionization-side prior.
+Table 1: Parameter Settings for the Semi Numerical Reionization History Simulation
+Symbol Parameter Description 21cmFAST Parameter Value Range
+ζIonizing EfficiencyHII EFF FACTOR[260,400]
+logT min
+vir Min. Virial Temperature (log K)ION Tvir MIN[5.45,5.85]
+Rmfp Max. Mean Free Path (Mpc)R BUBBLE MAX[10,65]
+In the implementation scripts, each simulated realization contributes one fixedktrajectory sampled at
+97 redshift bins spanningz= 6–30. We generate 200 realizations for each of the three fixed wavenumbers
+considered here (k= 0.1,0.5, and1.0hMpc −1), for a total of 600 trajectories. Accordingly, the ANN input
+and output vectors both have dimension 97. For the noisy recovery pipeline supplied with the paper, the
+explicit simulation and noise generation script is written for the representative casektarget = 0.1hMpc −1,
+while the same 97-dimensional architecture is used for the scale-dependent tests shown in the manuscript.
+The simulation script usesHII DIM=200 andBOX LEN=300. The raw power spectrum is computed
+from the 21cm brightness temperature cube with 100 logarithmickbins between0.05and1.5hMpc −1,
+and the nearest bin to the targetkis converted to the dimensionless form∆ 2
+21(k). All ANN inputs discussed
+below are these fixed-k∆ 2
+21(k, z)trajectories.
+3.2 Artificial Neural Network Architecture
+Our ANN is a standard multilayer perceptron with one hidden layer. In the implementation used here, the
+network maps a 97-dimensional fixed-k∆2
+21(k, z)trajectory to a 97-dimensional reconstructed reionization
+history. The architecture consists of an input layer with 97 nodes, one hidden layer with 128 neurons, a
+ReLU activation function, and an output layer with 97 nodes. In code, this corresponds to the sequence
+Linear(97,128)→ReLU→Linear(128,97).
+Letx j denote the input power-spectrum trajectory sampled on the redshift grid. The pre-activation of
+the hidden layer is
+si =
+NinX
+j=1
+ω(1)
+ij xj +b (1)
+i ,(10)
+whereN in = 97,ω (1)
+ij are the first-layer weights, andb(1)
+i are the corresponding biases. The activated hidden
+representation is
+ti = ReLU(si).(11)
+The output layer then gives
+yi =
+NhX
+j=1
+ω(2)
+ij tj +b (2)
+i ,(12)
+whereN h = 128, andy i denotes the reconstructed neutral fraction at thei-th redshift bin.
+The role of the ANN is therefore to learn a nonlinear map from∆ 2
+21(k, z)tox HI(z)within the adopted
+training family. We do not interpret the network as discovering a model-independent reionization history
+from first principles.
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 9
+3.3 Back Propagation Algorithm
+We optimize the network weights with standard back propagation (Rumelhart et al. 1986). The total training
+cost is
+E=
+NtrainX
+n=1
+En =
+NtrainX
+n=1
+"
+1
+2
+mX
+i=1
+(yi,n −d i,n)2
+#
+(13)
+whereN train is the number of training samples,mis the number of output neurons,yis the ANN
+prediction, anddis the target. The weight update follows
+∆ω(l)
+i,j =−η ∂E
+∂ω(l)
+i,j
+=−η
+NtrainX
+n=1
+∂E
+∂ω(l)
+i,j
+(14)
+whereηis the learning rate. For the purposes of this paper, the technical role of training is straight-
+forward: it adjusts the inverse-mapping so that the predictedx HI(z)tracks the simulation target on unseen
+samples from the same prior family.
+3.4 Experimental Settings
+We use the rectified linear unit (ReLU) as the hidden layer activation function (Nair & Hinton 2010),
+f(x) = max(0, x)(15)
+and the mean squared error (MSE) as the training loss,
+MSE= 1
+Ntrain
+NtrainX
+i=1
+En (16)
+The training process is through PyTorch and run on either GPU or CPU depending on availability. The
+clean signal recovery uses the Adam optimizer with learning rate10 −2, a maximum of 2000 epochs, and
+early stopping with patience 100 based on the validation loss. The thermal noise recovery keeps the same
+ANN architecture but switches to AdamW with learning rate10 −3 and weight decay10 −4, using up to
+10,000 epochs. In that script the SKA-like noise case uses patience 100, while the exaggerated1000×noise
+case uses patience 500 to tolerate larger validation loss fluctuations. In both scripts, the best checkpoint is
+chosen solely from the validation loss and then applied to the test set.
+Figure 3 shows representative learning curves. In this study, training, validation, and diagnostic test
+losses are all recorded, but only the validation loss is used for checkpoint selection. We evaluate three
+aspects of the inverse problem on one independent test split. First, we compare reconstructions at fixed
+k= 0.1,0.5, and1.0hMpc −1 to test how the information content changes with scale. Second, we add an
+idealized foreground-free SKA1-Low-like thermal-plus-sample-variance noise model, as well as an exag-
+gerated1000×noise stress test, to assess how stable the inverse map remains in noisier conditions. Third,
+because the restricted model family produces smooth S-shaped histories, we examine the transition inter-
+val0.2≤x HI ≤0.8as a scientifically motivated test of whether the network is capturing the physically
+informative part of reionization rather than only the generic endpoints.
+4 RESULTS
+In this section we present the reconstructed reionization historyx HI(z)inferred from fixed-ktrajectories
+of∆ 2
+21(k, z). Unless stated otherwise, the input trajectories are taken directly from the simulated signal, so
+the discussion first isolates the structure of the inverse map before observational perturbations are added.
+
+10 Wang & Shimabukuro
+0 1000 2000 3000 4000
+Epoch
+10−4
+10−3
+10−2
+10−1
+100
+MSE
+Training and Validation Loss Curves
+Training Loss
+Validation Loss
+Fig. 3: Representative MSE learning curves during model optimization. Early stopping is applied using the
+validation set MSE, and the best validation checkpoint is retained for final evaluation.
+4.1 Recovered reionization history
+We reconstructxHI(z)overz= 6–15 using the dimensionless power spectrum evaluated at fixed wavenum-
+ber. To assess the scale dependence of the inverse mapping, we compare reconstructions obtained atk= 0.1,
+0.5, and1.0hMpc −1. Figure 4 presents representative reconstructed histories for these three cases. One
+generally expects the recovery to become less accurate toward largerk, because smaller-scale power is
+increasingly sensitive to local ionization morphology and is therefore less directly coupled to the global
+progress of reionization.
+Within the present dataset, however, the reconstructions remain strong even atk= 1.0hMpc −1.
+We do not interpret this as evidence that small-scale modes are generically sufficient. Rather, it reflects
+the restricted training family adopted here: once the astrophysical parameter space is compressed to three
+parameters, the allowed histories occupy a relatively narrow manifold of smooth curves, and even higher-k
+power-spectrum trajectories retain useful timing information. The apparently weak scale dependence should
+therefore be understood as a prior-dependent feature of the present setup.
+4.2 Correlation-based metric
+To summarize the similarity between the reconstructed and true histories on the independent test set, we
+use the correlation coefficient (CC),
+CC=
+PNz
+i=1(ytrue,i −¯ytrue)(yANN,i −¯yANN)qPNz
+i=1(ytrue,i −¯ytrue)2
+qPNz
+i=1(yANN,i −¯yANN)2
+,(17)
+wherey true,i andy ANN,i denote the true and reconstructed neutral fractions at redshiftz i, andN z is the
+number of redshift bins. The overbars denote redshift averages. Although the Pearson correlation coefficient
+is often introduced in the context of linear relations and linear fitting, its normalized form can also be used
+as a profile-reproduction diagnostic for two discretized histories. We use it in this latter sense: after the
+true and reconstructed histories are sampled on the same redshift grid, CC measures how well their mean-
+subtracted variations are aligned across redshift. A high CC therefore indicates that the ANN reproduces
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 11
+6 8 10 12 14
+Redshift (z)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Neutral Fraction
+True Neutral Fraction
+ANN Predicted
+(a)k= 0.1hMpc −1
+6 8 10 12 14
+Redshift (z)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Neutral Fraction
+True Neutral Fraction
+ANN Predicted (b)k= 0.5hMpc −1
+6 8 10 12 14
+Redshift (z)
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Neutral Fraction
+True Neutral Fraction
+ANN Predicted
+(c)k= 1.0hMpc −1
+Fig. 4: Reconstructed reionization histories using fixed-ktrajectories of∆ 2
+21(k, z)at three representative
+scales.
+the overall redshift-dependent shape of the target history, but it should not be interpreted as implying that
+xHI(z)itself is linear in redshift.
+This use is justified only as a complementary measure of reconstruction fidelity, because CC is insensi-
+tive to some errors that are physically important for reionization. In particular, smooth monotonic histories
+can yield high CC values even when the midpoint or duration of the transition is imperfectly recovered, and
+an affine rescaling of a curve can leave CC nearly unchanged. We therefore use CC to summarize global
+shape agreement, while MAE, RMSE,z 50, and∆zare evaluated separately below to quantify absolute
+reconstruction accuracy and transition-specific errors.
+Using CC in this complementary sense, we next summarize how the global shape agreement changes
+with scale. Figure 5 shows the CC distributions for the reconstructed reionization histories obtained from
+the redshift evolution of the fixed-kpower spectrum atk= 0.1,0.5, and1.0hMpc −1. For the two lower-k
+cases, corresponding to larger spatial scales, the distributions are narrowly concentrated at high CC values,
+consistent with the visual impression in Figure 2 and with the expectation that these modes are more directly
+linked to the growth and topology of ionized regions.
+Atk= 1.0hMpc −1, the CC values also remain high, but this should not be interpreted as evidence
+for reconstruction quality comparable to the lower-kcases. As already seen in Figure 2, the recovered
+histories at this scale show visibly larger scatter and less faithful tracking of the transition region. This
+
+12 Wang & Shimabukuro
+apparent tension reflects the limitation discussed above: CC mainly measures agreement in the overall
+monotonic profile and is relatively insensitive to moderate mismatches in the exact midpoint and width
+of the transition. Within the restricted three-parameter prior adopted here, most histories are smooth and
+share a similar global form, so even noticeably degraded reconstructions can still yield high CC values.
+We therefore interpret thek= 1.0hMpc −1 result as showing that the network can still recover the broad
+reionization trend within our restricted three-parameter simulation set, rather than as evidence that high-k
+power spectra alone generally provide a precise reconstruction of the reionization history.
+0.9965
+0.9970 0.9975 0.9980 0.9985 0.9990 0.9995 1.0000 Cor
+relation Coefficient (CC)0
+2
+4
+6
+8
+10
+Normalised CountsA
+verage CC = 0.9997k =
+ 0.1h Mpc−1
+(a)k= 0.1hMpc −1
+0.9960
+0.9965 0.9970 0.9975 0.9980 0.9985 0.9990 0.9995 1.0000 Cor
+relation Coefficient (CC)0
+1
+2
+3
+4
+5
+6
+7
+Normalised CountsA
+verage CC = 0.9996k =
+ 0.5h Mpc−1 (b)k= 0.5hMpc −1
+0.99800
+0.99825 0.99850 0.99875 0.99900 0.99925 0.99950 0.99975 1.00000 Cor
+relation Coefficient (CC)0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+1.75
+2.00
+Normalised CountsA
+verage CC = 0.9993k =
+ 1.0h Mpc−1
+(c)k= 1.0hMpc −1
+Fig. 5: Distribution of correlation coefficients for reconstructions from fixed-k∆2
+21(k, z)trajectories at three
+representative scales.
+4.3 Recovery with idealized observational noise
+So far we have considered the noise-free case, in which the input power-spectrum trajectories contain no
+observational noise. However, real observations are affected by thermal noise, foreground contamination,
+calibration systematics, and other instrumental effects. In this section, we consider a more realistic but still
+idealized case by adding noise to the 21 cm power spectrum before using it as the ANN input. Specifically,
+we include only a foreground-free combination of thermal noise and sample variance in order to test how
+stable the inverse mapping remains under a limited observational perturbation model.
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 13
+The sensitivity of a radio interferometer to the 21cm power spectrum is determined by the array con-
+figuration, integration time, and system temperature. Following the standard formalism derived in previous
+studies (McQuinn et al. 2006; Mao et al. 2008; Parsons et al. 2012; Mao et al. 2013), we express the thermal
+noise power spectrum for a single Fourier modekas:
+Pth,1mode(k, µ)≈ X2YΩ fovT 2
+sys
+tintn(k⊥)Ae
+,(18)
+whereX 2Yconverts the interferometric bandwidth and solid angle into comoving volume units (see
+Furlanetto et al. 2006), withX≈d 2
+A (comoving angular diameter distance squared) andY≈λ 21(1 +
+z)2/H(z).Ω fov ≈λ 2/Ae is the solid angle of the primary beam field of view,Ae is the effective collecting
+area per station, andt int represents the total integration time.n(k ⊥)denotes the number density of baselines
+in theuvplane that are sensitive to the transverse wavenumberk ⊥ =k
+p
+1−µ 2, whereµ= cosθis the
+cosine of the angle between the wavevectorkand the line of sight. A high baseline density in the array core
+significantly enhances sensitivity to large scale structures (e.g., Parsons et al. 2012; Koopmans et al. 2015).
+The system temperature,T sys, is the sum of the receiver temperature and the sky brightness temperature:
+Tsys(ν) =T rcvr +T sky(ν).(19)
+At the low frequencies relevant to the Epoch of Reionization (EoR) and Cosmic Dawn, the system noise is
+dominated by the Galactic synchrotron background. We model the sky temperature as a power law following
+Haslam et al. (1982) and DeBoer et al. (2017):
+Tsky(ν)≈60
+ ν
+300MHz
+−2.55
+K.(20)
+We assume a receiver temperature ofT rcvr ≈100K, consistent with SKA1-Low design specifications
+(Dewdney et al. 2009; Braun et al. 2019).
+Since the 21cm signal is isotropic (after accounting for redshift space distortions), we estimate the spher-
+ically averaged power spectrum sensitivity in a spherical shell of width∆k. The variance of the thermal
+noise for a bin centered atkis given by the inverse variance weighting of all modes in the shell (Lidz et al.
+2011; Mao et al. 2013):
+Pthermal(k) =
+"X
+µ
+Nc(k, µ)
+P 2
+th,1mode(k, µ)
+#−1/2
+,(21)
+whereN c(k, µ)is the number of independent modes in thekshell region defined byk,µ, and logarithmic
+bin widthϵ= ∆k/k. Specifically,N c ≈ϵk 3∆µ·V survey/(4π2), whereV survey is the survey volume.
+In addition to thermal noise, the precision of power spectrum measurements is fundamentally limited
+by cosmic variance (sample variance), which arises from the finite volume surveyed. This is particularly
+dominant at large scales (smallk). The error contribution from cosmic variance is estimated as:
+Pcv(k) = P21(k)√Nmodes
+,(22)
+whereN modes is the total number of independent Fourier modes in the upper half of thekshell.
+The total observational uncertainty is the quadrature sum of the thermal noise and cosmic variance:
+σP (k) =
+q
+P 2
+thermal(k) +P 2cv(k).(23)
+
+14 Wang & Shimabukuro
+Although the sensitivity expressions above are conventionally written forP 21, the actual ANN inputs are
+the corresponding dimensionless trajectories∆2
+21(k, z). We therefore construct the noisy inputs in that same
+normalization by adding a Gaussian realization to the dimensionless signal trajectory:
+∆2
+obs(k, z) = ∆2
+21(k, z) +N ∆2(k, z).(24)
+For the noise realization, we adopt parameters representative of an idealized foreground-free SKA1-
+Low-like sensitivity calculation targeting the EoR (Dewdney et al. 2009; Braun et al. 2019; Shimabukuro
+2025). The adopted observational specifications and analysis assumptions are summarized in Table 2.
+Table 2: SKA1-Low-like observational specifications adopted for the noise model.
+Item Specification
+Array layout Compact 224-station hexagonal core within radius500m (core diam-
+eter∼1000m), with minimum baseline60m and maximum retained
+baseline1000m.
+Primary beam Gaussian beam with reference frequency150MHz and dish size35m.
+Site and receiver Observatory latitude−26.8 ◦ and receiver temperatureT rcvr = 100K.
+Integration time Totalt int = 1000hours, implemented as 100 observing days with 10
+hours per day.
+Field of view Single-beam FWHM∼3.5 ◦ atz∼8.
+BandwidthB= 10MHz per redshift bin.
+Effective areaA e ≈421 m 2 atz∼8, scaling with frequency asλ 2.
+k-binning Logarithmic step sizeϵ=δk/k= 0.1.
+Noise assumption Foreground-free sensitivity calculation, with random Gaussian realiza-
+tions drawn from the 1D thermal-plus-sample-variance uncertainty at
+the targetk.
+For each redshift, we first calculate the sensitivity atν= 1420/(1 +z)MHz, extract the nearest 1D
+sensitivity bin to the targetk, and draw one Gaussian realization for the SKA-like case. Our noise estimates
+are consistent with previous studies (e.g., Koopmans et al. 2015). For the idealized SKA1-Low-like setup
+adopted here, the signal remains larger than the thermal-noise contribution across much of the redshift range
+for the scales considered. Within this favorable signal-to-noise regime, and still within the compressed
+three-parameter model family, the inverse mapping from∆ 2
+21(k, z)tox HI(z)remains reasonably stable.
+We also examine reconstructed histories over the displayed rangez= 6–15 when noise is added ac-
+cording to the idealized SKA1-Low-like specification, together with an amplified case in which the thermal-
+noise amplitude is multiplied by10 3 as a stress test of a much less favorable regime. In other words, the
+“1000×SKA” case denotes the same SKA-like noise model but with the noise standard deviation scaled up
+by a factor of10 3. This amplified case is not intended as a quantitative model of any specific instrument.
+Figure 6 shows a representative reconstruction ofx HI(z)from noisy fixed-kpower-spectrum input. For
+the idealized SKA-like noise level, the reconstructed history remains close to the true curve throughout the
+transition, indicating that the network recovers the overall monotonic form and an approximately correct
+midpoint in this favorable regime. By contrast, the1000×noise stress test shows visibly larger deviations,
+especially near the low-neutral-fraction end and around the midpoint of the transition, although it still
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 15
+preserves the coarse S-shaped trend. This visual comparison motivates the more systematic error analysis
+below.
+Fig. 6: Representative reconstruction of the neutral-fraction history from noisy fixed-kpower-spectrum in-
+put overz= 6–15. The red solid curve shows the true history, the green dotted curve shows the reconstruc-
+tion obtained with the idealized SKA1-Low-like noise realization, and the blue dash-dotted curve shows the
+reconstruction for the exaggerated “1000×SKA” stress test, i.e., the same SKA-like noise model with the
+noise amplitude increased by a factor of10 3.
+Because the restricted parameter space produces smooth S-shaped histories, whole curve metrics alone
+may overstate what the network has learned. The physically most informative regime is the transition inter-
+val, where the ionized fraction changes rapidly. We therefore re-evaluate the reconstruction specifically in
+the range0.2≤x HI ≤0.8.
+We evaluate three physically meaningful aspects of the reconstruction within this interval: the neutral-
+fraction historyx HI(z)itself, the reionization midpointz 50, and the duration∆z. For the history, we quan-
+tify the reconstruction error using the mean absolute error (MAE) and the root-mean-square error (RMSE)
+computed from thex HI residuals within the transition interval. We also track the signed residual mean
+(bias), median, and standard deviation. For the derived summary quantities, we evaluate the midpoint and
+duration errors in redshift units.
+MAE measures the mean absolute difference between the predicted and true neutral fractions:
+MAE= 1
+NtestNz
+NtestX
+n=1
+NzX
+i=1
+y(n)
+true,i −y (n)
+ANN,i
+ .(25)
+RMSE is defined as
+RMSE=
+vuut 1
+NtestNz
+NtestX
+n=1
+NzX
+i=1
+
+y(n)
+true,i −y (n)
+ANN,i
+2
+.(26)
+Like MSE, RMSE gives greater weight to large residuals than MAE.
+
+16 Wang & Shimabukuro
+For the neutral-fraction history, we define the signed residual asytrue −y ANN, so positive values indicate
+that the ANN underestimatesx HI on average. For the derived summary quantities, we instead define signed
+errors as predicted minus true.
+The midpoint error is defined as
+Errorz50 =z ANN
+50 −z true
+50 .(27)
+For the duration, we use the same positive-duration convention as in Equation (5),
+∆z≡z 75 −z 25,(28)
+wherex HI(z75) = 0.75andx HI(z25) = 0.25. The duration error is then defined as
+Error∆z = ∆zANN −∆z true.(29)
+Figures 7–12 summarize the error distributions in the transition regime, and Table 3 collects the main
+statistics.
+0.00 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08
+MAE of xHI
+0
+2
+4
+6
+8Counts
+MAE = 0.0120
+μbias = −0.0069
+median = −0.0028
+σ = 0.0176
+N = 25
+Reionization History (xHI) MAE Distribution (k=0.1 Mpc−1)
+Fig. 7: MAE distribution for the reconstructed reionization history in the transition interval using noisy
+inputs atk= 0.1hMpc −1.
+Table 3 summarizes representative one-split performance for the three key reionization descriptors,
+evaluated within the physically most informative transition interval0.2≤x HI ≤0.8for the representative
+noisyk= 0.1hMpc −1 test subset. These numbers should be regarded as representative rather than as a
+fully converged estimate of the population-level reconstruction accuracy. For the reionization history itself,
+the network achieves a small absolute reconstruction error (MAE = 0.0120 and RMSE = 0.0139), indicating
+that the predictedx HI(z)tracks the target curves closely across the transition regime.
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 17
+0.00 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08
+RMSE of xHI
+0
+2
+4
+6
+8Counts
+RMSE = 0.0139
+μbias = −0.0069
+median = −0.0028
+σ = 0.0176
+N = 25
+Reionization History (xHI) RMSE Distribution (k=0.1 Mpc−1)
+Fig. 8: RMSE distribution for the reconstructed reionization history in the transition interval using noisy
+inputs atk= 0.1hMpc −1.
+Fig. 9: Distribution of the signed midpoint error,z ANN
+50 −z true
+50 , in redshift units.
+
+18 Wang & Shimabukuro
+Fig. 10: Distribution of the signed duration error,∆z ANN −∆z true, in redshift units.
+Table 3: Representative performance summary for one independent test subset (N= 25trajectories) for the
+three main reionization descriptors.
+Parameter MAE RMSE Bias (µ) Medianσ N
+Reionization History (xHI) 0.0120 0.0139 -0.0069 -0.0028 0.0176 25
+Reionization Midpoint (z50) 0.0046 0.0100 0.0034 0.0015 0.0094 25
+Reionization Duration (∆z) 0.0302 0.0378 -0.0019 -0.0012 0.0378 25
+The signed residual distribution shows a mild negative bias (µ=−0.0069; median=−0.0028) with a
+modest scatter (σ= 0.0176), implying a slight tendency to overestimate the neutral fraction on average un-
+der the adopted sign convention. When propagated to summary parameters, the midpoint redshift is recov-
+ered more accurately than the duration: the error statistics forz50 areMAE = 0.0046andRMSE = 0.0100,
+with a small positive bias (µ= 0.0034, median= 0.0015) and a tight dispersion (σ= 0.0094). In contrast,
+the duration∆zis more challenging, with larger errors (MAE = 0.0302,RMSE = 0.0378) and a broader
+spread (σ= 0.0378), although the mean bias remains close to zero (µ=−0.0019; median=−0.0012).
+This asymmetry between midpoint and duration is the main scientific message of the representative noisy
+test: within the restricted prior, fixed-kpower-spectrum evolution is a stronger estimator of reionization
+timing than of the detailed width of the transition.
+Overall, these representative noisy-input results support a cautious conclusion. Within the adopted
+model family and the favorable signal-to-noise regime of the idealized foreground-free noise model consid-
+ered here, the inverse mapping from∆2
+21(k, z)tox HI(z)appears reasonably stable, especially for midpoint-
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 19
+6.8
+7.0
+7.2
+7.4
+7.6
+7.8
+8.0
+8.2
+Predicted z50
+MAE = 0.0046
+RMSE = 0.0100
+μ = 0.0034
+median = 0.0015
+σ = 0.0094
+N = 25
+6.8
+7.0 7.2 7.4 7.6 7.8 8.0 8.2 
+True z50−0.05
+0.00
+0.05
+Signed error
+Fig. 11: Scatter plot of midpoint recovery for the reconstructed reionization history. The lower panel shows
+the signed differencez ANN
+50 −z true
+50 in redshift units.
+related quantities. Duration estimates are less precise and are therefore more sensitive to both noise and prior
+assumptions.
+5 SUMMARY & DISCUSSION
+We have investigated whether fixed-ktrajectories of the dimensionless 21 cm power spectrum,∆ 2
+21(k, z),
+can be used to reconstruct the reionization historyx HI(z)within a restricted, physically motivated three-
+parameter model by 21cmFAST. The main result of this work is that, within the adopted three-parameter
+21cmFAST prior, fixed-ktrajectories of∆ 2
+21(k, z)contain enough information to reconstruct the reioniza-
+tion historyx HI(z)with a compact ANN. In the representative tests presented here, the network recovers
+the timing of reionization more reliably than the detailed width of the transition. This conclusion should
+be interpreted within the scope of the present setup, where the network serves as a prior-dependent neural-
+network-based reconstructor rather than a model-independent framework.
+Within the present setup, the lower-ktrajectories provide the clearest connection to the global evo-
+lution of reionization. The reconstructions atk= 0.1and0.5hMpc −1 are broadly consistent with the
+expectation that larger-scale modes trace the global ionization trend more directly. The reconstructions at
+k= 1.0hMpc −1 remain reasonably good within the present setup. We interpret this as a consequence
+of the restricted training family adopted here, in which the allowed histories occupy a relatively narrow
+manifold of smooth curves. The weak scale dependence seen in the present calculations should therefore be
+
+20 Wang & Shimabukuro
+0.9
+1.0
+1.1
+1.2
+1.3
+1.4
+1.5
+1.6
+1.7
+Predicted Δz
+MAE = 0.0302
+RMSE = 0.0378
+μ = −0.0019
+median = −0.0012
+σ = 0.0378
+N = 25
+0.9
+1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 
+True Δz−0.05
+0.00
+0.05
+Signed error
+Fig. 12: Scatter plot of duration recovery for the reconstructed reionization history. The lower panel shows
+the signed difference∆z ANN −∆z true in redshift units.
+understood as a prior-dependent feature of the adopted model space; in a broader astrophysical parameter
+space, a stronger scale dependence may emerge.
+The most informative result comes from the transition-interval analysis. In the representative one-split
+test reported here, the midpointz 50 is recovered substantially more accurately than the duration∆z. This
+indicates that fixed-kpower-spectrum trajectories retain stronger information about the timing of reioniza-
+tion than about the detailed width of the transition, at least within the adopted prior. In that sense, the present
+calculation is best interpreted as an information-structure result for a restricted inverse problem.
+The noise tests lead to a similarly qualified conclusion. In the favorable regime of the idealized
+foreground-free SKA1-Low-like thermal-plus-sample-variance model considered here, the reconstruction
+remains reasonably stable after noise is added, especially for midpoint-related quantities. This should not
+be interpreted as universal robustness. The network is trained on a restricted simulation prior, and its output
+should therefore be interpreted as reliable only within the corresponding model family.
+Several steps are required before this approach can mature into a more broadly useful reconstruction
+tool. A key next step is to test which aspects of the present conclusion survive once the current prior
+compression is relaxed. In particular, it will be important to determine whether the stronger recoverability
+ofz 50 relative to∆zpersists beyond the present restricted model family. The training set should therefore be
+widened to cover a broader range of reionization histories and source prescriptions. In addition, uncertainty
+quantification should be incorporated, so that the network can report not only a best-fit history but also a
+
+Reionization Histories from 21 cm Power-Spectrum Evolution 21
+calibrated level of confidence and, ideally, a warning when an input trajectory lies outside its reliable domain
+of validity. Observational realism must also be improved by propagating foreground residuals, calibration
+errors, mode loss, and inter-redshift covariance through end-to-end mock analyses. Such tests will clarify
+whether fixed-ktrajectories remain sufficient in realistic applications, or whether information from multiple
+k-modes or more flexible compressed summaries will be required. Finally, reconstructed histories should
+be confronted with external probes, including CMB optical-depth constraints, Lyα-based measurements,
+and high-redshift galaxy observations, so that the network output can be tested in a genuinely multi-probe
+framework rather than treated as a stand-alone product.
+AcknowledgementsThis work is supported by the National SKA Program of China
+(No.2020SKA0110401), NSFC (Grant No. 12103044), and Yunnan Provincial Key Laboratory of
+Survey Science with project No. 202449CE340002.
+References
+Barkana, R., & Loeb, A. 2001, Phys. Rep., 349, 125
+Braun, R., Bonaldi, A., Bourke, T., Keane, E., & Wagg, J. 2019, arXiv e-prints, arXiv:1912.12699
+Chen, X., & Miralda-Escud´e, J. 2004, Astrophysical Journal, 602, 1
+Chen, X., & Miralda-Escud´e, J. 2008, Astrophysical Journal, 684, 18
+Dayal, P., & Ferrara, A. 2018, Phys. Rep., 780, 1
+DeBoer, D. R., Parsons, A. R., Aguirre, J. E., et al. 2017, PASP, 129, 045001
+Dewdney, P. E., Hall, P. J., Schilizzi, R. T., & Lazio, T. J. L. W. 2009, Proceedings of the IEEE, 97, 1482
+Fan, X., Carilli, C. L., & Keating, B. 2006, ARA&A, 44, 415
+Field, G. B. 1958, Proceedings of the IRE, 46, 240
+Field, G. B. 1959, Astrophysical Journal, 129, 536
+Furlanetto, S. R., & Briggs, F. H. 2004, New Astronomy Reviews, 48, 1039
+Furlanetto, S. R., Oh, S. P., & Briggs, F. H. 2006, Phys. Rep., 433, 181
+Furlanetto, S. R., Zaldarriaga, M., & Hernquist, L. 2004, ApJ, 613, 1
+Greig, B., & Mesinger, A. 2015, Monthly Notices of the Royal Astronomical Society, 449, 4246
+Haslam, C. G. T., Salter, C. J., Stoffel, H., & Wilson, W. E. 1982, A&AS, 47, 1
+Hirata, C. M. 2006, Monthly Notices of the Royal Astronomical Society, 367, 259
+Hornik, K., Stinchcombe, M., & White, H. 1989, Neural Networks, 2, 359
+Kageura, Y ., Ouchi, M., Nakane, M., et al. 2025, ApJS, 278, 33
+Koopmans, L., Pritchard, J., Mellema, G., et al. 2015, in Advancing Astrophysics with the Square Kilometre
+Array (AASKA14), 1
+La Plante, P., & Ntampaka, M. 2019, The Astrophysical Journal, 880, 110
+Lidz, A., Furlanetto, S. R., Peng Oh, S., et al. 2011, The Astrophysical Journal, 741, 70
+Madau, P. 2017, ApJ, 851, 50
+Madau, P., Haardt, F., & Rees, M. J. 1999, ApJ, 514, 648
+Madau, P., Meiksin, A., & Rees, M. J. 1997, ApJ, 475, 429
+Mao, Y ., D’Aloisio, A., Zhang, J., & Shapiro, P. R. 2013, Phys. Rev. D, 88, 081303
+
+22 Wang & Shimabukuro
+Mao, Y ., Tegmark, M., McQuinn, M., Zaldarriaga, M., & Zahn, O. 2008, Phys. Rev. D, 78, 023529
+McQuinn, M., Zahn, O., Zaldarriaga, M., Hernquist, L., & Furlanetto, S. R. 2006, ApJ, 653, 815
+Mesinger, A. 2019, The Cosmic 21-cm Revolution; Charting the first billion years of our universe
+Mesinger, A., Furlanetto, S., & Cen, R. 2011, MNRAS, 411, 955
+Morales, M. F., & Wyithe, J. S. B. 2010, Annual Review of Astronomy and Astrophysics, 48, 127
+Murray, S., Greig, B., Mesinger, A., et al. 2020, The Journal of Open Source Software, 5, 2582
+Nair, V ., & Hinton, G. E. 2010, Omnipress
+Park, J., Mesinger, A., Greig, B., & Gillet, N. 2019, MNRAS, 484, 933
+Parsons, A. R., Pober, J. C., Aguirre, J. E., et al. 2012, ApJ, 756, 165
+Planck Collaboration, Aghanim, N., Akrami, Y ., et al. 2020, A&A, 641, A6
+Pritchard, J. R., & Loeb, A. 2012, Reports on Progress in Physics, 75, 086901
+Robertson, B. E. 2022, ARA&A, 60, 121
+Rumelhart, D. E., Hinton, G. E., & Williams, R. J. 1986, Nature, 323, 533
+Scott, D., & Rees, M. J. 1990, MNRAS, 247, 510
+Shimabukuro, H. 2025, Research in Astronomy and Astrophysics, 25, 085017
+Shimabukuro, H., Hasegawa, K., Kuchinomachi, A., Yajima, H., & Yoshiura, S. 2023, PASJ, 75, S1
+Shimabukuro, H., Mao, Y ., & Tan, J. 2022, Research in Astronomy and Astrophysics, 22, 035027
+Shimabukuro, H., & Semelin, B. 2017, MNRAS, 468, 3869
+Sikder, S., Barkana, R., Reis, I., & Fialkov, A. 2024, MNRAS, 527, 9977
+Umeda, H., Ouchi, M., Kageura, Y ., et al. 2025, arXiv e-prints, arXiv:2504.04683
+Umeda, H., Ouchi, M., Kikuta, S., et al. 2025, The Astrophysical Journal Supplement Series, 277, 37
+Wouthuysen, S. A. 1952, Astronomical Journal, 57, 31
+Zaldarriaga, M., Furlanetto, S. R., & Hernquist, L. 2004, Astrophysical Journal, 608, 622

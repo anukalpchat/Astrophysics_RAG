@@ -1,0 +1,1777 @@
+Title: GraphShed: a parameter-free Graph-based waterShed group finder
+Authors: P. Ghafour, S. Ansarifard, M. H. Jalali Kanafi, S. M. S. Movahed
+Published: 2026-06-02
+Categories: astro-ph.CO, astro-ph.IM, physics.comp-ph
+
+GraphShed: a parameter-free Graph-based waterShed group finder
+P. Ghafour,1 S. Ansarifard,2 M. H. Jalali Kanafi, 1, 2 and S. M. S. Movahed ∗1, 3, 4
+1Department of Physics, Shahid Beheshti University, 1983969411, Tehran, Iran ∗
+2School of Physics, Institute for Research in Fundamental Sciences (IPM), P. O. Box 19395-5531, Tehran, Iran
+3School of Astronomy, Institute for Research in Fundamental Sciences (IPM), P. O. Box 19395-5531, Tehran, Iran
+4Department of Mathematics and Statistics, The University of Lahore,
+1-KM Defence Road, Lahore 54000, Pakistan †
+(Dated: June 3, 2026)
+In this study, a parameter-free group-finding method named GraphShed is introduced and evalu-
+ated using the IllustrisTNG100-1 simulation. The method utilizes top-down watershed segmentation
+applied to the set of separated Voronoi-induced graphs, facilitating the recognition of aggregations
+directly from the density field without tunable parameters or density thresholds. A galaxy group
+catalog constructed with GraphShed is compared with a Friends-of-Friends catalog generated from
+the same dataset. The M200 distributions of the two catalogs are statistically consistent; neverthe-
+less, other structural properties, including R200, sphericity, compactness, spin, and centroid shift
+show significant differences, suggesting that GraphShed could improve several internal characteris-
+tics of the identified systems. Conversely, the two-point correlation function and the mass function
+of the identified galaxy systems, derived from the aforementioned methods, show consistency. A
+velocity-based classification of interacting pairs indicates that GraphShed provides improved sepa-
+ration of nearby over-densities which might otherwise be considered as components of a single larger
+system in position-only methods due to their positional proximity. These results demonstrate that
+GraphShed effectively preserves cosmological statistics while offering a more refined detection of
+galaxy systems and their dynamical interactions.
+I. INTRODUCTION
+Cosmic structure originates from primordial quan-
+tum fluctuations ([ 58]), which seeded density per-
+turbations in the early Universe ([ 12, 44]). Under
+gravitational instability, these perturbations grow
+and evolve into the non-linear matter distribution
+([78, 89]). Dark matter halos form within this evolv-
+ing density field, and galaxies, as luminous tracers
+residing in those halos, provide a biased tracer to the
+underlying matter distribution and the cosmological
+information encoded in it ([69]).
+The spatial distribution of galaxies in the Universe
+is not uniform. Instead, galaxies are placed in a com-
+plex and interconnected network known as the cos-
+mic web ([18, 29]). This intuition has emerged from
+extensive observational efforts that have mapped
+the three-dimensional distribution of galaxies with
+increasing precision. Major surveys, including the
+2dFGRS ([25]), SDSS ([ 86]), and more recent and
+ongoing programs such as the DESI ([ 24]), Euclid
+([15]), and the LSST ([60]), have provided rich mul-
+tidimensional datasets that clearly reveal the web-
+like and hierarchical nature of cosmic structure.
+∗ P.Ghafour@outlook.com ansarifard@ipm.ir
+m_jalalikanafi@sbu.ac.ir m.s.movahed@ipm.ir
+† Corresponding author
+In addition, this cosmic-web is also evident in
+datasets from large cosmological simulations em-
+ploying different sets of cosmological parameters in-
+ferred from COBE ([80]), WMAP ([82]), and Planck
+([2]) collaborations. Prominent examples include
+the Magneticum simulations ([17, 30]), Millennium
+series (MS: [ 84]; MS-II: [ 19]; MS-TNG: [ 66]) and
+the Illustris suite ([ 64]; TNG: [ 65]). These simu-
+lations have contributed significantly to identifying
+and characterizing the large-scale structure by re-
+producing the emergence of web-like matter distri-
+butions within the framework of gravitational struc-
+ture formation.
+These observational and numerical studies consis-
+tently demonstrate that the intricate cosmic network
+is composed of dense knots associated with galaxy
+groups and clusters, elongated filaments connecting
+these nodes, and vast under-dense regions known as
+cosmic voids ([57, 69]).
+Despite their broad applications, there is no con-
+sensus on the formal definition of the cosmic web
+structures, and different methods exist that apply
+distinct identification criteria to these datasets (e.g.,
+[43, 70, 87]).
+A broad class of methods aims to classify the
+cosmic web as a whole. Among these, physically
+motivated approaches rely on dynamical, geometric
+and topological properties of the underlying density
+field, which can be constructed using various phys-
+arXiv:2606.03790v1  [astro-ph.CO]  2 Jun 2026
+
+ical proxies and observables such as mass, luminos-
+ity, etc. For instance, tensor-based methods such
+as the tidal tensor formalism (T-web; [ 45]) and the
+velocity shear tensor formalism (V-web; [ 73]) clas-
+sify regions according to the eigenvalues of the cor-
+responding tensors, typically relative to predefined
+thresholds, thereby separating the distribution into
+nodes, filaments, sheets, and voids. Also, topolog-
+ical frameworks quantify the global morphology of
+the cosmic web using persistent homology and inte-
+gral geometry. Key descriptors, such as Betti num-
+bers, Euler characteristics, and Minkowski function-
+als (e.g., [ 76]), have been characterized for Gaus-
+sian random fields, relating their expected values
+to critical point statistics and persistence diagrams
+(e.g., [ 75]). In contrast, graph-based approaches
+construct networks from the galaxy distribution and
+identify structures using network statistics such as
+node centrality, connectivity, and related topolog-
+ical features, often combined with threshold crite-
+ria on these properties to distinguish different cos-
+mic web morphologies (e.g., [ 47, 48]). Alternative
+methods include multi-scale morphology-based ap-
+proaches (e.g., [6, 21]), which classify structures us-
+ing the hierarchical features of the density field but
+remain explicitly dependent on smoothing scales and
+eigenvalue thresholds; and phase-space dynamical
+approaches (e.g., [36]), which detect shell-crossings
+and are largely free of density thresholds.
+In addition, several methods have been developed
+to specifically identify individual structures within
+the cosmic web. For instance, cosmic voids could be
+detected by approaches that incorporate watershed-
+based transforms (e.g., [72]) and genetic algorithms
+(e.g., [41]), which operate on the density field with
+multiple parameters. Cosmic filaments can also be
+extracted using methods, such as topological persis-
+tence ([81]), which traces elongated structures in the
+density field and depends on significance thresholds
+to filter topological features; or graph-based strate-
+gies (e.g., [ 40]), which employ techniques such as
+minimum spanning trees and the local field of the
+dataset while operating in a parameter-free manner.
+Beyond the methods noted earlier, several ap-
+proaches have been developed to construct group
+catalogs which have been employed in various stud-
+ies, ranging from galaxy evolution in dense envi-
+ronments (e.g., [33]), dwarf satellite statistics (e.g.,
+[88]), halo assembly bias (e.g., [27]), the calibration
+of halo occupation statistics (e.g., [ 93]) and test-
+ing galaxy-halo connection models (e.g., [ 32]), to
+constraints on cosmological parameters (e.g., [ 7]).
+These include graph-based methods such as employ-
+ing the Minimum Spanning Tree (e.g., [ 10]), where
+galaxies are connected through a tree that mini-
+mizes the total edge length and groups are defined
+by removing edges longer than a prescribed link-
+ing length. Other approaches rely on the concept
+of shared nearest neighbors (SNN), in which galax-
+ies are associated based on the overlap of their k-
+nearest neighbor (e.g., [34, 50]), introducing param-
+eters such as the number of neighbors and similarity
+thresholds. Solely position-based methods, such as
+the DBSCAN ([35]) and its special case, the tradi-
+tional Friends-of-Friends (FoF; [28]) algorithm, iden-
+tify groups through spatial proximity criteria de-
+fined by linking lengths or neighborhood radii. As
+a result, their ability to capture the full physical
+complexity of cosmic structures is limited. They
+might combine nearby over-densities; or connect
+marginally aligned, filamentary bridges of galaxies,
+causing these structures to be linked as a single ob-
+ject ([42]). This can result in identifying an extended
+system with a dynamically complex configuration.
+In this context, irregular clusters are a well-known
+example that are out of hydrostatic equilibrium and
+influenced by non‑thermal pressure. Such systems
+complicate the extraction of reliable physical prop-
+erties and introduce challenges for both cosmological
+and astrophysical inference ([ 4]). In addition, the
+performance of position-based methods remains in-
+herently sensitive to the adopted parameter values.
+A comprehensive review of group-finder algorithms
+used in galaxy simulations is provided by [54].
+As discussed above, the majority of existing
+group-finder methods rely on one or more free pa-
+rameters or threshold values. These parameters
+must either be predefined or determined through ad-
+ditional calibration procedures, which can increase
+computational complexity and resource demands.
+Although some efforts have been made to adapt pa-
+rameter choices to the redshift of the dataset (e.g.,
+[49]), the resulting group catalogs remain sensitive
+to these selections. Consequently, the dependence of
+the identified structures on tunable thresholds intro-
+duces uncertainties and could affect the robustness
+of the inferred physical properties.
+These limitations highlight the need for an al-
+gorithm that operates directly on the density field
+of the dataset, enabling it to capture the intrinsic
+features and complexities of the galaxy distribution
+through its sensitivity to variations in the underlying
+density field. Such a method should be independent
+of arbitrary thresholds and free of tunable parame-
+ters, minimizing the uncertainties introduced by pa-
+rameter choices. In addition, it should be straight-
+forward, easy to implement and computationally ef-
+ficient, enabling its application to large cosmological
+2
+
+datasets. An approach with these properties would
+provide a more robust framework for group identifi-
+cation and could potentially reveal additional physi-
+cal insights from the resulting group catalogs that
+remain inaccessible to traditional and parameter-
+dependent methods.
+In the presented study, motivated by the consider-
+ations outlined above, a parameter‑free, graph‑based
+watershed approach named GraphShed, is intro-
+duced and detailed in Section III. Utilizing this
+method, the group catalog produced by GraphShed
+is compared with that obtained from the traditional
+position‑based FoF approach, in order to probe sev-
+eral aspects of the resulting group catalogs:
+(I) How the structural properties of groups detected
+by the density‑field–based GraphShed method com-
+pare with those from a position‑only approach, is as-
+sessed through several structural diagnostics of both
+group catalogs (Section IV A).
+(II) How the adoption of GraphShed as the group
+finder influences large‑scale statistical measures of
+the group distribution is examined through com-
+parisons of the mass function and the unweighted
+two‑point correlation function derived from the two
+catalogs (Section IV B).
+(III) How the sensitivity of GraphShed to varia-
+tions in the underlying density field reveals a differ-
+ent population of dynamical interactions including
+mergers, accretions, and flybys, is determined us-
+ing a velocity-based classification approach, which
+is introduced and applied to both catalogs (Section
+IV C).
+The dataset used in this work is described in Sec-
+tion II, and the main findings and conclusions are
+summarized in Section V.
+II. SAMPLE SELECTION:
+ILLUSTRISTNG100-1
+The dataset employed in this study is drawn from
+the gravo-magnetohydrodynamical IllustrisTNG
+simulation ([ 65]), which follows the coupled evo-
+lution of dark matter, gas, stars, and black holes
+across cosmic time, from redshift z = 127 to z = 0.
+The simulation is executed using the Arepo moving-
+mesh framework ([ 83]) and adopts cosmological
+parameters consistent with the Planck results ([1]).
+These parameters include density values of Ωm =
+0.3089 for matter, Ωb = 0.0486 for baryons, and ΩΛ
+= 0.6911 for the cosmological constant, along with
+a scalar spectral index ns = 0 .9667, the amplitude
+of matter fluctuations σ8 = 0 .8159, and a Hubble
+constant H = 100h (km/s/Mpc) with h = 0.6774.
+The analysis is based on the highest-resolution re-
+alization within the IllustrisTNG100-1 suite, which
+spans a co-moving volume cube with a∼ 75 (Mpc/h)
+side length and features the baryonic and dark mat-
+ter mass resolutions of1.4×106M⊙ and 7.5×106M⊙,
+respectively. This combination of spatial extent and
+resolution provides a framework for both the robust
+identification of galaxy groups and clusters and the
+detailed examination of their diverse characteristics.
+From the full IllustrisTNG100-1 galaxy catalog,
+galaxies are selected based on three criteria: an r-
+band magnitude brighter than approximately−16, a
+stellar mass exceeding 108 M⊙ and a redshift of z =
+0 (snapshot 99). Applying these thresholds yields a
+final sample of roughly 41000 galaxies.
+III. METHODOLOGY:
+GRAPHSHED GROUP FINDER
+In this section, the GraphShed group finder is in-
+troduced as a parameter-free, easy to implement,
+and computationally eﬀicient method. It operates
+on a set of Voronoi-induced graphs and employs a
+Watershed-based identification process without re-
+quiring the adjustment or calibration of free pa-
+rameters or threshold values. Owing to its struc-
+tural simplicity, GraphShed can be applied to large
+galaxy catalogs while requiring reasonable compu-
+tational demands. The algorithm proceeds through
+three main phases that are applied sequentially to
+the input galaxy catalog. These phases are summa-
+rized in Algorithm 1 and in the schematic diagram
+shown in Figure1, and are described in detail below.
+A. Grid points & Voronoi Tessellation
+The initial phase of GraphShed consists of four
+steps. In the first step, a grid of points is inserted
+into the galaxy catalog. The characteristic spacing
+between adjacent grid points along each spatial di-
+rection is denoted by ℓ, which is determined by the
+mean inter-particle separation, due to the effects of
+shot noise:
+ℓ ≡
+3
+√
+VT
+n (1)
+where n denotes the total number of galaxies in
+the input catalog and VT represents the total back-
+ground volume of the dataset.
+These grids are treated as massless points and
+therefore do not contribute to the physical density
+3
+
+Algorithm 1: GraphShed group -f inder
+Input: {xi, yi, zi, mi}N
+i=1: coordinates and stellar
+masses of N galaxies in the catalog.
+Result: Group identifier Gi for each galaxy i.
+# Grid points & Voronoi tessellation
+1 Construct the set of galaxy positions Pi = (xi, yi, zi).
+2 Calculate the characteristic grid spacing ℓ by
+Equation(1 ).
+3 Add a 3D grid with spacing ℓ to the input dataset.
+4 Perform Voronoi tessellation on the set of galaxies and
+grid points → Voronoi cells Cj for each point j with
+vertices Xj .
+5 foreach Voronoi cell Ci of galaxy i do
+6 if ∃ χ ∈ Xi such that χ is outside the dataset
+boundary or at infinity then
+7 Discard Ci.
+8 else
+9 Vi ← Volume of Ci computed via
+ConvexHull .
+10 foreach Galaxy i do
+11 Compute the associated mass density by
+Equation(2 ).
+# Graph Construction:
+12 Compute the linking length L.
+13 Initialize an un-directed graph G = (A, B).
+14 foreach Pair of galaxies ( a, b) do
+15 if |Xa ∩ Xb| ≥ 2 then
+16 Compute distance Dab ←∥ P a − Pb ∥.
+17 if Dab ≤ L then
+18 Add edge (a, b) to graph G.
+# Watershed Group Identification:
+19 Sort galaxies in descending order of their
+corresponding cell density ρi.
+20 Initialize and mark the group identifier of all galaxies
+as unassigned: Gi ← ∅.
+21 foreach Galaxy k in sorted order do
+22 if Gk is already assigned then
+23 continue.
+24 else
+25 Initialize a new group Ξ = {k} with GΞ = ξ.
+26 repeat
+27 foreach Galaxy q ∈ Ξ do
+28 N (q) ← {f | (f, q) ∈ G} .
+29 foreach Galaxy f ∈ N (q) do
+30 if Gf = ∅ then
+31 if ρf ≤ ρq then
+32 Add f to Ξ.
+33 until No new galaxy is added to Ξ
+34 foreach Galaxy ν ∈ Ξ do
+35 Set Gν ← ξ.
+36 Return group identifiers Gi for all galaxies.
+field; however, their inclusion provides several ad-
+vantages for the tessellation of the dataset space in
+the subsequent step. First, it modifies the shape and
+geometric properties of Voronoi cells by suppressing
+FIG. 1. Schematic illustration of the main phases in-
+volved in the GraphShed group finder. In the first panel
+(top-left), grid points with characteristic spacing ℓ are
+added to the galaxy distribution. Grid points and galax-
+ies are shown as red and black dots, respectively. In the
+second panel (top-right), the dataset space is partitioned
+into distinct cells by applying the Voronoi tessellation to
+the combined set of galaxies and grid points. The ver-
+tices of the Voronoi cells are shown as blue dots. In the
+third panel ( bottom-right), the set of Voronoi-induced
+graphs are constructed using the shared-cell vertices and
+the linking length L, with graph edges shown in red. In
+the final panel (bottom-left), the Watershed approach is
+illustrated. Arrows indicate the progression of the al-
+gorithm as neighboring galaxies are incorporated into
+groups. Each identified group is shown in a distinct color
+and enclosed by dashed lines.
+excessively large cells associated with a data point
+and reducing irregular, sharply edged cell morpholo-
+gies. This leads to a more reliable estimation of cell
+volumes. Second, it increases the total number of
+Voronoi cells, thereby enhancing the spatial coverage
+and accessibility across the dataset space. Third, it
+modifies boundary conditions by refining the shape
+of marginal cells near the dataset edges. In par-
+ticular, it reduces the occurrence of cells associated
+with galaxies that contain vertices at infinity and
+mitigates sharply edged peripheral cells, ultimately
+minimizing the loss of usable volume in boundary
+regions. These advantages are discussed in detail by
+[41].
+In the second step, GraphShed constructs the
+Voronoi tessellation ([ 8]) of the combined set of
+4
+
+galaxies and inserted grid points. The tessellation
+is performed in three-dimensional space using the
+standard Euclidean metric. To accomplish this, the
+Voronoi diagram of the distribution must be gen-
+erated. A Voronoi diagram partitions the dataset
+space into cells surrounding a specified set of objects
+(in this case, the union of galaxies and grid points).
+Each point is then associated with a unique Voronoi
+cell Cj, defined by its corresponding vertices and en-
+compassing all regions of the dataset space that are
+closer to that point than to any other. These vertices
+are shown in Figure 1 as blue dots.
+Once the Voronoi cells and their corresponding
+vertices have been identified, certain marginal cells
+must be removed ([ 41]). GraphShed first discards
+all cells containing one or more vertices at infin-
+ity, as such cells would possess infinite volume when
+computing individual cell volumes (step 3). Subse-
+quently, any cell with vertices located outside the
+dataset boundaries is excluded. These cells often
+exhibit large or irregular shapes that could impact
+their computed volumes and, consequently, the re-
+sulting density estimates.
+The third step focuses on computing the volumes
+of the cells associated with the galaxies, excluding
+those corresponding to the inserted grid points. To
+perform these calculations, GraphShed employs the
+Quickhull algorithm ([9]) to construct the Minimum
+Convex Polygon, or convex hull, surrounding each
+cell. This construction uses the coordinates of the
+vertices identified during the Voronoi tessellation in
+the previous step.
+The convex hull of a set of points is defined as the
+smallest convex polyhedron that fully encloses all
+points in the set ([ 37]). To obtain the convex hull
+of a cell, the convex set of its Voronoi-derived ver-
+tices is first computed, after which the hull is defined
+as the minimal convex polyhedron whose boundary
+contains every vertex of the cell. Once the convex
+hull is established, its volume is calculated by decom-
+posing the polyhedron into tetrahedrons ([ 90]). A
+random interior point is selected, and tetrahedrons
+are formed by connecting this point to the vertices
+of each face. Summing the volumes of these tetra-
+hedrons yields the total cell volume Vi ([23]).
+Then, GraphShed computes the mass density1 as-
+sociated with each galaxy using the galaxy mass mi
+1 The density field can be constructed using different physical
+tracers, including dark matter mass, stellar mass (adopted
+in this work), luminosity, etc., depending on the dataset
+used.
+and the volume of its corresponding Voronoi cellVi,
+by:
+ρi = mi
+Vi
+(2)
+B. Graph Construction
+In the second phase, GraphShed constructs the
+set of separated graphs. To achieve this, the al-
+gorithm first computes the linking length L. This
+parameter is obtained by calculating the nearest-
+neighbor distance for all galaxies and taking the
+mean of those distances that are less than or equal
+to the mean inter-particle separation (Equation (1)),
+thereby mitigating the influence of galaxies located
+in highly underdense regions.
+There are two reasons for adopting this defini-
+tion instead of the traditional approach, which se-
+lects a fraction of the mean inter-particle separa-
+tion (Equation (1); e.g., [11]). First, the traditional
+method depends solely on the number density of the
+dataset; thus, datasets with identical number densi-
+ties but different clustering powers would yield the
+same linking length. In contrast, the mean nearest-
+neighbor distance inherently adapts to variations
+in clustering: among datasets with similar num-
+ber density, those exhibiting stronger clustering will
+have shorter nearest-neighbor distances and there-
+fore smaller linking lengths. Second, the traditional
+approach requires tuning a free parameter, the mul-
+tiplier applied to the mean inter-particle separation,
+which is not intrinsically tied to the dataset’s spa-
+tial distribution. Different choices of this multiplier
+can alter the final results, whereas the mean nearest-
+neighbor distance requires no such adjustable pa-
+rameters.
+Then, GraphShed uses the Voronoi cells corre-
+sponding to the galaxies Ci to identify each galaxy’s
+neighbors. The algorithm examines the vertices of
+the Voronoi cells, and whenever two cells share two
+or more common vertices (|Xa ∩ Xb| ≥ 2), the galax-
+ies associated with those cells are considered neigh-
+bors. If the distance between any two neighboring
+galaxies is less than or equal to the linking length
+(Dab <= L), GraphShed adds an edge between that
+pair of galaxies to the set of separated graphs.
+C. Watershed Group Identification
+In the final phase, GraphShed applies the Water-
+shed method ([14, 31]) to the set of separated graphs
+5
+
+to identify groups of galaxies. The procedure be-
+gins with the galaxy that possesses the highest cell
+density in the dataset, the global maximum. Using
+the graph constructed in the previous phase, the al-
+gorithm identifies its neighboring galaxies and adds
+those with densities less than or equal to that of
+the current galaxy, following a top-down progres-
+sion. This approach enables groups to grow out-
+ward from density maxima, thereby differentiating
+distinct nearby peaks in a manner similar to some
+physical density-based group and subhalo finders
+(e.g.,[42, 85]), rather than spuriously merging ad-
+jacent structures, as occurs in methods that operate
+solely based on the positions of galaxies (e.g., [35]).
+This process is repeated for each newly added galaxy
+and continues until no additional galaxies satisfy the
+density condition or remain connected to the grow-
+ing structure.
+Once the identification process of a group is com-
+plete, the algorithm proceeds to the next unassigned
+global maximum in the density field and applies the
+same procedure to identify another group. This con-
+tinues until no galaxies remain that possess at least
+one connected edge and therefore the potential to
+form a distinct group.
+IV. RESULTS AND DISCUSSION
+This section presents the resulting group catalog
+obtained from applying the GraphShed group finder,
+as detailed in SectionIII, to the dataset described in
+Section II. For the specified dataset, the characteris-
+tic grid spacing as defined by Equation (1) and the
+corresponding linking length metrics, are calculated
+by GraphShed as ∼ 2.16 Mpc/h and ∼ 0.44 Mpc/h,
+respectively.
+For comparison, a group catalog is also con-
+structed using the Friends-of-Friends (FoF) algo-
+rithm ([28]). The FoF method is selected for com-
+parison due to its widespread use in constructing
+galaxy group and cluster catalogs in previous stud-
+ies (e.g., [56, 62, 71]). FoF’s reliance on a position-
+only approach, makes it well suited for highlighting
+the differences between catalogs identified using a
+physical density-based method and those obtained
+from purely positional algorithms. In contrast to
+GraphShed, the FoF method does not incorporate
+any physical field, relies solely on galaxy positions
+and identifies groups using a linking length metric.
+This metric is typically defined as a constant fraction
+(b) of the mean inter-particle separation (Equation
+(1)). For this comparison,b = 0.2 is adopted, consis-
+tent with previous studies incorporating galaxy cat-
+alogs at redshift z = 0 (e.g., [63, 94]). This choice
+corresponds to a linking length of ∼ 0.43 Mpc/h for
+the FoF method.
+The close values of the linking lengths used by
+GraphShed and FoF for this dataset, make the com-
+parison largely insensitive to effects arising from dif-
+ferences in the adopted linking lengths by the two
+methods.
+Initially, structural properties of the groups iden-
+tified by GraphShed and FoF are compared (Section
+IV A), including R200, M200, sphericity, compact-
+ness, spin parameter and centroid shift.
+Subsequently, the large-scale statistical proper-
+ties of the resulting catalogs are analyzed at Sec-
+tion IV B. In particular, the halo mass functions
+and two-point correlation functions derived from the
+GraphShed and FoF catalogs are compared. This
+analysis allows an assessment of whether differences
+in the internal structure of the groups and clusters
+identified by the two methods propagate to statisti-
+cal measures describing the large-scale distribution
+of matter.
+Finally, Section IV C presents a comparison of
+mergers, flybys, and accretion events detected in
+the two catalogs. These interactions are determined
+using a velocity‑based merger identification proce-
+dure, introduced and applied to the GraphShed and
+FoF group catalogs; enabling a direct comparison
+of the resulting merger classifications obtained from
+the two methods.
+A. Structural Properties
+For a consistent comparison between the catalogs
+produced by the GraphShed and FoF methods us-
+ing the dataset described in SectionII, those groups
+containing more than or equal to 5 members are
+considered. This restriction is adopted to avoid po-
+tential misinterpretations arising from very small
+groups. Such a minimum group richness threshold is
+commonly adopted in cosmological and astrophysi-
+cal studies (e.g., [ 38, 59]). With this criterion, the
+number of detected groups is 1067 for GraphShed
+and 987 for the FoF method. The group richness
+(N) in these catalogs spans from small systems with
+5 members to massive galaxy clusters containing up
+to 211 and 402 galaxies for GraphShed and FoF, re-
+spectively.
+The difference in the maximum richness captured
+by the two methods arises from the position-only
+approach of the FoF algorithm, which might com-
+bine multiple nearby over-densities into a single
+group ([ 42]). In contrast, the sensitivity of the
+6
+
+FIG. 2. The main panel illustrates the distribution of
+the R200 radius with respect to the stellar massM200 for
+groups identified by the GraphShed and FoF methods, in
+dark green and orange, respectively. The corresponding
+logarithmic histograms of the M200 and R200 distribu-
+tions are presented using the same color scheme in the
+upper and right panels, respectively.
+GraphShed method to variations in the density field
+of the dataset, combined with its top-down water-
+shed segmentation approach, could separate such
+over-densities into distinct systems.
+The comparison begins with the R200 and M200
+parameters. The R200 is defined as the radius from
+the Center-Of-Mass (COM) of a group within which
+the density is approximately 200 times the back-
+ground density. Accordingly, M200 corresponds to
+the total stellar mass of galaxies contained within
+the R200 radius. The distribution of these pa-
+rameters for the resulting galaxy group catalogs of
+GraphShed and FoF are shown in Figure 2. The
+R200 radii of the GraphShed groups extend up to
+approximately 1.78 Mpc/h, whereas those of the
+FoF groups reach about 2.11 Mpc/h. Similarly,
+the M200 mass range of the GraphShed and FoF
+groups extends to approximately 12.51 and 12.79
+log10(M⊙/h), respectively. These results suggest
+that the FoF method constructs some relatively large
+and massive clusters, whereas GraphShed segments
+multiple over-dense regions that are grouped to-
+gether by FoF. Consequently, this leads to reduced
+upper bounds in the R200 radius and M200 mass
+distributions of the GraphShed-identified galaxy
+groups and clusters.
+In addition, the corresponding two‑sided
+Kolmogorov–Smirnov (here after noted as KS)
+([61]) test yields the p‑values listed in the first
+and second rows of Table I. The p-value obtained
+for the R200 distributions indicates a statistically
+significant difference between the two catalogs. In
+contrast, the resulting p-value for the M200 distri-
+butions suggests that the overall mass distributions
+of the galaxy groups identified by GraphShed and
+FoF are statistically similar.
+TABLE I.Two-sided KS p-values for the distributions of
+the structural characteristics of the group catalogs iden-
+tified by the GraphShed and FoF methods.
+Parameter p-value
+R200 4.26 × 10−7
+M200 0.92
+Sphericity 8.58 × 10−5
+Compactness 5.71 × 10−15
+Spin 3.97 × 10−7
+Centroid Shift 1.72 × 10−2
+For the comparison of the shapes of the result-
+ing galaxy groups and clusters, the sphericity ( Θ;
+Equation (3)) and compactness ( ζ; Equation ( 4))
+parameters are measured. The sphericity parameter
+is defined as:
+Θ ≡ c
+a (3)
+where a and c denote the largest and smallest eigen-
+values of the group’s moment of inertia tensor ([45]).
+Higher values of Θ correspond to more spherical
+group morphologies. The sphericity values of the
+galaxy groups in the GraphShed and FoF catalogs
+extend up to 0.592 and 0.53, respectively, and are
+shown in the top row of Figure 3 with respect to
+the groups’ R200 radius and M200 mass. As illus-
+trated in these panels, the sphericity of the groups
+generally increases with increasing R200 and M200.
+In addition, the groups identified by GraphShed are
+generally more spherical than those identified by the
+FoF method. The FoF catalog also contains sev-
+eral groups with large R200 and M200 values that
+exhibit relatively low sphericity, a feature that is not
+present in the GraphShed group catalog. Addition-
+ally, a two-sided KS test applied to the Θ distribu-
+tions yields the p-value presented in the third row of
+2 Including outliers, this value reaches 0.72.
+7
+
+Table I, indicating that the sphericity distributions
+of the galaxy groups identified by GraphShed and
+FoF are statistically different.
+The compactness parameter is then defined as the
+mean radial distance of the group members normal-
+ized to the R200:
+ζ ≡ 1
+R200 × N
+N∑
+i=1
+||⃗ ri − ⃗ rCOM || (4)
+where ⃗ ri and ⃗ rCOM represent the position vectors of
+the group members and the center of mass, respec-
+tively. Lower values of ζ indicate that the member
+galaxies are located closer to the COM, correspond-
+ing to a more compact system.
+The resulting compactness of the groups identified
+by GraphShed and FoF is illustrated in the middle
+row of Figure3 with respect to the groups’R200 and
+M200. As shown in these panels, the groups iden-
+tified by GraphShed generally exhibit lower ζ val-
+ues and therefore higher compactness, compared to
+those identified by the FoF method. The compact-
+ness values extend to approximately 0.89 and 2.463
+for the GraphShed and FoF catalogs, respectively.
+Overall, the ζ parameter decreases with increasing
+R200 and M200, indicating that larger systems tend
+to be more compact than smaller groups, which is ev-
+ident from the group catalogs of both methods. Ad-
+ditionally, the FoF catalog contains several groups
+with low to intermediateR200 and M200 that exhibit
+relatively low compactness, whereas the GraphShed
+groups generally show moderate to high compact-
+ness across the full range of R200 and M200. A two-
+sided KS test applied to ζ distributions yields the
+p-value presented in the fourth row of TableI, indi-
+cating a statistically significant distinction between
+the compactness distributions of the GraphShed and
+FoF catalogs.
+The comparison continues with the spin parame-
+ter of the groups. As discussed in previous studies
+(e.g., [45]), the spin parameter of a galaxy group is a
+dimensionless quantity originally introduced by [68]
+and later revised for improved computational appli-
+cability by [ 20]. This parameter characterizes the
+amount of ordered rotational motion relative to the
+internal random motions of the system and is defined
+as:
+λ′ ≡ |J200|
+√2GR200M 3/2
+200
+(5)
+3 This value extends to 4.98 when outliers are considered.
+where G denotes the Newtonian gravitational con-
+stant, and J200 represents the angular momentum
+of the group members located within the R200 ra-
+dius. Higher values of λ′, generally indicate systems
+possessing greater specific angular momentum which
+can be associated with recent mergers or anisotropic
+accretion (e.g., [46]), whereas lower values are more
+typical of dynamically settled or rotationally stable
+configurations (e.g., [13]).
+The distribution of the spin parameter for the
+groups identified by GraphShed and FoF is shown in
+the lower panel of Figure3 with respect to theirR200
+and M200. As illustrated in these panels, the groups
+in both catalogs exhibit broadly similar trends in
+this parameter. In general, systems with larger R200
+and higher M200 tend to demonstrate higher spin
+parameter values. However, the spin parameter of
+the GraphShed-identified groups extends to about
+13.02 in logarithmic scale, whereas the FoF groups
+reach values of about 13.794. In addition, the FoF
+catalog contains a subset of intermediate to large
+R200 and M200 systems that exhibit elevated spin
+values, a characteristic that is not evident in the
+GraphShed catalog. The two-sided KS test is also
+performed on λ′ distributions, yielding the p‑value
+presented in fifth row of TableI and indicating a sta-
+tistically difference between the spin distributions of
+the GraphShed and FoF catalogs.
+The next property examined is the centroid shift
+∆C of the groups identified in the two catalogs. Al-
+though centroid shift has been defined and employed
+in different ways in previous studies (e.g., [5, 74]), in
+this study it is defined as the distance between the
+group center and the peak of the stellar mass density
+field:
+∆C ≡ || ⃗ rMMD − ⃗ rUM|| (6)
+where, ⃗ rMMD and ⃗ rUM denote the position vectors
+of the center of the Voronoi cell with the Maximum
+Mass Density (MMD) within each group and the Un-
+weighted Mean position (UM) of the member galax-
+ies, respectively. These two positions are adopted to
+quantify the degree of asymmetry in the spatial dis-
+tribution of stellar mass within the group. As men-
+tioned in prior studies (e.g., [55, 79]), the UM posi-
+tion can be used as a proxy for the halo center when
+satellite galaxies are not included. In the present
+study, low-mass and low-luminosity satellite galax-
+ies are excluded from the sample (see Section II),
+4 Including outliers increases this value up to 14.29.
+8
+
+FIG. 3. The distributions of the sphericity ( Θ; U pper row), compactness (ζ; M iddle row) and spin parameter ( λ′;
+Bottom row) of the groups identified by GraphShed and FoF methods are illustrated with respect to theirR200 radii
+(Lef t column) and M200 stellar mass (M iddle column), respectively. The logarithmic histograms of these parameters
+are shown in the right column of each row. In all panels, the GraphShed and FoF group catalogs are shown in dark
+green and orange, respectively.
+thereby reducing potential biases arising from nu-
+merous faint satellites. In contrast, MMD position
+traces the location of the peak of the stellar mass
+density field within the group region. Considering
+Equation (6), large values of ∆C correspond to sys-
+tems in which the stellar mass density peak is signif-
+icantly displaced from the group center, indicating
+a more asymmetric mass distribution. Conversely,
+small values of ∆C indicate systems in which the
+stellar mass peak and the group center are closely
+aligned, consistent with a more symmetric configu-
+ration.
+The distributions of ∆C for groups identified by
+GraphShed and FoF are shown in Figure 4 with
+respect to the compactness ( ζ) and sphericity ( Θ)
+parameters. As seen in the figure, groups identi-
+fied by GraphShed generally exhibit smaller cen-
+troid shifts. The range of ∆C extends to about 0.79
+for FoF groups, whereas for GraphShed groups it
+reaches to about 0.51. The FoF catalog also con-
+tains some galaxy groups with large centroid shifts
+that are not present in the GraphShed catalog. In
+addition, the two-sieded KS test applied to ∆C dis-
+tributions yields the p‑value presented in the sixth
+row of Table I, indicating a statistically significant
+difference between the centroid shift distributions of
+the GraphShed and FoF catalogs.
+A positive correlation is observed between∆C and
+the compactness parameter ζ, such that groups with
+larger centroid shifts tend to have larger ζ values,
+9
+
+FIG. 4. The distribution of the centroid shift ( ∆C) with respect to the group compactness ( ζ; Lef t panel) and
+sphericity (Θ; M iddle panel) is shown for the GraphShed and FoF group catalogs in dark green and orange, respec-
+tively. The histogram of the centroid shift for these catalogs is presented in the Right panel using the same color
+scheme.
+corresponding to less compact systems. In addition,
+∆C is related to the sphericity parameter Θ, with
+systems exhibiting smaller centroid shifts generally
+showing higher Θ values, indicative of more spherical
+morphologies.
+B. Large-Scale Statistics
+Following the comparison of the physical and
+morphological properties of the groups identified
+by GraphShed and FoF, the next step examines
+how these group-finding methods affect the large-
+scale statistical properties derived from the resulting
+group catalogs. For this purpose, the un-weighted
+two-point correlation function (TPCF) and the mass
+function (MF) of the catalogs are compared.
+The TPCF is calculated using the Peebles–Hauser
+estimator ([67, 69]) applied to the COM positions
+of the identified groups, with separations measured
+up to half of the simulation box length to minimize
+boundary effects. The resulting correlation func-
+tions are shown in the left panel of Figure 5. In
+addition, the cumulative MF of the groups is pre-
+sented in the right panel of Figure5 as a function of
+the group M200.
+As shown in Figure 5, the TPCFs of the
+GraphShed and FoF catalogs exhibit a similar be-
+havior at large separation distances, while at smaller
+separations, the GraphShed catalog shows higher
+correlation amplitudes. This enhanced small‑scale
+signal originate from the density‑field–based nature
+of the GraphShed approach (as discussed earlier
+at Section III A). Unlike the position‑based FoF
+method, GraphShed is more sensitive to variations
+in the underlying density field and therefore sepa-
+rate nearby over‑densities that FoF could merge into
+a single system. The left column of Figure 6 illus-
+trates this excess of COM pairs at small separations
+for GraphShed relative to FoF.
+In the case of the MF, the two catalogs show sim-
+ilar trends at low and intermediate M200 values.
+However, for high-mass systems with M200 ≳ 12
+log10(M⊙/h), the FoF catalog contains higher num-
+ber of groups than the GraphShed catalog. Consis-
+tent with the results discussed previously, the FoF
+catalog also includes some systems with high M200
+values that are not present in the GraphShed cata-
+log.
+The similarities between the TPCFs and MFs ob-
+tained from the GraphShed and FoF catalogs indi-
+cate that the large‑scale statistical properties of the
+identified groups remain largely consistent between
+the two methods. Although some differences appear
+at small separations in the correlation function and
+at the high‑mass end of the mass function, the over-
+all trends are in good agreement.
+As discussed previously in SectionIV A, the M200
+mass distributions of the GraphShed and FoF cata-
+logs exhibit a high degree of statistical similarity.
+Together with the strong similarity in the TPCF
+and MF presented in this section, this suggests that
+cosmological interpretations and inferences derived
+from galaxy group catalogs (e.g., [ 16, 22]) are un-
+likely to be significantly affected, and that the re-
+sulting cosmological conclusions remain largely con-
+sistent. The close agreement with the FoF results
+further supports the use of GraphShed for studies
+that employ galaxy group catalogs as probes for cos-
+mological inferences (e.g., [77, 91]).
+10
+
+FIG. 5. The two-point correlation function (Lef t panel)
+as a function of distance ( r) and the corresponding cu-
+mulative mass functions ( Right panel) as a function of
+stellar mass (M) for the group catalogs identified by the
+GraphShed and FoF methods are shown in dark green
+and dark orange, respectively.
+C. Merger Identification
+The final aspect of the comparison between the
+GraphShed and FoF group catalogs is the identi-
+fication and comparison of candidate mergers, fly-
+bys, and accretion events among the detected galaxy
+groups and clusters. For this purpose, a veloc-
+ity‑based merger identification approach is intro-
+duced and employed. The proposed procedure is
+demonstrated using an example drawn from the
+group catalogs identified by the GraphShed (Sec-
+tion III) and FoF methods, applied to the dataset
+described in Section II and illustrated in Figure 6.
+As noted in Section IV, the corresponding linking
+lengths adopted by GraphShed and FoF for this
+dataset are very similar, ensuring that the presented
+comparison is not influenced by variations that could
+arise from differences in this parameter.
+Among all pairs of galaxy groups and clusters in
+the resulting group catalogs identified by GraphShed
+and FoF, potential merger candidates are identified
+using the center‑of‑mass positions (⃗ rC) and the R200
+radii of the groups. A pair is classified as a potential
+merger candidate if the distance between the COMs
+of the two groups is smaller than the sum of their
+R200 radii:
+∆αβ = |⃗ rα
+C − ⃗ rβ
+C | < R α
+200 + Rβ
+200. (7)
+where members of the pair are denoted by the labels
+α and β.
+Then, for each potential merger candidate pair,
+the mass‑weighted radial and perpendicular relative
+velocities are computed as described in Appendix
+A. The pairs are subsequently classified according
+to these velocity components. A pair is flagged as a
+merger candidate if:
+V∥
+α > 0, V∥
+β > 0, V ∥ > V ⊥ (8)
+indicating that the two groups are approaching each
+other with a dominant radial motion. Conversely,
+the pair is classified as a flyby candidate if:
+V⊥ > V ∥ (9)
+indicating the domination of the perpendicular com-
+ponent. It should be noted that within this classifi-
+cation, some interacting systems such as pairs orbit-
+ing each other during the stages of a merger might
+also be categorized as flybys in the analyzed snap-
+shot.
+Finally, the mass ratio of each merger candidate
+pair (Equation (8)) is defined as (e.g., [26]):
+ξ ≡
+min
+(
+M α
+200, M β
+200
+)
+max
+(
+M α
+200, M β
+200
+) (10)
+and pairs are then classified according to their mass
+ratio. If ξ > 0.33, the pair is considered as a major
+merger candidate, while those with 0.1 ≤ ξ ≤ 0.33
+are considered as minor merger candidates (e.g.,
+[26]). At the end, pairs with ξ < 0.1 are classified
+as accretion candidates, since the secondary compo-
+nent is suﬀiciently low in mass relative to the pri-
+mary, that it does not constitute a genuine merger
+(e.g., [39]).
+After applying this procedure, a total of 271 and
+63 potential group pairs satisfying the condition of
+Equation (7) are detected and analyzed from the
+GraphShed and FoF group catalogs, respectively.
+The resulting classifications are summarized in Ta-
+ble II. The substantially larger number of candidate
+pairs identified by GraphShed reflects the higher
+sensitivity of this density‑based approach to sub-
+structures within galaxy systems, enabling the de-
+tection of a broader range of dynamical interactions
+among nearby groups and clusters.
+TABLE II. Classifications of galaxy group merger and
+interaction types for catalogs generated by GraphShed
+and FoF methods.
+Class GraphShed (271) FoF (63)
+Major mergers 49 9
+Minor mergers 31 15
+Accretions 29 14
+Flybys 162 25
+11
+
+FIG. 6. The stacked two-dimensional distribution of the galaxies in the largest FoF-identified group from the dataset
+of Section II is shown at the U pper-Lef t panel, with the group’s center of mass marked by a black square. The
+projection stacks a 2.13 Mpc/h along the X-direction, with the Y -Z plane shown due to their larger extent. The
+GraphShed-detected groups at the same positional range are shown in theM iddle-Lef t panel. Each group plotted in
+a distinct color and their centers of mass indicated by black crosses. The X-ray luminosity map of the same region is
+presented in the Bottom-Lef t panel, where the centers of mass of both the GraphShed groups and the FoF group are
+also marked with black crosses and a black square, respectively. TheU pper-Right panel shows the galaxies belonging
+to the two groups forming a merger-candidate pair, from among the GraphShed-identified groups and each shown
+in a different color. In addition, the weighted mean velocity vectors of the individual groups (Equation ( A1)) and
+of the combined system (Equation (A2)) are drawn as arrows originating from their respective centers of mass. The
+M iddle-Right panel shows the same galaxy distribution, but with the relative velocity vectors of the two groups with
+respect to the pair’s rest frame (Equation (A3)), drawn as arrows from the group centers of mass. TheBottom-Right
+panel displays the X-ray luminosity map of the region containing the two groups. The iso-contours are drawn at
+logarithmic levels of 5, 5.6 and 6.2 in solar luminosity ( log10[L⊙]), and for each level the largest contour is shown.
+The center of mass of the two groups are indicated with black crosses.
+A comparison of the merger categories shows that
+both methods detect comparable fractions of ma-
+jor mergers, with GraphShed and FoF revealing 49
+(18%) and 9 ( 14%) pairs, respectively. In contrast,
+notable differences appear in the fractions of mi-
+nor mergers and accretion events. The FoF cata-
+log shows relatively larger proportions in these cate-
+gories, accounting for 24% and 22% of the identified
+12
+
+pairs respectively, whereas the GraphShed catalog
+yields smaller fractions of∼ 11% for both categories.
+The most prominent difference between the two
+catalogs appears in the classification of flyby sys-
+tems. In the GraphShed catalog, flybys constitute
+the majority of the detected pairs ( 60%), while in
+the FoF catalog they represent about 40% of the
+total. This indicates that GraphShed resolves a
+larger number of dynamically independent neighbor-
+ing structures whose relative motions are dominated
+by tangential components rather than radial. The
+lower fraction of flybys identified in the FoF catalog
+reflects the tendency of this method to link nearby
+systems based solely on their spatial proximity, po-
+tentially combining galaxy systems that are in fact
+passing alongside each other (e.g., [13, 53]).
+These results suggest that the higher sensitivity of
+density-based group-finding approaches can reveal
+not only merger candidates that remain hidden in
+position-only methods, but also identify flyby and
+accretion systems that might otherwise be grouped
+with other galaxy systems due to their positional
+proximity. Consequently, the GraphShed method
+provides a more detailed view of the dynamical in-
+teractions occurring within dense environments, en-
+abling a clearer distinction between different types of
+close encounters among galaxy groups and clusters.
+An example illustrating this capability is shown
+in Figure 6. In this figure, the largest group iden-
+tified by the FoF method from the galaxy distri-
+bution described in Section II is displayed. For
+comparison, the galaxy groups identified using the
+GraphShed approach, whose boundaries lie within
+the coordinate range of the FoF-identified group, are
+also shown. In addition, the cumulative X-ray lumi-
+nosity map of this region is presented.5
+As shown in the left column of Figure6, the large
+group identified by the FoF method as a single irreg-
+ular structure is separated into five distinct groups
+by the GraphShed algorithm. These groups corre-
+spond to different overdensity regions that are lo-
+cated close to each other within that same coor-
+dinate range. The presence of these distinct over-
+densities can also be inferred from the X-ray lumi-
+nosity map, which could indicate that each group
+corresponds to a separate mass concentration, and
+the GraphShed method properly distinguishes these
+structures despite their spatial proximity.
+5 This map is derived from the IllustrisTNG100-1 simulation
+by computing the X-ray luminosity of the gas cells using
+the corresponding density maps and incorporating cooling
+tables presented by [ 92].
+Among these five GraphShed-identified groups,
+the pair flagged as a merger candidate by the
+velocity-based merger identification procedure de-
+scribed earlier is illustrated in the right column of
+Figure 6. The X-ray luminosity map of this region,
+derived from the emission of gas cells in the simu-
+lation, together with fixed-level luminosity contours
+shown at several intensity levels, provides additional
+insights about these two system. At the lowest con-
+tour level (5), the emission exhibits an asymmet-
+ric, extended and bimodal morphology that encom-
+passes the central region of both systems, suggest-
+ing the presence of multiple X-ray peaks associated
+with distinct over-densities ([51]). At the intermedi-
+ate level (5.6), the contour reveals a clear dumbbell-
+like structure with two connected lobes, indicating
+two nearby halos whose gaseous envelopes partially
+overlap. Such bimodal X-ray morphologies are com-
+monly associated with interacting systems, contain-
+ing more than one gravitational potential well ([52]).
+Finally, the highest contour level (6.2) encloses only
+the central region of the brighter system, reflecting
+the deeper gravitational potential of the more mas-
+sive group. The presence of two nearby X-ray peaks
+together with the elongated emission and the bridge
+of gas between them supports the interpretation of
+a merging pair ([3]), consistent with the merger can-
+didate identified by the velocity-based procedure de-
+scribed earlier.
+V. SUMMARY AND CONCLUSION
+In this study, the GraphShed group finder is intro-
+duced as a parameter–free, Voronoi-induced graph–
+based watershed approach designed to identify par-
+ticle aggregations within the input dataset directly
+from its density field. The method has several key
+characteristics:
+• Employs the Voronoi tessellation on the com-
+bined set of grid points and data points to en-
+hance the segmentation of the dataset’s spatial
+domain.
+• Constructs a set of separated graphs using the
+adjacency of the Voronoi cells associated with
+the data points.
+• Applies a top–down watershed procedure to
+the density field of the dataset in order to iden-
+tify the particle aggregations.
+• Computes all relevant quantities directly from
+the data, enabling the identification of groups
+13
+
+without externally imposed thresholds or tun-
+able parameters.
+• Possesses a mathematically simple and compu-
+tationally eﬀicient formulation that is straight-
+forward to implement.
+The performance of GraphShed is evaluated us-
+ing galaxies from the IllustrisTNG100‑1 simula-
+tion, as described in Section II, which contains ∼
+41000 galaxies and GraphShed additionally inserts
+∼ 43000 grid points, yielding ∼ 84000 total points
+to analyze. For this dataset and performing the
+computations on an 11th Gen Intel(R) Core(TM)
+i7-1165G7 @ 2.80 GHz (4 cores; 8 logical processors)
+CPU, the method required an average runtime of
+∼ 73 s and a pick of ∼ 0.7 GB of additional resi-
+dent memory. A galaxy group catalog constructed
+by applying GraphShed to this dataset is systemat-
+ically compared with the catalog obtained using the
+Friends‑of‑Friends (FoF) method on the same data
+(Section IV). The comparison focuses on three main
+aspects: the internal structural properties of the
+identified groups, large–scale statistical measures of
+the galaxy groups and clusters, and the dynamical
+classification of interacting systems, including merg-
+ers, accretion events, and flybys.
+Several structural features are examined (Section
+IV A), including the distributions of R200, M200,
+sphericity (Θ), compactness (ζ), spin parameter(λ′)
+and centroid shift ( ∆C), along with two‑sided KS
+tests applied to these distributions. The M200 dis-
+tributions of the GraphShed and FoF groups are sta-
+tistically equivalent, whereas the distributions of the
+remaining parameters exhibit significant differences
+between the two catalogs.
+Large‑scale properties of the resulting group cat-
+alogs are further examined (Section IV B) using the
+TPCF and the MF. The TPCFs obtained from the
+GraphShed and FoF catalogs show differences at
+small separations but display similar trends at larger
+scales. The mass functions also exhibit close overall
+agreement, with discrepancies appearing primarily
+at the high‑mass end.
+Differences between the two catalogs become more
+evident when the dynamical interactions within the
+systems identified in each catalog are examined. To
+interpret these interactions, a velocity‑based clas-
+sification scheme is introduced and applied to the
+GraphShed and FoF group catalogs (Section IV C;
+Appendix A) to identify mergers, accretion events,
+and flybys based on the radial and perpendicu-
+lar components of the mass‑weighted relative ve-
+locities of potential merger candidates (Equation
+(7)). When applied to both catalogs, the classifi-
+cation reveals that GraphShed identifies a substan-
+tially larger number of interacting pairs than FoF.
+This difference is consistent with the interpretation
+that FoF might combine nearby systems undergo-
+ing flyby interactions into a single halo due to posi-
+tional proximity, while GraphShed more frequently
+resolves them as separate interacting structures.
+Overall, the results demonstrate that GraphShed
+provides a robust alternative to traditional group
+finding approaches. The presented analysis indicate
+that the GraphShed group finder:
+• Minimizes parameter–driven uncertainties
+that could affect traditional group–finding ap-
+proaches by avoiding tunable linking lengths
+or density thresholds (Section III).
+• Features computational simplicity, making it
+well suited for applications to large cosmolog-
+ical datasets (Section III).
+• Modifies several internal structural character-
+istics of the identified systems while preserv-
+ing a mass distribution broadly consistent with
+that obtained using the FoF method (Section
+IV A).
+• Introduces differences in the non‑linear regime
+and at the high‑mass end of the TPCF and MF
+of the resulting catalog, while showing simi-
+lar trends to FoF in the large‑scales and linear
+regime (Section IV B).
+• Identifies a significantly larger number of in-
+teracting systems, revealing higher numbers of
+major and minor mergers as well as accretions
+and flybys due to its high sensitivity to varia-
+tions in the density field, which remains hidden
+in position‑only approaches (Section IV C)
+Future applications of GraphShed to observa-
+tional datasets (e.g., [ 24]), larger cosmological sim-
+ulations (e.g., [30, 66]), the effect of different group-
+finders on the outcomes, and comparisons of its re-
+sulting group catalog with those derived from other
+physical density-based approaches (e.g., [45, 73]) will
+enable further assessment of its capability to iden-
+tify galaxy systems, characterize group morphology,
+probe environmental drivers of galaxy evolution, and
+enhance cosmological inferences drawn from studies
+of the cosmic web.
+14
+
+ACKNOWLEDGMENTS
+The authors acknowledge the use of the Illus-
+trisTNG100‑1 simulation database and its associ-
+ated data products, which constitute a valuable
+resource for investigations of large‑scale structure
+and cosmic‑web environments. The GraphShed
+group‑finder introduced in this work will be made
+publicly available in future publications; in the
+meantime, it can be obtained from the authors upon
+reasonable request.
+Appendix A: Mass-Weighted Radial And Perpendicular
+Relative Velocities
+The calculation of the mass-weighted radial and
+perpendicular components of the relative velocity
+proceeds in four steps. First, the velocity vectors of
+the galaxies in each group are used to compute the
+stellar‑mass–weighted mean velocity vector of that
+group:
+⃗Vα =
+∑
+i∈α M ∗
+i ⃗ vi∑
+i∈α Mi
+, ⃗Vβ =
+∑
+j∈β M ∗
+j ⃗ vj
+∑
+j∈β Mj
+(A1)
+where M ∗ and ⃗ vdenote the stellar mass and velocity
+vector of each member galaxy, respectively. The re-
+sulting weighted mean velocity vector of the groups
+are illustrated in the upper-right panel of Figure 6,
+originating from the COM of each group.
+In the second step, the mean weighted velocity
+vectors of the groups are transformed to the rest
+frame of the pair. This is achieved by first comput-
+ing the stellar-mass–weighted mean velocity of the
+combined system:
+⃗Vαβ =
+∑
+l∈α,β M ∗
+l ⃗ vl
+∑
+l∈α,β Ml
+(A2)
+and then subtracting this velocity vector from the
+group’s weighted mean velocity vectors to obtain
+their velocities relative to the pair rest frame:
+⃗Vα = ⃗Vα − ⃗Vαβ, ⃗Vβ = ⃗Vβ − ⃗Vαβ. (A3)
+These relative velocity vectors are shown in the
+middle-right panel of Figure6, drawn from the COM
+of each group.
+In the third step, radial unit vectors are defined
+from the COM of each group ( ⃗ rα
+C , ⃗ rβ
+C ) toward the
+COM of the combined system (⃗ rαβ
+C ):
+ˆτα = ⃗ rαβ
+C − ⃗ rα
+C
+|⃗ rαβ
+C − ⃗ rα
+C |
+, ˆτβ = ⃗ rαβ
+C − ⃗ rβ
+C
+|⃗ rαβ
+C − ⃗ rβ
+C |
+(A4)
+The radial components of the relative velocity vec-
+tors are then obtained by:
+V∥
+α = ⃗Vα · ˆτα, V∥
+β = ⃗Vβ · ˆτβ (A5)
+and the perpendicular components are defined as:
+V⊥
+α = |⃗Vα − V∥
+α ˆτα|, V⊥
+β = |⃗Vβ − V∥
+β ˆτβ|. (A6)
+Having obtained the radial and perpendicular
+components for both groups, the fourth step is to
+compute the mass-weighted relative velocities of the
+pair. The weighted radial relative velocity is defined
+as:
+V∥ =
+M α
+200V∥
+α + M β
+200V∥
+β
+M α
+200 + M β
+200
+(A7)
+and the weighted perpendicular relative velocity is
+given by:
+V⊥ =
+|M α
+200V⊥
+α − M β
+200V⊥
+β |
+M α
+200 + M β
+200
+. (A8)
+Here the weighting is performed using the group
+masses M200 in order to reduce the influence of small
+systems with unusually high velocities (e.g., flybys),
+ensuring that the contribution of each group to the
+relative velocity is based on its mass.
+[1] Ade, P. A., Aghanim, N., Arnaud, M., Ashdown,
+M., Aumont, J., Baccigalupi, C., Banday, A., Bar-
+reiro, R., Bartlett, J., Bartolo, N., et al. (2016).
+Planck 2015 results-xiii. cosmological parameters.
+Astronomy & Astrophysics, 594:A13.
+[2] Aghanim, N., Akrami, Y., Ashdown, M., Aumont,
+J., Baccigalupi, C., Ballardini, M., Banday, A. J.,
+Barreiro, R., Bartolo, N., Basak, S., et al. (2020).
+Planck 2018 results-vi. cosmological parameters. As-
+tronomy & Astrophysics, 641:A6.
+15
+
+[3] Andrade-Santos, F., Jones, C., Forman, W. R.,
+Murray, S. S., Kraft, R. P., Vikhlinin, A., Weeren,
+R. J. v., Nulsen, P. E., David, L. P., Dawson, W. A.,
+et al. (2015). Chandra and xmm-newton obser-
+vations of the bimodal planck sz-detected cluster
+plckg345. 40-39.34 (a3716) with high and low en-
+tropy subcluster cores. The Astrophysical Journal,
+803(2):108.
+[4] Ansarifard, S. et al. (2020a). The Three Hundred
+Project: Correcting for the hydrostatic-equilibrium
+mass bias in X-ray and SZ surveys. Astron. Astro-
+phys., 634:A113.
+[5] Ansarifard, S., Rasia, E., Biﬀi, V., Borgani, S., Cui,
+W., De Petris, M., Dolag, K., Ettori, S., Movahed,
+S., Murante, G., et al. (2020b). The three hundred
+project: Correcting for the hydrostatic-equilibrium
+mass bias in x-ray and sz surveys. Astronomy &
+Astrophysics, 634:A113.
+[6] Aragón-Calvo, M. A., Jones, B. J., Van De Wey-
+gaert, R., and Van Der Hulst, J. (2007). The multi-
+scale morphology filter: identifying and extracting
+spatial patterns in the galaxy distribution. Astron-
+omy & Astrophysics, 474(1):315–338.
+[7] Artis, E., Bulbul, E., Grandis, S., Ghirardini, V.,
+Clerc, N., Seppi, R., Comparat, J., Cataneo, M.,
+Von Der Linden, A., Bahar, Y., et al. (2025). The
+srg/erosita all-sky survey-constraints on the struc-
+ture growth from cluster number counts. Astronomy
+& Astrophysics, 696:A5.
+[8] Aurenhammer, F. (1991). Voronoi diagrams—a
+survey of a fundamental geometric data structure.
+ACM computing surveys (CSUR), 23(3):345–405.
+[9] Barber, C. B., Dobkin, D. P., and Huhdanpaa,
+H. (1996). The quickhull algorithm for convex
+hulls. ACM Transactions on Mathematical Software
+(TOMS), 22(4):469–483.
+[10] Barrow, J. D., Bhavsar, S. P., and Sonoda, D.
+(1985). Minimal spanning trees, filaments and
+galaxy clustering. Monthly Notices of the Royal As-
+tronomical Society, 216(1):17–35.
+[11] Berlind, A. A., Frieman, J., Weinberg, D. H., Blan-
+ton, M. R., Warren, M. S., Abazajian, K., Scranton,
+R., Hogg, D. W., Scoccimarro, R., Bahcall, N. A.,
+et al. (2006). Percolation galaxy groups and clusters
+in the sdss redshift survey: identification, catalogs,
+and the multiplicity function. The Astrophysical
+Journal Supplement Series, 167(1):1–25.
+[12] Bernardeau, F., Colombi, S., Gaztañaga, E., and
+Scoccimarro, R. (2002). Large-scale structure of
+the universe and cosmological perturbation theory.
+Physics reports, 367(1-3):1–248.
+[13] Bett, P., Eke, V., Frenk, C. S., Jenkins, A., Helly,
+J., and Navarro, J. (2007). The spin and shape of
+dark matter haloes in the millennium simulation of
+a λ cold dark matter universe. Monthly Notices of
+the Royal Astronomical Society, 376(1):215–232.
+[14] Beucher, S. (1979). Use of watersheds in contour
+detection. In Proc. Int. Workshop on Image Pro-
+cessing, Sept. 1979, pages 17–21.
+[15] Blanchard, A., Camera, S., Carbone, C., Car-
+done, V., Casas, S., Clesse, S., Ilić, S., Kilbinger,
+M., Kitching, T., Kunz, M., et al. (2020). Eu-
+clid preparation-vii. forecast validation for euclid
+cosmological probes. Astronomy & Astrophysics,
+642:A191.
+[16] Bocquet, S., Grandis, S., Bleem, L., Klein, M.,
+Mohr, J., Schrabback, T., Abbott, T., Ade, P.,
+Aguena, M., Alarcon, A., et al. (2024). Spt clus-
+ters with des and hst weak lensing. ii. cosmological
+constraints from the abundance of massive halos.
+Physical Review D, 110(8):083510.
+[17] Bocquet, S., Saro, A., Dolag, K., and Mohr, J. J.
+(2016). Halo mass function: baryon impact, fitting
+formulae, and implications for cluster cosmology.
+Monthly Notices of the Royal Astronomical Society,
+456(3):2361–2373.
+[18] Bond, J. R., Kofman, L., and Pogosyan, D. (1996).
+How filaments of galaxies are woven into the cosmic
+web. Nature, 380(6575):603–606.
+[19] Boylan-Kolchin, M., Springel, V., White, S. D.,
+Jenkins, A., and Lemson, G. (2009). Resolving cos-
+mic structure formation with the millennium-ii sim-
+ulation. Monthly Notices of the Royal Astronomical
+Society, 398(3):1150–1164.
+[20] Bullock, J. S., Dekel, A., Kolatt, T. S., Kravtsov,
+A. V., Klypin, A. A., Porciani, C., and Primack,
+J. R. (2001). A universal angular momentum pro-
+file for galactic halos. The Astrophysical Journal,
+555(1):240–257.
+[21] Cautun, M., van de Weygaert, R., and Jones, B. J.
+(2013). Nexus: tracing the cosmic web connection.
+Monthly Notices of the Royal Astronomical Society,
+429(2):1286–1308.
+[22] Chiu, I.-N., Klein, M., Mohr, J., and Bocquet, S.
+(2023). Cosmological constraints from galaxy clus-
+ters and groups in the erosita final equatorial depth
+survey. Monthly Notices of the Royal Astronomical
+Society, 522(2):1601–1642.
+[23] Cohen, J. and Hickey, T. (1979). Two algorithms for
+determining volumes of convex polyhedra. Journal
+of the ACM (JACM), 26(3):401–414.
+[24] collaboration, D., Adame, A., Aguilar, J., Ahlen, S.,
+Alam, S., Aldering, G., Alexander, D., Alfarsy, R.,
+Allende Prieto, C., Alvarez, M., et al. (2024). The
+early data release of the dark energy spectroscopic
+instrument. The Astronomical Journal, 168(2):58.
+[25] Colless, M., Dalton, G., Maddox, S., Sutherland,
+W., Norberg, P., Cole, S., Bland-Hawthorn, J.,
+Bridges, T., Cannon, R., Collins, C., et al. (2001).
+The 2df galaxy redshift survey: spectra and red-
+shifts. Monthly Notices of the Royal Astronomical
+Society, 328(4):1039–1063.
+[26] Contreras-Santos, A., Knebe, A., Pearce, F., Hag-
+gar, R., Gray, M., Cui, W., Yepes, G., De Petris,
+M., De Luca, F., Power, C., et al. (2022). The three
+hundred project: galaxy cluster mergers and their
+impact on the stellar component of brightest cluster
+galaxies. Monthly Notices of the Royal Astronomi-
+16
+
+cal Society, 511(2):2897–2913.
+[27] Croton, D. J., Gao, L., and White, S. D. (2007).
+Halo assembly bias and its effects on galaxy clus-
+tering. Monthly Notices of the Royal Astronomical
+Society, 374(4):1303–1309.
+[28] Davis, M., Efstathiou, G., Frenk, C. S., and White,
+S. D. (1985). The evolution of large-scale structure
+in a universe dominated by cold dark matter. As-
+trophysical Journal, Part 1 (ISSN 0004-637X), vol.
+292, May 15, 1985, p. 371-394. Research supported
+by the Science and Engineering Research Council of
+England and NASA., 292:371–394.
+[29] Davis, M., Huchra, J., Latham, D. W., and Tonry,
+J. (1982). A survey of galaxy redshifts. ii-the large
+scale space distribution. Astrophysical Journal, Part
+1, vol. 253, Feb. 15, 1982, p. 423-445., 253:423–445.
+[30] Dolag, K., Remus, R.-S., Valenzuela, L. M., Kim-
+mig, L. C., Seidel, B., Fortune, S., Stoiber, J.,
+Ivleva, A., Hoffmann, T., Biﬀi, V., et al. (2025).
+Encyclopedia magneticum: Scaling relations from
+cosmic dawn to present day. arXiv preprint
+arXiv:2504.01061.
+[31] Dougherty, E. (1992). Mathematical morphology in
+image processing. CRC press.
+[32] Dragomir, R., Rodríguez-Puebla, A., Primack,
+J. R., and Lee, C. T. (2018). Does the galaxy–halo
+connection vary with environment? Monthly No-
+tices of the Royal Astronomical Society, 476(1):741–
+758.
+[33] Epinat, B., Contini, T., Mercier, W., Ciesla, L.,
+Lemaux, B. C., Johnson, S., Richard, J., Brinch-
+mann, J., Boogaard, L. A., Carton, D., et al. (2024).
+Magic: Muse galaxy groups in cosmos–a survey to
+probe the impact of environment on galaxy evolu-
+tion over the last 8 gyr. Astronomy & Astrophysics,
+683:A205.
+[34] Ertöz, L., Steinbach, M., and Kumar, V. (2003).
+Finding clusters of different sizes, shapes, and den-
+sities in noisy, high dimensional data. In Proceed-
+ings of the 2003 SIAM international conference on
+data mining, pages 47–58. SIAM.
+[35] Ester, M., Kriegel, H.-P., Sander, J., Xu, X., et al.
+(1996). A density-based algorithm for discovering
+clusters in large spatial databases with noise. In
+kdd, volume 96, pages 226–231.
+[36] Falck, B. L., Neyrinck, M. C., and Szalay, A. S.
+(2012). Origami: delineating halos using phase-
+space folds. The Astrophysical Journal, 754(2):126.
+[37] Fan, K. (1984). Some properties of convex sets re-
+lated to fixed point theorems. Mathematische An-
+nalen, 266(4):519–537.
+[38] Fernandez, J., Alonso, S., Mesa, V., and Duplancic,
+F. (2024). Revealing ringed galaxies in group envi-
+ronments. Astronomy & Astrophysics, 683:A32.
+[39] Genel, S., Bouché, N., Naab, T., Sternberg, A., and
+Genzel, R. (2010). The growth of dark matter ha-
+los: evidence for significant smooth accretion. The
+Astrophysical Journal, 719(1):229–239.
+[40] Ghafour, P. and Tavasoli, S. (2025). Gravipast’s lens
+to the past: Unveiling the evolution of filamentary
+structures. The Astrophysical Journal, 990(2):119.
+[41] Ghafour, P., Tavasoli, S., and Shojaei, M. R. (2025).
+Vega: Voids identification using genetic algorithm.
+Journal of Cosmology and Astroparticle Physics,
+2025(12):001.
+[42] Graham, M. T. and Cappellari, M. (2023). A group
+finder algorithm optimised for the study of local
+galaxy environments. Astronomy & Astrophysics,
+675:A161.
+[43] Gurzadyan, V., Fimin, N., and Chechetkin, V.
+(2025). Cosmic voids and the kinetic analysis-iv.
+hubble tension and the cosmological constant. As-
+tronomy & Astrophysics, 694:A252.
+[44] Guth, A. H. (1981). Inflationary universe: A pos-
+sible solution to the horizon and flatness problems.
+Physical Review D, 23(2):347.
+[45] Hahn, O., Porciani, C., Carollo, C. M., and Dekel,
+A. (2007). Properties of dark matter haloes in clus-
+ters, filaments, sheets and voids. Monthly Notices
+of the Royal Astronomical Society, 375(2):489–499.
+[46] Hetznecker, H. and Burkert, A. (2006). The evolu-
+tion of the dark halo spin parameters λ and λ￿ in a
+λcdm universe: the role of minor and major mergers.
+Monthly Notices of the Royal Astronomical Society,
+370(4):1905–1914.
+[47] Hong, S., Coutinho, B. C., Dey, A., Barabási, A.-
+L., Vogelsberger, M., Hernquist, L., and Gebhardt,
+K. (2016). Discriminating topology in galaxy distri-
+butions using network analysis. Monthly Notices of
+the Royal Astronomical Society, 459(3):2690–2700.
+[48] Hong, S. and Dey, A. (2015). Network analysis of
+cosmic structures: network centrality and topologi-
+cal environment. Monthly Notices of the Royal As-
+tronomical Society, 450(2):1999–2015.
+[49] Huchra, J. and Geller, M. (1982). Groups of galax-
+ies. i-nearby groups. Astrophysical Journal, Part 1,
+vol. 257, June 15, 1982, p. 423-437. Research sup-
+ported by Cambridge University., 257:423–437.
+[50] Jarvis, R. A. and Patrick, E. A. (2006). Clus-
+tering using a similarity measure based on shared
+near neighbors. IEEE Transactions on computers,
+100(11):1025–1034.
+[51] Jones, C. and Forman, W. (1999). Einstein observa-
+tory images of clusters of galaxies. The Astrophysi-
+cal Journal, 511(1):65–83.
+[52] Jones, C., Forman, W., and Fabian, A. (1992). Clus-
+ters and superclusters of galaxies. by AC Fabian
+(Kluwer, Dordrecht, 1992), NATO Adv. Sci. Inst.
+Ser. C, 366:49.
+[53] Kang, X., Jing, Y., Mo, H., and Börner, G. (2005).
+Semianalytical model of galaxy formation with high-
+resolution n-body simulations. The Astrophysical
+Journal, 631(1):21–40.
+[54] Knebe, A., Pearce, F. R., Lux, H., Ascasibar, Y.,
+Behroozi, P., Casado, J., Moran, C. C., Diemand,
+J., Dolag, K., Dominguez-Tenreiro, R., et al. (2013).
+Structure finding in cosmological simulations: the
+state of affairs. Monthly Notices of the Royal As-
+17
+
+tronomical Society, 435(2):1618–1658.
+[55] Korytov, D., Rangel, E., Bleem, L., Frontiere, N.,
+Habib, S., Heitmann, K., Hollowed, J., and Pope, A.
+(2023). Modeling the galaxy distribution in clusters
+using halo cores. arXiv preprint arXiv:2302.04194.
+[56] Levis, S., Coenda, V., Muriel, H., de los Rios, M.,
+Ragone-Figueroa, C., Martínez, H. J., and Ruiz,
+A. N. (2025). Galaxy evolution in groups: Tran-
+sition galaxies in the illustristng simulations. As-
+tronomy & Astrophysics, 698:A57.
+[57] Libeskind, N. I., Van De Weygaert, R., Cautun,
+M., Falck, B., Tempel, E., Abel, T., Alpaslan, M.,
+Aragón-Calvo, M. A., Forero-Romero, J. E., Gon-
+zalez, R., et al. (2018). Tracing the cosmic web.
+Monthly Notices of the Royal Astronomical Society,
+473(1):1195–1217.
+[58] Liddle, A. R. and Lyth, D. H. (1993). The cold
+dark matter density perturbation. Physics Reports,
+231(1-2):1–105.
+[59] Marini, I., Popesso, P., Dolag, K., Bravo, M.,
+Robotham, A., Tempel, E., Li, Q., Yang, X., Csizi,
+B., Behroozi, P., et al. (2025). Detecting clusters
+and groups of galaxies populating the local universe
+in large optical spectroscopic surveys. Astronomy &
+Astrophysics, 694:A207.
+[60] Marshall, P., Anguita, T., Bianco, F. B., Bellm,
+E. C., Brandt, N., Clarkson, W., Connolly, A., Ga-
+wiser, E., Ivezic, Z., Jones, L., et al. (2017). Science-
+driven optimization of the lsst observing strategy.
+arXiv preprint arXiv:1708.04058.
+[61] Massey Jr, F. J. (1951). The kolmogorov-smirnov
+test for goodness of fit. Journal of the American
+statistical Association, 46(253):68–78.
+[62] Masson, F. and Parker, L. C. (2026). Calibrating
+galaxy infall times in groups and clusters with il-
+lustristng simulations. The Astrophysical Journal,
+1000(2):194.
+[63] More, S., Kravtsov, A. V., Dalal, N., and Gottlöber,
+S. (2011). The overdensity and masses of the friends-
+of-friends halos and universality of halo mass func-
+tion. The Astrophysical Journal Supplement Series,
+195(1):4.
+[64] Nelson, D., Pillepich, A., Genel, S., Vogelsberger,
+M., Springel, V., Torrey, P., Rodriguez-Gomez, V.,
+Sijacki, D., Snyder, G. F., Griffen, B., et al. (2015).
+The illustris simulation: Public data release. As-
+tronomy and Computing, 13:12–37.
+[65] Nelson, D., Springel, V., Pillepich, A., Rodriguez-
+Gomez, V., Torrey, P., Genel, S., Vogelsberger,
+Pakmor, R., Marinacci, F., Weinberger, R., et al.
+(2019). The illustristng simulations: public data re-
+lease. Computational Astrophysics and Cosmology,
+6:1–29.
+[66] Pakmor, R., Springel, V., Coles, J. P., Guillet,
+T., Pfrommer, C., Bose, S., Barrera, M., Del-
+gado, A. M., Ferlito, F., Frenk, C., et al. (2023).
+The millenniumtng project: the hydrodynamical full
+physics simulation and a first look at its galaxy clus-
+ters. Monthly Notices of the Royal Astronomical
+Society, 524(2):2539–2555.
+[67] Peebles, P. (1973). Statistical analysis of catalogs of
+extragalactic objects. i. theory. Astrophysical Jour-
+nal, Vol. 185, pp. 413-440 (1973), 185:413–440.
+[68] Peebles, P. J. (1969). Origin of the angular momen-
+tum of galaxies. Astrophysical Journal, vol. 155, p.
+393, 155:393.
+[69] Peebles, P. J. E. (2020). The large-scale structure of
+the universe, volume 96. Princeton university press.
+[70] Peterson, E. R., Carreres, B., Carr, A., Scolnic, D.,
+Bailey, A., Davis, T. M., Brout, D., Howlett, C.,
+Jones, D. O., Riess, A. G., et al. (2025). Improving
+the determination of supernova cosmological red-
+shifts by using galaxy groups. The Astrophysical
+Journal, 980(1):21.
+[71] Pizzardo, M., Geller, M. J., Kenyon, S. J., Dam-
+janov, I., and Diaferio, A. (2023). An illustristng
+view of the caustic technique for galaxy cluster mass
+estimation. Astronomy & Astrophysics, 675:A56.
+[72] Platen, E., Van De Weygaert, R., and Jones, B. J.
+(2007). A cosmic watershed: the wvf void detection
+technique. Monthly notices of the royal astronomical
+society, 380(2):551–570.
+[73] Pomarede, D., Hoffman, Y., Courtois, H. M., and
+Tully, R. B. (2017). The cosmic v-web. The Astro-
+physical Journal, 845(1):55.
+[74] Poole, G. B., Fardal, M. A., Babul, A., McCarthy,
+I. G., Quinn, T., and Wadsley, J. (2006). The im-
+pact of mergers on relaxed x-ray clusters–i. dynam-
+ical evolution and emergent transient structures.
+Monthly Notices of the Royal Astronomical Society,
+373(3):881–905.
+[75] Pranav, P. (2021). Topology and geometry of gaus-
+sian random fields ii: on critical points, excur-
+sion sets, and persistent homology. arXiv preprint
+arXiv:2109.08721.
+[76] Pranav, P., Van de Weygaert, R., Vegter, G.,
+Jones, B. J., Adler, R. J., Feldbrugge, J., Park,
+C., Buchert, T., and Kerber, M. (2019). Topology
+and geometry of gaussian random fields i: On betti
+numbers, euler characteristic, and minkowski func-
+tionals. Monthly Notices of the Royal Astronomical
+Society, 485(3):4167–4208.
+[77] Seppi, R., Comparat, J., Ghirardini, V., Garrel, C.,
+Artis, E., Sanchez, A., Liu, A., Clerc, N., Bulbul,
+E., Grandis, S., et al. (2024). The srg/erosita all-
+sky survey-tracing the large-scale structure with a
+clustering study of galaxy clusters. Astronomy &
+Astrophysics, 686:A196.
+[78] Shandarin, S. F. and Zeldovich, Y. B. (1989).
+The large-scale structure of the universe: Turbu-
+lence, intermittency, structures in a self-gravitating
+medium. Reviews of Modern Physics, 61(2):185.
+[79] Shin, T.-h., Jain, B., Adhikari, S., Baxter, E. J.,
+Chang, C., Pandey, S., Salcedo, A., Weinberg, D.,
+Amsellem, A., Battaglia, N., et al. (2021). The mass
+and galaxy distribution around sz-selected clusters.
+Monthly Notices of the Royal Astronomical Society,
+507(4):5758–5779.
+18
+
+[80] Smoot, G. F., Bennett, C. L., Kogut, A., Wright,
+E. L., Aymon, J., Boggess, N. W., Cheng, E. S.,
+De Amici, G., Gulkis, S., Hauser, M. G., et al.
+(1992). Structure in the cobe differential microwave
+radiometer first-year maps. Astrophysical Journal,
+Part 2-Letters (ISSN 0004-637X), vol. 396, no. 1,
+Sept. 1, 1992, p. L1-L5. Research supported by
+NASA., 396:L1–L5.
+[81] Sousbie, T., Pichon, C., and Kawahara, H. (2011).
+The persistent cosmic web and its filamentary
+structure–ii. illustrations. Monthly Notices of the
+Royal Astronomical Society, 414(1):384–403.
+[82] Spergel, D. N., Verde, L., Peiris, H. V., Komatsu,
+E., Nolta, M., Bennett, C. L., Halpern, M., Hin-
+shaw, G., Jarosik, N., Kogut, A., et al. (2003). First-
+year wilkinson microwave anisotropy probe (wmap)
+observations: determination of cosmological param-
+eters. The Astrophysical Journal Supplement Series,
+148(1):175–194.
+[83] Springel, V. (2010). E pur si muove: Galilean-
+invariant cosmological hydrodynamical simulations
+on a moving mesh. Monthly Notices of the Royal
+Astronomical Society, 401(2):791–851.
+[84] Springel, V., White, S. D., Jenkins, A., Frenk, C. S.,
+Yoshida, N., Gao, L., Navarro, J., Thacker, R., Cro-
+ton, D., Helly, J., et al. (2005). Simulations of the
+formation, evolution and clustering of galaxies and
+quasars. nature, 435(7042):629–636.
+[85] Springel, V., White, S. D., Tormen, G., and Kauff-
+mann, G. (2001). Populating a cluster of galaxies–i.
+results at z= 0. Monthly Notices of the Royal As-
+tronomical Society, 328(3):726–750.
+[86] Stoughton, C., Lupton, R. H., Bernardi, M., Blan-
+ton, M. R., Burles, S., Castander, F. J., Connolly,
+A., Eisenstein, D. J., Frieman, J. A., Hennessy, G.,
+et al. (2002). Sloan digital sky survey: early data
+release. The Astronomical Journal, 123(1):485–548.
+[87] Tavasoli, S. and Ghafour, P. (2025). The filament
+rift: λcdm’s structural challenge against observa-
+tion. The Astrophysical Journal, 994(2):219.
+[88] Tavasoli, S. and Ghafour, P. (2026). Cosmic en-
+vironment as the primary driver of dwarf satellite
+statistics. Astronomy & Astrophysics.
+[89] Tomita, K. (1967). Non-linear theory of grav-
+itational instability in the expanding universe.
+Progress of Theoretical Physics, 37(5):831–846.
+[90] Virtanen, P., Gommers, R., Oliphant, T. E., Haber-
+land, M., Reddy, T., Cournapeau, D., Burovski,
+E., Peterson, P., Weckesser, W., Bright, J., et al.
+(2020). Scipy 1.0: fundamental algorithms for
+scientific computing in python. Nature methods,
+17(3):261–272.
+[91] Wang, J., Yang, X., Zhang, J., Li, H., Fong, M.,
+Xu, H., He, M., Gu, Y., Luo, W., Dong, F.,
+et al. (2022). Halo properties and mass functions
+of groups/clusters from the desi legacy imaging sur-
+veys dr9. The Astrophysical Journal, 936(2):161.
+[92] Wiersma, R. P., Schaye, J., and Smith, B. D. (2009).
+The effect of photoionization on the cooling rates of
+enriched, astrophysical plasmas. Monthly Notices of
+the Royal Astronomical Society, 393(1):99–107.
+[93] Yang, X., Mo, H., and van den Bosch, F. C. (2008).
+Galaxy groups in the sdss dr4. ii. halo occupation
+statistics. The Astrophysical Journal, 676(1):248–
+261.
+[94] Yoo, J., Shin, J., Hwang, H. S., Sabiu, C. G., Kim,
+H., Ko, J., and Lee, J. C. (2025). Tracing dark
+matter in the central regions of galaxy clusters us-
+ing galaxies, gas, and intracluster light in tng300:
+Connections to cluster dynamical state. The Astro-
+physical Journal, 988(2):229.
+19

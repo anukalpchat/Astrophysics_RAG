@@ -1,0 +1,2927 @@
+Title: cBHBd: A fast code for the evolution of tidally limited star clusters and their binary black hole mergers
+Authors: Fotios Fronimos Pouliasis, Nolan Dickson, Daniel Marín Pina, Mark Gieles, Vincent Hénault-Brunet, Fabio Antonini
+Published: 2026-05-27
+Categories: astro-ph.GA
+
+Astronomy&Astrophysicsmanuscript no. andaa©ESO 2026
+May 28, 2026
+cBHBd: A fast code for the evolution of tidally limited star clusters
+and their binary black hole mergers
+Fotios Fronimos Pouliasis 1, Nolan Dickson 2, Daniel Marín Pina 1,3,4 , Mark Gieles 1,3,5 , Vincent
+Hénault-Brunet 2, and Fabio Antonini6
+1 Institut de Ciències del Cosmos (ICCUB), Universitat de Barcelona (UB), c. Martí i Franqués, 1, 08028 Barcelona, Spain
+2 Department of Astronomy and Physics, Saint Mary’s University, 923 Robie Street, Halifax, NS B3H 3C3, Canada
+3 Institut d’Estudis Espacials de Catalunya (IEEC), Edifici RDIT, Campus UPC, 08860 Castelldefels (Barcelona), Spain
+4 Zentrum für Astronomie der Universität Heidelberg, Institut für Theoretische Astrophysik, Albert-Ueberle-Str. 2, 69120 Heidelberg
+5 ICREA, Pg. Lluís Companys 23, E08010 Barcelona, Spain
+6 Gravity Exploration Institute, School of Physics and Astronomy, CardiffUniversity, CardiffCF24 3AA, UK
+Received XXXXX; accepted YYYYY
+ABSTRACT
+Context.The evolution of star clusters is driven by internal and external mechanisms, including stellar mass loss, two-body relaxation,
+and evaporation in the Galactic tidal field. Fast modeling tools are crucial for exploring diverse initial conditions and predicting cluster
+population properties and their contribution to gravitational wave (GW) sources over cosmic timescales.
+Aims.We present an improved version of theclusterBHBdynamics(cBHBd) code, designed to evolve star clusters consisting of stars
+and stellar-mass black holes (BHs). Regarding cluster evolution, we improve the description of evaporation in the Galactic tidal field
+and add the effect of different metallicities and different stellar mass functions. For the GW part, we add a new prescription for GW
+captures occurring in BBH-BBH interactions and for GW captures in between resonant interactions due to distant encounters that
+increase the eccentricity of the BBH.
+Methods.The updated version ofcBHBdis validated against a suite of Cluster Monte Carlo (cmc) models for different initial cluster
+masses, radii, metallicities, and Galactic orbits. We also compare to a suite ofN-body simulations and the GW predictions are
+compared to the BBH mergers in thecmcmodels andN-body simulations from literature.
+Results.Seven parameters of thecBHBdmodel are fitted to thecmcresults with nested sampling. With the best-fit values, the evolution
+of the total cluster mass, half-mass radius, and the mass of the BH population over 13 Gyr are reproduced to within∼10%. With the
+new GW capture recipes,cBHBdnow reproduces the BBH merger rate found in thecmcmodels of massive clusters (≳10 5 M⊙) and
+in directN-body models of lower mass clusters (≲10 5 M⊙), to within∼20%.
+Conclusions.The improvedcBHBdprovides a fast and efficient tool for modeling cluster evolution, capturing essential dynamical
+effects while maintaining flexibility and scalability for large-scale star cluster population studies. With a typical runtime of one second
+per cluster,cBHBdenables iterative applications such as the search for initial conditions of globular clusters (GCs), the modeling of
+stellar streams and GW population synthesis.
+Key words.Gravitational waves; Black hole physics; Stars: kinematics and dynamics; globular clusters: general
+1. Introduction
+Globular clusters (GCs) serve as unique laboratories for un-
+derstanding stellar dynamics, black hole (BH) populations, and
+gravitational wave (GW) sources. Their dense stellar environ-
+ments lead to complex dynamical interactions that shape their
+long-term evolution and influence the formation and retention
+of BHs (Strader et al. 2012; Giesers et al. 2018). While young
+massive clusters (YMCs) with similar masses as GCs are known
+(Portegies Zwart et al. 2010; Krumholz et al. 2019), they are not
+as dense as proto-GCs recently found at high redshift (Adamo
+et al. 2024). Recent observations with the James Webb Space
+Telescope (JWST) may point to signatures of GC formation at
+high redshift (Vanzella et al. 2022; Cameron et al. 2023; Char-
+bonnel et al. 2023) and connecting these observations to GCs in
+the Local Universe requires detailed dynamical modeling. De-
+spite progress in simulations (Wang et al. 2020; Grudi ´c et al.
+2023; Lahén et al. 2024; Barber & Antonini 2025), fully self-
+consistent modeling of GC formation and evolution remains
+computationally challenging.
+A fast evolution code is crucial for various astrophysical ap-
+plications. The main advantage over more detailed and compu-
+tationally expensive methods (such as Monte Carlo or directN-
+body simulations) lies in enabling large-scale parameter space
+explorations. With runtimes of order seconds per cluster, one can
+systematically vary initial conditions—such as cluster mass, ra-
+dius, metallicity, and galactic orbit—and study the impact of un-
+certain physical processes (e.g., stellar winds, supernovae, dy-
+namical friction) on the resulting populations of GW sources.
+GCs may contribute significantly to GW sources involving mas-
+sive BHs, because dynamical interactions in dense stellar envi-
+ronments can lead to BBH formation, hardening, and eventual
+coalescence (e.g., Portegies Zwart & McMillan 2000; Rodriguez
+et al. 2016; Samsing et al. 2018). Accurate and efficient models
+of cluster evolution are therefore essential for understanding the
+contribution of GCs to the observed GW event rate, particularly
+in the context of population synthesis studies.
+The evolution of clusters as the result of various processes
+can be captured by simple scaling relations (Fall & Rees 1977;
+Article number, page 1 of 24
+arXiv:2605.28088v1  [astro-ph.GA]  27 May 2026
+
+A&A proofs:manuscript no. andaa
+Gnedin & Ostriker 1997). Gieles et al. (2011) presented ana-
+lytic expressions for the evolution of the cluster mass and half-
+mass radius of tidally limited clusters. It describes the initial ex-
+pansion by using Hénon’s model of an isolated cluster (Hénon
+1965) and the evaporation phase at constant density at late stages
+by Hénon’s model for a cluster filling its tidal radius (Hénon
+1961). This simple model formed the base foremacss, a fast
+model for cluster evolution, which efficiently models the evo-
+lution of tidally limited GCs (Alexander & Gieles 2012; Gieles
+et al. 2014; Alexander et al. 2014).emacssdoes not consider
+the effect of BHs, which can greatly affect the dynamical evo-
+lution of clusters (Breen & Heggie 2013) and this was the mo-
+tivation to developclusterBH (Antonini & Gieles 2020b, here-
+after AG20).clusterBH includes the additional effect of BHs
+on the dynamical evolution, based on the theory presented in
+Breen & Heggie (2013). Combined with a description for the
+dynamics of the BBHs (BHBdynamics, AG20), the combined
+clusterBH+BHBdynamicscode (cBHBd 1) is a fast evolution
+code designed for population synthesis modeling of dynamically
+formed BBH mergers in evolving clusters. It has been used for
+population synthesis inference of the gravitational wave transient
+catalogs 2 and 3 (GWTC2, GWTC3, Antonini & Gieles 2020a;
+Antonini et al. 2023, respectively), from which it was found
+that dynamics is particularly efficient in producing massive BBH
+mergers (with primary masses≳30M ⊙, see also Antonini et al.
+2025). The differences betweenclusterBH andemacssare dis-
+cussed in Appendix A.
+In recent years, other fast codes have been developed and
+presented in literature. The cluster evolution in the fast coderap-
+ster(Kritos et al. 2023; Ng et al. 2023; Antonelli et al. 2023;
+Kritos et al. 2024) is based on similar input physics asclus-
+terBH, and also follows the GW inspiral and BBH dynamics
+in a similar way as BHBdynamics, as well as the growth of a
+central BH (see also Antonini et al. 2019). Other codes, such as
+fastcluster(Mapelli et al. 2021, 2022),b-pop(Arca Sedda et al.
+2023) andqluster(Gerosa & Mould 2023) are BBH popula-
+tion synthesis codes that focus on the formation and evolution of
+BBH mergers without, or simplified, evolution of the cluster.
+This paper examines the dynamical evolution of GCs from
+a macroscopic perspective. The main concept was introduced
+in AG20, where thecBHBdmodel was developed to describe
+the evolution of isolated GCs containing a stellar-mass BHs. Al-
+though the framework allowed the initial BH masses to vary with
+metallicity the evolution of the cluster model was obtained for a
+single metallicity value ([Fe/H]≃ −1.5) and the cluster was as-
+sumed to evolve in isolation (AG20) or have a constant mass
+loss rate due to the tidal field (Antonini et al. 2023). By focusing
+on macroscopic properties such as the total stellar mass (M ∗),
+total mass of the BH population (M BH), and the half-mass ra-
+dius (rh),cBHBdefficiently captured the long-term evolution of
+such systems without resolving individual stars while enabling
+broader applications across different cluster environments and
+initial conditions. Building on this foundation, we extend the
+model to include the effects of an external tidal field to improve
+the mass loss of the previous version and generalize it to different
+metallicities and initial mass functions (IMFs) for the cluster’s
+evolution.
+Our goal is to develop a fast evolution code that delivers re-
+sults with acceptable loss of accuracy compared to more compu-
+tationally intensive methods (Makino & Aarseth 1992; Aarseth
+1999; Nitadori & Aarseth 2012; Wang et al. 2015, 2016, 2020)
+in a computing time of the order of a second. By modeling two-
+1 cBHBdis available at https://github.com/cBHBd/cBHBd.
+component clusters consisting of stellar-mass BHs and stars,
+we aim to capture the key dynamical processes that drive clus-
+ter evolution. BHs significantly influence cluster expansion and
+mass loss by segregating rapidly to the cluster core and transfer-
+ring energy to the outer regions through relaxation.
+To test the capabilities of the updatedcBHBd, we compare
+its predictions to Cluster Monte Carlo (cmc) models of massive
+GCs (≳10 5 M⊙) with different metallicities [Fe/H] (Freitag &
+Benz 2001, 2002; Rodriguez et al. 2015; Rodriguez et al. 2018;
+Kremer et al. 2018; Zevin et al. 2019; Kremer et al. 2020).cmcis
+a code that uses the Monte Carlo method (Hénon 1971) to evolve
+a cluster. This approach allows to encompass a wide range of
+cluster masses and initial conditions within a tidal field.cBHBd
+is also compared to lower massN-body models from literature
+(Gieles et al. 2021; Banerjee 2021; Barber & Antonini 2025).
+cBHBdcomputes the dynamical formation and evolution of
+BBHs in stellar environments using semi-analytic prescriptions
+for BBH formation and hardening. It includes the formation of
+BBHs with arbitrary mass ratiosq=m 2/m1 withm 2 ≤m 1,
+allowing for realistic modeling of mass ratio distributions. The
+binding energy and orbital eccentricity of each BBH evolves
+through repeated hardening encounters, with the code tracking
+whether mergers occur inside the cluster due to rapid dynami-
+cal hardening or outside after ejection, with post-ejection merger
+times computed via the Peters (1964) formalism. Motivated by
+recent results (Marín Pina & Gieles 2024; Marín Pina et al. 2025;
+Rando Forastier et al. 2025), we include two new GW capture
+mechanism in the new version ofcBHBd, as these can contribute
+significantly to the (eccentric) merger rate. The full dynamical
+history of each BBH, including component masses, mass ratios,
+and eccentricities at formation and ejection, is retained, enabling
+statistical predictions for the distributions of these properties,
+relevant for GW observations. A schematic diagram of the work-
+ing ofcBHBdis shown in Figure 1.
+This paper is structured as follows: In Section 2, we describe
+the two parts of thecBHBdmodel:clusterBH (subsections
+2.1-2.5) and BHBdynamics(subsection 2.6). Section 3 focuses
+on fittingclusterBH tocmcmodels. In Section 4, we compare
+results for the production of BBH mergers incBHBdto those
+incmcmodels andN-body models. The paper concludes with
+a summary of the findings in Section 5. Finally, the Appen-
+dices discuss differences betweenclusterBH andemacss(Ap-
+pendix A), mass segregation (Appendix B), the effect BHs have
+on relaxation (Appendix C) and finally a comparison to addi-
+tionalcmcmodels that were not used to fitcBHBdparameters
+(Appendix D).
+2.cBHBdmodel description
+2.1. The initial BH population
+Here we describe how we obtain the initial BH mass function
+(BHMF). The initial BHMF (which includes all BHs that form
+in a cluster) is determined using the mass function evolution al-
+gorithm implemented in the SSPtoolslibrary 2, which was first
+introduced by Balbinot & Gieles (2018) and further developed
+by Dickson et al. 2023, 2024. We briefly summarize it here.
+Within SSPtools, the minimum initial stellar mass which is
+required to form a BH, as well as the BH initial-final mass rela-
+tion, are interpolated for a given metallicity from a grid of Single
+Star Evolution (sse) models, using the updated prescriptions for
+2 Available at https://github.com/SMU-clusters/ssptools. Version 3.1.0
+is used throughout this work.
+Article number, page 2 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+Input
+N: Total number of initial cluster stars
+ρh: Initial half-mass density [M ⊙ pc−3]
+αi,m i: IMF slopes and masses [M ⊙]
+[Fe/H]: Cluster metallicity
+RG: Galactocentric distance [kpc]
+tend: Simulation end time [Myr]
+clusterBH
+Fast cluster evolution with BHs
+BHBdynamics
+BBH population synthesis
+cBHBd
+Unified framework for cluster & BBH dynamics
+•Metallicity-dependent mass loss
+•Two-body relaxation
+•BH ejections
+•Evaporation in Galactic tidal field
+M∗(t),r h(t),M BH(t),⟨m∗⟩(t),⟨mBH⟩(t)
+•Sampling BBH component masses
+•BBH formation and evolution
+•Different channels for BBH mergers:
+1. GW captures during binary-single resonant interactions
+2. GW captures during BBH–BBH interactions
+3. Ejected mergers
+4. In-cluster inspirals
+5. GW captures in direct interactions
+Dynamical BBH merger catalog:
+Masses, spins, semimajor axis, eccentricity,
+merger channel, recoil kick
+Fig. 1.Schematic diagram ofcBHBd. Bold mechanisms are the new inclusions toclusterBH and BHBdynamics.
+stellar winds and remnant formation described by Banerjee et al.
+(2020). By default, we apply the rapid supernova scheme (Fryer
+et al. 2012), and implement the effects of pair-instability super-
+nova (PSN) and pulsation pair-instability supernova (PPSN) ac-
+cording to the prescriptions of Belczynski et al. (2016). We adopt
+the same prescriptions for stellar winds, supernova mechanisms,
+and remnant formation as implemented incmc, ensuring consis-
+tency with widely used models. These prescriptions, however,
+remain subject to significant uncertainties. For instance, line-
+driven winds are uncertain, the physics of the red supergiant
+(RSG) phase and stars crossing the Humphreys–Davidson limit
+remains poorly understood, and different supernova models yield
+very different remnant mass distributions (Maltsev et al. 2025;
+Willcox et al. 2025). These uncertainties propagate into the ini-
+tial BH mass function and therefore into the predicted BBH pop-
+ulation. The modular nature ofcBHBd, together with SSPtools,
+allows users to readily replace the default prescriptions—such as
+the initial-final mass relation—and explore alternative assump-
+tions as needed. From a given IMF, this relation is used to con-
+struct logarithmically-spaced BH mass bins. Here we adopt a
+Kroupa 2001 IMF over the mass range [0.08,150]M ⊙, however
+this, and other details of the stellar evolution prescriptions, can
+be changed by the user. For BHBdynamics, we explicitly sample
+BH masses in the aforementioned mass range by interpolating
+the same precomputed stellar-mass and [Fe/H] grid as used by
+clusterBH. In Sect. 2.6, we explain how we synchronise both
+codes.
+If desired, the ejection of BHs through supernovae natal
+kicks can be simulated by the inclusion of a retention fraction
+on newly formed BHs. We first assume that the kick velocity
+is drawn from a Maxwellian distribution with a dispersion of
+(1−f fb) 265 km s−1, wheref fb is the fallback fraction, the frac-
+tion of the stellar ejecta that falls back onto the newly formed
+compact remnant (Fryer et al. 2012), which depends on stellar
+progenitor mass and metallicity and is also interpolated from
+thessemodel grid. The retention fraction is then computed by
+integrating the Maxwellian distribution up to the initial cluster
+escape velocity, which is given in terms of the initial half-mass
+densityρ h and total cluster massMas (AG20)
+vesc =50 km s −1
+ M
+105 M⊙
+!1/3  ρh
+105 M⊙ pc−3
+!1/6
+,(1)
+where the constant of proportionality holds for a King model
+(King 1966) with dimensionless central potential ofW 0 =7
+(AG20). From the BH mass bins representing the BHMF, the
+total initial number and mass of BHs can be easily computed.
+For simplicity, the initial BH mass is included in the BH mass
+fractionf BH =M BH/Mfromt=0, although BHs have yet to
+be formed. This decision leads to an overestimation of the BH
+fraction the first few Myrs, but it simplifies the modeling of the
+cluster’s early relaxation. This decision does not affect the re-
+sults since the influence of the BH fraction through relaxation
+appears after the core has been formed.
+2.2. Assumptions and definitions
+The general philosophy ofclusterBH is that it describes the evo-
+lution of the total energy of a cluster,E, as the result of various
+processes. Specifically,Erefers to the ‘external energy’ of the
+cluster, that is, the total cluster energy excluding the negative
+energy locked up in multiples (Heggie & Aarseth 1992). Any
+change in the total mass,M, is accompanied by a change inE
+and by assuming that all these changes are slow with respect to
+the crossing time, the evolution ofr h, can be obtained through
+the assumption of virial equilibrium (see Gieles et al. 2011).
+In virial equilibrium,Ecan be expressed in terms ofMand
+rh as
+E≃ − GM 2
+5rh
+,(2)
+whereGis the gravitational constant. The numerical constant
+follows from the ratio of the half mass radius (rh) over the virial
+radius (rv) ofr h/rv ≃0.8 3, wherer v ≡ −GM 2/(2W) andWis
+the total external gravitational energy, equalingW=2Ein virial
+equilibrium. Then, from equation (2) one finds that
+˙rh
+rh
+=
+˙E
+|E| +2
+˙M
+M .(3)
+This equation can be used to determine the radius evolution after
+contributions to ˙Eand ˙Mhave been defined. As in AG20, we
+approximate the cluster by a two-component model, consisting
+of stars and BHs, such thatM=M ∗ +M BH whereM ∗ includes
+stars and also all remnants that are not BHs, that is, white dwarfs
+(WDs) and neutron stars (NSs).
+3 This ratio depends on the cluster model. For a Plummer model
+(Plummer 1911) it is 0.78 and for King models (King 1966) with di-
+mensionless central potential in the range 2≤W 0 ≤8 it is in the range
+0.80−0.85.
+Article number, page 3 of 24
+
+A&A proofs:manuscript no. andaa
+Throughout the evolution of the cluster, the change of energy
+is driven by different mechanisms and we consider three domi-
+nant processes
+˙E= ˙Esev + ˙Erlx + ˙Eev ,(4)
+where subscripts ‘sev’, ‘rlx’ and ‘ev’ stand for stellar evolution,
+relaxation and evaporation, respectively. In the following sub-
+sections we discuss each of these three processes and the corre-
+sponding ˙Mand ˙Eterms in detail.
+2.3. Stellar evolution
+Stellar evolution results in a change in energy following stel-
+lar mass loss, which becomes significant a few Myrs after clus-
+ter formation because of massive star winds and the first stars
+leaving the main sequence. As stars lose mass by winds and su-
+pernovae, mostly negative binding energy and a bit of positive
+kinetic energy is carried away, such that ˙Esev >0, leading to
+an expansion of the cluster. Here, we track this stellar evolution
+mass loss through the SSPtoolslibrary, using similar prescrip-
+tions as in Section 2.1, which are described below.
+First, the main-sequence lifetime of stars of initial massmis
+approximated as
+tms(m)=a 0 exp (a1ma2) ,(5)
+where the value of thea i coefficients are computed from inter-
+polated Dartmouth Stellar Evolution Program models (Dotter
+et al. 2007, 2008), and are dependent on metallicity. Inverting
+this function gives the value of the turn-offmassmto at any time
+t. The rate of change of main-sequence stars, at a givenm to is
+then given by:
+˙Nms,sev(mto)=− dN
+dm
+mto
+| ˙mto| ,(6)
+where the number of stars of a given turn-offmass (dN/dm) is
+given by the stellar mass function at that mass. Here we make
+the approximation that this is given by the IMF, which should be
+valid for realistic clusters where the bulk of the mass lost through
+evaporation will be from stars below the turn-offmass, but which
+could break down in cases of extreme tidal fields leading to clus-
+ter dissolution on stellar evolution timescales. The rate of change
+of the turn-offmass itself is found by differentiating the function
+form to(t):
+˙mto = 1
+a1a2t
+" 1
+a1
+ln
+ t
+a0
+!# 1
+a2 −1
+.(7)
+The rate of change of the total mass in main-sequence stars is
+then simply given by:
+˙Mms,sev(mto)= ˙Nms,sev(mto)m to (8)
+Because we are considering here all non-BH objects, the ac-
+tual rate of change of these objects is given by:
+˙N∗,sev(mto)=
+( ˙Nms,sev fort<t BH,max
+˙Nms,sev (1−f ret) fort>t BH,max
+(9)
+and the the total mass:
+˙M∗,sev(mto)=
+( ˙Nms,sev mto fort<t BH,max
+˙Nms,sev (mto −m rem fret) fort>t BH,max
+(10)
+wheret BH,max corresponds to the lifetime of the lowest mass stars
+which will form BHs, with the remaining remnants (WD and
+NS), formed with massesm rem, being included inM ∗. The pa-
+rameterf ret is the retention fraction of these remaining remnants,
+which we take as 10 per cent for NS and 100 per cent for WD,
+by default. The initial-final mass relation for WDs is interpolated
+from the MIST 2018 isochrones (Dotter 2016; Choi et al. 2016),
+while for NS we assume a constantm rem =1.4M ⊙.
+Finally the rate of change of the average stellar mass is then
+given by:
+˙⟨m∗⟩= d
+dt
+ M∗
+N∗
+
+=
+˙M∗
+N∗
+− M∗ ˙N∗
+N2∗
+(11)
+As in Alexander et al. (2014), we introduce a parameter that re-
+lates the fractional energy change to the fractional mass loss 4
+η=d ln|E|/d lnMand is sensitive to the degree of mass segre-
+gation. For homologous mass loss (no preferred location),η=3
+(Appendix B). As a result of relaxation, massive stars sink to-
+ward the cluster center. Since these stars experience the most
+significant mass loss through stellar winds, this process occurs
+predominantly in the inner regions. The potential deepens, such
+that more energy is lost andη >3. The energy change can be
+written as
+˙Esev =η ˙Msev
+E
+M .(12)
+To account for different degrees of segregation, as clusters have
+different relaxation times, we postulate that beforetcc,ηevolves
+linearly with time as
+η=η 0 +(η 1 −η 0) t
+tcc
+,t≤t cc,(13)
+whereη 0 is the initial value andη 1 > η 0 is the final value. In
+general,η 0 depends on the initial degree of segregation. Since
+all the clusters studied in this article are not mass segregated
+initially, the value is fixed toη 0 =3. The second parameterη 1 is
+fitted on in subsequent sections.
+2.4. Two-body relaxation
+2.4.1. Timescale
+Relaxation starts to contribute toEafter the formation of the first
+dynamical (BH) binary at the time of core collapse5. We refer to
+the phase after core collapse as ‘balanced evolution’ (Breen &
+Heggie 2013), when there exists a balance between the energy
+production in the core and the energy flux throughrh as the result
+of two-body relaxation (Hénon 1961). Although the exact nature
+of the energy source is irrelevant for understanding the evolution
+of the bulk cluster properties (Hénon 1975), we assume that the
+energy is provided by a BBH as long as the cluster contains BHs.
+As the binary interacts with its surroundings, it transfers energy
+outward, ensuring the cluster’s energy demands are satisfied. The
+energy that flows to the outer layers prevents further collapse and
+allows the system to evolve. Over time, this continuous energy
+4 The authors denote the parameterηasM.
+5 Historically, the term core collapse was used for observed clusters
+that have a high stellar density (for example, Djorgovski & King 1986),
+but here we follow Breen & Heggie (2013) who show that the core of
+BHs collapses well before that, and that the observable core collapse
+corresponds to the moment all BHs have been ejected.
+Article number, page 4 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+transfer reshapes the cluster’srh, driving its long-term evolution.
+To describe this process we write (Hénon 1961)
+˙Erlx =ζ |E|
+τrh
+,t≥t cc ,(14)
+whereζ≃0.1 (Hénon 1961; Hénon 1975) describes the effi-
+ciency of energy ‘conduction’ through the cluster by relaxation
+and is assumed to be constant. The corresponding timescale is
+the half-mass relaxation timescale, which is defined as (Spitzer
+& Hart 1971)
+τrh = 0.138
+⟨m⟩ψln(γN)
+s
+Mr3
+h
+G ,(15)
+whereNis the total number of particles,⟨m⟩is the average mass
+of all stars and BHs, ln(γN) is the Coulomb logarithm withγ≃
+0.02 (Giersz & Heggie 1996), andψis a parameter that depends
+on the mass spectrum (Spitzer & Hart 1971; Lee & Goodman
+1995). For equal-mass clustersψ=1 and for a two-component
+cluster we can writeψas (Spitzer & Hart 1971)
+ψ=
+ ⟨m∗⟩
+⟨m⟩
+1+λ
+(1−f BH)+f BH
+ ⟨mBH⟩
+⟨m⟩
+1+λ
+,(16)
+wheref BH =M BH/Mis the BH mass fraction and⟨m BH⟩and
+⟨m∗⟩are the average BH and average stellar mass, respectively.
+The indexλrelates the velocity dispersion to mass asσ∝m −λ,
+whereλ=0 corresponds to a mass-independent velocity disper-
+sion andλ=0.5 implies equipartition (Spitzer & Hart 1971).
+Because the initialM BH and⟨m BH⟩depend on the metallicity
+(Z), this formulation allows us to (indirectly) include the effect
+ofZon relaxation viaψ. To simplify the expression we can write
+equation (16) in the limit of smallf BH as
+ψ≃1+S,(17)
+whereSis similar to Spitzer’s parameter (Spitzer 1969) and is
+here defined as
+S=f BH
+ ⟨mBH⟩
+⟨m⟩
+1+λ
+.(18)
+For typical values (⟨m BH⟩/⟨m⟩ ≃20,f BH ≃0.01) we find
+S≃1 forλ=0.5, which is well above the maximum value
+for equipartition ofS=0.16 found by Spitzer. Equipartition be-
+tween stars and BHs is, therefore, not possible during most of
+the evolution (Breen & Heggie 2013). From now on, we fix the
+exponentλ=0.25, in between the values for equipartition and
+mass-independent velocity dispersion. This value is a few per-
+cent offthe value found fromN-body models of clusters with
+fBH ≃0.06−0.07 in Wang (2020). The quantities⟨m BH⟩,⟨m⟩,
+⟨m∗⟩, andψare defined for properties withinr h, which differ
+from the corresponding global values when the cluster is mass
+segregated (for example, all BHs may reside withinr h). How-
+ever, for simplicity, we approximate these quantities using their
+global counterparts in our analysis. This approximation is mo-
+tivated and justified in Appendix C, where we show that us-
+ing global values yields sufficiently accurate results. In reality
+the exponentλincreases towardsλ=0.5 when equipartition
+is reached. This increasesS, however it is neglected here since
+equipartition is achieved for small values ofSsuch thatψ≃1,
+so increasingλonly mildly affectsψ. The total number of cluster
+members at any time is,
+N= MBH
+⟨mBH⟩ + M∗
+⟨m∗⟩ .(19)
+The energy change as the result of relaxation (equation 14)
+is only considered after the moment of core collapse,t cc, which
+is a multiple of the initialτ rh:t cc =N τrh τrh0, withN τrh of order
+unity. This expression applies to clusters that are not mass seg-
+regated at birth and the constantN τrh depends on the degree of
+initial mass segregation and the central concentration of the clus-
+ter, withN τrh =0 signifying complete mass segregation or a very
+high initial central concentration. The time instance for core col-
+lapse for thecmcmodels ranges from a few Myrs to Gyrs based
+on initial conditions such asr h,NandZ. The impact of metal-
+licity is captured inψin the expression fort cc att=0 since
+MBH0 is accounted for. As a result,t cc is larger for metal-rich
+GCs because the lower values off BH and⟨m BH⟩reduceψ, which
+increasesτ rh0. The initial⟨m BH⟩and⟨m⟩needed forS(equa-
+tion 18) are found from the initial BHMF att cc (described in
+Section 2.1) and the stellar IMF att=0 respectively. The de-
+pendence of the initial relaxation timeτrh0 on the BH massM BH0
+throughψis an approximation used for modeling long relax-
+ation clusters. This is because for such clusters, BHs are formed
+within the first fewof Myrs and therefore dominate in the core.
+The approximation in principle fails when short relaxation clus-
+ters are considered since core collapse may occur before BHs are
+formed. In Appendix D we compare the predictions of the above
+formula with actual time instances for core collapse in thecmc
+models to motivate this decision.
+2.4.2. BH ejections
+A side effect of energy generation by a BBH is BH ejections
+from the cluster. To describe this, we follow Breen & Heggie
+(2013) who showed that during balanced evolution, BHs are
+ejected on a timescale that depends on the cluster as a whole
+˙MBH =−βζ M
+τrh
+,t≥t cc ,(20)
+whereβis a dimensionless parameter. In the comparison to the
+cmcmodels we noticed that this expression over-predicts the BH
+ejection rate near the depletion of the BH population. This is
+likely because near depletion the BHs have achieved equiparti-
+tion with the stars, and the central BBH starts ejecting both stars
+and BH, reducing| ˙MBH|. To account for this, a dependence onS
+is inserted in the definition ofβas,
+β=β 0
+
+1−exp(−S/S 0)
+
+,(21)
+whereβ 0 describes BH ejection forS≫S 0 andS 0 is a fitting
+parameter that sets when BH ejection becomes less efficient. The
+function is chosen so thatβ≃β 0 forS≫S 0, andβ≃0 for
+S≪S 0. This inclusion was unnecessary in AG20 because their
+N-body models were clusters in isolation such thatτrh grows and
+the end of the simulation time (12 Gyr) was reached before the
+BHs were ejected.
+Dynamics preferentially ejects the most massive BHs, reduc-
+ing⟨m BH⟩(Aarseth 2012). We compute⟨m BH⟩by subtracting the
+cumulative ejected mass (equation 20) from the initial BHMF,
+removing bins from highest to lowest mass;M BH and⟨m BH⟩for
+ψare then obtained from the remaining population.
+2.5. Evaporation
+Evaporation refers to the gradual escape of stars over the tidal
+boundary and we assume that only stars are lost via this mecha-
+nism, a valid approximation as long as the BH fraction remains
+Article number, page 5 of 24
+
+A&A proofs:manuscript no. andaa
+small. Since the cluster is within a tidal field from the start, the
+effect of evaporation is present at all times, as shown in equa-
+tion (4). Denotingξ ev as the fractional mass lost by evapora-
+tion per evaporation timescaleτ ev (Ambartsumian 1938; Spitzer
+1987),
+˙M∗,ev =−ξ evζ M∗
+τev
+,(22)
+whereζis the same parameter as in equations (14) and (20). The
+timescaleτ ev is usually assumed to beτ rh, but here we allow it
+to differ (see below). Because evaporation is more efficient in
+stronger tides,ξ ev can be written as (Gieles & Baumgardt 2008)
+ξev =ξ 0 exp
+ rh/rt
+Rht
+!
+,(23)
+wherer t is the tidal radius andRht andξ 0 are free parameters. For
+a circular Galactic orbit at distanceR G in a singular isothermal
+galaxy with circular velocityV c we write (King 1962)
+rt =
+GM
+2Ω2
+1/3
+,(24)
+whereΩ =V c/RG is the angular frequency of the cluster orbit.
+Because evaporation occurs in the outer regions of the cluster
+where no BHs are present,τev in equation (22) can be longer than
+τrh which is defined for the average properties withinrh (15). We
+therefore postulate that
+τev =τ rhψ .(25)
+Effectively,τev equalsτ rh withψ=1, soτ ev corresponds toτ rh of
+an equal-mass cluster. This step is necessary asτ rh captures the
+effect of BHs withinrh, which influences the cluster’s expansion
+but not its evaporation rate, because near the escape energy there
+are almost no BHs.
+The nonlinear dependence ofτ ev onτ rh as the result of po-
+tential escapers (Fukushige & Heggie 2000; Baumgardt 2001;
+Lamers et al. 2005; Renaud et al. 2011) is neglected for simplic-
+ity. Incmc, stars are assumed to escape if they meet the energy
+criterionε > ε crit (Chatterjee et al. 2010; Rodriguez et al. 2022),
+whereεdenotes the specific energy and subscript ‘crit’ the criti-
+cal value for escape. The expression forεcrit used in thecmcmod-
+els isε crit =c(N)ϕ(r t) wherec(N) is a parameter depending on
+the number of cluster componentsN. This criterion can be used
+to estimate ˙Eev which then depends on bothNand ther h/rt. Most
+of the models that we consider here have a smallr h/rt, such that
+˙Erlx dominates over ˙Eev at all ages. In this paper, we simplify the
+model by postulatingε crit =0, and therefore ˙Eev =0, however in
+clusterBH the option to include an alternative is available. We
+note that this does not mean that evaporation is not important,
+because it affects expansion through the term˙M⋆,ev (equation 3).
+In Section 3, we focus on determining the numerical values
+of the free parameters by performing a fit to severalcmcmodels.
+The list of parameters is available in Table 1.
+Parameter Description
+ζDimensionless energy change (Section 2.4.1,
+equation 14).
+β0 Dimensionless BH ejection rate (Section 2.4.2,
+equation 21).
+Rht Reference scale for ratior h/rt where the tidal
+mass loss rate is known (Section 2.5, equa-
+tion 23).
+ξ0 Prefactor for tidal mass loss (Section 2.5,
+equation 23).
+Nτrh Number of initial relaxation times untilt cc
+(Section 2.4.1).
+η1 Relates mass loss to energy change (Sec-
+tion 2.3, 13)).
+S 0 Value for Spitzer’s term used to slow down
+BH ejections for clusters with lowS(Sec-
+tion 2.4.2, equation 21).
+δError tolerance for the fitting (Section 3).
+λ=0.25 Exponent that connects velocity dispersion to
+average mass (Section 2.4.1), equation 16).
+γ=0.02 Constant in argument of Coulomb logarithm
+(Section 2.4.1, equation 15).
+Table 1.List ofclusterBH parameters and their descriptions. The first
+set of eight parameters are fitted tocmcmodels while the second set of
+two parameters is assigned fixed values prior to fitting.
+2.6. Few-body BH interactions and GW mergers
+Here we describe how we obtain the dynamically formed BBH
+mergers in the BHBdynamicspart ofcBHBd. We follow the al-
+gorithm presented in Antonini & Gieles (2020b); Antonini et al.
+(2023) with two updates to the treatment of few-body dynamics
+and two new channels for BBH mergers, which we describe in
+Sections 2.6.2 and 2.6.3.
+2.6.1. Recap ofcBHBdGW recipes
+In massive clusters, the majority of dynamical BBH mergers in-
+volve dynamically formed BBH, or ‘three-body’ BBHs, even in
+the presence of a large number of BBHs that form from binary
+evolution (referred to as primordial BBHs, Chattopadhyay et al.
+2022; Torniamenti et al. 2022; Marín Pina et al. 2025). Three-
+body BBHs are those formed in interactions involving at least
+three previously unbound BHs (Heggie 1975; Tanikawa et al.
+2012). Theory predicts that a cluster may host several three-
+body BBHs simultaneously (Goodman 1984), but in practice bi-
+nary–binary interactions quickly ionize the wider binaries, leav-
+ing on average only one hard BBH at any given time (Marín Pina
+& Gieles 2024).
+At the start of the simulation, we sample a population of
+BHs from the initial BHMF (Section 2.1), taking into account
+immediate ejections due to natal kicks with velocities that ex-
+ceed the escape velocity of the cluster. Natal kicks are applied
+again to sample individual BH masses and populate the BHMF,
+since BHBdynamicsneeds discrete BH masses to track individ-
+ual BH interactions, which can not be done with the mass bins
+ofclusterBH. However, we ensure thatM BH(t) is the same in
+theclusterBH and BHBdynamicsparts (explained at the end of
+Section 2.6.3). As in AG20, we assume that all BHs are ini-
+tially single. After core collapse, we form a dynamical BBH
+from this population, with a semi-major axis at the hard-soft
+Article number, page 6 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+boundarya h =Gm 1m2/(2⟨m⟩σ2), whereσis the velocity dis-
+persion withinr h, estimated fromσ 2 ≃0.2GM/r h. The primary
+BH mass,m 1, is sampled from the BH population in the clus-
+ter, following a distributionp(m 1)∝m α1
+1 , while the secondary,
+m2, is obtained by sampling the mass ratio,q=m 2/m1, from
+p(q)∝q α2. Following Antonini et al. (2023), we use the ex-
+ponentsα 1 =8+2αandα 2 =3.5+α, withαthe slope of
+the BH mass function, determined at each step from the remain-
+ing BH population using a maximum likelihood method. While
+the power-law BHMF is not fully realistic, it enables fast com-
+putations. The resulting differences relative to the BHMF from
+clusterBH are at the level of a few percent.
+Once the BBH is formed, it undergoes strong resonant in-
+teractions with single BHs. In such interactions, the three BHs
+engage in chaotic orbital motion, repeatedly exchanging energy
+and angular momentum during multiple close approaches. In
+scattering experiments, resonant interactions are defined as in-
+teractions for which the sum of the square distances between
+the three BHs has multiple minima (see e.g. McMillan & Hut
+1996; Rando Forastier et al. 2025). BHBdynamicsconsiders the
+few-body dynamics for an entire binary life cycle; the synchro-
+nization withclusterBH is performed at the end of each binary
+cycle (see Section 2.6.3).
+We now describe the three pathways to BBH coalescence
+that were considered in Antonini et al. (2023), including im-
+provements we introduce here:
+– GW captures during binary-single resonant interactions:
+In each resonant interaction between a BBH and a single
+BH, we sample the mass of the interloper BH,m 3, from
+p(m3)∝m α3
+3 , withα 3 =α+1/2. To determine whether there
+are GW captures during these interactions, we follow the
+method of Samsing et al. (2014). The probability of GW cap-
+tures during resonant binary–single interactions can be esti-
+mated using the framework of Samsing & D’Orazio (2018).
+The interactions can be split into a numberN IMS of hierar-
+chical metastable intermediate states, separated by chaotic
+democratic intermediate states. For a binary-single interac-
+tion with unequal masses, we computeN IMS from equa-
+tions 8 and 9 in Rando Forastier et al. (2025). This improves
+the method of Antonini et al. (2023), which considered a
+fixedN IMS, independent of the mass ratio. For each of the
+NIMS hierarchical states, we assume that the eccentricity of
+the BBH is sampled from a thermal distribution. At each in-
+termediate state, there is a merger if the energy radiated in a
+single pericenter passage (Hansen 1972) is greater than the
+binding energy of the BBH. We refer to these mergers as
+‘binary-single GW captures’.
+In this version of the code, we allow for the possibility that
+one of the components of the binary is exchanged with the
+interloper BH. For a resonant binary-single interaction in-
+volving three BHs of massesm a,m b, andm c, the probability
+that the ejected component ism c is given by (Ginat & Perets
+2021, equation 36)
+p(mc)= m4
+am4
+b
+(ma +m b)5/2
+
+m4a m4
+b
+(ma+mb)5/2 + m4a m4c
+(ma+mc)5/2 +
+m4
+bm4c
+(mb+mc)5/2
+ .
+(26)
+After the binary-single interaction, we eject one of the three
+BHs. We select the ejected BH via a weighted random
+choice, with the probability to eject the BH with massm i
+given byp(m i). This means, e.g., that the binary will not ex-
+perience an exchange in a fractionp(m 3) of interactions. Af-
+ter a binary-single resonant interaction, on average, the bi-
+nary will become more bound (Heggie 1975). The fractional
+energy loss for unequal-mass BHs is given by equation 5 in
+Rando Forastier et al. (2025). This improves the method of
+Antonini et al. (2023), which assumed a mass-independent
+fractional energy loss. Due to energy conservation, both the
+interloper and BBH receive a recoil kick. If their recoil kick
+velocity is larger thanv esc, we assume that they are ejected
+from the cluster; otherwise, they reach a higher orbit around
+the cluster that decays to the core due to dynamical friction.
+– Ejected mergers:For an ejected BBH, we compute its
+merger timescale (Peters 1964) and, if it inspirals before the
+end of the simulation, we label it as ‘ejected merger’.
+After the interaction, the binary either (i) becomes more
+bound and remains in the cluster; (ii) becomes more bound
+and is ejected from the cluster due to the momentum recoil
+kick; (iii) merges and remains in the cluster, or (iv) merges
+and is ejected from the cluster as the result of a GW kick.
+– In-cluster inspirals:Furthermore, we allow the possibility
+that a BBH is sufficiently tight and eccentric that it merges
+between resonant interactions. If the merger timescale (Pe-
+ters 1964) is shorter than the time in between resonant inter-
+actions (t3, see equation 20 in Antonini & Gieles 2020b), we
+label it as ‘in-cluster inspiral’.
+In the following subsections, we explain the numerical
+recipes for two new merger channels in BHBdynamics.
+2.6.2. GW captures during BBH-BBH interactions
+Until now, BHBdynamicsconsidered only binary-single interac-
+tions. Here, we add GW captures during binary-binary inter-
+actions. Binary–binary encounters are expected to play an im-
+portant role in dense stellar environments, contributing to the
+dynamical formation and evolution of compact-object binaries
+(Zevin et al. 2019). We expect this merger channel to be more
+important in lower mass clusters because of a high rate of BBH
+formation (Marín Pina et al. 2025). The vast majority of binary-
+binary interactions among three-body BBHs lead to the ionisa-
+tion of the wider binary and do not significantly change the SMA
+or the eccentricity of the tighter binary. For simplicity, we as-
+sume that they either trigger a merger or disrupt the wider binary
+without changing the properties of the smaller binary, as demon-
+strated by the scattering experiments in Marín Pina et al. (2025).
+The mean number of binary-binary interactions between
+each binary-single interaction,N bb, is (Marín Pina et al. 2025)
+Nbb = Γbb
+Γbs
+=0.3
+ NBH
+102
+−1/3
+.(27)
+HereΓ bb is the binary-binary interaction rate;Γ bs =t −1
+3 is the
+binary-single interaction rate andN BH is the total number of BHs
+in the cluster. From post-Newtonian binary-binary scattering ex-
+periments Marín Pina et al. (2025) found that the probability that
+a binary-binary interaction triggers a merger is given by
+pcap,bb ≃0.034
+ ⟨m⟩4
+20M ⊙
+!5/7  amin
+0.1 AU
+−5/7  
+1+
+ ar
+8.6
+2!−0.83
+,(28)
+where⟨m⟩ 4 is the mean mass of the four BHs,a min is the SMA
+of the smallest binary, anda r ≥1 is the SMA ratio. To com-
+putep cap,bb, we create a new dynamical BBH with the same pro-
+cedure as defined above: SMA at the hard-soft boundary, with
+Article number, page 7 of 24
+
+A&A proofs:manuscript no. andaa
+masses sampled fromp(m 1) andp(q). While a real BBH can un-
+dergo binary-binary interactions with multiple different BBHs,
+we treat them as effectively multiple interactions with this sec-
+ond BBH. We model GW captures in binary-binary interactions
+as a Poissonian process, so we assume them to occur before the
+next binary-single resonant interaction via a random choice with
+probability
+pbb =1−e −pcap,bbNbb.(29)
+We assume that the binary with the smallest SMA merges, and
+label it as ‘binary-binary GW capture’. If there is no merger, we
+assume that the larger binary is ionised and the smaller binary
+remains unperturbed (Marín Pina & Gieles 2024).
+2.6.3. GW captures in direct interactions
+In between resonant binary-single interactions, the BBH will un-
+dergo many distant non-resonant, or ‘direct’, encounters with
+single BHs. The effect of these interactions is a small change
+in the eccentricity of the BBH while the binding energy is con-
+served. There is, however, the possibility that a binary is suffi-
+ciently tight and eccentric that a slight positive change in eccen-
+tricity triggers a runaway GW emission at periapsis that leads
+to a merger. This process, which we name ‘GW captures in di-
+rect interactions’ (Trani et al. 2024; Rando Forastier et al. 2025),
+increases the relative contribution of mergers inside the cluster
+versus ejected mergers. Rando Forastier et al. (2025) show that
+the rate of GW captures in direct interactions is comparable to
+the in-cluster mergers between resonant encounters. To deter-
+mine whether a BBH merges in this channel, we use the cross-
+section for eccentricity changes in wide fly-bys,Σ(δe> δe 0),
+from Heggie & Rasio (1996), whereΣstands for the cross sec-
+tion of the interaction,δedenotes the eccentricity change andδe 0
+is the threshold eccentricity change required to trigger a merger.
+The timescale for such an interaction to happen is given by
+tdi = 1
+nBHΣ(δe> δe 0)vbs
+,(30)
+wheren BH is the number density of BHs within the half-mass
+radius of the BH subcluster,rh,BH, computed as (Breen & Heggie
+2013)
+rh,BH =r h
+ MBH
+M
+3/5  ⟨mBH⟩
+⟨m⟩
+ln(γNBH)
+ln(γN)
+!2/5
+,(31)
+andv bs is the mean relative velocity between binaries and singles
+withinr h,BH. Assuming equipartition, we getv bs ≃ √3/2σBH,
+withσ BH estimated as in Breen & Heggie (2013), i.e.
+σBH =
+s
+0.2GMBH
+rh,BH
+.(32)
+We model GW captures in direct interactions as a Poissonian
+processes, so we assume them to occur before the next resonant
+interaction via a random choice with probability
+pdi =1−e −t3/tdi .(33)
+After a GW capture in a direct interaction, the merger remnant
+is retained (kicked out) if the GW recoil kick is smaller (larger)
+thanv esc.
+The binary cycle is concluded once the BBH merges or is
+ejected and then a new binary is created at timem ej/ ˙MBH after
+the formation of the previous binary (see equation 37 in Antonini
+& Gieles 2020b). Herem ej <0 is the total mass ejected by the
+previous binary (including itself) and ˙MBH is provided byclus-
+terBH, evaluated at the time of the formation of the previous
+binary. We note that there could be a slight mismatch between
+this timestep and the internal time of BHBdynamics. We prior-
+itize the time synchronization ofM BH betweenclusterBH and
+BHBdynamics.
+The process is repeated until the end of the simulation or
+until all BHs are ejected from the cluster.
+3. FittingclusterBHtocmcmodels
+3.1.cmcmodels
+To calibrate theclusterBH code, we usecmcmodels, a set of
+Monte Carlo star cluster simulations (Kremer et al. 2020; Ro-
+driguez et al. 2018; Kremer et al. 2018; Rodriguez et al. 2015).
+cmcserves as a convenient tool for evolving massive clusters,
+because the computational time scales asO(Nln(N)). The pub-
+licly available grid ofcmcmodels 6 (Kremer et al. 2020) includes
+simulations with initial conditions forN=[2×10 5,4×10 5,8×
+105,1.6×10 6,3.2×10 6],r v =[0.5,1,2,4] pc,R G =[2,8,20] kpc
+andZ=[0.0002,0.002,0.02], allowing for a broad exploration
+of cluster evolution across different environments. They sum
+to a total of 148 models. A few combinations are not avail-
+able in the database, such asN=1.6×10 6 withr v =0.5 pc
+atZ=0.01Z ⊙,N=3.2×10 6 withZ=0.1Z ⊙ and finally
+N=3.2×10 6 withr v =[0.5,4] pc atZ=[0.01,1]Z ⊙. The
+relation between ther h andr v isr h =0.814r v for thecmcini-
+tial conditions (a King profile with dimensionless central poten-
+tialW 0 =5). As in Section 2.1 a Kroupa IMF over the mass
+range [0.08,150]M ⊙ is used with the initial average mass being
+⟨m∗⟩0 =0.586M ⊙. We determine our parameters from the mod-
+els withN=[8×10 5,1.6×10 6,3.2×10 6] andr v =[1,2,4] pc.
+We limit the study to clusters with large number of particles,
+where the Monte Carlo method is more reliable, and three op-
+tions for the virial radius by excluding the densest clusters with
+rv =0.5 pc. This leaves us with 58 models to work with. The
+unused clusters experience stellar collisions which cannot be re-
+produced by the current version ofclusterBH. These stellar col-
+lisions do not necessarily occur at early times and the masses
+of colliding stars differ with age. While such collisions can af-
+fect the stellar population and BH formation, their impact on
+the number of merging BBHs is likely secondary compared to
+the dynamical interactions among BHs themselves. This subset
+defines the calibration sample used to determine the fitting pa-
+rameters. We then validate the model by applying these fixed
+parameters to the remaining 90cmcmodels not included in the
+fit, as described in Appendix D.
+3.2. Likelihood
+To constrain the eight fitting parameters forclusterBH, we use
+three quantities:M ∗,M BH, andr h. We assume that the uncer-
+tainty of thecmcmodels for each quantity in each snapshot
+is proportional to the value itself. Specifically, letX cmc
+i with
+i∈[1,3] representM ∗,M BH, andr h from thecmcmodels. Then
+for the mass of stars and the half-mass radius, the standard de-
+viation is simply (AG20)σ cmc
+i =δX cmc
+i whereδis the same for
+all quantitiesX cmc
+i , and serves as a measure of the average frac-
+tional difference betweenclusterBH andcmc, to be determined
+6 The models used are available at https://cmc.ciera.northwestern.edu/
+Article number, page 8 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+0.0875+0.0030
+0.0027
+0.064
+0.068
+0.072
+0
+0.0679+0.0027
+0.0025
+0.066
+0.069
+0.072
+0.075
+Rht
+0.0711+0.0022
+0.0021
+0.120
+0.135
+0.150
+0.165
+0
+0.147+0.011
+0.009
+0.75
+0.90
+1.05
+1.20
+Ntrh
+0.916+0.099
+0.088
+3.8
+4.0
+4.2
+4.4
+1
+4.17+0.12
+0.14
+0.600
+0.615
+0.630
+0.645
+0.660
+S0
+0.629+0.011
+0.010
+0.080 0.084 0.088 0.092 0.096
+0.108
+0.111
+0.114
+0.117
+0.120
+0.064 0.068 0.072
+0
+0.066 0.069 0.072 0.075
+Rht
+0.120 0.135 0.150 0.165
+0
+0.75 0.90 1.05 1.20
+Ntrh
+3.8 4.0 4.2 4.4
+1
+0.600 0.615 0.630 0.645 0.660
+S0
+0.1080.1110.1140.1170.120
+0.115+0.002
+0.003
+Fig. 2.Marginalized and 2D projections of the posterior probability distributions of the free parameters ofclusterBH. The plot displays contours
+up to the 3σlevel, corresponding to the 68%, 95%, and 99.7% credible regions in parameter space. Above each marginalized posterior distribution,
+the median and 1σcredibility interval for the corresponding parameter are shown.
+in the fit. For the BH population, an additional Poisson error is
+included inσ cmc
+i such that
+σcmc
+BH =
+q
+(δM cmc
+BH )2 +N BH⟨mBH⟩2 .(34)
+This is because the BH population in certain models is close
+to depletion. The parameterδaccounts for both the stochastic
+nature of thecmcmodels (different random seeds yield differ-
+ent outcomes) and the systematic approximations ofclusterBH.
+This approach follows the prescription of AG20 (their equa-
+tion 18). By treatingδas a free parameter in the likelihood,
+we introduce an uncertainty in thecmcdata, preventing the fit
+from over-constraining the physical parameters to a specific re-
+alisation of the Monte Carlo noise. Becauseδis typically larger
+than the fractional uncertainties on any single model parameter
+derived from the fit, we adoptδas the primary measure of the
+model’s predictive accuracy. Such a value serves as a measure
+of the upper limit of the systematic error ofclusterBH rela-
+tive to higher-fidelity models, demonstrating that the simplified
+model captures the essential physics without being fine-tuned to
+the stochastic variations of thecmcgrid.
+By considering the contribution of each snapshot, the log
+likelihood can be written as
+lnL=−
+X
+i jk
+1
+2
+ XclusterBH
+i jk −X cmc
+i jk
+σcmc
+i jk
+2
++ln
+ √
+2πσcmc
+i jk
+
+,(35)
+where indexisums over the three cluster quantities,jsums over
+58 cluster models andksums over the 11 snapshots, at times ap-
+proximately [0,0.1,1,6,10,10.55,11,11.55,12,12.5,13] Gyr.
+We use the same IMF as thecmcmodels (see Section 3.1).
+We use the Bayesian nested sampling tooldynesty(Speagle
+2020) to constrain the eight parameters. We adopt a uniform
+prior probability distribution for each parameter across the range
+specified in Table 2.
+Parameter Prior Range Fitted Value
+ζ[0.01, 0.15] 0.0875 +0.0030
+−0.0027
+β0 [0.0001, 0.5] 0.0679 +0.0027
+−0.0025
+Rht [0.001, 1] 0.0711 +0.0022
+−0.0021
+ξ0 [0, 1] 0.147 +0.011
+−0.009
+Nτrh [0.1, 5] 0.916 +0.099
+−0.088
+η1 [3, 10] 4.17 +0.12
+−0.14
+S 0 [0.0001, 10] 0.629 +0.011
+−0.010
+δ[0.01, 1] 0.115 +0.002
+−0.003
+Table 2.Fitted parameters forclusterBH. Uniform prior ranges used
+for the fit are shown in the second column, and the third column re-
+ports the median posterior estimates with 1σuncertainties, defined as
+the 68% central credible intervals.
+3.3. Results
+In this section we compare the best-fitclusterBH models to the
+cmcmodels. The posterior distributions of the parameters are
+shown in Fig. 2 and the inferred values are listed in Table 2.
+A direct comparison of the models is available in Figures 3-10.
+We discuss each parameter in turn, building a coherent picture
+of the physical processes that govern cluster evolution.
+Article number, page 9 of 24
+
+A&A proofs:manuscript no. andaa
+4.75
+5.00
+5.25
+5.50
+5.75log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.0002
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.0002
+Fig. 3.Left: Evolution ofM ∗,r h andM BH for clusters withN=8×10 5 andZ=0.0002. Right: Percentage difference betweenclusterBH and
+cmc, defined as∆X/X=(X clusterBH −X cmc)/Xcmc for all three quantities. Dashed lines show thecmcmodels while continuous lines the predictions
+ofclusterBH. Different colors signify different values of the initialrv, with red, green and blue corresponding to 1 pc, 2 pc and 4 pc respectively.
+Shaded areas indicate the lowest-highest values ofM ∗,r h orM BH within 1σat each time instance. They do not necessarily correspond to a single
+set of parameters. For the cluster withr v =4 pc atR G =2 kpc, the available snapshots stop close to 1 Gyr because it dissolves fast.
+The best-fit value of the dimensionless energy–production
+rate isζ=0.0875, slightly smaller than the valueζ=0.1
+used in the isolatedclusterBH model of AG20. Interestingly,
+ζis closer to the value derived by Hénon (1965) for isolated
+clusters (ζ=0.0926) than to the tidally limited cluster value
+(ζ=0.0725; Hénon (1961)). The dimensionless BH ejection
+rate isβ 0ζ=0.0059, which matches the theoretical expectation
+of Breen & Heggie (2013) (0.006) and is 2.1 times larger than the
+AG20 value7. This increase is because here⟨m ∗⟩drops to about
+half its initial value within the first few Myrs, making relaxation
+roughly twice as long for the sameM,r h, andf BH compared to
+the constant-⟨m∗⟩assumption in AG20. The exponential model
+for tides that is used here prefers the set of valuesR ht =0.0711
+andξ 0 =0.147. The values obtained here facilitate mass loss for
+clusters in orbits at small galactocentric distances.
+The relaxation factor isN trh =0.916, nearly 3 times smaller
+than the value 3.21 used in AG20. This difference likely arises
+because AG20 adopted Plummer models, which have a larger
+ratior c/rh (wherer c is the core radius). The final energy-
+production efficiency parameterη1 is 4.17 and controls the early
+expansion of the cluster due to mass segregation. It differs from
+AG20 as it was fixed to 3, while it is also 5% larger than the
+value of 4 used inemacss(even though a differential equation
+was used for describing the evolution of such parameter, instead
+of the linear intformula used here).
+The parameter that governs the suppression of BH ejections
+isS 0 ≃0.629 (Table 2). Table 3 lists the values ofSfor all
+models at the first snapshot containing BHs (t=0.1 Gyr). For
+7 In AG20 the BH ejection rate differs from equation (20) because the
+energy emission rateζwas absorbed intoβ.
+metal-rich clusters (Z=0.02), the initial BH fraction is low
+(f BH ≃2%) and the average BH mass is small (⟨m BH⟩ ≃9M ⊙);
+consequently these clusters haveS≃0.9, close to the fittedS 0.
+As defined in equation 21, whenSis comparable toS 0 the BH
+ejection rateβis suppressed relative to its maximumβ 0, explain-
+ing why metal-rich clusters retain their BHs longer.
+Overall, the fitting error ofclusterBH relative to thecmc
+models isδ≃0.115, i.e. 11.5%. Given the simplified nature of
+clusterBH, we consider this an acceptable accuracy. Because
+this∼10% systematic uncertainty dominates over the fractional
+uncertainties of any individual model parameter derived from the
+fit, we adoptδas the primary measure of our model’s predictive
+accuracy, representing a balance between model simplicity and
+predictive power.
+TheclusterBH model was calibrated on 58cmcmodels with
+M≥8×10 5,M ⊙ andr v ≥1,pc, yielding∼1900 data points for 8
+free parameters, making overfitting unlikely. It generalizes well
+to lower-mass clusters and to models outside the fitting range
+(Appendix D), though discrepancies increase for very compact
+clusters (rv =0.5,pc). We therefore recommend applyingclus-
+terBH forr v ≳1,pc, and use caution at smaller radii.
+3.3.1. Dependence onN
+For a givenr v,R G and metallicity, more massive clusters have
+longer relaxation times and therefore retain more BHs over a
+Hubble time. In thecmcmodels, clusters withN=8×10 5 lose
+their BHs earlier than those withN=1.6×10 6 or 3.2×10 6.
+clusterBH reproduces this trend accurately. For example, at
+Z=0.0002 andR G =20 kpc (as seen fromM BH(t) in Fig-
+ures 3-7), the BH mass at 13 Gyr increases from∼10 2 M⊙ to
+Article number, page 10 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+5.0
+5.5
+6.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.0002
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.0002
+Fig. 4.Same as Figure 3, but for models withN=1.6×10 6 andZ=0.0002.
+4.75
+5.00
+5.25
+5.50
+5.75log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.002
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.002
+Fig. 5.Same as Figure 3, but for models withN=8×10 5 andZ=0.002.
+∼10 3 M⊙ as the initial number of stars rises by a factor of four.
+This demonstrates that more massive clusters retain a larger frac-
+tion of their BH population over a Hubble time, in agreement
+with thecmcmodels. The initial BH massM BH,0 is within≲10%
+of thecmcvalue, and the subsequent evolution ofM ∗,r h and
+MBH agrees to within 20–30% for most models (Figures. 3-9).
+The agreement is best for the largest clusters (N=3.2×10 6, Fig-
+ure 9) because they are only available atRG =20 kpc where tides
+are weak and internal dynamics dominate. The small discrepan-
+cies that appear at low metallicity and largerv (e.g.,N=8×10 5,
+rv =4 pc,Z=0.0002) are due to a feedback loop: an overesti-
+mate ofM BH increasesr h, increases the relaxation time, reduces
+Article number, page 11 of 24
+
+A&A proofs:manuscript no. andaa
+5.0
+5.5
+6.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.002
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.002
+Fig. 6.Same as Figure 3, but for models withN=1.6×10 6 andZ=0.002.
+4.75
+5.00
+5.25
+5.50
+5.75log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.02
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105, Z = 0.02
+Fig. 7.Same as Figure 3, but for models withN=8×10 5 andZ=0.02.
+the BH ejection rate, and leads to a further overestimate ofM BH
+andr h. Despite this, the overall performance forN≳8×10 5 is
+satisfactory.
+3.3.2. Dependence on virial radius
+The virial radiusr v sets the initial densityρ h ∝Mr −3
+v . Denser
+clusters (smallerr v) have shorter relaxation times and eject
+their BHs more rapidly. In thecmcmodels, compact clusters
+(rv =1 pc) lose most of their BHs within a few Gyr, while ex-
+Article number, page 12 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+5.0
+5.5
+6.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+2
+3
+4
+5
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.02
+40
+20
+0
+20
+40
+M* /M* (%)
+RG = 2 kpc RG = 8 kpc RG = 20 kpc
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106, Z = 0.02
+Fig. 8.Same as Figure 3, but for models withN=1.6×10 6 andZ=0.02.
+5.8
+6.0
+6.2
+6.4
+log10 (M* /M )
+Z = 0.0002
+CMC
+clusterBH
+Z = 0.02
+rv = 1 pc
+rv = 2 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+3.5
+4.0
+4.5
+5.0
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+N = 3.2 × 106
+40
+20
+0
+20
+40
+M* /M* (%)
+Z = 0.0002 Z = 0.02
+40
+20
+0
+20
+40
+rh/rh(%)
+0 2 4
+log10 (T/Myr)
+40
+20
+0
+20
+40
+MBH/MBH(%)
+0 2 4
+log10 (T/Myr)
+N = 3.2 × 106
+Fig. 9.Predictions ofclusterBH (solid lines) compared tocmc(dashed lines) for clusters with initialN=3.2×10 6 stars atR G =20 kpc. Columns
+show the results for metallicitiesZ=[0.0002,0.02] from left to right, forr v =[1,2] pc with colors red and green respectively.
+tended clusters (r v =4 pc) retain BHs for much longer, driving
+a strong expansion ofr h (see Kremer et al. 2020).clusterBH
+captures this behaviour well, but with a systematic trend. For
+rv =1 pc it slightly underestimatesM BH at late ages (especially
+for metal-poor clusters), whereas forr v =4 pc it tends to over-
+estimateM BH andr h (Figures 3–8). Ther v =2 pc models show
+the best agreement. This pattern is explained by the same feed-
+back loop described above: an initial offset inMBH is amplified
+because the relaxation time depends on the BH population. The
+fact that the most compact clusters are slightly under-predicted
+Article number, page 13 of 24
+
+A&A proofs:manuscript no. andaa
+Table 3.Predicted value ofSfromclusterBH (left) versus numerical value fromcmc(right) att=0.1 Gyr for all models considered.
+Virial Radius Z=0.0002 Z=0.002 Z=0.02
+8×10 5 1.6×10 6 3.2×10 6 8×10 5 1.6×10 6 3.2×10 6 8×10 5 1.6×10 6 3.2×10 6
+1 pc 7.44|6.87 8.36|7.38 8.80|7.86 5.16|5.01 5.65|5.33 –|– 0.86|0.80 0.87|0.90 0.98|1.02
+2 pc 8.72|8.09 9.22|8.34 9.31|8.50 6.05|5.90 6.36|5.92 –|– 0.89|0.91 0.97|1.00 0.98|1.09
+4 pc 9.46|8.40 10.08|8.78 –|– 6.85|6.31 7.15|6.43 –|– 0.99|1.03 1.05|1.11 –|–
+inM BH may also reflect thatcmcincludes a small binary fraction
+(5%), which can enhance BH ejection via binary–single interac-
+tions – an effect not included inclusterBH. Nevertheless, the
+overall behaviour as a function of initial density is correctly re-
+produced. Note that BHs break the self-similar evolution in the
+M−r h plane of post-collapse, equal-mass clusters (Hénon 1961,
+1965; Alexander & Gieles 2012; Gieles et al. 2014), as shown in
+Figure 10.
+3.3.3. Dependence on galactocentric distance
+The tidal field strength is set byR G (circular orbit,V c =
+220 km s−1. At large distances (R G =20 kpc) the tidal radius is
+large, evaporation is negligible, and clusters evolve as effectively
+isolated systems. HereclusterBH andcmcagree exceptionally
+well for all quantities (R G =20 kpc panels in Figures. 3–9),
+confirming that the internal dynamics (stellar evolution, relax-
+ation, BH ejections) are correctly calibrated. At intermediate dis-
+tances (R G =8 kpc) tides start to matter for extended clusters
+(rv =4 pc), andclusterBH captures the increased mass loss
+with only minor deviations. The reason why sparse clusters are
+affected first is because the tidal mass-loss rate is sensitive to
+the fractionr h/rt which is large for larger h and/or smallR G.
+At small galactocentric distances (R G =2 kpc), tides are strong
+and drive rapid dissolution, especially for low-density clusters.
+The exponential expression for the dimensionless evaporation
+rate (equation 23) with the fitted parametersR ht =0.0711 and
+ξ0 =0.147 successfully reproduces the evaporation mass loss
+seen incmc. The only notable discrepancy is that for the lowest
+metallicity and largestr v (Z=0.0002,r v =4 pc),clusterBH
+predicts slightly slower mass loss thancmc(Figure 3, right col-
+umn). This suggests that the most extended, metal-poor clusters
+may require an even stronger tidal efficiency. Nevertheless, the
+same tidal parameters work across all metallicities and masses,
+validating the prescription.
+3.3.4. Dependence on metallicity
+Metallicity controls the initial BHMF: metal-poor clusters (Z=
+0.0002) form many massive BHs that are retained (fBH ∼7−8%,
+⟨mBH⟩ ∼20M ⊙), giving a large Spitzer parameterS; metal-rich
+clusters (Z=0.02) form fewer and lighter BHs (f BH ∼2%,
+⟨mBH⟩ ∼9M ⊙), resulting in a smallerS. At the time of core col-
+lapse, the initial BH mass predicted byclusterBH agrees with
+thecmcmodels to within∼10% for metal-poor clusters, and
+even better forZ=0.02. 8 Adjusting the BH ejection rate with an
+8 The small discrepancy in the initial BHMFs betweenclusterBH and
+thecmcgrid likely arises from differences in the underlying stellar and
+binary evolution prescriptions. While both use similar assumptions for
+supernovae kicks and remnant-mass relations, details in the implemen-
+tation may vary. The stellar evolution module employed by thecmcpub-
+lic grid is an earlier version of COSMIC (Breivik et al. 2020), while
+SSPtoolsis based onsse(Banerjee et al. 2020), and does not account
+0.0
+0.5
+1.0log10 (rh/pc)
+RG = 2 kpc
+ RG = 8 kpc
+Z = 0.0002
+RG = 20 kpc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+CMC
+clusterBH
+0.0
+0.5
+1.0log10 (rh/pc)
+Z = 0.002
+105106
+M [M ]
+0.0
+0.5
+1.0log10 (rh/pc)
+105106
+M [M ]
+105106
+M [M ]
+Z = 0.02
+Fig. 10.Evolution ofr h as a function ofMfor allcmcmodels used in
+the fitting. TheclusterBH prediction is shown for comparison.
+S-dependentβis especially important for metal-rich clusters, as
+fewer and on average lower mass BHs form inside them, which
+results in already sufficiently lowSand therefore inefficient ejec-
+tion, as described in Section 2.4.2. In thecmcmodels, metal-poor
+clusters eject most BHs within a few Gyr, while metal-rich clus-
+ters retain BHs for many Gyr because the ejection rateβis sup-
+pressed whenSis close toS 0 (equation 21).clusterBH agrees
+well withcmcforZ=0.0002 over the first∼10 Gyr; at later ages
+the fractional differences inMBH can reach up to 40%. However,
+at those late times the absolute BH mass is very small (often
+≲100M ⊙), and the large fractional error is dominated by Pois-
+son noise in thecmcmodels. ForZ=0.02 the agreement is
+remarkably good (Figures 7–8), with all quantities within 20%
+over 13 Gyr. This success directly demonstrates the necessity of
+theS-dependentβ: without it,clusterBH would eject BHs far
+too quickly in metal-rich clusters. The intermediate metallicity
+Z=0.002 shows a smooth transition, and the small remaining
+offsets are within the global∼10% errorδ. A minor discrepancy
+persists for the most compact metal-poor clusters (r v =1 pc,
+Z=0.0002), whereclusterBH slightly underestimatesM BH;
+this may also be related to the absence of primordial binaries in
+clusterBH, as noted in the footnote.
+for, e.g., binary systems. Moreover,cmcadopts a 5% binary fraction.
+While SSPtoolsclosely reproduces the results of the latest COSMIC
+version, it is not identical to it.
+Article number, page 14 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+0.0 0.5 1.0 1.5
+X/X
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0P
+M* /M*
+MBH/MBH
+rh/rh
+Fig. 11.Comparison betweenclusterBH andcmcat the final snapshot.
+The y-axis represents the cumulative probability distribution of the frac-
+tional differences. All models have a difference inrh below 30%, 96.5%
+forM ∗ and 60% forM BH for allcmcmodels fitted.
+3.4. Performance ofclusterBH at 13 Gyr
+The newclusterBH version generally reproduces most of the
+cmcmodels accurately at different times, but for applications to
+GCs, it is most relevant how the performance is at old ages. Fig-
+ure 11 shows the comparison ofM ∗,M BH, andr h betweenclus-
+terBH andcmcat the time of the final snapshots for all models
+att=13 Gyr. If the clusters were not evolved up until 13 Gyr,
+the final snapshot available was used. Considering a tolerance
+of 30% in the fractional difference, 96.5% of models agree for
+M∗, 100% forr h, and 59% forM BH. The agreement forM BH im-
+proves to 83% when a 50% tolerance is used. A fewclusterBH
+models overestimate the BH fraction by more than 100%. These
+outliers correspond to clusters with metallicityZ=0.02, or to
+models havingN=8×10 5,r v =2 pc or 4 pc, andZ=0.0002. In
+these cases the absolute BH mass in thecmcmodel is very small
+(typically≲100M ⊙), whileclusterBH predicts a few hundred
+solar masses. Such large fractional differences arise from mod-
+est absolute discrepancies (a few 10 2 M⊙) in the regime where
+the BH population is nearly depleted. Moreover, in this stochas-
+tic regime thecmcresults themselves are subject to Poisson fluc-
+tuations because they track individual BHs; rerunning the same
+cmcmodel with a different random seed can change the outcome
+by a similar amount. Hence, the outliers do not indicate a sys-
+tematic failure ofclusterBH but rather highlight the limitations
+of comparing deterministic models against Monte Carlo simula-
+tions when only a handful of BHs remain.
+3.5. Comparison withN-body models
+We now make a brief comparison betweenclusterBH and the
+N-body models studied in Gieles et al. (2021). We use the mod-
+els with an initial density ofρ h =10 3 M⊙ pc−3. The metallic-
+ity is [Fe/H]=−1.5, and the models adopt a Kroupa IMF be-
+tween [0.1,100]M ⊙ resulting in an initial average mass⟨m⟩ 0 =
+0.638M ⊙. The clusters are on eccentric orbits, and the tidal mass
+loss can be approximated by a circular orbit with galactocentric
+distance ofR G =9.15 kpc (Gieles & Gnedin 2023) with circular
+velocityV c =220 km s −1. In Fig.12 the comparison withclus-
+terBH is available. Although theseN-body models were not
+included in the fitting, the agreement is satisfactory. The code
+is therefore reliable across a wide range of cluster masses, from
+∼10 4 M⊙ (tested againstN-body models) up to several 10 6 M⊙.
+4. Predictions for BBH mergers
+In this Section, we compare the predicted number of BBH merg-
+ers incBHBdto the results fromcmcand the lower-massN-body
+models of Banerjee (2021).
+To do this, we use the initial conditions of thecmcmod-
+els and run them using both the new and previous versions of
+cBHBd. The results are shown in Fig. 13. We find that the up-
+datedcBHBdcan accurately reproduce the number of dynam-
+ical mergers for most of the parameter space of initial condi-
+tions. The typical factor-of-a-few discrepancies betweencBHBd
+andcmcare comparable to the systematic uncertainties inherent
+in population synthesis predictions for the GC channel, which
+can exhibit variations of similar magnitude even when using the
+same physical model (see e.g., Mandel & Broekgaarden (2022),
+their Figure. 3). For models with lower densities, the number
+of predicted mergers shows a systematic deviation, withcBHBd
+underpredicting them. This discrepancy likely arises because the
+cmcmodels include a 5% binary fraction, making mergers trig-
+gered by dynamical interactions involving primordial binaries
+non-negligible in low-density environments.
+The discrepancies between the previous and updated ver-
+sions ofcBHBdcan be highlighted by binning in cluster masses,
+as shown in Figure 14. The new version has an overall better
+agreement with thecmcmodels, with a median percentual differ-
+ence of≲20%. The agreement withN-body models is especially
+improved at lower cluster masses (≤10 5 M⊙), where the pre-
+vious version ofcBHBdunderpredicts the number of mergers.
+The overall improvement is due to the inclusion of GW captures
+in direct interactions, which account for∼20% of all mergers,
+while the improvement in the low-mass regime is due to the in-
+clusion of GW captures during BBH-BBH interactions.
+While it was previously reported that the mass dependence
+of BBH mergers was superlinear,N merg ∝M 1.6
+0 (Antonini &
+Gieles 2020b), by performing a least-squares fit, we find a re-
+lationship close to linear,N merg ∝M 1.3
+0 . We note that this fit
+is performed over our family of models, which might obfuscate
+some degeneracies in the initial conditions. In particular, thecmc
+models have higher initial densities than theN-body models. If
+we run all models usingcBHBdbut with the same initial den-
+sity (fixed atρ h =10 4 M⊙ pc−3) and for the same amount of time
+(t=13 Gyr), we findN merg ∝M 1.1
+0 . The almost-linear scaling
+withM 0 implies that the merger efficiency defined as the num-
+ber of mergers per unit of initial cluster mass, is roughly constant
+across all masses. For an initial cluster mass function that scales
+asM −2
+0 (for example Portegies Zwart, McMillan, & Gieles 2010)
+(and assuming that the initialρ h does not depend on mass), low-
+mass clusters contribute roughly the same to the merger rate as
+massive clusters.
+5. Conclusion
+In this study we present the computational capabilities and ad-
+vantages of the fast codecBHBdfor modeling the evolution of
+star clusters and their BBH mergers under tidal field effects on
+circular orbits, with different metallicities and IMFs. By focus-
+ing on macroscopic properties such as mass-loss mechanisms
+Article number, page 15 of 24
+
+A&A proofs:manuscript no. andaa
+3.5
+4.0
+log10 (M*/M )
+ N=50k
+N-body
+clusterBH
+4.4
+4.6
+N=100k
+N-body
+clusterBH
+4.8
+5.0
+N=200k
+N-body
+clusterBH
+0.50
+0.75
+log10 (rh/pc)
+0.50
+0.75
+1.00
+0.50
+0.75
+1.00
+2 3 4
+log10 (T/Myr)
+0
+2
+log10 (MBH/M )
+2 3 4
+log10 (T/Myr)
+0
+2
+2 3 4
+log10 (T/Myr)
+2.5
+3.0
+3.5
+25
+0
+25
+M* /M* (%)
+N=50k
+25
+0
+25
+N=100k
+25
+0
+25
+N=200k
+25
+0
+25
+rh/rh(%)
+25
+0
+25
+25
+0
+25
+2 3 4
+log10 (T/Myr)
+25
+0
+25
+MBH/MBH(%)
+2 3 4
+log10 (T/Myr)
+25
+0
+25
+2 3 4
+log10 (T/Myr)
+25
+0
+25
+Fig. 12.Comparison betweenclusterBH andN-body models with initial densityρ h =1000M ⊙pc−3 and metallicity [Fe/H]=−1.5.
+N8e5 rv1 rg2 Z0.0002
+N8e5 rv1 rg8 Z0.0002
+N8e5 rv1 rg20 Z0.0002
+N8e5 rv1 rg2 Z0.002
+N8e5 rv1 rg8 Z0.002
+N8e5 rv1 rg20 Z0.002
+N8e5 rv1 rg2 Z0.02
+N8e5 rv1 rg8 Z0.02
+N8e5 rv1 rg20 Z0.02
+N8e5 rv2 rg2 Z0.0002
+N8e5 rv2 rg8 Z0.0002
+N8e5 rv2 rg20 Z0.0002
+N8e5 rv2 rg2 Z0.002
+N8e5 rv2 rg8 Z0.002
+N8e5 rv2 rg20 Z0.002
+N8e5 rv2 rg2 Z0.02
+N8e5 rv2 rg8 Z0.02
+N8e5 rv2 rg20 Z0.02
+N8e5 rv4 rg2 Z0.0002
+N8e5 rv4 rg8 Z0.0002
+N8e5 rv4 rg20 Z0.0002
+N8e5 rv4 rg2 Z0.002
+N8e5 rv4 rg8 Z0.002
+N8e5 rv4 rg20 Z0.002
+N8e5 rv4 rg2 Z0.02
+N8e5 rv4 rg8 Z0.02
+N8e5 rv4 rg20 Z0.02
+N1.6e6 rv1 rg2 Z0.0002
+N1.6e6 rv1 rg8 Z0.0002
+N1.6e6 rv1 rg20 Z0.0002
+N1.6e6 rv1 rg2 Z0.002
+N1.6e6 rv1 rg8 Z0.002
+N1.6e6 rv1 rg20 Z0.002
+N1.6e6 rv1 rg2 Z0.02
+N1.6e6 rv1 rg8 Z0.02
+N1.6e6 rv1 rg20 Z0.02
+N1.6e6 rv2 rg2 Z0.0002
+N1.6e6 rv2 rg8 Z0.0002
+N1.6e6 rv2 rg20 Z0.0002
+N1.6e6 rv2 rg2 Z0.002
+N1.6e6 rv2 rg8 Z0.002
+N1.6e6 rv2 rg20 Z0.002
+N1.6e6 rv2 rg2 Z0.02
+N1.6e6 rv2 rg8 Z0.02
+N1.6e6 rv2 rg20 Z0.02
+N1.6e6 rv4 rg2 Z0.0002
+N1.6e6 rv4 rg8 Z0.0002
+N1.6e6 rv4 rg20 Z0.0002
+N1.6e6 rv4 rg2 Z0.002
+N1.6e6 rv4 rg8 Z0.002
+N1.6e6 rv4 rg20 Z0.002
+N1.6e6 rv4 rg2 Z0.02
+N1.6e6 rv4 rg8 Z0.02
+N1.6e6 rv4 rg20 Z0.02
+N3.2e6 rv1 rg20 Z0.0002
+N3.2e6 rv1 rg20 Z0.02
+N3.2e6 rv2 rg20 Z0.0002
+N3.2e6 rv2 rg20 Z0.02
+Model name
+101
+102
+Nmerg
+CMC (only dynamical mergers)
+cBHBd (Antonini et al. 2023)
+cBHBd
+Fig. 13.Detailed comparison of the number of dynamical BBH mergers in the new version ofcBHBd(light blue) andcmc(green), separated
+by initial conditions. The gray area represents the distribution of the number of mergers incBHBd, found using 1000 runs for each set of initial
+conditions; the median is marked with a vertical bar. The green errorbars represent the 95% confidence intervals in thecmcmodels, estimated from
+a single run for each set of initial conditions. The blue crosses represent the median of the number of mergers when using the previous version of
+cBHBd.
+and energy production,clusterBH provides accurate descrip-
+tions of clusters with varying initial conditions. The study an-
+alyzed clusters withNfrom 8×10 5 to 3.2×10 6 stars initially us-
+ingcmcmodels as comparison data, considering different initial
+half-mass radii, galactocentric distances, and metallicities. Re-
+sults confirm that the current version ofcBHBdeffectively mod-
+els cluster evolution and resulting BBH mergers across diverse
+scenarios at low computational costs.
+While the present study focuses on validating the total BBH
+merger rate, we recognize that the astrophysical interpretation
+of GW events requires accurate predictions of the full demo-
+graphic distributions, including BH masses, mass ratios, and ec-
+centricities. A systematic comparison of these properties with
+Article number, page 16 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+105 106
+M0 [M⊙]
+10□1
+100
+101
+102
+Nmerg
+Nmerg ∝ M 1.3
+0
+cBHBd (Antonini et al. 2023)
+cBHBd
+nbody7
+cmc
+Fig. 14.Comparison of the number of dynamical BBH mergers, binned
+by initial cluster mass, for the different codes. In red, thecmcmodels; in
+yellow, thenbody7 models of Banerjee (2021); in green, the new version
+ofcBHBd; and in blue, the previous version ofcBHBd(Antonini et al.
+2023).
+high-fidelity models such ascmcand directN-body simulations
+will be the subject of a forthcoming study. For reference, a
+detailed comparison of BBH properties within theclusterBH
+framework can be found in AG20. Such a validation is essen-
+tial to ensure thatcBHBdreliably captures rare but scientifically
+important populations, such as hierarchical mergers in the mass
+gap or eccentric mergers that retain a dynamical signature. In ad-
+dition, we emphasize thatclusterBH is best suited for clusters
+with virial radii≳1 pc, i.e., within the range used for calibration.
+For more compact clusters, the model uncertainties increase, as
+shown in Appendix D. Future work should further test the code
+against higher-fidelity simulations.
+We envision that in future workcBHBdcan be used to ad-
+dress various science cases. A particularly important application
+will be the inference of the initial conditions, structure, stellar
+content and BH populations of nearby GCs by constraining their
+dynamical histories using fast evolutionary models likeclus-
+terBH. This would help bridge the gap between present-day ob-
+servables and theoretical predictions of initial conditions, allow-
+ing for the improved modelling of cluster formation and evolu-
+tion. A forthcoming study by Dickson et al. (in prep) will com-
+bineclusterBH with detailed cluster mass models to explore
+implications on the initial conditions and evolution of a large
+sample of Milky Way GCs based on present-day observations
+(Dickson et al. 2023, 2024).
+Tidal streams originating from GCs also provide valuable in-
+sights into their disruption processes and the dynamics of the
+host galaxy (Chapman et al. 2008; Schneider & Moore 2011;
+Shipp et al. 2018; Vasiliev 2019; Pearson et al. 2024; Valluri
+et al. 2025; Chen et al. 2025a). Observations of these streams
+reveal their kinematic and structural properties, helping to trace
+the gravitational potential of the host galaxy. The BH population
+plays a key role in tidal tail formation, as the rapid loss of stars
+increases the BH fraction, leading to cluster expansion and ac-
+celerated evaporation (Gieles et al. 2021). In mass modeling of
+GC streams, efficient evolutionary prescriptions allow for more
+reliable inference of their present-day mass distribution, particu-
+larly in the presence of BHs (Chen et al. 2025a,b; Roberts et al.
+2025). While a dedicated fast evolution code for modeling clus-
+ters and their resulting streams is not yet available to our knowl-
+edge, developing such an approach building upon a fast cluster
+evolution code likecBHBdholds great promise for accurately
+capturing the formation and evolution of streams. We aim to ad-
+dress this issue in the future when tidally dissolved clusters can
+be adequately described bycBHBd.
+The improved GW recipes incBHBdcombined with its
+speed makecBHBdan ideal tool for population synthesis mod-
+elling of BBH mergers in star clusters, which is very relevant in
+the current era of GW astronomy, marked by a rapidly growing
+number of detections (e.g., the fourth gravitational-wave tran-
+sient catalogue, GWTC-4.0, The LIGO Scientific Collaboration
+et al. 2025) and an increasing demand for detailed population
+modelling. The added description of GW captures in BBH-BBH
+interactions have improved the code particularly for low-mass
+clusters (≲10 5 M⊙). Combined with the new ability to model
+clusters with different metallicities,cBHBdis now ideally suited
+to model low-mass, metal-rich clusters that are forming across
+cosmic time. This would be an interesting addition to thecB-
+HBdpopulation models for old, massive (globular) clusters of
+Antonini et al. (2023).
+Acknowledgments
+FFP acknowledges the “la Caixa” Foundation (ID100010434)
+for financial support in the form of a Doctoral INPhINIT
+fellowship (fellowship code LCF/BQ/DI23/11990067). ND is
+grateful for the support of the Durland Scholarship in Grad-
+uate Research. DMP and MG acknowledge financial support
+from the grants PRE2020-091801, PID2021-125485NB-C22,
+PID2024-155720NB-I00, CEX2019-000918-M, CEX2024-
+001451-M funded by MCIN/AEI/10.13039/501100011033
+(State Agency for Research of the Spanish Ministry of Science
+and Innovation). VHB acknowledges the support of the Nat-
+ural Sciences and Engineering Research Council of Canada
+(NSERC) through grant RGPIN-2020-05990. FA acknowledges
+the support of STFC grants ST/V005618/1. We thank Peter
+J. Smith for helpful discussions and suggestions during the
+development of this work.
+References
+Aarseth, S. J. 1999, PASP, 111, 1333
+Aarseth, S. J. 2012, MNRAS, 422, 841
+Adamo, A., Bradley, L. D., Vanzella, E., et al. 2024, Nature, 632, 513
+Alexander, P. E. R. & Gieles, M. 2012, MNRAS, 422, 3415
+Alexander, P. E. R., Gieles, M., Lamers, H. J. G. L. M., & Baumgardt, H. 2014,
+MNRAS, 442, 1265
+Ambartsumian, V . A. 1938, TsAGI Uchenye Zapiski, 22, 19
+Antonelli, A., Kritos, K., Ng, K. K. Y ., Cotesta, R., & Berti, E. 2023,
+Phys. Rev. D, 108, 084044
+Antonini, F. & Gieles, M. 2020a, Phys. Rev. D, 102, 123016
+Antonini, F. & Gieles, M. 2020b, MNRAS, 492, 2936
+Antonini, F., Gieles, M., Dosopoulou, F., & Chattopadhyay, D. 2023, MNRAS,
+522, 466
+Antonini, F., Gieles, M., Dosopoulou, F., & Chattopadhyay, D. 2023, Monthly
+Notices of the Royal Astronomical Society, 522, 466
+Antonini, F., Gieles, M., & Gualandris, A. 2019, MNRAS, 486, 5008
+Antonini, F., Romero-Shaw, I., Callister, T., et al. 2025, arXiv:2509.04637,
+arXiv:2509.04637
+Arca Sedda, M., Mapelli, M., Benacquista, M., & Spera, M. 2023, MNRAS, 520,
+5259
+Balbinot, E. & Gieles, M. 2018, MNRAS, 474, 2479
+Banerjee, S. 2021, Monthly Notices of the Royal Astronomical Society, 503,
+3371
+Banerjee, S., Belczynski, K., Fryer, C. L., et al. 2020, A&A, 639, A41
+Barber, J. & Antonini, F. 2025, MNRAS, 538, 639
+Baumgardt, H. 2001, MNRAS, 325, 1323
+Article number, page 17 of 24
+
+A&A proofs:manuscript no. andaa
+Belczynski, K., Heger, A., Gladysz, W., et al. 2016, Astronomy and Astro-
+physics, 594, A97
+Breen, P. G. & Heggie, D. C. 2013, MNRAS, 432, 2779
+Breivik, K., Coughlin, S., Zevin, M., et al. 2020, ApJ, 898, 71
+Cameron, A. J., Katz, H., Rey, M. P., & Saxena, A. 2023, MNRAS, 523, 3516
+Chapman, S. C., Ibata, R., Irwin, M., et al. 2008, MNRAS, 390, 1437
+Charbonnel, C., Schaerer, D., Prantzos, N., et al. 2023, A&A, 673, L7
+Chatterjee, S., Fregeau, J. M., Umbreit, S., & Rasio, F. A. 2010, ApJ, 719, 915
+Chattopadhyay, D., Hurley, J., Stevenson, S., & Raidani, A. 2022, MNRAS, 513,
+4527
+Chen, Y ., Li, H., & Gnedin, O. Y . 2025a, ApJ, 980, L18
+Chen, Y ., Valluri, M., Gnedin, O. Y ., & Ash, N. 2025b, ApJS, 276, 32
+Choi, J., Dotter, A., Conroy, C., et al. 2016, ApJ, 823, 102
+Dickson, N., Hénault-Brunet, V ., Baumgardt, H., Gieles, M., & Smith, P. J. 2023,
+MNRAS, 522, 5320
+Dickson, N., Smith, P. J., Hénault-Brunet, V ., Gieles, M., & Baumgardt, H. 2024,
+MNRAS, 529, 331
+Djorgovski, S. & King, I. R. 1986, ApJ, 305, L61
+Dotter, A. 2016, ApJS, 222, 8
+Dotter, A., Chaboyer, B., Jevremovi´c, D., et al. 2007, AJ, 134, 376
+Dotter, A., Chaboyer, B., Jevremovi´c, D., et al. 2008, ApJS, 178, 89
+Fall, S. M. & Rees, M. J. 1977, MNRAS, 181, 37P
+Freitag, M. & Benz, W. 2001, A&A, 375, 711
+Freitag, M. & Benz, W. 2002, A&A, 394, 345
+Fryer, C. L., Belczynski, K., Wiktorowicz, G., et al. 2012, ApJ, 749, 91
+Fukushige, T. & Heggie, D. C. 2000, MNRAS, 318, 753
+Gerosa, D. & Mould, M. 2023, in 57th Rencontres de Moriond on Gravitation
+Gieles, M., Alexander, P. E. R., Lamers, H. J. G. L. M., & Baumgardt, H. 2014,
+MNRAS, 437, 916
+Gieles, M. & Baumgardt, H. 2008, MNRAS, 389, L28
+Gieles, M., Erkal, D., Antonini, F., Balbinot, E., & Peñarrubia, J. 2021, Nature
+Astronomy, 5, 957
+Gieles, M. & Gnedin, O. Y . 2023, MNRAS, 522, 5340
+Gieles, M., Heggie, D. C., & Zhao, H. 2011, MNRAS, 413, 2509
+Giersz, M. & Heggie, D. C. 1996, MNRAS, 279, 1037
+Giesers, B., Dreizler, S., Husser, T.-O., et al. 2018, MNRAS, 475, L15
+Ginat, Y . B. & Perets, H. B. 2021, Physical Review X, 11, 031020
+Gnedin, O. Y . & Ostriker, J. P. 1997, ApJ, 474, 223
+Goodman, J. 1984, ApJ, 280, 298
+Grudi´c, M. Y ., Hafen, Z., Rodriguez, C. L., et al. 2023, MNRAS, 519, 1366
+Hansen, R. O. 1972, Phys. Rev. D, 5, 1021
+Heggie, D. C. 1975, MNRAS, 173, 729
+Heggie, D. C. & Aarseth, S. J. 1992, MNRAS, 257, 513
+Heggie, D. C. & Rasio, F. A. 1996, Monthly Notices of the Royal Astronomical
+Society, 282, 1064–1084
+Hénon, M. 1961, Ann. Astrophys., 24, 369; English trans.: arXiv:1103.3499
+Hénon, M. 1965, Annales d’Astrophysique, 28, 62; English translation:
+arXiv:1103.3498
+Hénon, M. H. 1971, Ap&SS, 14, 151
+Hénon, M. 1975, Dynamics of the Solar Systems, IAU Symposium No. 69, 133
+King, I. 1962, AJ, 67, 471
+King, I. R. 1966, AJ, 71, 64
+Kremer, K., Chatterjee, S., Rodriguez, C. L., & Rasio, F. A. 2018, ApJ, 852, 29
+Kremer, K., Ye, C. S., Rui, N. Z., et al. 2020, ApJS, 247, 48
+Kritos, K., Berti, E., & Silk, J. 2023, Phys. Rev. D, 108, 083012
+Kritos, K., Strokov, V ., Baibhav, V ., & Berti, E. 2024, Phys. Rev. D, 110, 043023
+Kroupa, P. 2001, MNRAS, 322, 231
+Krumholz, M. R., McKee, C. F., & Bland-Hawthorn, J. 2019, ARA&A, 57, 227
+Lahén, N., Naab, T., & Szécsi, D. 2024, MNRAS, 530, 645
+Lamers, H. J. G. L. M., Gieles, M., & Portegies Zwart, S. F. 2005, A&A, 429,
+173
+Lee, H. M. & Goodman, J. 1995, ApJ, 443, 109
+Makino, J. & Aarseth, S. J. 1992, PASJ, 44, 141
+Maltsev, K., Schneider, F. R. N., Mandel, I., et al. 2025, A&A, 700, A20
+Mandel, I. & Broekgaarden, F. S. 2022, Living Reviews in Relativity, 25, 1
+Mapelli, M., Bouffanais, Y ., Santoliquido, F., Arca Sedda, M., & Artale, M. C.
+2022, MNRAS, 511, 5797
+Mapelli, M., Dall’Amico, M., Bouffanais, Y ., et al. 2021, MNRAS, 505, 339
+Marín Pina, D. & Gieles, M. 2024, MNRAS, 527, 8369
+Marín Pina, D., Gieles, M., Andrade, T., & Trani, A. A. 2025, A&A, 698, A229
+McMillan, S. L. W. & Hut, P. 1996, ApJ, 467, 348
+Ng, K. K. Y ., Kritos, K., Antonelli, A., Cotesta, R., & Berti, E. 2023,
+Phys. Rev. D, 108, 083015
+Nitadori, K. & Aarseth, S. J. 2012, MNRAS, 424, 545
+Pearson, S., Bonaca, A., Chen, Y ., & Gnedin, O. Y . 2024, ApJ, 976, 54
+Peters, P. C. 1964, Phys. Rev., 136, B1224
+Plummer, H. C. 1911, MNRAS, 71, 460
+Portegies Zwart, S. F. & McMillan, S. L. W. 2000, ApJ, 528, L17
+Portegies Zwart, S. F. & McMillan, S. L. W. 2002, ApJ, 576, 899
+Portegies Zwart, S. F., McMillan, S. L. W., & Gieles, M. 2010, ARA&A, 48, 431
+Rando Forastier, B., Marín Pina, D., Gieles, M., Portegies Zwart, S., & Antonini,
+F. 2025, A&A, 697, A118
+Renaud, F., Gieles, M., & Boily, C. M. 2011, MNRAS, 418, 759
+Roberts, E. K., Tremblay, P.-E., O’Brien, M. W., et al. 2025, MN-
+RAS[arXiv:2502.09579]
+Rodriguez, C. L., Amaro-Seoane, P., Chatterjee, S., et al. 2018, Phys. Rev. D, 98,
+123005
+Rodriguez, C. L., Chatterjee, S., & Rasio, F. A. 2016, Phys. Rev. D, 93, 084029
+Rodriguez, C. L., Morscher, M., Pattabiraman, B., et al. 2015, Physical Review
+Letters, 115, 051101
+Rodriguez, C. L., Weatherford, N. C., Coughlin, S. C., et al. 2022, ApJS, 258, 22
+Samsing, J., Askar, A., & Giersz, M. 2018, ApJ, 855, 124
+Samsing, J. & D’Orazio, D. J. 2018, MNRAS, 481, 5445
+Samsing, J., MacLeod, M., & Ramirez-Ruiz, E. 2014, ApJ, 784, 71
+Schneider, A. & Moore, B. 2011, MNRAS, 415, 1569
+Shipp, N., Drlica-Wagner, A., Balbinot, E., et al. 2018, ApJ, 862, 114
+Speagle, J. S. 2020, MNRAS, 493, 3132
+Spitzer, L. 1987, Dynamical Evolution of Globular Clusters (Princeton Univ.
+Press, Princeton, NJ)
+Spitzer, L. J. 1969, ApJ, 158, L139
+Spitzer, L. J. & Hart, M. H. 1971, ApJ, 164, 399
+Strader, J., Chomiuk, L., Maccarone, T. J., et al. 2012, ApJ, 750, L27
+Tanikawa, A., Hut, P., & Makino, J. 2012, New A, 17, 272
+The LIGO Scientific Collaboration, the Virgo Collaboration, the KAGRA Col-
+laboration, et al. 2025, arXiv e-prints, arXiv:2508.18082
+Torniamenti, S., Rastello, S., Mapelli, M., et al. 2022, MNRAS, 517, 2953
+Trani, A. A., Leigh, N. W. C., Boekholt, T. C. N., & Portegies Zwart, S. 2024,
+A&A, 689, A24
+Valluri, M., Fagrelius, P., Koposov, S. E., et al. 2025, ApJ, 980, 71
+Vanzella, E., Castellano, M., Bergamini, P., et al. 2022, ApJ, 940, L53
+Vasiliev, E. 2019, MNRAS, 482, 1525
+Wang, L. 2020, MNRAS, 491, 2413
+Wang, L., Iwasawa, M., Nitadori, K., & Makino, J. 2020, MNRAS, 497, 536
+Wang, L., Spurzem, R., Aarseth, S., et al. 2016, MNRAS, 458, 1450
+Wang, L., Spurzem, R., Aarseth, S., et al. 2015, MNRAS, 450, 4070
+Willcox, R., Schneider, F. R. N., Laplace, E., et al. 2025 [arXiv:2508.20787]
+Zevin, M., Samsing, J., Rodriguez, C., Haster, C.-J., & Ramirez-Ruiz, E. 2019,
+ApJ, 871, 91
+Article number, page 18 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+Appendix A: Differences betweenclusterBHand
+emacss
+It is worth briefly discussing the capabilities ofclusterBH in
+comparison to another available fast evolution code,emacss, as
+detailed in Alexander & Gieles (2012); Gieles et al. (2014);
+Alexander et al. (2014). In summary, while both codes can be
+used to study stellar clusters efficiently and with sufficient ac-
+curacy, there are a few main differences. First,emacssincludes
+additional physical phenomena, such as mass segregation and its
+impact on the average stellar mass, induced mass loss mecha-
+nisms as well as the time evolution of the ratiorh/rv. As a result,
+emacssrequires additional parameters to properly describe these
+effects. In contrast, the current version ofclusterBH does not
+include such effects yet. The second difference lies in the treat-
+ment of particle populations.clusterBH is specifically designed
+so that the BH population is created and evolves until it is de-
+pleted, whereasemacssdoes not have this specific focus. The
+balanced phase is also treated differently inclusterBH. Here,
+each effect contributing to mass loss and energy production is ac-
+counted for att>t cc. On the other hand,emacssmakes a smooth
+connection prior core collapse to post core collapse while in the
+balanced phase only Hénon’s contribution is considered. Regard-
+ing stellar evolution,emacssmakes use of a similar expression as
+equation (12) however unlikeclusterBH, the ratio⟨m ∗⟩/⟨m⟩is
+used on the right hand side, with⟨m ∗⟩not being influenced by
+tides. FinallyclusterBH makes no predictions for the evolution
+of the core.
+Appendix B: Energy change following mass loss
+The parameterη, first introduced in equation (12), quantifies the
+level of segregation and is related to the efficiency of energy
+transfer to the cluster’s outer layers. Mass loss occurs at the clus-
+ter’s center, and it is assumed that the time scale is longer than
+the local crossing time. This applies to both BH ejections dur-
+ing the balanced phase and stellar mass loss from main sequence
+stars. The heaviest stars, which lose more mass, segregate faster.
+Given that the cluster is in virial equilibrium, the relation
+U=2Eholds whereUis its potential energy. Let⟨v 2⟩be the
+mean square velocity such thatT= 1
+2 M⟨v2⟩. Mass loss affects
+both kinetic and potential energy, as a removed particle carries
+away a fraction of these energies. The variations in potential and
+kinetic energy can be expressed as,
+dU
+U =2 ⟨ϕ∆⟩
+⟨ϕ⟩
+dM
+M , dT
+T = ⟨v2
+∆⟩
+⟨v2⟩
+dM
+M ,(B.1)
+whereϕis the specific potential and⟨ϕ⟩=2U/M. Subscript∆
+denotes removal. The total rate of energy change, derived from
+the virial theorem, is connected to mass loss through,
+dE
+E =
+4 ⟨ϕ∆⟩
+⟨ϕ⟩ − ⟨v2
+∆⟩
+⟨v2⟩
+
+dM
+M .(B.2)
+This expression definesηin equation (12), implying that the
+level of segregation depends on the fractions of potential and
+squared velocity carried away by escaping particles, regardless
+of the escape method. Thus,
+η=4 ⟨ϕ∆⟩
+⟨ϕ⟩ − ⟨v2
+∆⟩
+⟨v2⟩ .(B.3)
+0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.00
+q*
+0.86
+0.88
+0.90
+0.92
+0.94
+0.96
+0.98
+1.00
+q*, h
+trh0 < 300 Myr
+trh0  300 Myr
+Fit (trh0 < 300 Myr): y = (1.00 ± 0.000) x1.93 ± 0.003
+Fit (trh0  300 Myr): y = (1.00 ± 0.000) x2.03 ± 0.002
+Fig. C.1.The relation betweenq ∗ within the half-mass radius and the
+globalq ∗ is well-described by a quadratic power-law. Sinceq∗ values are
+close to unity, this contribution in equation (17) can be approximated as
+constant.
+This expression generally increases over time, indicating a grow-
+ing concentration in the central regions of the cluster. For a ho-
+mologous distribution, the ratios⟨ϕ ∆⟩/⟨ϕ⟩and⟨v 2
+∆⟩/⟨v2⟩are both
+equal to unity, givingη=3.
+Appendix C: Computation ofψ
+Here we compare properties withinr h to global cluster values,
+since the parameterψin equation (16) is meant to reflect con-
+ditions withinr h. The subscript h denotes values withinr h. The
+key quantity is⟨m⟩ hψ, because it appears in the denominator of
+the relaxation time (equation 15), which sets the timescale of BH
+ejection, evaporation and expansion.
+To understand the behavior ofψ, all thecmcmodels are con-
+sidered. Since the level of segregation is different, clusters will
+be separated based on the initial relaxation. Since no informa-
+tion ofψ(t=0) is available, the formula for relaxation for the
+one component model, that is equation (15) withψ=1, att=0
+is considered to separate clusters based on relaxation. The stel-
+lar distribution initially is random, therefore the same value of
+ψis expected for all models. The same assumption was made
+in Portegies Zwart & McMillan (2002) where core collapse was
+investigated.
+Consider the ratioq ∗ =⟨m ∗⟩/⟨m⟩. Both⟨m ∗⟩and⟨m⟩within
+rh are larger than⟨m ∗⟩and⟨m⟩of the cluster respectively, so
+we assumeq ∗,h =q a
+∗, with prefactor 1 becauseq ∗,h =q ∗ when
+no BHs are present. In the stellar mass, we include everything
+that is not a BH, even remnants such as white dwarfs or neutron
+stars. Figure C.1 shows thatα=2 is preferred, but since global
+q∗ is close to unity, we simply set this factor isψequal to 1 in
+equation (16) (as in AG20). Consequently, the BH population
+determinesψat early times, and once all BHs are ejected,ψ=1.
+This substitution is valid fort>t cc, since BHs already dominate
+ψduring the relaxation-driven expansion.
+Similarly the BH fractionf BH,h is studied with a power-law.
+Because the majority of BHs reside withinr h, the relation be-
+tweenf BH,rh andf BH should be fairly trivial. It is expected that
+the prefactor of the power-law is quite close to 2 while the expo-
+nent is close to 1.
+The final ingredient in computingψis the BH mass frac-
+tion withinr h, defined asq BH =⟨m BH⟩/⟨m⟩. A power-law fit for
+this quantity is shown in Fig. C.2. Clusters with initially long
+Article number, page 19 of 24
+
+A&A proofs:manuscript no. andaa
+101
+102
+qBH
+101
+102
+qBH, h
+trh0 < 300 Myr
+trh0  300 Myr
+Fit (trh0 < 300 Myr): y = (0.59 ± 0.021) x1.08 ± 0.009
+Fit (trh0  300 Myr): y = (0.79 ± 0.012) x1.06 ± 0.004
+y=x
+Fig. C.2.The relation between the fraction⟨m BH⟩/⟨m⟩withinr h with
+the global property. Points with large initial relaxation align closely to
+they=xline, indicating non-segregated clusters.
+0.35 0.40 0.45 0.50 0.55 0.60
+m [M ]
+0.4
+0.5
+0.6
+0.7
+0.8
+m h [M ]
+trh0 < 300 Myr
+trh0  300 Myr
+Fit (trh0 < 300 Myr): y = (1.12 ± 0.041) x0.83 ± 0.037
+Fit (trh0  300 Myr): y = (0.99 ± 0.012) x0.96 ± 0.012
+y=x
+Fig. C.3.Relation of the average mass withinr h and the global by sep-
+arating clusters based on initial relaxation. Points att=0 are dropped
+for consistency with Fig.C.2. The parallel lines suggest that a single set
+of parameters can describe both categories of clusters.
+relaxation times tend to lie close to the identity line (y=x),
+while those with short relaxation times fall on a distinct second
+branch parallel to the first. This distinction arises because clus-
+ters with long initial relaxation do not segregate rapidly. How-
+ever, this does not necessitate treating the two populations sepa-
+rately, since the relaxation timescale is governed by the product
+⟨m⟩hψ, which varies by less than 20% across the two categories.
+In Fig. C.3, we show how the average mass withinr h com-
+pares to the cluster average for both branches, while Fig. C.4
+shows that the product⟨m⟩ hψbehaves similarly regardless of
+the initial relaxation state. This justifies the use of a unified set
+of parameters to model clusters with different initial conditions.
+Parameters tuned to match the high relaxation group are more
+convenient and therefore selected.
+Based on the prefactor obtained from Fig. C.2 for large relax-
+ation clusters, adoptingλ=0.25 yieldsψ≃1+1.47S, identical
+to the form used in AG20. While this relation can be employed,
+a simpler alternative is to use the approximationψ≃1+S, as
+shown in Fig. C.4. This results in a simple power-law formula as
+10 5
+10 4
+10 3
+10 2
+10 1
+fBH
+100
+101
+m h
+trh0 < 300 Myr
+trh0  300 Myr
+Fig. C.4.The product⟨m⟩ hψ. Each point represents a snapshot for a
+given model. Regardless of initial relaxation, the behavior is the same
+therefore a single set of values suffices. The figure is made using equa-
+tion (17). Second branch on the left plot belongs toZ=0.02 clusters
+which for the same BH fraction as the rest clusters, they have a different
+BH mass.
+100
+m
+100
+101
+m h h
+trh0 < 300 Myr
+trh0  300 Myr
+Fit: y = (1.45 ± 0.010) x1.21 ± 0.003
+Fig. C.5.Comparison between⟨m⟩ψwithinr h and the approximated
+form.
+shown in Fig. C.5. Using a different prefactor inψeffectively
+rescales the model parameters fitted previously.
+Compared to the fit presented in the main text, the values of
+ζ,R ht,N τrh, andS 0 change ifS ′ is used inψ. Specifically, using
+ψ(S ′) shortens the relaxation timescale, necessitating a higher
+value ofN τrh for consistency. Consequently, the energy emission
+rateζdecreases to maintain the same productζψ, which governs
+the BH ejection rate. Since lowerζcould lead to overestimated
+BH retention at low BH fractions, the parameterS 0 is increased
+to compensate. To preserve the evaporation rate,ξ 0 is also in-
+creased. In summary, although modifying the scaling inψalters
+the individual parameters, the overall model behavior remains
+robust due to compensating shifts. In the main text, we adopt the
+linear approximationψ=1+Sfor simplicity.
+Article number, page 20 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+Appendix D: Comparison tocmcmodels not
+included in the fits
+Our model parameters were calibrated using massive clusters
+withN=[8×10 5,1.6×10 6,3.2×10 6] andr v =[1,2,4] pc. Here
+we compareclusterBH to the remainingcmcmodels from the
+public grid that were left out of the fit. The estimated error to
+these models is extracted from the root mean square
+˜δ=
+vut
+1
+Ntot
+X
+i jk
+ XclusterBH
+i jk −X cmc
+i jk
+Xcmc
+i jk
+2
+(D.1)
+whereN tot is the total number of snapshots and is approximately
+˜δ≃0.401.clusterBH is capable of describingr h within 30%,
+M∗ close to 50% mainly because ofr v =0.5 pc models that lose
+mass faster incmc.M BH is overestimated inclusterBH mainly
+for metal-poor clusters. The stellar masses of clusters withr v =
+0.5 pc andZ=0.0002 and the BH masses of clusters withN≤
+4×10 5 andZ=[0.0002,0.002] are the ones that drive the value
+of ˜δup.
+In Figure D.1, the models withr v =0.5 pc forN=[8×
+105,1.6×10 6] are shown. The figure shows thatclusterBH
+underestimates the stellar mass loss rate, with the difference
+inM ∗ being within 10% and increases with age for models at
+RG =2 kpc withZ=0.0002. It is worth noting that it is the
+metal-poor clusters that experience an increased mass loss in
+cmc, which cannot be captured byclusterBH at the moment.
+This was one of the reasons that these clusters were not included
+in the fit.r h is also underestimated inclusterBH with the differ-
+ence being within 20−40%. The deviation occurs before core
+collapse so it is not due to BHs. In the end, the BH population
+is described reasonably well byclusterBH as the ejections are
+overestimated slightly but primarily when the BH population has
+dropped to aboutM BH =100M ⊙.
+Figures D.2, D.3, and D.4 show the results for all three metal-
+licities forN=[2×10 5,4×10 5]. By plotting the lowNmodels,
+we find that most clusters have stellar masses and half-mass radii
+within a 30% error margin. Clusters with metallicityZ=0.0002
+andr v =[2,4] pc tend to expand more according toclusterBH
+while those withr v =[0.5,1] pc expand less. This follows the
+pattern observed in the models that were fitted. However, the BH
+masses, especially forZ=0.0002, are overestimated inclus-
+terBH. Increasing the BH ejection rate solely for such models
+is difficult to deal with since, to our knowledge, no scaling with
+the stellar population should be observed. AtR G =2 kpc, clus-
+ters withr v =0.5 pc andr v =4 pc also exhibit excess mass
+loss, indicating that our current tidal prescription cannot capture
+the rapid dissolution of these systems. Such models are expected
+to have a large ratior h/rt so the contribution of ˙Eev previously
+neglected should become important.
+As a final comment, we showcase the predicted core–
+collapse timest cc inclusterBH compared to those obtained with
+cmcin Fig. D.5. Thecmcvalues are determined by analyzing the
+evolution of the core radius and identifying the first local mini-
+mum as the time of core collapse.
+The figure shows a noticeable spread along both axes. This
+spread arises because, forclusterBH, the 1σuncertainty in the
+parameterN trh is considered, while for thecmcmodels, results
+from all galactocentric distances are combined, and the spread
+represents the corresponding standard deviation. Models are also
+distinguished based on whether they were included in the likeli-
+hood analysis.
+It becomes evident that, for most clusters with short initial
+relaxation, theclusterBH predictions oft cc deviate by roughly
+20% from thecmcvalues. This suggests that even though, for
+these clusters, the initial relaxation timeτ rh0 depends primarily
+on the stellar IMF rather than on the BH fraction throughψ, us-
+ing the expressiont cc =N trh τrh0,whereτ rh0 depends onψ, still
+provides satisfactory results. As a comment, using the elapsed
+relaxation
+Ntrh =
+Z tcc
+0
+dt
+τrh
+(D.2)
+produces similar results. Therefore, to keep the model simple,
+we selected to uset cc =N trhτrh0.
+Examining the models withZ=0.02, it becomes clear that
+tcc is significantly larger. This is expected, since metal-rich clus-
+ters produce lighter BHs, which take longer to segregate. Rather
+than introducing an explicit metallicity dependence directly on
+tcc, it is more physically motivated—though not entirely ac-
+curate—to incorporate aZ–dependence throughψ, thereby ac-
+counting for variations in the BHMF.
+Article number, page 21 of 24
+
+A&A proofs:manuscript no. andaa
+4.75
+5.00
+5.25
+5.50
+5.75log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+Z = 0.0002
+Z = 0.002
+Z = 0.02
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 8 × 105
+5.0
+5.5
+6.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+Z = 0.002
+Z = 0.02
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 1.6 × 106
+Fig. D.1.Comparison betweenclusterBH andcmcfor models with initialr v =0.5 pc andN=8×10 5 stars (left) andN=1.6×10 6 (right).
+4.0
+4.5
+5.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 2 × 105, Z = 0.0002
+4.5
+5.0
+5.5
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 4 × 105, Z = 0.0002
+Fig. D.2.Clusters withN=2×10 5 (left) andN=4×10 5 (right) stars for Z=0.0002.
+Article number, page 22 of 24
+
+Fronimos Pouliasis et al.: A fast star cluster code
+4.0
+4.5
+5.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 2 × 105, Z = 0.002
+4.5
+5.0
+5.5
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 4 × 105, Z = 0.002
+Fig. D.3.Cluster models forZ=0.002 withN=2×10 5 (left) andN=4×10 5 (right).
+4.0
+4.5
+5.0
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 2 × 105, Z = 0.02
+4.5
+5.0
+5.5
+log10 (M* /M )
+RG = 2 kpc
+CMC
+clusterBH
+RG = 8 kpc
+ RG = 20 kpc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+rv = 0.5 pc
+rv = 1 pc
+rv = 2 pc
+rv = 4 pc
+0.5
+0.0
+0.5
+1.0
+1.5
+log10 (rh/pc)
+0 2 4
+log10 (T/Myr)
+0
+2
+4
+log10 (MBH/M )
+0 2 4
+log10 (T/Myr)
+0 2 4
+log10 (T/Myr)
+N = 4 × 105, Z = 0.02
+Fig. D.4.Same as Figure D.2 but forZ=0.02.
+Article number, page 23 of 24
+
+A&A proofs:manuscript no. andaa
+101 102 103
+tCMC
+cc  [Myr]
+101
+102
+103
+tclusterBH
+cc  [Myr]
+Initial Conditions
+rv = 0.5 pc
+rv = 1.0 pc
+rv = 2.0 pc
+rv = 4.0 pc
+Z = 0.0002
+Z = 0.002
+Z = 0.02
+Model Status
+Used
+Unused
+y=x
+Fig. D.5.Core collapse in clusterBH versus cmc . Error in x axis is due
+to the standard deviation from combining different galactocentric dis-
+tances. Error in the y axis is due to the 1σuncertainty in the number of
+initial relaxationsN trh.
+Article number, page 24 of 24

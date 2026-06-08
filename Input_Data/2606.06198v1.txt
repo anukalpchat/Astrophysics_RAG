@@ -1,0 +1,304 @@
+Title: Hub-Aware Hybrid Search: Accelerating the Locally Aligned Ant Technique
+Authors: Simone Vilardi, Reynier Peletier, Felipe Contreras, Kerstin Bunte
+Published: 2026-06-04
+Categories: cs.NE, astro-ph.CO, astro-ph.GA, astro-ph.IM
+
+Hub-Aware Hybrid Search: Accelerating the
+Locally Aligned Ant Technique
+Simone Vilardi1, Reynier Peletier 2, Felipe Contreras1,3 and Kerstin Bunte 1
+1- University of Groningen - Bernoulli Institute
+for Mathematics, Computer Science and Artificial Intelligence
+2- University of Groningen - Kapteyn Astronomical Institute
+3- Instituto de F´ ısica y Astronom´ ıa, Universidad de Valpara´ ıso
+Abstract. Finding manifold structures in noisy and high-dimensional
+point clouds is a challenging but important problem. In astronomical ob-
+servation survey and simulation data the detection of filaments, streams
+(1D), walls (2D) and clusters (3D) gives rise to deeper understanding of
+the evolution of our universe. The Locally Aligned Ant Technique (LAAT)
+uses biologically inspired agents to efficiently recover faint and multidi-
+mensional structures. However, very dense hubs (e.g. nodes or globular
+clusters) dominate the ants’ activity, creating unnecessary computational
+overheads. In this paper we propose a two-stage solution. First a fast
+preprocessing step locates the hubs and replaces them with a tailored like-
+lihood model. Subsequently, a mixed likelihood-pheromone strategy guides
+the ants to efficiently bridge the dense regions. We demonstrate improve-
+ments in detection efficiency and robustness of LAAT with synthetic and
+a large-scale astronomical N-body simulation of the cosmic web.
+1 Introduction
+To understand the large-scale structure of the Universe, it is paramount to iden-
+tify filaments, streams, and clusters within the cosmic web, which are diffi-
+cult to detect due to noise and high dimensionality in astronomical surveys
+and N-body simulations.[1–4] The 1-DREAM pipeline was developed to detect
+and model one-dimensional manifolds in such settings [5, 6], with LAAT as
+its first module for identifying likely manifold members via an ant-colony op-
+timisation scheme combining local geometry and pheromone reinforcement [5].
+However, real datasets often contain very dense hubs where ants rapidly accumu-
+late, causing these clusters to dominate pheromone accumulation and subsequent
+thresholding. This wastes computation resources and hampers the desired one-
+dimensional manifold recovery. Recent extensions proposing a dynamic radius
+[7, 8] improved the noise handling and user-friendliness of LAAT, but the ants
+still spent a significant amount of steps (time) in dense regions. We present a
+revised LAAT that mitigates hub dominance 1 by: (1) identifying dense regions,
+(2) fitting a likelihood model to each region, (3) running ants on the combined
+likelihood-point cloud domain, and (4) introducing a modified transition prob-
+ability incorporating those models to guide the ants towards fainter structures.
+These modifications retain the alignment-and-pheromone mechanism of LAAT,
+while avoiding the repeated exploration of dense hubs. This improves the recov-
+ery of filamentary manifolds in challenging cosmological datasets.
+1code publicly available athttps://git.lwp.rug.nl/cs.projects/Hub-LAAT
+arXiv:2606.06198v1  [cs.NE]  4 Jun 2026
+
+2 Methodology
+LAAT guides stochastic agents across a dataset using pheromone deposition
+and evaporation schemes inspired by biology. Given a datasetX={x i}N
+i=1, for
+each point,x i ∈I RD we define a spherical neighbourhoodN (i)
+r of radiusrand
+compute local eigen-vectors and -values{(v d, λ)d)}D
+d=1 within it. LAAT drives
+ants with two preferences: (i) Alignment of (x j −x i) withv d represented by
+angle|cosα (i,j)
+d |and weighted byλ d, thusA (i,j) =PD
+d=1
+|cosα (i,j)
+d |
+P
+d′ |cosα (i,j)
+d′ | · λdP
+d′ λd′
+,
+and neighborhood relative ¯A(i,j) = A(i,j)
+P
+j′∈N (i)
+r
+A(i,j′) . (ii) And relative accumulated
+pheromone ¯F j(t) at timetat pointx j ∈ N (i)
+r , that can evaporate on rarely
+visited points (see [5]). Both combined result in a movement preference fromx i
+tox j of an ant at timetwith contributions controlled byκ∈[0,1]:
+V (i,j)(t) = (1−κ) ¯F j(t) +κ ¯A(i,j).(1)
+The transition probabilities are viewed as negative “energies”
+P(j|i, t) = exp
+
+β V (i,j) (t)
+
+/P
+j′ ∈N (i)
+r
+exp
+
+β V (i,j′ )(t)
+
+,(2)
+with inverse temperatureβ. Herej ′ indexes points in the local neighbour-
+hoodN (i)
+r of pointi. To allow efficient parallelization with multiple ants, the
+pheromone is updated in epochs encompassing a number of ant steps. The evo-
+lutionary process is linear with the number of points, with a one time squared
+preprocessing cost including local PCA [5]. The presence of dense hubs induces
+two issues: (1) pheromone accumulates, making them local attractors and reduc-
+ing visitations in fainter structures, and (2) structure members are detected by
+pheromone thresholding, which tends to keep a significant amount of points in
+these small dense regions, slowing down any subsequent analysis unnecessarily.
+2.1 Hub identification and modelling
+Our approach is designed for efficiency, identifying dense regions to reduce com-
+putational burden in the subsequent evolutionary computation. In the special
+case ofκ= 1 in (1) the ants ignore the pheromone and transition probabilities
+are independent oftand stay constant withP ij =P(j|i). It can be considered
+a Markov Chain (MC) and studied as stationary distribution of the point cloud
+(several if isolated). It is independent of the starting point and will converge
+to a steady-state vectorπ, the dominant left eigenvector of the transition ma-
+trix containing the visitation frequency of each data point. We compute this
+eigenvector using the Power method and use the thresholding strategy proposed
+in [7] to obtain high visitation values indicating dense regions. Concretely, for
+every particlex i we sort its neighboursx j ∈ N (i)
+r in ascending order of visi-
+tation scores j =π j, obtain the minimum (maximum) values min (smax), and
+smooth the distribution by fitting a cubic splinef(s). The first inflection point
+s0 is found by differentiation and marks a steep change. A parameterηdefines
+
+a local thresholdT i, more aggressive or conservative:
+Ti =
+(
+s0 + (smax −s 0)η,1≥η≥0,
+s0 + (s0 −s min)η,−1≤η <0. (3)
+A minimum threshold is enforced as a fraction of the average visitationT i ≥
+ψ
+N
+PN
+j=1 πj. We then cluster high-visitation points via the friends-of-friends
+algorithm with linking lengthl=b(V/N) 1/D, whereVis the data volume (or
+surface) with free parameterb∈[0.1,1]. Alternativelylcan be chosen as LAAT
+neighbourhood radiusr. We only retain hubs containing at leastN min points.
+After detection we fit a likelihood model to each of theKhubs, forming
+the basis for the new hybrid ant-movement scheme. We model the distribution
+using a Bayesian Gaussian mixture with a Dirichlet process prior 2. The fitted
+BGM yields a continuous likelihood field, which we divide into High-Likelihood
+Points (HLPs) or Low-Likelihood Points (LLP) to remove the dense central
+region and keep a transition region to lower density outskirts. Although hubs
+are general, we simplify using nested equal-volume Mahalanobis shells centred at
+the maximum likelihood point of thek’s modelc k to approximate likelihood level
+sets. LetN p denote the number of particles enclosed up to shellℓwith radiusr ℓ,
+Nhub the total number of hub particles and the enclosed fractionR=N p/Nhub.
+For growing shellsS ℓ ={x j :r ℓ−1 <∥x j −c k∥ ≤r ℓ }, we compute a stopping
+probabilityp stop = (eα/R −1) /(e1/R −1)withα= R−0.5
+0.5 ,which increases as a larger
+fraction of the hub has been enclosed. A random drawu∼U(0,1) terminates the
+shell expansion whenu < p stop. The median likelihood of the final shell defines
+the hub thresholdT k separating HLP (> T k) from LLP (≤T k). Removing
+the HLP from the data before exploration prevents any future ant visitation,
+reducing computational time and memory requirements.
+2.2 New ant transition probabilities
+All remaining data pointsx i carry likelihood information for theKmodelled
+hubsL (i)
+k withk= 1. . . K. The friends-of-friends clustering provides a crisp
+assignment so each point has at most one likelihood value (extension to fuzzy
+memberships are possible). For points that do not belong to any hub the original
+LAAT transition probabilities (2) are used. When the current pointx i has a
+valid hub assignmentk, we replace the old transition using the hub’s LLPs as
+follows. For a neighbourx j ∈ N (i)
+r we define the likelihood difference term
+∆(i,j)
+k =
+L(i)
+k − L(j)
+k
+, and the likelihood-based transition probability becomes
+P(j|i) = ∆(i,j)
+k L(j)
+k /Tk
+P
+j′∈N (i)
+r
+∆(i,j′)
+k L(j′)
+k /Tk
+.(4)
+This probability favours target neighbours that both differ strongly in likelihood
+fromx i and lie in high-likelihood regions, thus directing ants towards sharp
+likelihood gradients. This transition alone would steer the ants to surround the
+2BayesianGaussianMixtureinhttps://github.com/scikit-learn/scikit-learn.
+
+Fig. 1: a) Mock data. b) and c) Old and New LAAT outputs.
+cavity. To allow faster exploration, we propose a double jump strategy with
+controlled repulsion. For the targetx j fromx i (4) we compute the Euclidean
+distanceδ ij. With a probabilityP 2nd(j) = exp(− δij/r) a 2nd jump is triggered
+to a random pointx j′ in the LLP set of modelk, effectively expanding the
+neighbourhoodN (i)
+r to the model shell LLP k. A longe-range repulsion follows
+the 2nd jump to increase the chance to leave the hub. Concretely, a shell is
+formed centred atx j′ with potential target pointsx m at a distanceγ minr≤
+δj′m ≤γ maxr. The parametersγ min andγ max control the repulsion range relative
+to the LAAT parameter radiusr. The transition probability for repulsionP rep =
+exp(−L(m)
+k /L(j′)
+k ), favours moves towards lower-likelihood points, that connect the
+hub to fainter structures, effectively enabling the ants to leave the hub.
+3 Experiments and Discussion
+We compare the new algorithm with the original LAAT on a synthetic dataset
+with known ground truth components, to measure component recovery directly.
+Then we study the new parameters sensitivity using a second cosmic-web-like
+mock dataset and demonstrate its scalability on a 50 3 Mpc3/hcosmic web N-
+body simulation cube containing 2.8×10 5 particles. Throughout the experi-
+ments, we fixβ= 10 in the MC transition probabilities toleranceε= 0.1 and a
+maximum of 100 steps in the Power Iteration. We model each Bayesian Gaussian
+mixture with maximal 10 components, full covariances and a uniform concen-
+tration prior. We set ant-transition parametersγ min = 1.5 andγ max = 2.5.
+Table 1: Component recovery.
+OLD NEW
+Dense hub 88% 5%
+Filament 5% 72%
+Noise 1% 3%
+Synthetic data:the sample contains 8×10 3
+particles: 64% in the dense hub, 26% in the
+filament, and 10% noise. For the old method
+we use 100 ants, 1000 epochs, and 10000 steps
+withr= 0.25. For the new one, the new hyper-
+parameters (ψ, η, b) are set to (0.005,−0.2, r).
+To ensure a fair comparison, we estimated, by wall-clock CPU timing, that the
+new preprocessing steps weight around 40 epochs of 10000 steps on this dataset.
+As a consequence, we leave the number of ants and steps unchanged, and reduce
+the number of epochs to 960. Results are shown in Figure 1 and Table 1 report-
+ing the recovery fractions of each component and demonstrate the significant
+improvement in filamentary component recovery achieved by the new algorithm.
+Parameter analysis:the algorithm behaviour is primarily governed by the pre-
+processing parameters, with all others fixed due to their weaker empirical impact.
+
+Fig. 2: a) Mock data. b) Filament skeletons. c) Tubes to select candidate
+filament points for the analysis.
+The parameterbcontrols the typical spatial extent of detected hubs, whileψ
+andηregulate the partition into dense and non-dense points, balancing speed
+and completeness. Lower values classify more points as dense, risking removal of
+faint structures, whereas higher values make hub detection stricter and limit hub
+usage. To study this trade-off, we use a synthetic, cosmic web-like point cloud
+comprising two high-density Gaussian nodes, three filaments of varying length,
+shape and density, and uniform background noise (totalling around 2.4·10 4
+points). We perform a sensitivity analysis of the parameters similar to [5].
+Specifically, we alterψ∈[0.0005,0.5] andη∈[−1,1], and fix the remaining
+parameters to 100 ants, 100 epochs, 5000 steps,r= 0.5, andb= 0.2. Figure 2
+shows the dataset with filament skeletons and tube regions to select points at a
+fixed radial distance (r= 0.35), corresponding to∼70% of all filament points.
+As in Taghribi et al. [5] we evaluate the recovery of the filament using the av-
+erage Hausdorff distance (AHD) [9]. We focus specifically on filaments with
+comparisons made between the union of true filament points within the tubes in
+Figure 2 and LAAT-selected points constrained to the same regions (Table 1).
+Fig. 3: Global mean AHD as a func-
+tion of the hyperparametersψandη.
+As shown in Figure 3, increasing ei-
+therψorηmakes hub detection more
+restrictive, reducing filament complete-
+ness and increasing the average Haus-
+dorff distance. The best overall recovery
+for this dataset is obtained for (ψ, η) =
+(0.1,−1), which corresponds to the low-
+est mean AHD.
+cosmic web:The new Hub-LAAT
+significantly improves scenarios involv-
+ing multiple dense regions, as they guide
+the ants more efficiently, accelerating
+and substantially improving the overall
+exploration process, as illustrated in Figure 4. Panels (b) and (c) show, the top
+105 particles with the highest pheromone values obtained with the old and the
+new LAAT algorithms, using identical settings (100 ants, 100 epochs, 10 4 steps
+andr= 1). Hub-LAAT hyperparameters (ψ, η, b) were set to (0.005,−0.6, r).
+Panel (d) displays the top 10 5 particles from Hub-LAAT (c) with an additional
+number of particles equalling those removed during preprocessing (∼3.7×10 4).
+
+Fig. 4: a) cosmic web data. b) and c) Top 10 5 particles with highest pheromone
+levels from original and new LAAT. (d) Top 105 particles plus∼3.7·10 4 particles
+(matching the number new LAAT preprocessing removed).
+Lacking ground truth, the evaluation is necessarily qualitative.
+4 Conclusions and future work
+In this paper, we propose a two-stage modification to LAAT: fast hub detec-
+tion with a tailored likelihood model, followed by mixed likelihood-pheromone
+ant transition probabilities. These extensions mitigate hub-induced overconcen-
+tration, reduce computational and memory overhead, accelerate the recovery of
+filaments and streams, and improve robustness in noisy, high-dimensional cos-
+mological datasets. In future work we will develop a temporal version of the
+methodology to model the dynamic evolution of galaxy structures over time.
+Acknowledgments
+Funded by the European Union (MSCA EDUCADO, GA 101119830). Views and opinions
+expressed are however those of the author(s) only and do not necessarily reflect those of
+the European Union. Neither the European Union nor the granting authority can be held
+responsible for them.
+References
+[1] J. R. Bond, L. Kofman, and D. Pogosyan. “How filaments of galaxies are woven
+into the cosmic web”. In:Nat.380.6575 (1996), pp. 603–606.
+[2] M. Cautun et al. “Evolution of the cosmic web”. In:MNRAS441.4 (2014),
+pp. 2923–2973.doi:10.1093/mnras/stu768.
+[3] V. Springel. “The cosmological simulation code GADGET-2”. In:MNRAS364.4
+(2005), pp. 1105–1134.doi:10.1111/j.1365-2966.2005.09655.x.
+[4] J. Schaye et al. “The EAGLE project: simulating the evolution and assembly of
+galaxies and their environments”. In:MNRAS446.1 (2015), pp. 521–554.
+[5] A. Taghribi et al. “LAAT: Locally Aligned Ant Technique for Discovering Multiple
+Faint Low Dimensional Structures of Varying Density”. In:IEEE Trans. Knowl.
+Data Eng.35.6 (2023), pp. 6014–6027.doi:10.1109/TKDE.2022.3177368.
+[6] M. Canducci et al. “1-DREAM: 1D Recovery, Extraction and Analysis of Mani-
+folds in noisy environments”. In:Astron. Comput.41 (2022), p. 100658.
+[7] F. Contreras, K. Bunte, and R. Peletier. “Improved LAAT strategy to recover
+manifolds embedded in strong noise”. In:31st ESANN. 2023, pp. 71–76.
+[8] F. Contreras, K. Bunte, and R. Peletier. “Adaptive Locally Aligned Ant Technique
+for Manifold Detection and Denoising”. In:33rd ESANN. 2025, pp. 111–116.
+[9] M.-P. Dubuisson and A. Jain. “A modified Hausdorff distance for object match-
+ing”. In:Proc. of the 12th Int. Conf. Pattern Recognit.Vol. 1. 1994, 566–568 vol.1.
+doi:10.1109/ICPR.1994.576361.

@@ -1,0 +1,1333 @@
+Title: COSMOS2025: Machine Learning Classification of Early- and Late-type Galaxies at 0 < z < 3
+Authors: Vahid Asadi, Najmeh Sheikhi
+Published: 2026-06-02
+Categories: astro-ph.GA
+
+DRAFT VERSIONJUNE3, 2026
+Typeset using LATEXtwocolumnstyle in AASTeX631
+COSMOS2025: Machine Learning Classification of Early- and Late-type Galaxies at0<z<3
+VAHIDASADI
+ 1 ANDNAJMEHSHEIKHI
+ 1
+1Department of Physics, Institute for Advanced Studies in Basic Sciences (IASBS), PO Box 11365-9161, Zanjan, Iran; vahijd.asadij@gmail.com
+ABSTRACT
+We present a fast, interpretable machine learning framework to classify early- and late-type galaxies in the
+COSMOS2025 catalog at0<z<3, without relying on image-based training labels or computationally ex-
+pensive structural fitting. Using the Santa Cruz Semi-Analytic Model, we generate a training set with se-
+cure morphological labels defined by bulge-to-total mass ratio and specific star formation rate. We bridge the
+simulation-to-observation domain gap by injecting realistic photometric noise derived from COSMOS2025.
+ACatBoostClassifiertrained on 66 broadband colors achieves excellent performance in the simulated
+domain, recovering late-types with98%precision/recall and early-types with91%precision and88%recall.
+Applied to 44,132 COSMOS2025 galaxies, the model reveals a striking bimodality: only∼6% of galaxies
+receive intermediate probabilities (0.3<P(Early type)<0.7)—nearly identical to the fraction observed in
+the simulation. This demonstrates that broadband colors are a decisive morphological discriminant, with the
+remaining 94% classified at high confidence. Validation against independent bulge+disk decompositions yields
+70%overall accuracy, with late-types identified at78%purity and74%completeness. The most important color
+feature, F277W–F444W, reflects the expected optical/NIR contrast between old and young stellar populations.
+The full pipeline completes in under 30 minutes on standard hardware, demonstrating that simulation-trained
+color-based classifiers offer a scalable, physically interpretable route to approximate morphology for large next-
+generation surveys.
+Keywords:galaxy morphology—machine learning—COSMOS2025—high-redshift galaxies—photometric
+classification
+1.INTRODUCTION
+The morphological classification of galaxies is funda-
+mental to our understanding of galaxy formation and
+evolution. Since the inception of the Hubble se-
+quence (Hubble 1926), the structural dichotomy between
+early-type galaxies–typically quiescent, bulge-dominated
+spheroids–and late-type galaxies–typically star-forming,
+disk-dominated systems–has served as a primary probe of the
+physical processes driving cosmic history. This morphologi-
+cal bimodality correlates with other physical properties, such
+as color, stellar mass, and star formation rate (e.g., Strateva
+et al. 2001; Bell et al. 2003; Baldry et al. 2004), suggest-
+ing that morphology traces the integrated merger history and
+feedback mechanisms acting upon a galaxy (e.g., Conselice
+2014; Somerville & Dav´e 2015).
+While morphological classification is well-established in
+the local universe (z∼0), extending these studies to higher
+redshifts (z>1) presents significant challenges. At these
+epochs, galaxies are intrinsically smaller, fainter, and often
+exhibit irregular structures that defy classical Hubble types
+(e.g., Mortlock et al. 2013; Huertas-Company et al. 2016).
+Traditional methods, such as visual classification (e.g., Lin-
+tott et al. 2008; Kartaltepe et al. 2015; Simmons et al. 2016;
+Willett et al. 2016) or parametric fitting of surface brightness
+profiles (e.g., Peng et al. 2002; Simard et al. 2011; Vika et al.
+2013; Dimauro et al. 2018; Nedkova et al. 2024; Shuntov
+et al. 2025), become increasingly computationally expensive
+and subject to biases caused by surface brightness dimming
+and point spread function effects in large-volume surveys.
+Furthermore, the advent of next-generation surveys with the
+James Webb Space Telescope (JWST; Gardner et al. 2006),
+Euclid (e.g., Cuillandre et al. 2025), and the Nancy Grace
+Roman Space Telescope (e.g., Wang et al. 2022) will yield
+datasets of unprecedented volume, rendering manual or dis-
+tinct computationally intensive fitting techniques impractical
+for the entirety of the observed populations.
+To address these data challenges, machine learning (ML)
+has emerged as a practical tool for astronomical classifica-
+tion. In recent years, ML algorithms—most notably con-
+volutional neural networks (CNNs)—have been applied to
+separate galaxy populations morphologically based on imag-
+ing data (e.g., Dom´ınguez S´anchez et al. 2018; Cheng et al.
+2021; Bhambra et al. 2022; Fang et al. 2023; Iyer et al. 2024;
+arXiv:2606.03224v1  [astro-ph.GA]  2 Jun 2026
+
+2
+Cao et al. 2024; Luo et al. 2025; Pandya et al. 2025). While
+powerful, CNN-based methods face several intrinsic limita-
+tions for large-scale, multi-survey applications at high red-
+shift. Their performance is heavily dependent on the spe-
+cific imaging data (e.g., depth, resolution, point spread func-
+tion, and bandpasses) on which they are trained, making them
+difficult to generalize consistently across different surveys
+or even within a single survey as observational conditions
+vary (see discussions in, e.g., Barchi et al. 2020). Further-
+more, the feature representations learned by CNNs are of-
+ten opaque “black boxes”, providing limited physical insight
+into the photometric drivers of morphological classification
+(e.g., S ¸AHiN et al. 2025). Most critically, the majority of
+these methods are supervised learning approaches that re-
+quire large, consistently labeled training sets, which at high
+redshifts (z>1) are scarce, potentially biased by visual clas-
+sification at low signal-to-noise, and may not reflect the true
+physical diversity of galaxies during peak assembly epochs.
+In this study, we present an approach that leverages photo-
+metric colors rather than pixel-level images, trained on phys-
+ically grounded simulations rather than limited observational
+labels. We construct a robust ML framework to classify
+early- and late-type galaxies out to z∼3using the COS-
+MOS2025 catalog (Shuntov et al. 2025). Our method uti-
+lizes the updated Santa Cruz Semi-Analytic Model (SAM)
+(Somerville et al. 2021; Yung et al. 2022) to generate a large,
+high-redshift training set with intrinsic morphology labels
+defined by bulge-to-total mass ratio (B/T) and specific star
+formation rate (sSFR). Rather than assigning rigid binary
+labels, our classifier outputs a continuous probability that
+quantifies a galaxy’s photometric similarity to the early-type
+archetype. This probabilistic framework naturally accommo-
+dates galaxies with intermediate or mixed properties.
+We treat the “simulation-to-observation” domain
+gap by injecting realistic photometric noise derived
+from the COSMOS2025 data itself. By training a
+CatBoostClassifiermodel (Prokhorenkova et al.
+2018) on photometric colors—features, we obtain a clas-
+sifier that is computationally efficient, and whose decisions
+can be traced to physically meaningful color indices.
+The paper is organized as follows. In Section 2, we de-
+scribe the mock and observational datasets. Section 3 details
+the pre-processing steps, including missing value imputation
+and noise injection. Section 4 outlines the ML architecture
+and training strategy. We present the performance metrics
+and results in Sections 5 and 6, followed by a discussion of
+the implications and limitations in Section 7. We conclude in
+Section 8.
+We adopt a flatΛCDM cosmology with parameters H 0 =
+70kms−1Mpc−1,Ω m = 0.3andΩ Λ = 0.7. All magnitudes
+are reported in the AB system (Oke & Gunn 1983).
+2.DATA
+This study employs two complementary datasets: SAM
+mock galaxy data, which provides a physically motivated
+training sample with known intrinsic galaxy properties, and
+the COSMOS2025 observational catalog (Shuntov et al.
+2025), which serves as the target dataset for early- and late-
+type galaxy classification. In this section, we describe both
+datasets and the selection criteria applied to construct the
+working samples.
+2.1.Mock Data
+For this work we use JWST wide-field light-cone catalogs
+constructed from the updated Santa Cruz SAM galaxy for-
+mation model (Somerville et al. 2021; Yung et al. 2022). The
+model evolves galaxies within dark matter merger trees ex-
+tracted from the Bolshoi–PlanckN-body simulation (Klypin
+et al. 2011), assuming aΛCDM cosmology. Baryonic pro-
+cesses are treated with parameterized prescriptions for gas
+accretion and cooling, star formation, stellar and supernova
+feedback, black hole growth and AGN feedback, and galaxy
+mergers, yielding self-consistent predictions for key galaxy
+properties such as stellar mass, star formation rate, metallic-
+ity, and SEDs.
+To mimic deep extragalactic surveys, the SAM outputs
+are organized into light cones that trace the evolving galaxy
+population across cosmic time. The catalogs cover five in-
+dependent fields with footprints matched to the CANDELS
+legacy fields (Grogin et al. 2011; Koekemoer et al. 2011):
+GOODS-S, GOODS-N, COSMOS, EGS, and UDS. Each
+field contains multiple realizations spanning0≤z≤10,
+and includes observed-frame photometry for a wide range
+of facilities (e.g. JWST/NIRCam, Roman/WFI, HST/WFC3
+and ACS, Spitzer, Euclid, Rubin, GALEX, SDSS, UKIRT,
+VISTA, and DECam), as well as rest-frame luminosities in
+UV and optical bands (Yung et al. 2019; Somerville et al.
+2021; Yung et al. 2022). Physical quantities for halos and
+galaxies, including stellar and bulge masses, are provided and
+form the basis for our morphology definition and training la-
+bels.
+In the SAM, galaxies are assigned to dark matter halos as
+centrals and satellites. Gas accretion, cooling, and star for-
+mation follow an updated Kennicutt–Schmidt relation tied to
+the molecular gas content, with an additional starburst mode
+associated with galaxy mergers (Robertson et al. 2006; Hop-
+kins et al. 2009; Somerville et al. 2015). Stellar and AGN
+feedback can eject or heat gas, regulating subsequent star for-
+mation and black hole growth (Somerville et al. 2008; Bondi
+1952). Model parameters are calibrated to reproduce ob-
+served galaxy mass and luminosity functions and key scaling
+relations, and the resulting SEDs are processed through dust
+attenuation and IGM absorption models before being con-
+volved with instrument response functions to produce real-
+
+3
+istic broadband fluxes and magnitudes (Madau 1995; Yung
+et al. 2019; Somerville et al. 2021; Yung et al. 2022).
+2.2.Observation Data
+The observational component of this work is based on
+the COSMOS2025 galaxy catalog (Shuntov et al. 2025),
+the definitive data release from the COSMOS-Web JWST
+Treasury program (GO#1727; PIs: Casey & Kartaltepe).
+COSMOS2025 builds on previous COSMOS compilations
+(Laigle et al. 2016; Weaver et al. 2022) and provides photom-
+etry, photometric redshifts, morphological measurements,
+and derived physical parameters for over 700,000 galaxies
+in the central∼0.54 deg 2 of the COSMOS field (Scoville
+et al. 2007).
+The catalog combines deep, high-resolution imaging from
+both space- and ground-based facilities. JWST/NIRCam
+(F115W, F150W, F277W, F444W) and JWST/MIRI
+(F770W) data from COSMOS-Web are complemented by
+HST/ACS F814W imaging, together with extensive ground-
+based ultraviolet (CFHT/MegaCam), optical (Subaru/HSC
+and Suprime-Cam), and near-infrared data from UltraVISTA
+DR6 (VISTA/VIRCAM; McCracken et al. 2012). Source de-
+tection is performed on a PSF-homogenizedχ 2 combination
+of the four NIRCam bands, and photometry is measured in a
+homogeneous way across 37 bands covering0.3–8µm.
+Morphological and photometric measurements are ob-
+tained using SEXTRACTOR++, which fits S ´ersic and
+bulge+disk models to the native-resolution images convolved
+with the appropriate PSF, delivering consistent total fluxes
+and structural parameters across all bands. Photometric red-
+shifts and physical parameters are derived withLePhare
+(Arnouts et al. 1999; Ilbert et al. 2006) andCIGALE(Bo-
+quien et al. 2019), using 32 bands spanning0.3–8µm. The
+combination of deep JWST/NIRCam imaging, expanded
+template libraries with diverse star formation histories and
+dust attenuation curves, and improved ground-based data
+from UltraVISTA DR6 and HSC PDR3 yields photometric
+redshift accuracies ofσ NMAD ∼0.01–0.03down to faint
+magnitudes and significantly improved stellar-mass com-
+pleteness compared to COSMOS2020 (Weaver et al. 2022).
+In this work, we use the SEXTRACTOR++ model-fit pho-
+tometry, together with the associatedLePharephotometric
+redshifts and stellar masses, to construct our observational
+sample.
+2.3.Sample Selection
+For a fair comparison between the SAM and COS-
+MOS2025 catalogs, we first identified a common set of
+broad-band filters available in both datasets. We selected
+twelve bands spanning the ultraviolet to near-infrared, which
+provide strong leverage on galaxy colors, stellar masses, and
+star formation histories. These include the CFHT u band,
+Table 1.Overview of the twelve COSMOS2025 bands used in this
+work.
+Instrument Band Central a Widthb Depthc
+/Telescopeλ[ ˚A] [ ˚A]
+(Survey)
+CFHT u 3858 598 27.3
+NIRCam F115W 11622 2646 27.2
+F150W 15106 3348 27.4
+F277W 28001 6999 28.1
+F444W 44366 11109 28.0
+ACS/HST F814W 8333 2511 27.5
+VIRCAM Y 10216 923 25.8
+/VISTA J 12525 1718 25.8
+UltraVISTA H 16466 2905 25.5
+DR6 K s 21557 3074 25.3
+IRAC ch1 35686 7443 26.4
+/Spitzerch2 45067 10119 26.3
+a Median of the transmission curve.
+b Full width of the transmission curve at half maximum.
+c 5σdepth in empty apertures with diameters of1.0 ′′ for ground-based,
+0.15′′ for JWST/NIRCam and HST/ACS, and0.5 ′′ for JWST/MIRI im-
+ages, averaged over the NIRCam area.
+HST/ACS F814W, UltraVISTA YJHK s, JWST/NIRCam
+F115W, F150W, F277W, F444W, andSpitzer/IRAC channels
+1 and 2, as summarized in Table 1.
+To construct our working samples, we then applied identi-
+cal cuts to both the mock and observational catalogs:
+– Redshift range:0<z<3. This range is well sampled
+in both catalogs and covers the epoch where our B/T-
+based morphology classification is most reliable.
+– Stellar mass cut:log(M ⋆/M⊙)>9.5. This threshold
+avoids the dwarf regime, where our B/T morphology
+indicator becomes less reliable.
+– Magnitude cut:m F444W <27.5. This limit is set by
+the depth and photometric quality of COSMOS2025
+catalog.
+This selection results in a final sample of 265,504 galax-
+ies from the SAM catalog (restricted to the COSMOS light
+cone and using all seven available realizations) and 44,132
+galaxies from the COSMOS2025 catalog.
+3.PRE-PROCESSING
+To enable a consistent machine-learning analysis between
+the idealized mock catalog and the real observational data,
+the selected samples from Section 2 must be harmonized and
+transformed. This section details the steps taken to address
+
+4
+Table 2.Percentage of missing values for magnitudes and fluxes in
+the COSMOS2025 sample across the twelve selected bands.
+COSMOS2025 selected band Missing value [%]
+Magnitude Flux
+u 7.50 0.00
+F115W 0.45 0.00
+F150W 0.08 0.00
+F277W 0.01 0.00
+F444W 0.00 0.00
+F814W 0.88 0.00
+Y 0.96 0.00
+J 0.39 0.00
+H 0.15 0.00
+Ks 0.09 0.00
+ch1 0.23 0.00
+ch2 0.25 0.00
+missing data, construct informative color features, inject re-
+alistic observational noise into the simulations, and define
+robust morphology labels for model training.
+3.1.Filling Photometry Missing Values
+The SAM sample contained no missing values in the se-
+lected bands (Table 1). In contrast, the COSMOS2025 sam-
+ple exhibited missing data in all bands except F444W, which
+was used for sample selection (Table 2).
+ML-based imputation methods have become increasingly
+prevalent in astronomy for handling missing photometric
+data, offering advantages over traditional interpolation or
+mean-substitution approaches by capturing complex, non-
+linear relationships in multi-band datasets (e.g., Stekhoven
+2015; Ren et al. 2020; Keerin & Boongoen 2022; Luo et al.
+2024a). Among these methods,MissForest(Stekhoven
+2015) is particularly well-suited for astronomical applica-
+tions because it is a non-parametric, iterative ensemble
+method that makes no assumptions about the underlying data
+distribution. It naturally handles high-dimensional interac-
+tions between bands and is robust to outliers, allowing for the
+reconstruction of missing entries without requiring extensive
+feature engineering or architectural tuning.
+To address the missing data in this study, we employed
+theMissForestimputation method, an iterative approach
+based on the Random Forest algorithm (Breiman 2001). In
+this procedure, each band containing missing values is mod-
+eled as a function of the other bands. In each iteration, a
+Random Forest is trained on the observed data to predict the
+missing entries. This process cycles repeatedly through the
+affected bands, with imputed values from one step informing
+the predictions in the next, until the solution converges (i.e.,
+changes become minimal between iterations).
+Table 3.Missing fraction and imputation accuracy (MAE) for each
+band in the SAM sensitivity test.
+Band Missing value [%] MAE
+u 8.903×10 −2
+F115W 0.703×10 −4
+F150W 0.103×10 −5
+F277W 0.008×10 −7
+F444W 0.00 0.0
+F814W 1.101×10 −3
+Y 1.708×10 −4
+J 0.808×10 −4
+H 0.306×10 −5
+Ks 0.206×10 −5
+ch1 0.501×10 −4
+ch2 0.604×10 −5
+This approach captures the complex, non-linear relation-
+ships between photometric bands, ensuring the imputed mag-
+nitudes are statistically consistent with the underlying multi-
+wavelength structure of the complete dataset.
+To assess the impact of imputation on our results, we per-
+formed a sensitivity analysis using the complete SAM sam-
+ple as ground truth. We first transferred the observed miss-
+ingness pattern from the COSMOS2025 catalog to the SAM
+sample in a magnitude-dependent manner. We divided the
+COSMOS2025 galaxies into magnitude bins based on their
+F444W brightness—a band that is effectively 100% com-
+plete. Within each bin, we calculated the fraction of galaxies
+missing measurements in every other photometric band.
+These calculated, bin-specific missing fractions were then
+applied as probabilities to the complete SAM sample: galax-
+ies in a given magnitude bin had measurements in each band
+removed randomly according to the corresponding observa-
+tional missing fraction. This method ensured that the arti-
+ficially introduced missingness in the SAM sample realis-
+tically reflected the survey’s detection limits, where fainter
+galaxies are more likely to have missing measurements—
+particularly in less sensitive bands—rather than imposing a
+uniform missing fraction.
+After imputing the incomplete SAM dataset using
+MissForest, we evaluated the imputation accuracy by
+comparing the imputed values to the true SAM values, calcu-
+lating the mean absolute error (MAE) for each band. Results
+demonstrate that imputation is highly accurate (Table 3):
+MAE ranges from 0.026 mag for the u-band (8.9% missing)
+to essentially zero (<10 −5 mag) for NIR bands (F277W,
+F444W, F150W, all with<0.1%missing).
+Additionally, Figure 1 compares the distributions of the six
+most important color indices (see Figure 11) for the COS-
+MOS2025 sample galaxies with imputed versus non-imputed
+photometry. The histograms nearly overlap, confirming that
+
+5
+Figure 1.Comparison of color-index distributions for galaxies in the COSMOS2025 sample with imputed photometry (solid blue histograms)
+and with original (non-imputed) photometry (dotted red histograms).
+imputation does not bias the feature space. This verifies that
+the imputation process preserves the underlying photometric
+relationships and introduces no meaningful bias to the feature
+space used for classification.
+3.2.Constructing Colors
+After filling missing values of the selected bands, we de-
+rived colors from the twelve photometric bands to serve as
+the primary features for our ML model. To encapsulate the
+SED shape comprehensively and enable the model to capture
+complex, non-linear relationships, we generated all unique
+pairwise color combinations. This yielded a total of 66 dis-
+tinct colors, encompassing both short wavelength-baseline
+combinations (e.g., F227W - F444W, J - H) and long baseline
+combinations (e.g., u - F115W, Ks −ch1).
+We chose to use color indices rather than raw appar-
+ent magnitudes for some key reasons. Colors provide a
+more direct and robust diagnostic of galaxy physical prop-
+erties. While apparent magnitudes are sensitive to distance
+and flux calibration uncertainties, color indices are intrinsi-
+cally distance-independent and mitigate many such system-
+atic effects. Furthermore, because colors measure the rel-
+ative flux between bands, they more effectively constrain
+the SED shape—information that is critical for differentiat-
+ing between stellar populations, star formation histories, and
+dust attenuation characteristics (see for more detail Luo et al.
+2024b).
+Each color probes a distinct physical regimen: UV–optical
+colors diagnose young stellar populations and ionized gas,
+optical–NIR colors reveal stellar mass and dust properties,
+and long-baseline colors encode integrated SED information.
+By including all 66 pairwise combinations, we ensure that no
+potentially informative diagnostic is omitted, while allowing
+our ML model to learn which combinations are most relevant
+for morphological classification.
+3.3.Injecting Observational Noise
+To ensure that the idealized photometry from the SAM
+sample is realistically compatible with the observational
+COSMOS2025 sample, we injected noise to mimic its ob-
+served color-error properties. This was implemented in a
+three-step process:
+1. For each of the 66 colors in the COSMOS2025 sample,
+we trained aRandomForestRegressormodel
+(Breiman 2001) to predict the color error using the
+color value itself as the sole feature.
+
+6
+Figure 2.Comparison of color distributions between the COSMOS2025 sample (blue solid histograms) and the noise-injected SAM sample
+(red dotted histograms).
+2. We applied these 66 trained models to the correspond-
+ing colors in the pristine SAM sample, generating a
+predicted color error (σ C,pred) for every object and
+color.
+3. To simulate observational uncertainties, we added a
+random perturbation,δC, to each SAM color. EachδC
+was drawn from a Gaussian distribution with a mean
+of zero and a standard deviation equal to the predicted
+error for that specific object and color (Asadi et al.
+2025b).
+In Figure 2, the normalized histograms of several impor-
+tant representative colors (see Figure 11) illustrate that the
+SAM+noise sample (dotted curves) reproduces both the over-
+all shapes and dynamic ranges of the COSMOS2025 distribu-
+tions (solid curves), with only modest residual shifts in peak
+positions and tails.
+3.4.Setting Labels
+We construct high-purity morphological labels for the
+SAM sample using a two-stage approach that combines
+structural (B/T ratio) and star-formation-activity indicators.
+Traditional morphological classifications often rely on a
+single bulge-to-total mass ratio threshold (typically around
+B/T≃0.4) to separate early- and late-types (e.g., de Jong
+1996; Allen et al. 2006); however, such a purely struc-
+tural cut can mix quenched disks and star-forming bulges in
+the intermediate regime, reducing label purity for our ML
+method. Instead, we adopt a more conservative strategy
+that requires consistency between galaxy structure and star-
+formation state, explicitly trading completeness for cleaner,
+physically homogeneous training labels.
+First, to identify the quiescent and star-forming popula-
+tions at different epochs, we adopted the evolving sSFR
+threshold from Pacifici et al. (2016), defined as:
+sSFR≤sSFR lim = 0.2
+tU(z) (1)
+Here, sSFR is in Gyr −1, and t U(z)is the age of the uni-
+verse at redshift z in Gyr. This criterion provides a dynamic
+threshold that evolves with cosmic time, reflecting the ob-
+served decline in galaxy star-formation activity.
+Second, we classify galaxies based on their bulge-to-total
+stellar mass ratio:
+B/T= Mbulge
+M⋆
+,(2)
+using strict thresholds:
+
+7
+Figure 3.UMAP projection of the SAM sample in color space. Left: Classification labels showing secure late-type (blue), secure early-type
+(red), and ambiguous (grey) galaxies. Right: The same projection colored by redshift.
+– Early-type candidate: B/T≥0.5(bulge-dominated)
+– Late-type-type type candidate: B/T≤0.3(disk-
+dominated)
+Galaxies with zero or non-finiteM bulge are treated as pure
+disks (B/T= 0).
+We then combine these indicators to define secure labels:
+– Secure early-type: B/T≥0.5and classified as quies-
+cent
+– Secure late-type: B/T≤0.3and classified as star-
+forming
+– Ambiguous: All other galaxies (intermediate B/T or
+morphology–sSFR mismatch)
+This yields 105,600 secure late-type (41%), 20,391 secure
+early-type (8%), and 139,513 ambiguous galaxies (51%).
+Only the secure populations are used for ML training to en-
+sure high label purity.
+Our decision to train exclusively on secure early- and late-
+type galaxies is a deliberate methodological choice. By an-
+choring the ML classifier on these two physically distinct ex-
+tremes, we define a “morphological–star-formation axis” in
+color space. The classifier’s primary output—when applied
+to the full SAM or COSMOS2025 samples—is the contin-
+uous probability P(Early type), which quantifies a galaxy’s
+photometric similarity to the secure early-type archetype rel-
+ative to the secure late-type archetype. This strategy serves
+two primary scientific purposes:
+– As a validation probe: it tests whether the photometric
+distinction learned from the secure extremes extrapo-
+lates meaningfully into the transitional regime. Does
+structural ambiguity imply photometric ambiguity?
+– As a continuum diagnostic: the classifier assigns
+P(Early type)to every galaxy (in both the SAM and
+COSMOS2025 samples), placing each object along
+a continuous early–late axis defined by the secure
+archetypes, rather than forcing a binary classification
+(the hard threshold at P(Early type) = 0.5is presented
+only for compatibility).
+Figure 3 shows a 2D Uniform Manifold Approximation
+and Projection (UMAP; McInnes et al. 2018) of the SAM
+sample galaxies built from the 66 colors: the left panel is
+colored by our morphology labels (secure late-type, secure
+early-type, and ambiguous), and the right panel shows the
+same projection colored by redshift. Secure late-types and
+secure early-types occupy broadly distinct regions of the
+manifold, while ambiguous systems predominantly fill the
+interface between them, tracing a continuous transition in
+color space. The redshift-colored panel reveals a smooth gra-
+dient across the manifold, with low-redshift galaxies concen-
+trated toward one side and higher-redshift galaxies toward the
+other, demonstrating that the color-based embedding encodes
+both morphological and redshift information.
+4.MACHINE LEARNING METHOD
+The core of our analysis is to first train a ML classifier on
+the 66 noise-injected colors of the secure early- and late-type
+subsample, reproducing the labels defined in Section 3.4, and
+then use this model to obtain both probabilistic and hard
+classifications for the full SAM sample (including galaxies
+flagged as ambiguous) and for COSMOS2025.
+4.1.CatBoost Classifier
+We employed theCatBoostClassifieralgorithm
+(Prokhorenkova et al. 2018) to perform supervised classifi-
+
+8
+cation of galaxies into early- and late-type classes. CatBoost
+has demonstrated appropriate performance in astronomical
+applications, including galaxy classification (Asadi et al.
+2025a), quasar identification (Hughes et al. 2022), and source
+characterization (Coronado-Bl ´azquez 2022), among other
+studies (Humphrey et al. 2023; Cunha & Humphrey 2022;
+Coronado-Bl´azquez 2023; Zeraatgari et al. 2024; Boulet
+2024; Li et al. 2025).
+As a gradient-boosting method, CatBoost builds an ensem-
+ble of decision trees sequentially, with each new tree trained
+to correct the misclassifications of the previous trees, pro-
+gressively minimizing a chosen loss function and improv-
+ing the overall predictive performance of the classifier. Im-
+portantly for our 66-dimensional color feature space, Cat-
+Boost is inherently robust to feature redundancy: the ensem-
+ble mechanism automatically prioritizes informative features
+and down-weights collinear or uninformative ones. This ro-
+bustness allows us to include all 66 color combinations with-
+out risk of overfitting or loss of generalization—the model
+naturally filters redundancy and identifies the physically most
+relevant diagnostics.
+We selected CatBoost over deep learning alternatives
+(e.g., attention-based or recurrent networks) primarily for its
+interpretability—feature importance rankings directly reveal
+which colors drive morphological classification—and com-
+putational efficiency, while maintaining appropriate perfor-
+mance on our dataset.
+4.2.Splitting the SAM Sample
+To evaluate the intrinsic performance of the
+CatBoostClassifierin a controlled setting, we work
+entirely within the SAM before moving to the observational
+data. We perform a random, stratified split of the secure
+SAM sample into a training set (80%) and a testing set
+(20%), with stratification based on the morphology labels to
+preserve the relative early- and late-type class proportions in
+both subsets. This yields a training set of 100,792 galaxies
+(including 16,313 secure early-types) and a testing set of
+25,199 galaxies (including 4,078 secure early-types). The
+redshift distributions of the two subsets are nearly identical
+(Figure 4), and a 2D UMAP projection (Figure 5) shows
+that the training and testing samples occupy the same region
+of color space, confirming that the split does not introduce
+obvious selection biases.
+4.3.Optimization
+The model hyperparameters were tuned using a random-
+ized search with 5-fold stratified cross-validation over 50 it-
+erations (Pedregosa et al. 2011), maximizing the F1-score
+(Equation 5). The search focused on three key param-
+eters—the number of iterations, learning rate, and tree
+depth—which primarily control model complexity, conver-
+Figure 4.Validation of the training–testing split. The redshift dis-
+tributions of the training and testing subsets are nearly identical,
+confirming that the random stratified sampling produces represen-
+tative and unbiased splits of the SAM sample.
+Table 4.Hyperparameter tuning results: search ranges and final
+selected values.
+Hyperparameter Iterations Learning rate Depth
+Value range 100–2000 0.01–0.3 3–10
+Optimum value 932 0.05 4
+gence behavior, and the bias–variance trade-off in gradient-
+boosted decision trees (G ´eron 2022). The optimal val-
+ues obtained from this procedure are listed in Table 4.
+Adopting these optimal hyperparameters, we retrained the
+CatBoostClassifieron the secure SAM training set
+and then applied the resulting model to the secure testing set
+to assess its classification performance.
+5.ACCURACY METRICS
+To evaluate and compare the performance of our ML clas-
+sifier on the secure SAM testing set, we employ standard
+metrics derived from the confusion matrix (Stehman 1997):
+precision (purity), recall (completeness), and the F1-score.
+Precision measures the accuracy of positive predictions, or
+the purity of the selected positive class:
+Precision= TP
+TP+FP .(3)
+Recall measures the fraction of all actual positives that are
+correctly identified, or the completeness of the selection:
+Recall= TP
+TP+FN .(4)
+In the specific context of this work, a positive prediction
+corresponds to the identification of an early-type galaxy. A
+high precision therefore indicates a pure sample of early-type
+
+9
+Figure 5.UMAP projection of the secure SAM sample, comparing the training and testing sets obtained from the random stratified split. The
+overlapping spatial distributions demonstrate that the partition is representative, ensuring that a model trained on the training set can be fairly
+evaluated on the testing set.
+galaxies, in which most of the identified candidates are truly
+early-type, while a high recall indicates a complete sample,
+meaning the model successfully recovers a large fraction of
+the true early-type population.
+The F1-score, defined as the harmonic mean of precision
+and recall, provides a single metric that balances the trade-off
+between purity and completeness:
+F1-Score= 2× Precision×Recall
+Precision+Recall .(5)
+6.RESULT
+6.1.Performance on the SAM sample
+Having established our classification framework, we now
+evaluate the performance of the ML classifier within the con-
+trolled environment of the secure SAM testing set, where the
+true morphological labels are known. This allows us to quan-
+tify how well the model recovers early- and late-type galaxies
+before applying it to the observational COSMOS2025 sam-
+ple.
+The confusion matrix for the classifier, visualized in Fig-
+ure 6, provides a clear view of its performance on the secure
+SAM testing set. For true late-type galaxies, the model cor-
+rectly recovers 98% as late-type while misclassifying only
+2% as early-type, indicating an extremely pure late-type pre-
+diction channel. For true early-type galaxies, the classifier
+correctly identifies 88% as early-type and assigns 12% to the
+late-type class, demonstrating strong but slightly less com-
+plete recovery of early-type systems compared to late-types.
+A more detailed quantitative view is presented in Table 5,
+which lists the precision, recall, and F1-score for both mor-
+phological classes. For late-type galaxies, the classifier
+Figure 6.Confusion matrix for the ML classifier evaluated on the
+secure SAM testing set.
+achieves a precision of 98%, a recall of 98%, and an F1-
+score of 98%, indicating that late-type predictions are both
+extremely pure and nearly complete. For early-type galaxies,
+the model attains a precision of 91%, a recall of 88%, and an
+F1-score of 90%, demonstrating robust performance on the
+minority class with only a modest reduction in completeness
+relative to the late-type population.
+The trade-off between purity and completeness in the
+classifier is further illustrated by the class-specific preci-
+sion–recall curves shown in Figure 7. For early-type galax-
+ies, the curve has an Area Under the Curve (AUC) of 0.96,
+while for late-type galaxies the AUC reaches 1.00, high-
+lighting the model’s excellent overall performance in both
+regimes. The default probability threshold of 0.5, marked by
+
+10
+Class Precision [%] Recall [%] F1-Score [%]
+Late-type 97.7 98.3 98.0
+Early-type 90.8 88.1 89.5
+Table 5.Performance of the ML classifier on the secure SAM test-
+ing set for early- and late-type galaxies, evaluated using precision
+(purity), recall (completeness), and F1-score.
+Figure 7.Precision–recall curves for the ML classifier on the secure
+SAM testing set, shown separately for early-type (red) and late-type
+(blue) galaxies. Filled circles indicate the default probability thresh-
+old of 0.5.
+the colored points in Figure 7, provides a good balance be-
+tween precision and recall for each class and corresponds to
+the summary metrics reported in Table 5.
+While the global metrics demonstrate that the classifier
+performs very well on average, a more nuanced view emerges
+when examining performance as a function of redshift. Fig-
+ure 8 shows the precision, recall, and F1-score for early-
+and late-type galaxies across six redshift bins in the range
+0<z<3, highlighting how the model behaves as galaxy
+populations evolve with cosmic time.
+For late-type galaxies, the performance is essentially satu-
+rated at all redshifts: precision rises from∼94%to∼99%,
+recall from∼95%to∼100%, and F1-score from∼94%to
+∼99%, indicating both extremely pure and nearly complete
+late-type classifications in every bin. In contrast, the early-
+type class shows a mild but systematic degradation with red-
+shift: precision remains high (∼91–93% at z<2and
+∼86–91% at z>2), while recall declines from∼90–92%
+in the lowest bins to∼74%in the highest bin, leading to F1-
+scores that decrease from∼91–92% at z<1.5to∼81%
+at2.5≤z<3.0. The slight decline in early-type recall
+at higher redshifts likely reflects the increasing prevalence
+of irregular and clumpy structures at early cosmic times,
+where the traditional early-late dichotomy becomes less dis-
+tinct (e.g., Conselice 2014; Guo et al. 2015), combined with
+the fact that securely early-type systems become intrinsically
+rare compared to late-types in these bins (see Figure 9). Nev-
+ertheless, the classifier maintains high purity even at these
+epochs.
+Having validated the classifier’s performance and con-
+firmed its stability on the held-out testing set, we proceeded
+to the final classification stage. To ensure the model captured
+the widest possible range of galaxy properties, we retrained
+theCatBoostClassifieron the combined training and
+testing subsets of the secure SAM sample. This final pro-
+duction model, which benefits from the maximum number of
+available high-confidence labels while maintaining the same
+hyperparameters and 66-color feature set, was then applied
+to all SAM galaxies—including those initially flagged as am-
+biguous. This yields both hard morphology labels (using the
+default probability threshold of 0.5) and probabilistic clas-
+sifications in the form of P(Early type)for every object, re-
+sulting in 222,523 galaxies classified as late-type and 42,981
+as early-type. Figure 10 illustrates the corresponding deci-
+sion structure in the 2D UMAP space: the left panel shows
+the hard early- and late-type labels assigned by the classifier,
+while the right panel displays the early-type probabilities, re-
+vealing a smooth gradient across the main color locus that
+connects clearly late-type and clearly early populations.
+Examining the distribution of P(Early type)across the
+full SAM sample reveals a striking bimodality: only
+5.8% of galaxies receive intermediate probabilities (0.3<
+P(Early type)<0.7), while the remaining 94.2% are clas-
+sified with high confidence (P(Early type)≤0.3or≥0.7).
+This demonstrates that broadband colors are a decisive mor-
+phological discriminant in the simulation domain. As we
+show in Section 6.3, this same bimodality appears in the ob-
+servational COSMOS2025 sample with nearly identical frac-
+tions.
+6.2.Feature Behavior
+Before applying the trained classifier to the COSMOS2025
+sample, we first examine how the model uses color informa-
+tion within the SAM, in order to understand which features
+drive the early- and late-type separation. Figure 11 shows
+theCatBoostClassifierfeature importance ranking
+for the top ten colors, derived from the final model trained
+on the secure SAM sample. The most informative feature
+is the long-baseline NIRCam color F277W-F444W, followed
+by a set of optical–NIR and UV–NIR colors (e.g. H-F277W,
+u-F115W, u-H).
+While the full set of 66 colors naturally introduces
+some redundancy, CatBoost’s feature importance mechanism
+demonstrates that only a subset of features drives the classi-
+fier’s decisions. The top 10 colors account for 52.6% of the
+total gain in the loss function, while the bottom 30 features
+contribute only 12.1%, confirming that the model naturally
+
+11
+Figure 8.Redshift dependence of the classifier performance on the secure SAM testing set.
+Figure 9.Redshift distribution of secure early- (red) and late-type
+(blue) galaxies in the SAM test sample, showing the dominance of
+late types and the declining early-type fraction toward higher red-
+shift.
+filters uninformative features and is not compromised by the
+high dimensionality.
+CatBoost’s feature importance scores quantify how much
+each color contributes to reducing the classification loss
+across the ensemble of trees. In practice, the algorithm ag-
+gregates the gain in the objective function each time a fea-
+ture is used to split a node, summing these contributions over
+all trees and normalizing them to yield relative importance
+values (Prokhorenkova et al. 2018). This procedure natu-
+rally highlights colors that consistently create purer early-
+and late-type splits.
+These feature importance trends have clear physical impli-
+cations. The dominance of the F277W-F444W color reflects
+the strong contrast between rest-frame optical and near-IR
+light, which is sensitive to the relative contribution of old,
+red stellar populations versus younger, bluer stars; bulge-
+dominated early-type galaxies are therefore expected to be
+redder in this color (e.g., Bell et al. 2003). The prominence
+of UV/optical–NIR colors (e.g. H-F277W, u-F115W, u-H, u-
+F277W, u-Ks, u-ch1, u-ch2) is likewise consistent with early-
+types having suppressed recent star formation and stronger
+4000 ˚A breaks, while late-types show bluer UV-to-NIR gra-
+dients due to ongoing star formation (e.g., Poggianti & Bar-
+baro 1997; Kauffmann et al. 2003).
+While the importance ranking highlights individual colors,
+understanding the correlations among them provides deeper
+insight into the underlying physical drivers. To assess this,
+we computed the Pearson correlation matrix for the top ten
+features; the result is shown in Figure 12. The u-based col-
+ors form a tightly correlated group with mutual coefficients
+r≃0.54–0.63, indicating that they do not represent indepen-
+dent directions in feature space but a single underlying physi-
+cal dimension: the UV–to–optical/NIR spectral slope associ-
+ated with recent star formation. In contrast, F277W–F444W
+shows only weak correlations with this u–* group (typically
+|r|≲0.2), confirming that it provides a largely independent
+constraint on the rest-frame optical/NIR color and hence on
+the age/metallicity of the dominant stellar population.
+6.3.Application to the COSMOS2025 sample
+Having validated the classifier and examined its fea-
+ture behavior in the SAM, we next apply the trained
+CatBoostClassifierto the COSMOS2025 sample. To
+ensure strict consistency between the domains, we first con-
+struct the same set of 66 colors from the twelve common
+bands (Table 1) used for training, and feed these as inputs
+to the model. As for the SAM, the classifier returns both a
+hard morphology label (using the default probability thresh-
+old of 0.5) and a probabilistic classification P(Early type)for
+every COSMOS2025 galaxy.
+Applying the model to the 44,132-object COSMOS2025
+sample yields 29,044 galaxies classified as late-type and
+15,088 as early-type. Figure 13 summarizes these results
+in the 2D UMAP space built from the COSMOS2025 col-
+ors: the left panel shows the hard early- and late-type assign-
+ments, the middle panel displays the corresponding early-
+type probabilities, and the right panel illustrates how these
+probabilities vary smoothly with redshift across the main
+color locus.
+
+12
+Figure 10.UMAP projection of the full SAM sample in color space after applying the trainedCatBoostClassifieron the secure SAM
+sample. Left: Hard classifications into early-type (red) and late-type (blue) galaxies. Right: The same projection colored by the predicted
+probability of being early-type.
+Figure 11.Top ten color features ranked by importance in the
+CatBoostClassifiertrained on the secure SAM sample.
+The probabilistic outputs allow us to quantitatively com-
+pare the structure of the COSMOS2025 color space with
+that of the SAM. Figure 14 shows the distribution of
+P(Early type)for the full COSMOS2025 sample alongside
+the SAM distribution from Section 6.1. The two distribu-
+tions are strikingly similar: only 5.9% of COSMOS2025
+galaxies fall in the intermediate probability range0.3<
+P(Early type)<0.7, nearly identical to the 5.8% observed
+in the SAM. The remaining 94% of galaxies in both domains
+receive high-confidence classifications (P(Early type)≤0.3
+or≥0.7).
+This result has two implications. First, it suggests that
+broadband colors are an effective morphological discrimi-
+nant in both simulated and observed populations: the ma-
+jority of galaxies—including many with intermediate struc-
+Figure 12.Pearson correlation matrix of the ten most important
+color features (from Figure 11), computed from the SAM sample.
+The diagonal elements (self-correlations) are omitted for visual clar-
+ity.
+tural properties—have integrated colors that place them close
+to one photometric archetype. Second, the close agreement
+between the SAM and COSMOS2025 distributions supports
+the effectiveness of our simulation-based training and noise-
+injection approach, indicating that the classifier has learned a
+mapping from colors to morphology that transfers across the
+domain gap with minimal systematic offset.
+6.4.Validation with COSMOS2025 Bulge+Disk
+Decompositions
+To validate the performance of our simulation-trained clas-
+sifier on real observational data, we compare its predic-
+tions against independent structural morphology measure-
+
+13
+Figure 13.UMAP projection of the COSMOS2025 sample in color space after applying the trainedCatBoostClassifier. Left: Hard
+morphology labels, showing galaxies classified as late-type (blue) and early-type (red). Middle: The same projection colored by the predicted
+probability of being early-type. Right: The projection colored by redshift.
+Figure 14.Distribution of early-type probabilities P(Early type)for (left) the full SAM sample and (right) the COSMOS2025 sample.
+ments from the COSMOS2025 catalog. The catalog provides
+bulge-to-total flux ratios (B/T) derived from two-dimensional
+S´ersic profile fitting to the high-resolution JWST/NIRCam
+images (Shuntov et al. 2025). These measurements offer a
+direct, observationally-derived estimate of galaxy structural
+morphology that is independent of the photometric colors
+used by our classifier.
+We use the B/TF277W measurement as our primary valida-
+tion metric. This band selection is particularly appropriate
+as the F277W-F444W color emerged as the most important
+feature in our classifier (Figure 11), while maintaining high
+signal-to-noise detections. We adopt B/T F277W ≥0.4and
+B/TF277W <0.4to define early- and late-type galaxies, re-
+spectively.
+Using the B/T F277W-based early- and late-type split as an
+external benchmark, the COSMOS2025 classifications from
+our ML model achieve an overall accuracy of 70% in re-
+producing the structural morphology labels. The early-type
+Class Precision [%] Recall [%] F1-Score [%]
+Late-type 77.7 73.7 75.7
+Early-type 53.9 59.3 56.5
+Table 6.Performance of the ML classifier on the COSMOS2025
+sample when using the B/T F277W = 0.4 threshold as the reference
+structural classification.
+class is recovered with a precision (purity) of 54% and a
+recall (completeness) of 59%, while late-type galaxies are
+identified with a precision of 78% and a recall of 74%, indi-
+cating that the classifier performs particularly well for disk-
+dominated systems but still provides reasonably consistent
+predictions for bulge-dominated galaxies given the continu-
+ous nature of galaxy structure. These results are summarized
+in Table 6.
+With a closer look at the redshift dependence, classifier
+performance reveals pronounced divergence across morpho-
+logical classes. Figure 15 presents the precision, recall, and
+
+14
+Figure 15.Redshift-dependent validation of the ML classifier against COSMOS2025 B/T F277W-based structural classifications.
+F1-score as a function of redshift for both morphological
+classes, evaluated in six bins spanning0<z<3. For late-
+type galaxies, the classifier maintains consistently precision
+(71–79%) across all epochs, while recall systematically im-
+proves from∼66% at z<0.5to∼88% at z>2.5. This
+increasing completeness at higher redshifts likely reflects the
+growing dominance of disk-dominated, star-forming systems
+during the peak epoch of cosmic star formation, where the
+color-sSFR-structure relation becomes tighter and the classi-
+fier’s photometric decision boundaries more effective.
+In contrast, early-type galaxies exhibit markedly different
+redshift dependence. Precision remains relatively stable, but
+recall shows a systematic and substantial degradation from
+∼77% at z<0.5to only∼33% at2.5≤z<3.0. This trend
+directly mirrors the behavior observed in the SAM testing set
+(Figure 8), confirming that the simulation-trained classifier
+has successfully transferred the underlying physical redshift
+dependence to the observational domain rather than introduc-
+ing spurious domain-transfer artifacts.
+Although the agreement between our ML classifications
+and the B/TF277W-based structural labels is at the∼70% level
+in terms of overall accuracy, the method is extremely fast: the
+full training and prediction steps require less than 5 minutes,
+while including photometric preprocessing and hyperparam-
+eter optimization the end-to-end pipeline completes in under
+30 minutes on a standard workstation equipped with an 11th
+Gen Intel® Core™ i7-1165G7 processor. This demonstrates
+that a simulation-trained classifier can provide reasonably ac-
+curate morphological information at a fraction of the compu-
+tational cost of full bulge+disk decompositions.
+7.DISCUSSION
+Our study presents a simulation-trained, color-based ML
+framework for classifying galaxies into early- and late-type
+morphological classes across a broad redshift range (0<z<
+3). By leveraging the physical realism of semi-analytic mod-
+els and the photometric richness of the COSMOS2025 cat-
+alog, we have demonstrated that a relatively simple, inter-
+pretable classifier—trained on SAM-derived colors and ap-
+plied to real multi-band photometry—can recover morpho-
+logical information with reasonable accuracy and significant
+computational efficiency.
+7.1.Performance in the SAM Domain
+Within the SAM, the classifier achieves near-saturated per-
+formance for late-type galaxies and robust, though slightly
+lower, recovery for early-type systems, on the secure testing
+set. This indicates that, in a controlled environment where the
+mapping between structure, star formation, and colors is in-
+ternally consistent, broad-band colors alone contain enough
+information to separate bulge-dominated quiescent galaxies
+from disk-dominated star-forming galaxies with high relia-
+bility (e.g., Strateva et al. 2001; Bell et al. 2003; Taylor et al.
+2015).
+The mild decline in early-type recall with increasing red-
+shift, contrasted with the essentially redshift-independent
+late-type performance, reflects the growing complexity of
+galaxy populations at early cosmic times. In particular, the
+SAM predicts a larger fraction of structurally intermediate
+or morphologically disturbed systems at z≳2, for which
+the traditional early–late dichotomy becomes less sharp and
+color-based decision boundaries are intrinsically more am-
+biguous (e.g., Lotz et al. 2004; Conselice 2014). The persis-
+tence of high early-type precision even in the highest redshift
+bins suggests that the classifier remains conservative in as-
+signing early-type labels, favoring purity over completeness
+when the color distributions of the two classes overlap.
+7.2.Performance in the COSMOS2025 Domain
+The probabilistic classifications obtained for COS-
+MOS2025 exhibit the same strong bimodality observed in
+the SAM domain (Figure 14). Galaxies in both simulated and
+observed populations cluster decisively around the early- and
+late-type photometric archetypes, with only a small fraction
+occupying the intermediate regime.
+This close agreement between the SAM and COS-
+MOS2025 probability distributions provides empirical sup-
+port for our domain-transfer strategy. The photometric bi-
+modality captured by the classifier is not an artifact of the
+simulation, but a genuine feature of real galaxy populations.
+
+15
+A key insight emerging from this probabilistic framework
+is the distinction between structural and photometric ambi-
+guity. Although a substantial fraction of galaxies in the SAM
+are classified as structurally ambiguous based on B/T and
+sSFR criteria, the vast majority nonetheless receive decisive
+probability assignments. This reveals that integrated broad-
+band colors provide a cleaner mapping onto the early–late
+dichotomy than structural cuts alone. Most galaxies with in-
+termediate bulge fractions or mismatched morphology and
+star formation have colors that align them clearly with one
+photometric archetype.
+The small fraction of galaxies with intermediate probabil-
+ities are therefore not methodological artifacts or classifica-
+tion failures. Rather, they represent the genuine photometric
+“gray zone”—systems whose integrated colors reflect mixed
+stellar populations, ongoing quenching, or complex struc-
+tural states. As such, they constitute a scientifically valu-
+able sample for targeted follow-up studies of morphological
+transformation and the quenching process.
+7.3.Comparison with COSMOS2025 Bulge+Disk
+Morphologies
+When transferred to COSMOS2025, the simulation-
+trained classifier recovers the F277W-based bulge+disk clas-
+sifications with an overall accuracy of roughly seven-tenths,
+yielding a substantially higher success rate for late-type than
+for early-type systems. This level of agreement is notable
+given that the two schemes rely on fundamentally differ-
+ent information—integrated colors versus two-dimensional
+light-profile decompositions (e.g., Peng et al. 2002; Simard
+et al. 2011)—and that real galaxies exhibit structural and star-
+formation diversity that is necessarily simplified in the SAM.
+The better performance for late-type systems likely reflects
+the relatively tight coupling between blue colors, high sSFR,
+and disk-dominated structure, whereas red colors can arise
+from a mixture of bulge-dominated quenched galaxies, dust-
+reddened star-forming disks, and composite systems with
+significant bulge and disk components (e.g., Muzzin et al.
+2013; Ilbert et al. 2013). Disagreements between the two
+classifications therefore do not necessarily represent outright
+failures, but instead highlight galaxies that are structurally in-
+termediate or that deviate from the SAM’s assumed relation
+between morphology and star-formation history, and thus
+may be of particular interest for follow-up studies of morpho-
+logical transformation (e.g., Martin et al. 2007; Schawinski
+et al. 2014).
+7.4.Advantages and Use Cases
+A key strength of this framework is its computational ef-
+ficiency: training and inference on tens of thousands of ob-
+jects complete in minutes on a standard workstation (For a
+more detailed discussion, see Section 5.2.1 in Asadi et al.
+(2025c)), compared with the far greater resources required
+for full bulge+disk decompositions or deep CNN-based im-
+age classifiers. Combined with the interpretability of color-
+based decision boundaries and feature importance rankings,
+this makes the method well suited for constructing large,
+approximate morphological catalogs in upcoming wide-area
+surveys where detailed structural measurements will be in-
+feasible for the full galaxy population.
+The probabilistic outputs further enable flexible sample
+definitions tailored to specific science goals. For exam-
+ple, users interested in highly pure early-type samples can
+adopt a high probability threshold, while studies that priori-
+tize completeness over purity can choose more inclusive cuts
+or work directly with the continuous early-type probability
+as a weight in statistical analyses.
+7.5.Limitations and Future Directions
+While our framework offers significant speed and inter-
+pretability advantages, it is subject to limitations inherent to
+both the method and the underlying simulation. First, the
+classifier relies on the physical recipes of the Santa Cruz
+SAM; any deviation between the simulated and real mapping
+of galaxy colors to morphology—arising from dust attenu-
+ation modeling or star-formation prescriptions—will intro-
+duce systematic biases. Second, by utilizing integrated colors
+alone, we discard spatial information such as asymmetry and
+concentration, which are valuable for identifying mergers or
+distinguishing between face-on disks and spheroids.
+A critical physical limitation of this study is the restric-
+tion to z<3. We deliberately adopted this cut because
+the traditional early- versus late-type dichotomy becomes in-
+creasingly ill-defined at higher redshifts. Beyond z∼3,
+galaxy assembly is dominated by irregular and clumpy struc-
+tures where the classical Hubble sequence is not yet fully
+established (e.g., Elmegreen et al. 2007; Guo et al. 2015).
+In this regime, apparent “bulges” may often represent tran-
+sient clumps formed via violent disk instabilities rather than
+merger-built spheroids, rendering standard B/T ratios am-
+biguous (e.g., Dekel et al. 2009; Ceverino et al. 2010). Fur-
+thermore, at z>4, many galaxies are still in the process
+of stabilizing their disks, making a simple structural binary
+insufficient to capture the diversity of the population.
+However, the advent of JWST has fundamentally altered
+the landscape for high-redshift morphology, revealing rota-
+tionally supported disks and surprisingly mature structures
+at z∼4−6that were previously inaccessible to HST (e.g.,
+Ferreira et al. 2022; Casey et al. 2023; Robertson et al. 2023).
+To extend our ML framework into this era of galaxy as-
+sembly, future work must evolve beyond purely photomet-
+ric structural labels. A robust high-redshift classifier will
+require a hybrid morphological-kinematic approach: rather
+than relying solely on B/T, training labels should incorporate
+
+16
+kinematic diagnostics available in the simulation—such as
+the rotation-to-dispersion ratio (v/σ)—to identify rotation-
+ally supported disks that may appear featureless or clumpy
+in imaging (e.g., Wisnioski et al. 2015; Amvrosiadis et al.
+2025). Additionally, the classification scheme should be ex-
+panded to include a specialized “irregular or clumpy” class,
+allowing the model to explicitly identify the complex, transi-
+tioning systems that characterize the peak epochs of cosmic
+assembly.
+8.CONCLUSION
+We have presented a simulation-based ML framework to
+classify galaxies into early- and late-type morphologies out
+to z∼3, utilizing the COSMOS2025 catalog. By training
+aCatBoostClassifieron 66 photometric color fea-
+tures derived from the Santa Cruz SAM and injecting realis-
+tic observational noise, we bridged the gap between theoreti-
+cal predictions and real observational data without relying on
+expensive visual or structural classification labels. Our main
+findings are as follows:
+– In the simulated domain, our CatBoost classifier
+achieves excellent performance: late-type galaxies are
+recovered with 98% recall and precision, while early-
+types show 88% recall and 91% precision. Early-type
+recall shows a mild redshift dependence, declining to
+∼74% at z∼2.5−3.0while maintaining high purity.
+– Applied to the 44,132 galaxies in COSMOS2025, the
+model classifies 15,088 as early-type and 29,044 as
+late-type. Compared to structural B/T-based classifica-
+tions, it achieves 70% overall accuracy, with late-types
+identified at 78% purity and 74% completeness, and
+early-types at 54% purity and 59% completeness.
+– The classifier’s probabilistic outputs reveal a strong bi-
+modality in both simulated and observed galaxy pop-
+ulations: only∼6% of galaxies in SAM and COS-
+MOS2025 receive intermediate probabilities (0.3<
+P(Early type)<0.7), while the remaining 94% are
+classified with high confidence. This demonstrates that
+broadband colors are a decisive morphological dis-
+criminant, and that most structurally ambiguous galax-
+ies are photometrically unambiguous. The small in-
+termediate population represents genuine transitional
+systems—prime targets for follow-up studies of galaxy
+transformation.
+– The classifier demonstrates physical interpretability,
+with the F277W-F444W color emerging as the most
+important feature—consistent with the rest-frame op-
+tical/NIR contrast between old and young stellar popu-
+lations. The redshift-dependent performance in obser-
+vations closely mirrors that in simulations, validating
+successful domain transfer.
+– The entire pipeline—from data preprocessing through
+training to prediction on tens of thousands of galax-
+ies—completes in under 30 minutes on standard desk-
+top hardware.
+This work demonstrates that simulation-trained color-
+based classifiers provide a fast, interpretable, and reason-
+ably accurate approach to morphological classification for
+large galaxy surveys. By leveraging physically motivated
+training data and focusing on photometric colors, we bridge
+the gap between idealized simulations and observational
+datasets, offering a scalable solution for next-generation sur-
+veys where detailed structural measurements remain compu-
+tationally prohibitive for full samples.
+ACKNOWLEDGMENTS
+We thank the anonymous referee for their thorough and
+constructive comments, which have significantly strength-
+ened the methodological rigor and clarity of this manuscript.
+The corresponding author gratefully acknowledges Prof. Ho-
+sein Haghi and Dr. Akram Hasani Zonoozi for their invalu-
+able guidance and mentorship during the PhD studies that
+provided part of the scientific foundation for this work.
+DATA A V AILABILITY
+The trained ML model and full classified COSMOS2025
+sample (including early- and late-type galaxy classifi-
+cations) resulting from this analysis are publicly avail-
+able in the GitHub repository: https://github.com/vahidoo7/
+COSMOS2025-Early-Late-Galaxy-Classifier.
+Software:Matplotlib (Barrett et al. 2005), Pandas
+(McKinney et al. 2011), Scikit-learn (Pedregosa et al. 2011),
+Astropy (Robitaille et al. 2013), UMAP (McInnes et al.
+2018), Numpy (Harris et al. 2020), SciPy (Virtanen et al.
+2020), Seaborn (Waskom 2021).
+REFERENCES
+Allen, P. D., Driver, S. P., Graham, A. W., et al. 2006, MNRAS,
+371, 2
+Amvrosiadis, A., Wardlow, J., Birkin, J., et al. 2025, MNRAS, 536,
+3757
+Arnouts, S., Cristiani, S., Moscardini, L., et al. 1999, MNRAS,
+310, 540
+Asadi, V ., Chartab, N., Zonoozi, A. H., et al. 2025a, ApJ, 993, 123
+Asadi, V ., Zonoozi, A. H., & Haghi, H. 2025b, ApJ, 998, 2
+
+17
+Asadi, V ., Zonoozi, A. H., Haghi, H., et al. 2025c, ApJ, 989, 65
+Baldry, I. K., Glazebrook, K., Brinkmann, J., et al. 2004, ApJ, 600,
+681
+Barchi, P. H., de Carvalho, R., Rosa, R. R., et al. 2020, Astronomy
+and Computing, 30, 100334
+Barrett, P., Hunter, J., Miller, J. T., Hsu, J.-C., & Greenfield, P.
+2005, ADASS XIV , 347, 91
+Bell, E. F., McIntosh, D. H., Katz, N., & Weinberg, M. D. 2003,
+ApJS, 149, 289
+Bhambra, P., Joachimi, B., & Lahav, O. 2022, MNRAS, 511, 5032
+Bondi, H. 1952, MNRAS, 112, 195
+Boquien, M., Burgarella, D., Roehlly, Y ., et al. 2019, A$A, 622,
+A103
+Boulet, T. 2024, A&A, 685, A66
+Breiman, L. 2001, Machine Learning, 45, 5
+Cao, J., Xu, T., Deng, Y ., et al. 2024, A&A, 683, A42
+Casey, C. M., Kartaltepe, J. S., Drakos, N. E., et al. 2023, ApJ, 954,
+31
+Ceverino, D., Dekel, A., & Bournaud, F. 2010, MNRAS, 404, 2151
+Cheng, T.-Y ., Conselice, C. J., Arag´on-Salamanca, A., et al. 2021,
+MNRAS, 507, 4425
+Conselice, C. J. 2014, ARA, 52, 291
+Coronado-Bl´azquez, J. 2022, MNRAS, 515, 1807
+—. 2023, MNRAS, 521, 4156
+Cuillandre, J.-C., Bertin, E., Bolzonella, M., et al. 2025, A&A,
+697, A6
+Cunha, P., & Humphrey, A. 2022, A&A, 666, A87
+de Jong, R. S. 1996, A&A, 313, 45
+Dekel, A., Birnboim, Y ., Engel, G., et al. 2009, Nature, 457, 451
+Dimauro, P., Huertas-Company, M., Daddi, E., et al. 2018,
+MNRAS, 478, 5410
+Dom´ınguez S´anchez, H., Huertas-Company, M., Bernardi, M.,
+Tuccillo, D., & Fischer, J. 2018, MNRAS, 476, 3661
+Elmegreen, D. M., Elmegreen, B. G., Ravindranath, S., & Coe,
+D. A. 2007, ApJ, 658, 763
+Fang, G., Ba, S., Gu, Y ., et al. 2023, ApJ, 165, 35
+Ferreira, L., Adams, N., Conselice, C. J., et al. 2022, ApJ, 938, L2
+Gardner, J. P., Mather, J. C., Clampin, M., et al. 2006, Space
+Science Reviews, 123, 485
+G´eron, A. 2022, Hands-On Machine Learning with Scikit-Learn,
+Keras, and TensorFlow: Concepts, Tools, and Techniques to
+Build Intelligent Systems, 3rd edn. (O’Reilly Media)
+Grogin, N. A., Kocevski, D. D., Faber, S., et al. 2011, ApJS, 197,
+35
+Guo, Y ., Ferguson, H. C., Bell, E. F., et al. 2015, ApJ, 800, 39
+Harris, C. R., Millman, K. J., Van Der Walt, S. J., et al. 2020,
+nature, 585, 357
+Hopkins, P. F., Cox, T. J., Younger, J. D., & Hernquist, L. 2009,
+ApJ, 691, 1168
+Hubble, E. P. 1926, ApJ, 64, 321
+Huertas-Company, M., Bernardi, M., P´erez-Gonz´alez, P., et al.
+2016, MNRAS, 462, 4495
+Hughes, A. C., Bailer-Jones, C. A., & Jamal, S. 2022, A&A, 668,
+A99
+Humphrey, A., Bisigello, L., Cunha, P., et al. 2023, A&A, 671, A99
+Ilbert, O., Arnouts, S., Mccracken, H. J., et al. 2006, A&A, 457,
+841
+Ilbert, O., McCracken, H. J., Le F`evre, O., et al. 2013, A&A, 556,
+A55
+Iyer, K., Angeloudi, E., Bagley, M., et al. 2024, A&A, 685, A48
+Kartaltepe, J. S., Mozena, M., Kocevski, D., et al. 2015, ApJS, 221,
+11
+Kauffmann, G., Heckman, T. M., White, S. D., et al. 2003,
+MNRAS, 341, 33
+Keerin, P., & Boongoen, T. 2022, IP&M, 59, 102881
+Klypin, A. A., Trujillo-Gomez, S., & Primack, J. 2011, ApJ, 740,
+102
+Koekemoer, A. M., Faber, S., Ferguson, H. C., et al. 2011, ApJS,
+197, 36
+Laigle, C., McCracken, H. J., Ilbert, O., et al. 2016, ApJS, 224, 24
+Li, J., Lv, H., Liu, Y ., et al. 2025, ApJS, 276, 24
+Lintott, C. J., Schawinski, K., Slosar, A., et al. 2008, MNRAS, 389,
+1179
+Lotz, J. M., Primack, J., & Madau, P. 2004, ApJ, 128, 163
+Luo, Z., Chen, J., Chen, Z., et al. 2025, ApJS, 279, 17
+Luo, Z., Tang, Z., Chen, Z., et al. 2024a, MNRAS, 531, 3539
+Luo, Z., Li, Y ., Lu, J., et al. 2024b, MNRAS, 535, 1844
+Madau, P. 1995, ApJ, 441, 18
+Martin, D. C., Wyder, T. K., Schiminovich, D., et al. 2007, ApJS,
+173, 342
+McCracken, H., Milvang-Jensen, B., Dunlop, J., et al. 2012, A&A,
+544, A156
+McInnes, L., Healy, J., Saul, N., & Großberger, L. 2018, arXiv
+preprint arXiv:1802.03426
+McKinney, W., et al. 2011, PyHPC, 14, 1
+Mortlock, A., Conselice, C. J., Hartley, W. G., et al. 2013,
+MNRAS, 433, 1185
+Muzzin, A., Marchesini, D., Stefanon, M., et al. 2013, ApJ, 777, 18
+Nedkova, K. V ., H¨außler, B., Marchesini, D., et al. 2024, MNRAS,
+532, 3747
+Oke, J., & Gunn, J. 1983, ApJ, 266, 713
+Pacifici, C., Kassin, S. A., Weiner, B. J., et al. 2016, ApJ, 832, 79
+Pandya, S., Patel, P., Nord, B. D., Walmsley, M., &´Ciprijanovi´c,
+A. 2025, MLST, 6, 035032
+Pedregosa, F., Varoquaux, G., Gramfort, A., et al. 2011, JMLR, 12,
+2825
+Peng, C. Y ., Ho, L. C., Impey, C. D., & Rix, H.-W. 2002, ApJ, 124,
+266
+Poggianti, B., & Barbaro, G. 1997, A&A, 325, 1025
+
+18
+Prokhorenkova, L., Gusev, G., V orobev, A., Dorogush, A. V ., &
+Gulin, A. 2018, NIPS, 31
+Ren, B., Pueyo, L., Chen, C., et al. 2020, ApJ, 892, 74
+Robertson, B., Cox, T. J., Hernquist, L., et al. 2006, ApJ, 441, 21
+Robertson, B. E., Tacchella, S., Johnson, B., et al. 2023, Nature, 7,
+611
+Robitaille, T. P., Tollerud, E. J., Greenfield, P., et al. 2013, A&A,
+558, A33
+S ¸AHiN, E., Arslan, N. N., &¨Ozdemir, D. 2025, Neural Computing
+and Applications, 37, 859
+Schawinski, K., Urry, C. M., Simmons, B. D., et al. 2014,
+MNRAS, 440, 889
+Scoville, N., Aussel, H., Brusa, M., et al. 2007, ApJS, 172, 1
+Shuntov, M., Akins, H. B., Paquereau, L., et al. 2025, arXiv
+preprint arXiv:2506.03243
+Simard, L., Mendel, J. T., Patton, D. R., Ellison, S. L., &
+McConnachie, A. W. 2011, ApJS, 196, 11
+Simmons, B. D., Lintott, C., Willett, K. W., et al. 2016, MNRAS,
+464, 4420
+Somerville, R. S., & Dav´e, R. 2015, ARA&A, 53, 51
+Somerville, R. S., Hopkins, P. F., Cox, T. J., Robertson, B. E., &
+Hernquist, L. 2008, MNRAS, 391, 481
+Somerville, R. S., Popping, G., & Trager, S. C. 2015, MNRAS,
+453, 4337
+Somerville, R. S., Olsen, C., Yung, L. A., et al. 2021, MNRAS,
+502, 4858
+Stehman, S. V . 1997, Remote sensing of Environment, 62, 77
+Stekhoven, D. J. 2015, Astrophysics Source Code Library,
+ascl:1505
+Strateva, I., Ivezi´c, ˇZ., Knapp, G. R., et al. 2001, ApJ, 122, 1861
+Taylor, E. N., Hopkins, A. M., Baldry, I. K., et al. 2015, MNRAS,
+446, 2144
+Vika, M., Bamford, S. P., Haeussler, B., et al. 2013, MNRAS, 435,
+623
+Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020, Nature
+methods, 17, 261
+Wang, Y ., Zhai, Z., Alavi, A., et al. 2022, ApJ, 928, 1
+Waskom, M. L. 2021, JOSS, 6, 3021
+Weaver, J. R., Kauffmann, O., Ilbert, O., et al. 2022, ApJS, 258, 11
+Willett, K. W., Galloway, M. A., Bamford, S. P., et al. 2016,
+MNRAS, 464, 4176
+Wisnioski, E., Schreiber, N. F., Wuyts, S., et al. 2015, ApJ, 799,
+209
+Yung, L. A., Somerville, R. S., Finkelstein, S. L., Popping, G., &
+Dav´e, R. 2019, MNRAS, 483, 2983
+Yung, L. A., Somerville, R. S., Ferguson, H. C., et al. 2022,
+MNRAS, 515, 5416
+Zeraatgari, F., Hafezianzadeh, F., Zhang, Y .-X., Mosallanezhad, A.,
+& Zhang, J.-Y . 2024, A&A, 688, A33

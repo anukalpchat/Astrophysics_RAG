@@ -1,0 +1,866 @@
+Title: Deep Learning-Enabled Prediction of Geoeffective CMEs Using SOHO and SDO Observations
+Authors: Zhaoxin Yan, Jason T. L. Wang, Haimin Wang, Harim Lee, Ju Jing, Yan Xu, Chunhui Xu, Vasyl Yurchyshyn
+Published: 2026-05-23
+Categories: astro-ph.SR, cs.LG
+
+Solar Physics
+DOI: 10.1007/•••••-•••-•••-••••-•
+Deep Learning-Enabled Prediction of Geoeffective
+CMEs Using SOHO and SDO Observations
+Zhaoxin Y an1,2 ·Jason T. L. W ang 1,2 ·
+Haimin W ang1,3,4 ·Harim Lee 1,3 ·
+Ju Jing 1,3,4 ·Y an Xu 1,3,4 ·Chunhui Xu 1,2 ·
+V asyl Y urchyshyn4
+©The author(s)••••
+AbstractUnderstanding and forecasting the geoeffectiveness of a coronal mass
+ejection (CME) is crucial for protecting infrastructure in the near-Earth space
+environment and on Earth. In this study, we present a novel fusion model
+to forecast the geoeffectiveness of CME events. Our model combines convolu-
+tional neural networks for feature learning and a prediction network for feature
+B J.T.L. Wang
+wangj@njit.edu
+B H. Wang
+haimin.wang@njit.edu
+Z. Yan
+zy7@njit.edu
+H. Lee
+harim.lee@njit.edu
+J. Jing
+ju.jing@njit.edu
+Y. Xu
+yan.xu@njit.edu
+C. Xu
+cx4@njit.edu
+V. Yurchyshyn
+vasyl.yurchyshyn@njit.edu
+1 Institute for Space Weather Sciences, New Jersey Institute of Technology, University
+Heights, Newark, NJ 07102, USA
+2 Department of Computer Science, New Jersey Institute of Technology, University Heights,
+Newark, NJ 07102, USA
+3 Center for Solar-Terrestrial Research, New Jersey Institute of Technology, University
+Heights, Newark, NJ 07102, USA
+4 Big Bear Solar Observatory, New Jersey Institute of Technology, 40386 North Shore Lane,
+Big Bear City, CA 92314, USA
+SOLA: main.tex; 26 May 2026; 0:57; p. 1
+arXiv:2605.24748v1  [astro-ph.SR]  23 May 2026
+
+Yan et al.
+fusion and event classification. The model is trained by observations from instru-
+ments including the Large Angle Spectroscopic Coronagraph (LASCO) on board
+the Solar and Heliospheric Observatory (SOHO) and the Atmospheric Imaging
+Assembly (AIA) and Helioseismic and Magnetic Imager (HMI) on board the
+Solar Dynamics Observatory (SDO). The trained model is then used to predict
+whether an Earth-reaching CME will cause a geomagnetic storm and/or the
+probability that the CME will cause such a storm. Experimental results based
+on a five-fold cross validation scheme demonstrate the good performance of our
+fusion model, achieving a mean true skill statistic (TSS) score of 0.703 when
+the model is used as a deterministic prediction tool, and a mean Brier score
+of 0.095 when the model is used as a probabilistic forecasting tool, where a
+TSS score of 1 or a Brier score of 0 indicates perfect performance. This work
+contributes to forecasting the causal relationship between Earth-directed CMEs
+and geomagnetic storms in solar-terrestrial interactions.
+Keywords:Coronal mass ejections; Solar-terrestrial relations; Heliosphere
+1. Introduction
+Geomagnetic storms, often triggered by Earth-directed coronal mass ejections
+(CMEs; Liu, Webb, and Zhao 2006; Gopalswamy 2009; Vourlidas, Patsourakos,
+and Savani 2019; Zhang et al. 2025), pose significant threats to modern techno-
+logical infrastructure in the near-Earth space environment and on Earth. These
+disturbances can compromise satellite operations, disrupt global positioning sys-
+tems, interfere with radio communications, and induce harmful currents in power
+transmission networks. The severity of such storms is quantified through various
+geomagnetic indices, with the Dst (Disturbance Storm Time) index serving
+as a primary indicator, where Dst values below−50 nT signify geomagnetic
+storm conditions (Gonzalez et al. 1994; Telloni 2022). Additional indices, includ-
+ing Kp, Ap, and high-resolution variants such as SYM-H and ASY-H, provide
+complementary storm characterization capabilities (Mayaud 1980; Wanliss and
+Showalter 2006).
+Recently, the rapid advancement of artificial intelligence and machine learning
+has opened new avenues for forecasting the terrestrial effects of CMEs. For
+example, Besliu-Ionescu et al. (2019) adopted a logistic regression model to
+predict the geoeffectiveness of a given CME using CME parameters. Pricopi et al.
+(2022) extended the work of Besliu-Ionescu et al. (2019) by considering a suite
+of machine learning methods, including logistic regression, K-nearest neighbors
+(KNN), support vector machines (SVMs), feed-forward artificial neural networks
+(ANNs) and ensemble models, with solar onset parameters. Ye et al. (2025) de-
+veloped a feature dimension reduction method in conjunction with a KNN model
+to predict the geoeffectiveness of CMEs using multiple CME features. Ye et al.
+(2024) investigated the geoeffectiveness of a CME and its dependence on solar
+wind conditions using an SVM model. Telloni et al. (2023) predicted geomag-
+netic events, also using solar wind data with multiple ANN models. Guastavino
+et al. (2024) formulated the prediction of geomagnetic disturbances as a binary
+SOLA: main.tex; 26 May 2026; 0:57; p. 2
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+classification problem and employed a long short-term memory recurrent neural
+network, together with in situ measurements of solar wind plasma and magnetic
+field, to solve the problem. Hu, Camporeale, and Swiger (2023) designed multi-
+fidelity boosted neural networks, trained by solar wind parameters, to predict
+the Dst index. Liu et al. (2024) adopted a temporal convolutional network with
+integrated gradients to predict Dst. Fu et al. (2021) used solar images to predict
+the geoeffectiveness of CMEs with an attention-assisted convolutional neural
+network (CNN). Because only solar observations were used without handpicked
+features, their tool has the potential for making near-real-time forecasts.
+In this study, we present a novel fusion model that combines convolutional
+neural networks for feature learning and a prediction network for feature fusion
+and event classification, to predict geoeffective CMEs. Specifically, we use obser-
+vations collected by the Atmospheric Imaging Assembly (AIA; Lemen et al. 2012)
+and Helioseismic and Magnetic Imager (HMI; Scherrer et al. 2012) on board the
+Solar Dynamics Observatory (SDO; Pesnell, Thompson, and Chamberlin 2012)
+as well as the Large Angle Spectroscopic Coronagraph (LASCO; Brueckner et al.
+1995) on board the Solar and Heliospheric Observatory (SOHO; Domingo, Fleck,
+and Poland 1995) to train and test our fusion model. The model predicts whether
+an Earth-reaching CME will cause a geomagnetic storm and/or the probability
+that the CME will cause such a storm, where the storm is defined as a disturbance
+of the Earth’s magnetosphere during which the minimum Dst value is lower than
+−50 nT (Gonzalez et al. 1994; Telloni 2022). The fusion model achieves a mean
+true skill statistic (TSS) score of 0.703 when used as a deterministic prediction
+tool, and a mean Brier score of 0.095 when used as a probabilistic forecasting
+tool based on a five-fold cross validation scheme, where a TSS score of 1 or a
+Brier score of 0 indicates perfect predictions.
+The remainder of this paper is organized as follows. Section 2 describes the
+observational data and pre-processing procedures used in our study. Section 3
+presents the architecture and implementation details of our fusion model. Section
+4 reports the experimental results obtained by evaluating the fusion model from
+the perspectives of deterministic prediction and probabilistic forecasting. Section
+5 presents a discussion and concludes the paper.
+2. Data
+The main data source used in our study is the list of interplanetary CMEs
+maintained by Richardson and Cane (2010), referred to as the RC list. We
+selected 164 Earth-reaching CMEs that have LASCO observing time recorded
+in the RC list. These CME events spanned the period from 2011 to 2024. All
+selected CMEs were associated with Dst values in the RC list. Figure 1 shows
+the distribution of the Dst values for the 164 CMEs. A CME is geoeffective if its
+associated Dst value is lower than−50 nT (Gonzalez et al. 1994; Telloni 2022).
+As a result, there were 86 geoeffective CMEs and 78 non-geoeffective CMEs.
+Figure 2 shows the breakdown of these CME events. The lower the Dst values,
+the stronger the corresponding geomagnetic storms.
+SOLA: main.tex; 26 May 2026; 0:57; p. 3
+
+Yan et al.
+Figure 1.Distribution of the Dst index values for the 164 Earth-reaching CME events in our
+dataset.
+Figure 2.Breakdown of the geoeffective (blue) and non-geoeffective (orange) CME events in
+our dataset.
+When training and validating our fusion model, we used solar observations
+from multiple instruments, including SOHO/LASCO, SDO/AIA with two chan-
+nels 193 ˚A and 211 ˚A, and SDO/HMI. Figure 3 shows the solar observations
+on the CME event that occurred on 14 March 2015 UT, which are, from left to
+right, LASCO C2, AIA 193 ˚A, AIA 211 ˚A, and HMI. As in the literature (Wang
+et al. 2019; Alobaid et al. 2023), we used base-difference images for LASCO C2
+to improve model performance. LASCO C2 images capture the early outward
+propagation of CMEs in the corona and provide onset signatures and initial
+speed estimates (Brueckner et al. 1995). AIA images show coronal dimmings
+and flare-related brightenings in the low corona that are strongly associated
+with CME initiation (Dissauer et al. 2018, 2019), and they also reveal coronal
+holes, which are the sources of high-speed solar wind streams that can interact
+with CMEs and affect their geoeffectiveness (Gopalswamy et al. 2009). HMI
+magnetograms provide the photospheric magnetic field context, including shear,
+polarity inversion lines, and sigmoidal structures, which are known to increase
+the probability of eruptions (Falconer, Moore, and Gary 2006; Toriumi and
+SOLA: main.tex; 26 May 2026; 0:57; p. 4
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Figure 3.Solar observations on the CME event that occurred on 14 March 2015 UT. Shown
+from left to right are a LASCO C2 image, an AIA 193 ˚A image, an AIA 211 ˚A image, and a
+full-disk HMI line-of-sight magnetogram.
+Wang 2019). Combining these observations gives a multimodal view of both
+the magnetic environment and the coronal response, improving the ability to
+assess CME potential and forecast their geoeffectiveness.
+Each CME event in our dataset had a LASCO observing time stamp, denoted
+t, recorded in the RC list. Following Alobaid et al. (2024), we collected LASCO
+C2 images 10 minutes beforetand 4 hours aftert, averaging 21 images per
+CME event, with a total of 3,438 LASCO C2 images. In addition, we collected
+AIA 193 ˚A images and AIA 211 ˚A images, with a cadence of 1 hour, in the
+time window from 4 hours beforettot, totaling 1,295 AIA images. Finally,
+we collected HMI magnetograms, also with a cadence of 1 hour, in the time
+window from 3 hours beforettot, totaling 471 HMI magnetogram images.
+These temporal ranges were chosen on the basis of the literature (Alobaid et al.
+2024) and also our own experimental study. We have tested larger temporal
+ranges, which incurred longer execution times without improving performance,
+and smaller temporal ranges, which yielded worse performance. Missing images
+in the time windows were excluded from the study. The dataset contained 5,204
+images in total.
+We then used a stratified 80:20 split on our CME event dataset for model
+training and testing. Specifically, we randomly selected 80% of the 86 geoeffec-
+tive CME events in the dataset, which yielded 69 events, and 80% of the 78
+non-geoeffective CME events in the dataset, which yielded 62 events, for model
+training. The remaining 20% from each class, including 17 geoeffective and 16
+non-geoeffective events, were used for model testing. Thus, we maintained the
+same class proportions (geoeffective vs. non-geoeffective) in both training and
+test sets as the original event dataset. All images associated with an event were
+exclusively assigned to the same set, either training or test, to prevent data
+leakage. The training set and the test set are disjoint and, therefore, our trained
+model can make predictions on test data that it has never seen during training.
+To monitor model performance and prevent overfitting during training, we fur-
+ther selected 12% of the training events from each class and used the selected
+events for model validation.
+3. Methodology
+Figure 4 shows the architecture of our fusion model. The input of the fusion
+model consists of solar images associated with a CME event. Letting the LASCO
+SOLA: main.tex; 26 May 2026; 0:57; p. 5
+
+Yan et al.
+Figure 4.Overall architecture of our fusion model. The model accepts, as input, a CME event
+represented by images of four types (LASCO C2, AIA 193˚A, AIA 211 ˚A and HMI), and assigns
+a pair of networks, ResNet (RN) and EfficientNet (EN), to learn and extract features from the
+input images of each type. These learned features are then sent to our PredictionNet (PN),
+which is composed of three modules: ensemble (EM), vision transformer (ViT) and multilayer
+perceptron (MLP), for feature fusion and event classification. PN outputs “1” indicating that
+the input CME event is positive/geoeffective or “0” indicating that the input CME event is
+negative/non-geoeffective when our model is used as a deterministic prediction tool. When our
+model is used as a probabilistic forecasting tool, the output is a probability for the input CME
+event to be geoeffective.
+observing time of the CME event bet, these solar images, which represent the
+CME event, include: 21 LASCO C2 images in the period fromt- 10 min tot+
+4 hr, 4 AIA 193 ˚A images and 4 AIA 211 ˚A images in the period fromt- 4 hr
+tot, and 3 HMI magnetograms in the period fromt- 3 hr tot.
+We employ two convolutional neural networks (CNNs), specifically ResNet50
+(He et al. 2016) and EfficientNet-B0 (Tan and Le 2019), for feature learning
+and a vision transformer (Dosovitskiy et al. 2021) for image classification based
+on learned features. CNNs are well known for their ability to learn useful fea-
+tures from raw pixel data. ResNet50 and EfficientNet-B0 are widely used CNNs
+due to their balance of performance and computational cost. Both ResNet50
+and EfficientNet-B0 have been trained in ImageNet (Deng et al. 2009) and are
+adapted to our task through transfer learning (Pan and Yang 2010). Specifically,
+we load the pre-trained weights of ResNet50 and EfficientNet-B0 to our ResNet
+and EfficientNet models, respectively, and fine-tune the models using the training
+and validation images at hand. We assign a pair of ResNet and EfficientNet to
+each data type (LASCO C2, AIA 193 ˚A, AIA 211 ˚A and HMI), where the two
+CNNs are used to learn features from images of the respective data type.
+For each data type, ResNet processes each image of that data type, indi-
+vidually and separately, through its deep residual architecture to produce a
+2,048-channel feature map with a spatial dimension of 7×7 pixels. The feature
+maps are intermediate representations produced by the convolutional layers in
+ResNet. Specifically, each data type has multiple images and hence is associ-
+ated with multiple feature maps. For example, for the 21 LASCO C2 images,
+SOLA: main.tex; 26 May 2026; 0:57; p. 6
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+we obtain 21 feature maps. These 21 feature maps are averaged to obtain a
+single representative 2,048-channel feature map with a spatial dimension of
+7×7 pixels. The average feature map preserves important temporal dynamics
+and fine-grained spatial features in the 21 LASCO C2 images. Similarly, for
+the 4 AIA 193 ˚A images (4 AIA 211 ˚A images, 3 HMI magnetogram images,
+respectively), we obtain 4 (4, 3, respectively) feature maps, which are averaged
+to obtain a single representative 2,048-channel feature map with a spatial di-
+mension of 7×7 pixels for the 4 AIA 193 ˚A images (4 AIA 211 ˚A images,
+3 HMI magnetogram images, respectively). Simultaneously, EfficientNet uses
+its compound-scaled convolutional layers to produce a representative, average
+1,280-channel feature map with the same spatial resolution of 7×7 pixels for
+the multiple images of each data type. The representative, average feature maps
+of each data type are then sent to a prediction network, or PredictionNet (PN),
+which is composed of three modules: ensemble (EM), vision transformer (ViT)
+and multilayer perceptron (MLP).
+For each data type, the EM module combines the two representative average
+feature maps produced by ResNet and EfficientNet, respectively, through chan-
+nel concatenation and attention mechanisms to create a unified feature map of
+512×7×7 pixels that preserves spatial information. This process results in four
+feature maps, one for each data type. Next, the EM module learns weights among
+the four feature maps to combine them to produce a final 512-dimensional feature
+map, which is projected onto a 768-dimensional space through a linear trans-
+formation to match the internal dimensionality requirements of the subsequent
+ViT module.
+ViT is well known for its ability to classify images effectively. ViT transforms
+the processed 768-dimensional feature map into an optimized 512-dimensional
+feature vector. The MLP module has two fully connected layers: the first layer
+reduces dimensionality to 256 with ReLU activation, followed by dropout regu-
+larization with a dropout rate of 0.3 to prevent overfitting, and a final sigmoid-
+activated layer, which produces a probability for the input CME event to be
+geoeffective. To obtain deterministic predictions, we implement a probability
+threshold of 0.6 in our fusion model. CME events with predicted probabilities
+greater than or equal to the threshold are classified as geoeffective, while CME
+events with predicted probabilities below the threshold are classified as non-
+geoeffective. This threshold value was empirically optimized to balance recall
+and precision in our validation dataset. Specifically, the threshold of 0.6 was
+determined through a grid search on the validation set containing 9 geoeffective
+and 8 non-geoeffective CME events. We tested threshold values in the range
+between 0.3 and 0.7 with a step size of 0.05 and selected the threshold that
+maximized the true skill statistic (TSS), which will be defined in Section 4.1. TSS
+provides a balanced assessment of predictive skills that accounts for both the hit
+rate and the false alarm rate, independent of the class distribution (Bloomfield
+et al. 2012). The optimization was performed exclusively on the validation set
+to avoid data leakage from the test set.
+Figure 5 details the ViT module, where we load the pre-trained weights of
+Dosovitskiy et al. (2021) into the module. The input 768-dimensional feature
+SOLA: main.tex; 26 May 2026; 0:57; p. 7
+
+Yan et al.
+Figure 5.Architecture details of the vision transformer (ViT), which consists of multi-head
+self-attention layers, feed-forward networks, and residual connections for enhanced feature
+representation.
+map with a spatial resolution of 14×14 pixels is first partitioned into 196 non-
+overlapping patches by a positional encoding layer. This creates a sequence of 196
+patch embeddings, each represented as a 768-dimensional vector. These patch
+embeddings are then processed through two sequential transformer encoder
+blocks, each containing a multi-head self-attention layer with 12 attention heads
+and a position-wise feed-forward network utilizing the GELU activation func-
+tion. Residual connections, denoted by⊕, and layer normalization ensure stable
+gradient flow and feature preservation throughout the transformer processing
+pipeline. The transformer blocks process the sequence of 196 patches, learning
+contextual relationships between the patches through the self-attention layers
+and feed-forward networks. Following transformer enhancement, the input 768-
+dimensional feature map undergoes a final layer normalization and is projected
+into an optimized 512-dimensional feature vector. Table 1 and Table 2 summarize
+the configuration and parameter details, respectively, of our fusion model.
+Table 1.Configuration Details of the Proposed Fusion Model
+Component Configuration Regularization Activation Output
+ResNet 50 Layers Batch Norm. ReLU 2,048×7×7
+EfficientNet 38 Layers Batch Norm. SiLU 1,280×7×7
+EM Module Conv2D + Attn. Batch Norm. ReLU 512×7×7
+ViT Pos. Encoding Linear Proj.− −196×768
+ViT Trans. Block 1 12 Attn. Heads Layer Norm. GELU 196×768
+ViT Trans. Block 2 12 Attn. Heads Layer Norm. GELU 196×768
+MLP Dense Layer Fully Connected−ReLU 256
+MLP Output Layer Fully Connected Dropout (0.3) Sigmoid 2
+4. Experiments and Results
+4.1. Experimental Setup
+As mentioned in Section 2, we implemented a stratified data partitioning scheme
+by dividing the dataset at hand into training and test sets using an 80:20 ratio
+where approximately 12% of the training data from each class were selected
+for model validation. There were 164 CMEs in our dataset, with 86 being geo-
+effective and 78 being non-geoeffective. As a result, the training set had 69
+SOLA: main.tex; 26 May 2026; 0:57; p. 8
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Table 2.Parameter Analysis for the Proposed Fusion Model
+Architecture Component Layer Count Trainable Parameters
+ResNet 50 23.51M
+EfficientNet 38 4.01M
+EM Module 3 1.68M
+ViT Transformer Enhancement 2 Blocks 14.37M
+ViT Other Layers 3 0.89M
+MLP Layers 2 0.20M
+Whole Fusion Model−44.66M
+geoeffective CMEs and 62 non-geoeffective CMEs where 9 geoeffective CMEs
+and 8 non-geoeffective CMEs are used for model validation, and the test set had
+17 geoeffective CMEs and 16 non-geoeffective CMEs.
+When evaluating our fusion model for deterministic prediction, we adopted
+five complementary performance metrics: recall, precision, accuracy, F1, and true
+skill statistic (TSS). Given a CME eventE,Eis a true positive (TP) when the
+model predicts thatEis positive (i.e. geoeffective) andEis indeed positive.E
+is a true negative (TN) when the model predicts thatEis negative (i.e. non-
+geoeffective) andEis indeed negative.Eis a false positive (FP) when the model
+predicts thatEis positive whileEis actually negative.Eis a false negative (FN)
+when the model predicts thatEis negative whileEis actually positive. When the
+context is clear, we also use TP, TN, FP and FN to represent the total number
+of true positives, true negatives, false positives, and false negatives, respectively.
+The five performance metrics are mathematically defined as follows:
+Recall = TP
+TP + FN,(1)
+Precision = TP
+TP + FP,(2)
+Accuracy = TP + TN
+TP + FP + TN + FN,(3)
+F1 = 2×TP
+2×TP + FP + FN ,(4)
+TSS = TP
+TP + FN − FP
+FP + TN.(5)
+F1 combines precision and recall into a single value, providing a balanced
+measure of a model’s performance. TSS accounts for both the hit rate (recall)
+and the false alarm rate, providing a balanced assessment of predictive skills
+independent of the class distribution, as indicated previously. The F1 score
+ranges from 0 to 1, while the TSS score ranges from−1 to 1, with a value
+of 1 indicating perfect model performance for both metrics.
+SOLA: main.tex; 26 May 2026; 0:57; p. 9
+
+Yan et al.
+In addition to the fusion model, we consider its three component networks
+alone, used as baseline methods. The ResNet baseline takes solar images as input
+from all four data types (LASCO C2, AIA 193 ˚A, AIA 211 ˚A, and HMI), which
+are first processed individually within their respective time windows. The result-
+ing feature maps for each data type are averaged to obtain a single representative
+2,048-channel feature map with a spatial dimension of 7×7 pixels. Each data
+type yields an average feature map. The four average feature maps are then
+concatenated and fed into a multilayer perceptron (MLP) classifier, which has
+the same architecture as that used in the fusion model, to produce the output.
+The EfficientNet baseline works similarly. For the ViT baseline, the multiple
+images of each data type are first averaged to obtain a single representative
+image for each data type, respectively. Each average image is resized to 112×112
+pixels. The four resized average images are then concatenated into a 224×224
+image arranged in a 2×2 grid. Next, the concatenated image is partitioned into
+14×14 = 196 non-overlapping patches, each having 16×16 pixels. Each patch
+is linearly projected onto a 768-dimensional embedding vector, which matches
+the input dimensionality of the ViT baseline. These patch embeddings are then
+processed by two transformer encoder blocks with the same architecture as those
+shown in Figure 5, followed by an MLP classifier, which has the same architecture
+as that used in the fusion model, to produce the output. All three baseline
+methods and the proposed fusion model use the same training, validation, and
+test sets, as well as identical optimization settings, including the learning rate,
+batch size, number of epochs, and loss function, to ensure a fair and controlled
+comparison between the different models.
+4.2. Deterministic Prediction Results
+We conducted a series of experiments to evaluate the performance of the pro-
+posed fusion model and its component networks (i.e., the three baseline meth-
+ods). Figure 6 presents the results. It can be seen in Figure 6 that the ViT
+baseline outperforms the other two component networks (ResNet and Efficient-
+Net). Overall, the fusion model is the best, achieving a TSS score of 0.757. This
+happens probably because the fusion model combines the superior capabilities
+of convolutional neural networks in representation/feature learning and those of
+ViT for image recognition/classification. Previously, Alobaid et al. (2024) used
+different data and algorithms to predict geoeffective CMEs with a slightly lower
+TSS of 0.714, though a direct comparison between our work and Alobaid et al.’s
+work is not possible because the algorithms and datasets used by the two works
+differ.
+Figure 7 presents the confusion matrix obtained by our fusion model. The
+confusion matrix provides a breakdown of errors that occur when the fusion
+model makes predictions on the test set. There are 33 CME events in the test
+set, with 17 being geoeffective/positive and 16 being non-geoeffective/negative.
+Among the 17 positive CME events, the fusion model correctly predicts 15 of
+them (TP = 15) and incorrectly predicts 2 of them to be negative, although the
+two are actually positive (FN = 2). Among the 16 negative CME events, the
+SOLA: main.tex; 26 May 2026; 0:57; p. 10
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Figure 6.Comparison of our fusion model with its three component networks based on the
+80:20 train-test split described in Section 2 when all the four tools are used for deterministic
+prediction. The fusion model achieves the best performance with a TSS score of 0.757.
+fusion model correctly predicts 14 of them (TN = 14) and incorrectly predicts
+2 of them to be positive, although the two are actually negative (FP = 2).
+To ensure the statistical reliability of our performance assessment, we also
+performed a five-fold cross-validation experiment using stratified sampling to
+maintain consistent class distributions across all folds. Specifically, our dataset
+of 164 CME events was partitioned into five subsets of approximately equal size,
+each containing roughly 17 geoeffective and 16 non-geoeffective CMEs. The five-
+fold cross-validation was applied to all models, including the proposed fusion
+model and its component networks (i.e., the three baseline methods). With
+the five-fold cross validation, our fusion model achieved a mean TSS of 0.703,
+in reference to the mean TSS of 0.673 in Alobaid et al. (2024). The ResNet
+SOLA: main.tex; 26 May 2026; 0:57; p. 11
+
+Yan et al.
+Figure 7.The confusion matrix obtained by our fusion model used for deterministic prediction
+based on the 80:20 train-test split described in Section 2.
+Table 3.Five-Fold Cross Validation Results of the Four Deterministic Prediction Models
+Model Recall Precision Accuracy F1 TSS
+ResNet 0.620±0.137 0.625±0.111 0.624±0.028 0.622±0.124 0.248±0.055
+EfficientNet 0.565±0.174 0.604±0.149 0.598±0.030 0.584±0.162 0.195±0.060
+ViT 0.674±0.089 0.684±0.072 0.681±0.024 0.679±0.081 0.363±0.048
+Fusion0.819±0.0350.876±0.0300.851±0.0150.847±0.0330.703±0.030
+baseline achieved a mean TSS of 0.248, the EfficientNet baseline achieved a
+mean TSS of 0.195, and the ViT baseline achieved a mean TSS of 0.363. Table 3
+presents the detailed results including the mean scores and standard deviations
+of all performance metrics, with the best metric values highlighted in boldface.
+The five-fold cross validation results again demonstrate the superiority of the
+proposed fusion model over the baseline methods.
+There are four data types (LASCO C2, AIA 193 ˚A, AIA 211 ˚A and HMI)
+used as input to our fusion model. Figure 8 compares the effectiveness of the
+four data types and their combinations, including LASCO C2, AIA 193 ˚A, AIA
+211 ˚A, HMI, LASCO C2 + AIA 193 ˚A, LASCO C2 + AIA 211 ˚A, LASCO C2 +
+HMI, AIA 193 ˚A + AIA 211 ˚A, AIA 193 ˚A + HMI, AIA 211 ˚A + HMI, LASCO
+C2 + AIA 193 ˚A + AIA 211 ˚A, LASCO C2 + AIA 193 ˚A + HMI, LASCO C2 +
+AIA 211 ˚A + HMI, AIA 193 ˚A + AIA 211 ˚A + HMI, LASCO C2 + AIA 193 ˚A
++ AIA 211 ˚A + HMI. Each data type alone is used as input to our model to
+produce results. Then, in turn, each combination is used as input to the model
+to produce the results. It can be seen in Figure 8 that combining the four data
+types together performs the best, achieving the highest TSS score of 0.757.
+4.3. Model Interpretation
+To elucidate the decision-making process of our fusion model, we employ Inte-
+grated Gradients (IG; Sundararajan, Taly, and Yan 2017), an axiomatic feature
+attribution method that explains deep learning model predictions by assigning
+SOLA: main.tex; 26 May 2026; 0:57; p. 12
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Figure 8.Comparison of the four data types (LASCO C2, AIA 193 ˚A, AIA 211 ˚A, HMI) and
+their combinations, each of which is used in turn as input to our fusion model, for deterministic
+prediction based on the 80:20 train-test split described in Section 2. The model achieves the
+best performance when all the four data types are used together.
+importance scores to input features. The resulting attribution maps highlight the
+regions in the input images that most influence the model’s predictions. Based
+on Figure 8, AIA 193 ˚A and AIA 211 ˚A images have a stronger effect on the
+performance of our model than LASCO C2 and HMI images. Therefore, we use
+the two AIA images to explain the model’s decision-making process.
+Figure 9 shows the AIA images and their corresponding IG attribution maps
+for a correctly predicted (true positive) CME event, denotedC, that occurred
+on 14 March 2015 UT (also see Figure 3). In each AIA image, the active region
+(AR) NOAA 12297, which is the source region of the eventC, is highlighted
+SOLA: main.tex; 26 May 2026; 0:57; p. 13
+
+Yan et al.
+Figure 9.AIA 193 ˚A image (top), AIA 211 ˚A image (bottom), and their corresponding IG
+attribution maps for a correctly predicted (true positive) CME event that occurred on 14
+March 2015 UT. The left column shows the AIA images and the right column shows the IG
+attribution maps. Each color bar indicates the normalized attribution intensity, ranging from
+0 (blue, low attribution, low importance score) to 1 (red, high attribution, high importance
+score). In each AIA image, the AR 12297, which is the source region of the CME event, is
+highlighted by a red box, while the coronal holes are outlined in green. Based on the IG
+attribution maps, our fusion model assigns high importance scores to the coronal loops in the
+CME-producing AR 12297, paying much attention to the loops, and consequently predicts
+that the CME event is positive/geoeffective.
+by a red box. This AR 12297 is identified by (1) locating all solar ARs and
+their coordinates at the appearance time of the eventCusing the Solar Region
+Summary provided by the Space Weather Prediction Center (SWPC), 1 (2) de-
+termining which of the ARs located in (1) produces a flare that may possibly
+be associated with a CME using the Geostationary Operational Environmental
+1https://www.swpc.noaa.gov/products/solar-region-summary
+SOLA: main.tex; 26 May 2026; 0:57; p. 14
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Satellite (GOES) X-ray flare catalogs provided by the National Centers for En-
+vironmental Information (NCEI), and (3) comparing the location (coordinates)
+of the AR identified in (2) with the location (central position angle) of the
+CME whose onset time recorded in the SOHO LASCO CME Catalog 2 matches,
+within a 2 hr window (Zhang et al. 2025), the appearance time of the eventC
+to make sure that the AR identified in (2) is the source region of the eventC. In
+addition, we extract the coronal holes and their locations (coordinates) in each
+AIA image from the Heliophysics Events Knowledgebase (Hurlburt et al. 2012)
+using SunPy (SunPy Community et al. 2015). The coronal holes in each AIA
+image are outlined in green. Separately, in each IG attribution map, the AR
+12297 is highlighted by a white box, and the coronal holes are also outlined in
+white. In the attribution maps, warmer colors (red) indicate higher attribution
+values and cooler colors (blue) indicate lower attribution values. It can be seen
+in Figure 9 that our fusion model assigns high importance scores to the coronal
+loops in the CME-producing AR 12297, paying much attention to the loops,
+and consequently predicts that the CME eventCis positive, i.e., it will cause a
+geomagnetic storm.
+Figure 10 shows the AIA images and their corresponding IG attribution maps
+for an incorrectly predicted (false negative) CME event that occurred on 7 May
+2019 UT. In each AIA image, the AR 12740, which is the source region of the
+CME event, is highlighted by a red box while the coronal holes are outlined in
+green. Separately, in each IG attribution map, the AR 12740 is highlighted by a
+while box, and the coronal holes are also outlined in white. This AR 12740 and
+coronal holes are located using the same methods as described above. It can be
+seen in Figure 10 that our fusion model does not pay sufficient attention to the
+coronal loops in the CME-producing AR 12740. As a result, the model predicts
+that the CME event is negative, though the CME event is actually positive, i.e.,
+geoeffective.
+4.4. Probabilistic F orecasting Results
+As explained in Figure 4, our fusion model can be used as a probabilistic
+forecasting tool, which outputs a probability that an input CME event will
+be geoeffective. The three component networks (ResNet, EfficientNet, and ViT)
+can also be used as probabilistic forecasting tools. When evaluating these net-
+works for probabilistic forecasting, we adopted the Brier score (Brier 1950) and
+the Brier skill score (Wilks 2010). The Brier score, denoted BS, quantifies the
+accuracy of the probabilistic forecast by computing the mean squared difference
+between the predicted probabilities and actual binary outcomes, mathematically
+expressed as:
+BS = 1
+N
+NX
+i=1
+(yi −ˆyi)2,(6)
+2https://cdaw.gsfc.nasa.gov/CME list/
+SOLA: main.tex; 26 May 2026; 0:57; p. 15
+
+Yan et al.
+Figure 10.AIA 193 ˚A image (top), AIA 211 ˚A image (bottom), and their corresponding IG
+attribution maps for an incorrectly predicted (false negative) CME event that occurred on
+7 May 2019 UT. In each AIA image, the AR 12740, which is the source region of the CME
+event, is highlighted by a red box, while the coronal holes are outlined in green. Based on the
+IG attribution maps, our fusion model does not pay sufficient attention to the coronal loops
+in the CME-producing AR 12740. Consequently, the model predicts that the CME event is
+negative, though the CME event is actually positive/geoeffective.
+whereNrepresents the total number of CME events in the test set,y i denotes the
+actual binary outcome for theith test event with 1 indicating that the event is
+geoeffective and 0 indicating that the event is non-geoeffective, and ˆyi represents
+the predicted probability for theith test event. Brier scores range from 0 to 1,
+with an optimal value of 0 representing perfect probabilistic accuracy.
+The Brier skill score, denoted BSS, provides a normalized measure of model
+performance, calculated as:
+BSS = 1− BS
+1
+N
+PN
+i=1(yi −¯y)2
+,(7)
+SOLA: main.tex; 26 May 2026; 0:57; p. 16
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Figure 11.Comparison of our fusion model with its three component networks based on the
+80:20 train-test split described in Section 2 when all the four tools are used for probabilistic
+forecasting. The fusion model achieves the best performance with a BS score of 0.080.
+where ¯y= 1
+N
+PN
+i=1 yi represents the mean frequency of actual geoeffective events
+in the test set. BSS values range from−∞to 1, with a perfect skill corresponding
+to BSS = 1.
+Figure 11 compares the performance of the component networks (i.e., the
+three baseline methods) and the fusion model for probabilistic forecasting. Again,
+ViT performs better than the other two component networks (ResNet and
+EfficientNet). Overall, the fusion model is the best, achieving a BS score of
+0.080, in reference to the BS score of 0.094 in Alobaid et al. (2024). To ensure
+the statistical reliability of our performance assessment, we also evaluated all
+models using five-fold cross-validation. Across the five folds, the fusion model
+achieved a mean BS score of 0.095, in reference to the mean BS score of 0.107 in
+Alobaid et al. (2024). The ResNet baseline achieved a mean BS score of 0.155,
+the EfficientNet baseline achieved a mean BS score of 0.179, and the ViT baseline
+achieved a mean BS score of 0.141. Table 4 presents the detailed results including
+the mean scores and standard deviations of the performance metrics, with the
+best metric values highlighted in boldface. Again, the fusion model outperforms
+its component networks.
+Figure 12 compares the effectiveness of the four data types (LASCO C2, AIA
+193 ˚A, AIA 211 ˚A and HMI) and their combinations for probabilistic forecasting.
+The results are consistent with those for the deterministic prediction shown
+in Figure 8 where combining the four data types together achieves the best
+performance.
+SOLA: main.tex; 26 May 2026; 0:57; p. 17
+
+Yan et al.
+Table 4.Five-Fold Cross-Validation Results of
+the Four Probabilistic Forecasting Models
+Model BS BSS
+ResNet 0.155±0.012 0.378±0.048
+EfficientNet 0.179±0.015 0.282±0.060
+ViT 0.141±0.011 0.435±0.044
+Fusion0.095±0.0100.619±0.040
+Figure 12.Comparison of the four data types (LASCO C2, AIA 193 ˚A, AIA 211 ˚A, HMI) and
+their combinations, each of which is used in turn as input to our fusion model, for probabilistic
+forecasting based on the 80:20 train-test split described in Section 2. The model achieves the
+best performance when all the four data types are used together.
+5. Discussion and Conclusion
+In this study, we proposed a new fusion model for predicting geoeffective CMEs,
+using data from Solar Cycles (SCs) 24 and 25 to train the model. Specifically, the
+model uses four types of solar images (LASCO C2, AIA 193 ˚A, AIA 211 ˚A and
+HMI) and combines three state-of-the-art neural networks (ResNet, EfficientNet,
+and ViT) for feature learning, feature fusion, image classification, and event
+prediction. With five-fold cross validation, the model achieves a mean true skill
+statistic (TSS) score of 0.703 when used as a deterministic prediction tool and
+a mean Brier score of 0.095 when used as a probabilistic forecasting tool, in
+reference to the mean TSS score of 0.673 and the mean Brier score of 0.107 in
+Alobaid et al. (2024), who used training data collected in SC 23. Notice that,
+as in the work of Alobaid et al. (2024), we rely on existing tools (e.g., Sudar,
+SOLA: main.tex; 26 May 2026; 0:57; p. 18
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Vrˇ snak, and Dumbovi´ c 2016; Liu et al. 2018; Wang et al. 2019; Amerstorfer et al.
+2021; Dumbovi´ c et al. 2021; Kaportseva and Shugay 2021; Alobaid et al. 2022;
+Baratashvili et al. 2022; Guastavino et al. 2023; Chierichini et al. 2024; Ye et al.
+2024; Chen et al. 2025; Pattnaik, Micha lek, and Ravishankar 2025) to predict
+whether a CME event will arrive at Earth. If it is predicted that the CME will
+hit Earth, then one can use the fusion model developed here to further predict
+whether the CME will cause a geomagnetic storm and/or the probability that
+the CME will cause such a storm.
+Our work uses AIA images and HMI magnetograms. In practice, AIA images
+can be saturated, which causes pixels to lose detail, making it difficult to see
+the underlying structures (Schwartz, Torre, and Piana 2014; Guastavino et al.
+2019; Yu et al. 2022). Saturation occurs when large solar flares and coronal
+mass ejections produce intense bursts of EUV light that saturate the detector.
+Saturation can be resolved by using de-saturation tools, which reconstruct lost
+information (Schwartz et al. 2015; Yu et al. 2022). In our dataset, there are
+740 AIA 193 ˚A images each with 4,096×4,096 pixels; 64.5% of the images (i.e.,
+477 images) have no saturated pixel. Among the remaining 263 images having
+saturated pixels, 33 images contain more than 100 saturated pixels (out of the
+total 4,096×4,096 = 16,777,216 pixels); no image contains more than 1,000 sat-
+urated pixels. There are 646 AIA 211 ˚A images each with 4,096×4,096 pixels
+(missing images were excluded from the study as mentioned in Section 2); 81.9%
+of the images (i.e., 529 images) have no saturated pixel. Among the remaining
+117 images having saturated pixels, 31 images contain more than 100 saturated
+pixels, 12 images contain more than 1,000 saturated pixels, and 2 images contain
+more than 10,000 saturated pixels with one image containing 10,277 saturated
+pixels and the other image containing 11,506 saturated pixels. These statistics
+show that saturated pixels account for a small portion of the AIA images used
+in the study. In addition, 93.5% of the AIA 193 ˚A images have an exposure time
+more than 1.0 second, and 91.1% of the images have an exposure time more
+than 2.0 seconds. There are 5 AIA 193 ˚A images with an exposure time less
+than 0.2 seconds. By contrast, all the AIA 211 ˚A images have an exposure time
+more than 2.0 seconds. How saturated and/or short-exposure images influence
+the prediction of geoeffective CMEs and how to explain the influence using IG
+attribution maps will be further investigated in future work.
+Our experimental results based on the 80:20 train-test split and five-fold
+cross validation showed that the proposed fusion model performs better than all
+baseline methods. On the basis of these experimental results, we conclude that
+the fusion model is a feasible tool for predicting geoeffective CMEs. Because the
+proposed model is trained by observations collected in the current solar cycle
+and the testing SOHO LASCO C2 images as well as the SDO observations can
+be obtained in near real-time, the proposed model has the potential to be an
+operational near real-time forecasting system.
+AcknowledgmentsWe acknowledge constructive suggestions and comments from an anony-
+mous referee that have helped to significantly improve the manuscript. We also thank members
+of the Institute for Space Weather Sciences for fruitful discussions. The SOHO LASCO CME
+Catalog is generated and maintained at the CDAW Data Center by NASA and The Catholic
+SOLA: main.tex; 26 May 2026; 0:57; p. 19
+
+Yan et al.
+University of America in cooperation with the Naval Research Laboratory. SDO is a NASA
+mission to observe solar activity and space weather. SOHO is an international cooperation
+project between ESA and NASA.
+Author ContributionJ.W. and H.W. conceived the study. Z.Y. wrote the manuscript. All
+the authors reviewed the manuscript.
+FundingJ.W. and H.W. acknowledge support from NSF AGS grants 2228996, 2149748,
+NSF OAC grants 2504860, 2320147, and NASA grants 80NSSC24K0548, 80NSSC24K0843,
+80NSSC24M0174. J.J. acknowledges support from NSF AGS grants 2300341, 2149748. Y.X.
+acknowledges support from NSF AGS grants 2228996, 2229064, and NSF RISE-2425602 grant.
+V.Y. acknowledges support from NSF AGS grants 2401229, 2408174, 2300341, 2309939, NSF
+AST-2108235 grant, and NASA 80NSSC24K1914 grant.
+Data AvailabilityCME events used in this study were compiled from the RC list in https:
+//izw1.caltech.edu/ACE/ASC/DATA/level3/icmetable2.htm. SOHO LASCO C2 images were
+collected from the SOHO science archives at https://soho.nascom.nasa.gov/data/archive/.
+SDO observations were collected from the Joint Science Operations Center (JSOC) at http:
+//jsoc.stanford.edu/.
+Declarations
+Conflict of interestThe authors declare no conflict of interest.
+References
+Alobaid, K.A., Abduallah, Y., Wang, J.T.L., Wang, H., Jiang, H., Xu, Y., Yurchyshyn, V.,
+Zhang, H., Cavus, H., Jing, J.: 2022, Predicting CME arrival time through data integration
+and ensemble learning.Frontiers in Astronomy and Space Sciences9, 1013345. DOI.
+Alobaid, K.A., Abduallah, Y., Wang, J.T.L., Wang, H., Fan, S., Li, J., Cavus, H., Yurchyshyn,
+V.: 2023, Estimating coronal mass ejection mass and kinetic energy by fusion of multiple
+deep-learning models.Astrophys. J. Lett.958, L34. DOI.
+Alobaid, K.A., Wang, J.T.L., Wang, H., Jing, J., Abduallah, Y., Wang, Z., Farooki, H., Cavus,
+H., Yurchyshyn, V.: 2024, Prediction of geoeffective CMEs using SOHO images and deep
+learning.Sol. Phys.299, 159. DOI.
+Amerstorfer, T., Hinterreiter, J., Reiss, M.A., M¨ ostl, C., Davies, J.A., Bailey, R.L., Weiss,
+A.J., Dumbovi´ c, M., Bauer, M., Amerstorfer, U.V., Harrison, R.A.: 2021, Evaluation of
+CME arrival prediction using ensemble modeling based on heliospheric imaging observations.
+Space Weather19, e02553. DOI.
+Baratashvili, T., Verbeke, C., Wijsen, N., Poedts, S.: 2022, Improving CME evolution and
+arrival predictions with AMR and grid stretching in Icarus.Astron. Astrophys.667, A133.
+DOI.
+Besliu-Ionescu, D., Talpeanu, D.-C., Mierla, M., Maris Muntean, G.: 2019, On the prediction
+of geoeffectiveness of CMEs during the ascending phase of SC24 using a logistic regression
+method.J. Atmos. Solar-Terr. Phys.193, 105036. DOI.
+Bloomfield, D.S., Higgins, P.A., McAteer, R.T.J., Gallagher, P.T.: 2012, Toward reliable
+benchmarking of solar flare forecasting methods.Astrophys. J. Lett.747, L41. DOI.
+Brier, G.W.: 1950, Verification of forecasts expressed in terms of probability.Monthly Weather
+Review78, 1. DOI.
+Brueckner, G.E., Howard, R.A., Koomen, M.J., Korendyke, C.M., Michels, D.J., Moses, J.D.,
+Socker, D.G., Dere, K.P., Lamy, P.L., Llebaria, A., Bout, M.V., Schwenn, R., Simnett, G.M.,
+Bedford, D.K., Eyles, C.J.: 1995, The Large Angle Spectroscopic Coronagraph (LASCO).
+Sol. Phys.162, 357. DOI.
+Chen, H., Sachdeva, N., Huang, Z., Holst, B., Manchester, W., Jivani, A., Zou, S., Chen, Y.,
+Huan, X., Toth, G.: 2025, Decent estimate of CME arrival time from a data-assimilated
+ensemble in the Alfv´ en Wave Solar atmosphere Model (DECADE-AWSoM).Space Weather
+23, 2024SW004165. DOI.
+SOLA: main.tex; 26 May 2026; 0:57; p. 20
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Chierichini, S., Liu, J., Kors´ os, M.B., Del Moro, D., Erd´ elyi, R.: 2024, CME arrival modeling
+with machine learning.Astrophys. J.963, 121. DOI.
+Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., Fei-Fei, L.: 2009, ImageNet: A large-scale
+hierarchical image database. In:Proceedings of the IEEE Conference on Computer Vision
+and Pattern Recognition, 248. DOI.
+Dissauer, K., Veronig, A.M., Temmer, M., Podladchikova, T., Vanninathan, K.: 2018, Statis-
+tics of coronal dimmings associated with coronal mass ejections. I. Characteristic dimming
+properties and flare association.Astrophys. J.863, 169. DOI.
+Dissauer, K., Veronig, A.M., Temmer, M., Podladchikova, T.: 2019, Statistics of coronal dim-
+mings associated with coronal mass ejections. II. Relationship between coronal dimmings
+and their associated CMEs.Astrophys. J.874, 123. DOI.
+Domingo, V., Fleck, B., Poland, A.I.: 1995, The SOHO mission: An overview.Sol. Phys.162,
+1. DOI.
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., De-
+hghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., Houlsby, N.: 2021, An image
+is worth 16x16 words: Transformers for image recognition at scale. In:Proceedings of the
+9th International Conference on Learning Representations.
+Dumbovi´ c, M.,ˇCalogovi´ c, J., Martini´ c, K., Vrˇ snak, B., Sudar, D., Temmer, M., Veronig, A.:
+2021, Drag-based model (DBM) tools for forecast of coronal mass ejection arrival time and
+speed.Front. Astron. Space Sci.8, 58. DOI.
+Falconer, D.A., Moore, R.L., Gary, G.A.: 2006, Magnetic causes of solar coronal mass ejections:
+Dominance of the free magnetic energy over the magnetic twist alone.Astrophys. J.644,
+1258. DOI.
+Fu, H., Zheng, Y., Ye, Y., Feng, X., Liu, C., Ma, H.: 2021, Joint geoeffectiveness and arrival
+time prediction of CMEs by a unified deep learning framework.Remote Sens.13, 1738.
+DOI.
+Gonzalez, W.D., Joselyn, J.A., Kamide, Y., Kroehl, H.W., Rostoker, G., Tsurutani, B.T.,
+Vasyliunas, V.M.: 1994, What is a geomagnetic storm?J. Geophys. Res.99, 5771. DOI.
+Gopalswamy, N.: 2009, Halo coronal mass ejections and geomagnetic storms.Earth, Planets
+and Space61, 595. DOI.
+Gopalswamy, N., M¨ akel¨ a, P., Xie, H., Akiyama, S., Yashiro, S.: 2009, CME interactions with
+coronal holes and their interplanetary consequences.Journal of Geophysical Research (Space
+Physics)114, A00A22. DOI.
+Guastavino, S., Piana, M., Massone, A.M., Schwartz, R., Benvenuto, F.: 2019, Desaturating
+SDO/AIA observations of solar flaring storms.Astrophys. J.882, 109. DOI.
+Guastavino, S., Candiani, V., Bemporad, A., Marchetti, F., Benvenuto, F., Massone, A.M.,
+Mancuso, S., Susino, R., Telloni, D., Fineschi, S., Piana, M.: 2023, Physics-driven machine
+learning for the prediction of coronal mass ejections’ travel times.Astrophys. J.954, 151.
+DOI.
+Guastavino, S., Bahamazava, K., Perracchione, E., Camattari, F., Audone, G., Telloni, D.,
+Susino, R., Nicolini, G., Fineschi, S., Piana, M., Massone, A.M.: 2024, Forecasting geoffective
+events from solar wind data and evaluating the most predictive features through machine
+learning approaches.Astrophys. J.971, 94. DOI.
+He, K., Zhang, X., Ren, S., Sun, J.: 2016, Deep residual learning for image recognition. In:
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 770.
+DOI.
+Hu, A., Camporeale, E., Swiger, B.: 2023, Multi-hour-ahead Dst index prediction using multi-
+fidelity boosted neural networks.Space Weather21. DOI.
+Hurlburt, N., Cheung, M., Schrijver, C., Chang, L., Freeland, S., Green, S., Heck, C., Jaffey,
+A., Kobashi, A., Schiff, D., Serafin, J., Seguin, R., Slater, G., Somani, A., Timmons, R.:
+2012, Heliophysics Event Knowledgebase for the Solar Dynamics Observatory (SDO) and
+beyond.Sol. Phys.275, 67. DOI.
+Kaportseva, K.B., Shugay, Y.S.: 2021, Use of the DBM model to the predict of arrival of
+coronal mass ejections to the Earth.Cosmic Res.59, 268. DOI.
+Lemen, J.R., Title, A.M., Akin, D.J., Boerner, P.F., Chou, C., Drake, J.F., Duncan, D.W.,
+Edwards, C.G., Friedlaender, F.M., Heyman, G.F., Hurlburt, N.E., Katz, N.L., Kushner,
+G.D., Levay, M., Lindgren, R.W., Mathur, D.P., McFeaters, E.L., Mitchell, S., Rehse, R.A.,
+Schrijver, C.J., Springer, L.A., Stern, R.A., Tarbell, T.D., Wuelser, J.-P., Wolfson, C.J.,
+Yanari, C., Bookbinder, J.A., Cheimets, P.N., Caldwell, D., Deluca, E.E., Gates, R., Golub,
+L., Park, S., Podgorski, W.A., Bush, R.I., Scherrer, P.H., Gummin, M.A., Smith, P., Auker,
+G., Jerram, P., Pool, P., Soufli, R., Windt, D.L., Beardsley, S., Clapp, M., Lang, J., Waltham,
+SOLA: main.tex; 26 May 2026; 0:57; p. 21
+
+Yan et al.
+N.: 2012, The Atmospheric Imaging Assembly (AIA) on the Solar Dynamics Observatory
+(SDO).Sol. Phys.275, 17. DOI.
+Liu, J., Ye, Y., Shen, C., Wang, Y., Erd´ elyi, R.: 2018, A new tool for CME arrival time
+prediction using machine learning algorithms: CAT-PUMA.Astrophys. J.855, 109. DOI.
+Liu, J., Shen, C., Wang, Y., Xu, M., Chi, Y., Zhong, Z., Mao, D., Zhang, Z., Wang, C., Liu,
+J., Wang, Y.: 2024, Forecasting the Dst index with temporal convolutional network and
+integrated gradients.Sol. Phys.299, 98. DOI.
+Liu, Y., Webb, D.F., Zhao, X.P.: 2006, Magnetic structures of solar active regions, full-halo
+coronal mass ejections, and geomagnetic storms.Astrophys. J.646, 1335. DOI.
+Mayaud, P.N.: 1980, What is a geomagnetic index? In:Derivation, Meaning, and Use of
+Geomagnetic Indices, American Geophysical Union. Chap. 2. DOI.
+Pan, S.J., Yang, Q.: 2010, A survey on transfer learning.IEEE Trans. Knowl. Data Eng.22,
+1345. DOI.
+Pattnaik, A., Micha lek, G., Ravishankar, A.: 2025, Estimation of transit time of CMEs from
+the Sun to Earth.Astrophys. J.982, 35. DOI.
+Pesnell, W.D., Thompson, B.J., Chamberlin, P.C.: 2012, The Solar Dynamics Observatory
+(SDO).Sol. Phys.275, 3. DOI.
+Pricopi, A.-C., Paraschiv, A.R., Besliu-Ionescu, D., Marginean, A.-N.: 2022, Predicting the
+geoeffectiveness of CMEs using machine learning.Astrophys. J.934, 176. DOI.
+Richardson, I.G., Cane, H.V.: 2010, Near-Earth interplanetary coronal mass ejections during
+solar cycle 23 (1996 - 2009): Catalog and summary of properties.Sol. Phys.264, 189. DOI.
+Scherrer, P.H., Schou, J., Bush, R.I., Kosovichev, A.G., Bogart, R.S., Hoeksema, J.T., Liu, Y.,
+Duvall, T.L., Zhao, J., Title, A.M., Schrijver, C.J., Tarbell, T.D., Tomczyk, S.: 2012, The
+Helioseismic and Magnetic Imager (HMI) investigation for the Solar Dynamics Observatory
+(SDO).Sol. Phys.275, 207. DOI.
+Schwartz, R.A., Torre, G., Piana, M.: 2014, Systematic de-saturation of images from the
+Atmospheric Imaging Assembly in the Solar Dynamics Observatory.Astrophys. J. Lett.
+793, L23. DOI.
+Schwartz, R.A., Torre, G., Massone, A.M., Piana, M.: 2015, DESAT: A Solar SoftWare tool
+for image de-saturation in the Atmospheric Image Assembly onboard the Solar Dynamics
+Observatory.Astronomy and Computing13, 117. DOI.
+Sudar, D., Vrˇ snak, B., Dumbovi´ c, M.: 2016, Predicting coronal mass ejections transit times to
+Earth with neural network.Mon. Not. R. Astron. Soc.456, 1542. DOI.
+Sundararajan, M., Taly, A., Yan, Q.: 2017, Axiomatic attribution for deep networks. In:
+Proceedings of the 34th International Conference on Machine Learning, 3319.
+SunPy Community, Mumford, S.J., Christe, S., P´ erez-Su´ arez, D., Ireland, J., Shih, A.Y., Inglis,
+A.R., Liedtke, S., Hewett, R.J., Mayer, F., Hughitt, K., Freij, N., Meszaros, T., Bennett,
+S.M., Malocha, M., Evans, J., Agrawal, A., Leonard, A.J., Robitaille, T.P., Mampaey,
+B., Campos-Rozo, J.I., Kirk, M.S.: 2015, SunPy–Python for solar physics.Computational
+Science and Discovery8, 014009. DOI.
+Tan, M., Le, Q.V.: 2019, EfficientNet: Rethinking model scaling for convolutional neural
+networks. In:Proceedings of the 36th International Conference on Machine Learning97,
+6105.
+Telloni, D.: 2022, Statistical methods applied to space weather science.Front. Astron. Space
+Sci.9, 865880. DOI.
+Telloni, D., Schiavo, M.L., Magli, E., Fineschi, S., Guastavino, S., Nicolini, G., Susino, R.,
+Giordano, S., Amadori, F., Candiani, V., Massone, A.M., Piana, M.: 2023, Prediction ca-
+pability of geomagnetic events from solar wind data using neural networks.Astrophys. J.
+952, 111. DOI.
+Toriumi, S., Wang, H.: 2019, Flare-productive active regions.Living Reviews in Solar Physics
+16, 3. DOI.
+Vourlidas, A., Patsourakos, S., Savani, N.P.: 2019, Predicting the geoeffective properties
+of coronal mass ejections: current status, open issues and path forward.Philosophical
+Transactions of the Royal Society A377, 20180096. DOI.
+Wang, Y., Liu, J., Jiang, Y., Erd´ elyi, R.: 2019, CME arrival time prediction using convolutional
+neural network.Astrophys. J.881, 15. DOI.
+Wanliss, J.A., Showalter, K.M.: 2006, High-resolution global storm index: Dst versus SYM-H.
+J. Geophys. Res. (Space Physics)111, A02202. DOI.
+Wilks, D.S.: 2010, Forecast verification. In:Statistical Methods in the Atmospheric Sciences,
+3rd edn., Elsevier. Chap. 8. DOI.
+SOLA: main.tex; 26 May 2026; 0:57; p. 22
+
+Deep Learning-Enabled Prediction of Geoeffective CMEs
+Ye, D., Li, H., Guo, L., Jiang, X.: 2025, An improved halo coronal mass ejection geoeffectiveness
+prediction model using multiple coronal mass ejection features based on the DC-PCA-KNN
+method.Astrophys. J.978, 66. DOI.
+Ye, Y., Liu, J., Hao, Y., Cui, J.: 2024, Evaluating the geoeffectiveness of interplanetary coronal
+mass ejections: Insights from a support vector machine approach with SHAP value analysis.
+Astrophys. J.972, 52. DOI.
+Yu, X., Xu, L., Ren, Z., Zhao, D., Sun, W.: 2022, Image desaturation for SDO/AIA using
+mixed convolution network.Research in Astronomy and Astrophysics22, 065009. DOI.
+Zhang, H., Jing, J., Wang, J.T.L., Wang, H., Abduallah, Y., Xu, Y., Alobaid, K.A., Farooki,
+H., Yurchyshyn, V.: 2025, Prediction of halo coronal mass ejections using SDO/HMI vector
+magnetic data products and a transformer model.Astrophys. J.981, 37. DOI.
+SOLA: main.tex; 26 May 2026; 0:57; p. 23

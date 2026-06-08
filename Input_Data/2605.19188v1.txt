@@ -1,0 +1,1336 @@
+Title: Lossless Compression of Cosmological Information from Type Ia Supernova Distance Measurements
+Authors: Zhenyuan Wang, Yun Wang
+Published: 2026-05-18
+Categories: astro-ph.CO
+
+Prepared for submission to JCAP
+Lossless Compression of Cosmological
+Information from Type Ia Supernova
+Distance Measurements
+Zhenyuan Wang (王 王 王震 震 震远 远 远)1 , Yun Wang 1
+1IPAC, California Institute of Technology, 1200 E. California Blvd., Pasadena, CA 91125,
+U.S.A
+E-mail: zywang@ipac.caltech.edu, wang@ipac.caltech.edu
+Abstract.We perform model-independent distance measurements on four Type Ia super-
+novae (SNe Ia) compilations (Pantheon, Pantheon+, DES-Dovekie, Union3) and compress
+each dataset into the values of logr p(z) at eleven redshift knots, wherer p(z) is a rescaled
+comoving distance. These Gaussian distributed compressed values, together with their full
+covariance, completely capture the distance-redshift relation information from each dataset.
+We demonstrate this by using these to perform an Markov Chain Monte Carlo (MCMC)
+likelihood analysis to infer cosmological parameters in flat ΛCDM, flatw 0waCDM, and a
+non-parametric reconstruction of the dark-energy densityX(z)≡ρ DE(z)/ρDE(0). Across all
+datasets and flux-averaging configurations and all three cosmological models, the resulting
+parameter contours and figures of merit reproduce the corresponding full distance-modulus
+analyses using the original SNe Ia data sets (see Wang & Wang 2026a [1]) within the sta-
+tistical sampling noise of the chains, demonstrating that the eleven logr p data points are an
+operationally lossless compression of the cosmological information in the dataset. Our SN Ia
+data compression enables an analytic analysis that completes inO(10 −2) s per dataset and
+reduces the downstream cosmological MCMC to the fast evaluation of an 11-dimensional
+Gaussian likelihood, with a per-step cost set by the number of knots and independent of
+the SNe Ia sample size. Our methodology will benefit the data analysis of future surveys
+from Euclid, Roman, and LSST, which will deliver SNe Ia samples one to three orders of
+magnitude larger than current ones.
+arXiv:2605.19188v1  [astro-ph.CO]  18 May 2026
+
+Contents
+1 Introduction 1
+2 Methodology: Compression Framework and Estimators 3
+2.1 Definition 4
+2.2 Spline interpolation, likelihood, and knot placement 5
+2.3 Without flux averaging: closed-form estimator 6
+2.4 With flux averaging: iterative Newton estimator 6
+2.5 Practical recipe 7
+2.5.1 Recipe A: compressing SN distance moduli into logr p knots 7
+2.5.2 Recipe B: cosmological inference with logr p and covariance 8
+3 Results 9
+3.1 Validation of estimators and Gaussian posterior 9
+3.2 Compression of distance measurement 11
+3.3 Cosmological inference with compressed data 11
+3.3.1 Flat ΛCDM 13
+3.3.2 Flatw 0waCDM 13
+3.3.3 Model-independent dark energy measurementX(z)CDM 16
+4 Discussion and Conclusions 17
+A Mathematical Background 20
+A.1 Linear-Gaussian model and the BLUE estimator 20
+A.2 Newton’s method and the Hessian 21
+B Compressedlogr p Data Products 21
+1 Introduction
+Type Ia supernovae (SNe Ia) gave the first direct evidence that the expansion of the Universe
+is accelerating [2, 3]. The current generation of compilations (Pantheon+ [4], DES-Dovekie
+[5, 6], Union3 [7]) each containO(10 3) SNe Ia. Combined with DESI DR2 BAO and CMB,
+these data give the current best constraints on the dark energy equation of statew(z) [8, 9].
+These SNe data (except Union3) are released as per-SN distance moduli with anN×N
+covariance. That format works for a single likelihood evaluation, but it does not show the
+distance–redshift shape each survey prefers, and it is not portable between surveys. Any
+reanalysis under a new dark energy model requires running the full Markov Chain Monte
+Carlo (MCMC) again. Whether dark energy is consistent with a cosmological constant is
+still an open question, and the answer will come from the next generation of SNe Ia surveys.
+The next decade will see SNe Ia samples increase by factors of roughly 10 from Roman
+and Euclid, and up to∼10 3 from LSST. The Euclid mission targets∼1.8×10 4 SNe Ia
+out toz∼1.5 [10]; the Roman High-Latitude Time-Domain Survey (HLTDS) is designed to
+yield∼10 4 SNe Ia out toz∼2 [11–13]; and the Vera C. Rubin Observatory Legacy Survey
+of Space and Time (LSST) will discover∼10 5–106 well-measured SNe Ia over its ten-year
+– 1 –
+
+operation [14]. The per-SN analysis approach will not scale to those large sample sizes. Co-
+variance matrices grow asN 2, joint likelihoods across surveys and rapid model exploration
+become more computationally challenging. We need a compact, model-independent interme-
+diate data product: a simple Gaussian distance prior compressing the SN Ia data that any
+downstream cosmological analyses can use directly, analogous to the CMB distance priors
+(R, la, ωb) that compress the entireC ℓ spectrum into three numbers [15, 16]. We use the
+termlosslessin an operational sense throughout this paper. We require that the down-
+stream cosmological posterior from the compressed data agree with the posterior from the
+full (µ,C µ) both in the Figure-of-Merit, FoM≡1/ √detC θ withC θ the covariance matrix of
+the cosmological parametersθ[17], and in the 1D and 2D marginalized posteriors. The FoM
+check alone is necessary but not sufficient, since the determinant could in principle preserve
+the total posterior volume while redistributing variance across parameter directions, which
+would change the 1D marginal posterior and the correlation structure.
+The framework we build on is the rescaled distancer p(z)≡[H 0r(z)/(cz)](1 +z) W(z) of
+[18, 19], whereW(z) is an empirical exponent of redshift chosen to keepr p(z)≈1 across the
+observed range. [18, 19] took the constant choiceW(z) = 0.41, which keepsr p approximately
+flat over 0< z≲1.5. The values ofr p at a set of redshift knots are treated as free parameters.
+A cubic spline through the knots givesr p(z) at any redshift, which determinesd L(z) and
+hence the predicted distance modulusµ th(z) at each SN’s redshift; the knot values are then
+constrained by matchingµ th toµ obs via MCMC. This is model-independent by construction:
+knot values are set by the data, and the spline only does local interpolation between them. We
+stay with the cubic spline rather than switching to a Gaussian process [20, 21] or Chebyshev
+polynomials [9] because the spline does not require a kernel or assuming any global features.
+Local interpolation between knots is the minimum needed to capture the features of the data.
+We make three changes relative to [18, 19]. The first is the rescaling exponent. Replacing
+the constant 0.41 with a quadratic function inu, whereu=z/(1 +z), makes the rescaled
+rp(z) smooth enough across 0< z <3 that a small number of cubic-spline knots reproduce
+its shape accurately. The second is the choice of variable. Working in logr p rather than
+rp is what makes a closed-form solution available: under the standard SN Ia likelihood
+(distance modulusµ obs withGaussiancovarianceC µ), our spline forward model is exactly
+linear in the logr p knots, and the posterior on the knots is exactly Gaussian. Therefore,
+the mean and covariance of logr p can be obtained by the best linear unbiased estimator
+(BLUE) which costsO(10 −2) s per dataset and avoids both the convergence diagnostics and
+the high-znon-Gaussianity that shows up when ther p knots are sampled directly via MCMC
+(Sec. 3.1). The third is consistency: no new likelihood assumption is introduced beyond the
+standardµ-Gaussian one, so the logr p posterior is what the traditionalµ-based analysis
+would give if it were inverted analytically. A similar approach at the catalog level is the
+Union3 distance-modulus compression of [7], which uses a cubic spline through 22 redshift
+knots to represent the residualµ−µ fid(z) relative to a fiducial flat ΛCDM with Ω m = 0.3.
+Our logr p representation is mathematically a linear reparameterization of the same spline-
+on-residual idea, since logr p ∝µ−ν(z) withν(z) a deterministic function of redshift. The
+logr p knots retain only the data-driven shape of the distance–redshift relation. Relative
+to Union3 we (i) adopt a uniform 11-knot grid across all four compilations, and (ii) use a
+closed-form BLUE estimator (Sec. 2.3), so the compression itself doesn’t require MCMC.
+Flux averaging, introduced by [22], addresses a separate concern: the weak-lensing
+magnification PDF for high-zSNe is non-Gaussian and skewed, so direct averaging of distance
+moduli is biased when individual events are scattered by lensing magnification. Averaging
+– 2 –
+
+in flux space rather than in magnitude space removes the lensing-caused bias [23, 24]. In
+the traditional MCMC analysis, flux averaging is applied dynamically: at every sampled
+cosmology the SN Ia data set (µ obs,C µ) is re-binned using that sample’sd L(z) to set the
+luminosity weights and bin redshifts. This data-cosmology coupling makes the flux-averaged
+forward model nonlinear in the logr p knots: the conversion to flux fromµis exponential, and
+the luminosity-weighted bin average depends on the predictedd 2
+L(z) used to scale individual
+SNe. We handle this with an iterative approach, which performs the same dynamic re-binning
+as MCMC but in a deterministic loop: at each iteration the previous-best-fit logr p knots are
+used to flux-average the per-SN data into binned distance moduli (¯µobs, ¯C) on∼4×as many
+redshift bins as logr p knots, and a closed-form BLUE step on the binned data then updates
+the logr p knots. Convergence takes 2–4 iterations, so the compression with flux averaging
+completes in seconds without MCMC.
+In Paper I [1], we reported cosmological constraints from full MCMC on distance mod-
+ulus dataµfor Pantheon, Pantheon+, DES-Dovekie, and Union3 in flat ΛCDM,w 0waCDM,
+and a non-parametric model for the dark energy density ratioX(z)≡ρ DE(z)/ρDE(0). This
+paper provides the corresponding compressed data product for the same full datasets: a
+closed-form Gaussian posterior (mean and covariance) on 11 logr p knots that any down-
+stream pipeline can use as a Gaussian likelihood, reproducing the Paper I results accurately
+and orders of magnitude faster.
+The paper is organized as follows. Section 2 sets up the framework: ther p(z) definition
+and rescaling (Sec. 2.1), the spline forward model and likelihood (Sec. 2.2), the closed-form
+Gaussian posterior on logr p (Sec. 2.3), the iterative-Newton extension for flux-averaged data
+(Sec. 2.4), and a practical recipe summarizing the workflow of compression and downstream
+cosmological analysis(Sec. 2.5). Section 3 introduces the four SNe Ia compilations, validates
+the closed-form/iterative-Newton estimators against MCMC (Sec. 3.1), presents the logr p
+reconstructions, examines the empirical Gaussianity of the compressed posterior, verifies
+losslessness through downstream FoM ratios, and reports the cosmological constraints. We
+summarize this paper and discuss future applications in Section 4. Mathematical background,
+including the BLUE (Appendix A.1) and Newton’s method (Appendix A.2), is reviewed
+in Appendix A. The compressed logr p data products for all four SN Ia compilations are
+tabulated in Appendix B.
+2 Methodology: Compression Framework and Estimators
+This section sets up the model-independent distance measurement as data compression that
+the rest of the paper builds on. We define the rescaled comoving distancer p(z) and the
+rescaling function that makes it smooth across the observed redshift range in Sec. 2.1. Then
+we describe how to use interpolation to measure the logr p at redshift knots from the distance
+modulus dataµin Sec. 2.2. In Sec. 2.3 we derived the closed-form best linear unbiased
+estimator (BLUE) for logr p knots and their Gaussian covariance in the case without flux
+averaging. We then extend BLUE to an iterative-Newton estimator to include the flux
+averaging in Sec. 2.4. In Sec. 2.5 we summarize with a practical recipe for compressing the
+distance modulus data into logr p knots and Gaussian covariance matrix, and for using the
+compressed product in downstream cosmological analyses.
+– 3 –
+
+0.0 0.5 1.0 1.5 2.0 2.5
+z
+−0.15
+−0.10
+−0.05
+0.00
+0.05
+0.10
+0.15
+logrp(z)
+Flat ΛCDMΩm = 0.25
+Ωm = 0.27
+Ωm = 0.2975
+Ωm = 0.32
+Ωm = 0.35
+0.0 0.5 1.0 1.5 2.0 2.5
+z
+Flat w0waCDM
+Ωm = 0.2975
+w0 = −1, wa = 0 (ΛCDM)
+w0 = −0.8, wa = 0
+w0 = −1.2, wa = 0
+w0 = −1, wa = −0.5
+w0 = −1, wa = +0.5
+Figure 1: Theoretical logr p(z) (natural log) for representative cosmology models, computed
+from the full distance integral with the rescaling exponentW(z) = 0.223+0.186u+ 0.245u 2.
+Left:flat ΛCDM with Ω m ∈ {0.25,0.27,0.2975,0.32,0.35}, plotted in a grey family with line
+darkness and thickness increasing with Ω m.Right:flatw 0waCDM with Ω m fixed at the
+fiducial value. Solid blue and cyan lines varyw 0 atw a = 0, dashed orange and brown lines
+varyw a atw 0 =−1. The fiducial ΛCDM (w 0 =−1,w a = 0, Ω m = 0.2975) appears as the
+same medium-grey thick line in both panels.
+2.1 Definition
+The rescaled distance was first introduced by [18], who proposed the power-law formr p(z) =
+[H0r(z)/(cz)] (1 +z) 0.41, later adopted in [19]. Herer(z) is the radial comoving distance. In
+a flat universe,r(z) is given by
+r(z) = c
+H0
+Z z
+0
+dz′
+E(z ′) , E(z)≡H(z)/H 0,(2.1)
+so the explicitH 0 in ther p prefactor cancels thec/H 0 inr(z), andr p(z) depends only on
+the dimensionless expansion rateE(z). The construction therefore encodes only the shape
+of the expansion history. The constant exponent 0.41 was chosen empirically to keepr p ≈1
+over 0< z≲1.5. We extend this construction by promoting the exponent to a quadratic
+function ofu≡z/(1 +z):
+rp(z)≡ H0r(z)
+cz (1 +z) W(z) ,whereW(z) = 0.223 + 0.186u+ 0.245u 2 (2.2)
+The functionW(z) keepsr p(z) close to unity across 0< z <3, so a small number of cubic-
+spline knots reproduce its shape accurately across the redshift range covered by current and
+future SNe Ia compilations.
+Figure 1 demonstrates two complementary points. First, across all reasonable cosmolo-
+gies logr p(z) remains smooth across the full redshift range, confirming that the rescaling
+does its job and a small number of spline knots can capture the full shape (Sec. 2.2). Second,
+distinct cosmologies leave distinct smooth signatures on logr p, with Ω m (left panel) andw 0,
+wa (right panel) each tracing a separable pattern across the displayed redshift range. The
+amplitude of these cosmological signatures (∼0.05 atz∼1) is comparable to the per-knot 1σ
+uncertainty achievable from current SNe Ia compilations (Sec. 3), so measuring logrp(z) knot
+by knot directly visualizes the distance–redshift shape the data prefer and the cosmological
+models that can reproduce it.
+– 4 –
+
+2.2 Spline interpolation, likelihood, and knot placement
+We parameterize the distance–redshift relation by the values of logr p atKredshift knots
+{z0 = 0, z 1, . . . , z K−1}. The first knot is fixed kinematically:y 0 ≡logr p(z0 = 0) = 0,
+sincer(z)→cz/H 0 asz→0 in any FLRW cosmology. The remainingK−1 knot values
+y= (y 1, . . . , yK−1) are the free parameters constrained by the data, and together with their
+Gaussian covariance form the compressed data product used for downstream cosmological
+analyses. At any redshiftz, logr p(z) is obtained by a cubic spline interpolation through the
+knots, which is linear in the knot values:
+logr p(z) =
+K−1X
+k=0
+Sk(z)y k,(2.3)
+whereS k(z) are the cubic-spline basis functions, depending only on the knot positions{z k}
+and the natural boundary conditions (y ′′ = 0 atz 0 andz K−1).
+The theoretical distance modulus is given byµ th(z) = 5 log 10(dL(z)/Mpc) + 25, with
+dL(z) = (1 +z)r(z) in a flat universe. Substituting ourr p parameterization (Eq. 2.2) gives
+µth(z) = 5 log10
+
+(1 +z) 1−W(z) z rp(z)· cH −1
+0
+Mpc
+
++ 25,(2.4)
+Combining Eqs. (2.3) and (2.4), the per-SN distance modulus is exactly linear iny:
+µth(z) =M+ν(z) + 5
+ln10
+K−1X
+k=0
+Sk(z)y k,(2.5)
+where the global nuisance offsetMabsorbing theH 0 dependence and the cosmology-free
+functionν(z) are
+M ≡5 log 10
+ cH −1
+0
+Mpc
+
++ 25,
+ν(z)≡5 log 10(z) + 5
+ 
+1− W(z)
+
+log10(1 +z).
+(2.6)
+Bothµ th(z) andν(z) diverge as 5 log 10(z)→ −∞atz→0. The difference is finite and
+proportional to logr p(z), consistent with the FLRW boundary condition logr p(0) = 0 that
+setsy 0. In practiceν(z) is only evaluated at the SN redshifts{z i}, which all satisfyz i >0,
+so this divergence never enters the numerical pipeline.
+We analytically marginalize overMand obtain the following modifiedχ 2 to be mini-
+mized,
+χ2
+marg = (∆µ)TC−1(∆µ)−
+
+(∆µ)TC−11
+2
+1TC−11 ,(2.7)
+with ∆µthe data residual against theM-independent part ofµ th (Eqs. 2.5 and 2.6), and
+Cis the full covariance matrix ofµ obs. For the flux-averaged analysis, individual SNe are
+compressed into redshift bins following Paper I [1]. The bin-level likelihood, including the
+model-dependent ln det ¯Cterm from the parameter dependence of the projection matrix, is
+treated in Sec. 2.4.
+TheMmarginalization makes explicit that the data constrain only theshapeof logr p(z):
+a uniform shifty k →y k +δat all knots is exactly compensated byM → M −5δlog 10 e, so
+the overall amplitude of{y k}is degenerate with the nuisance parameter and does not enter
+the cosmological inference.
+– 5 –
+
+We use 12 knots indexedz 0, z1, . . . , z11 per dataset. Pantheon, Pantheon+, and Union3
+(zmax ≈2.26) share the same grid; DES-Dovekie has a lower redshift maximum (zmax ≈1.14),
+so its top three knots are shifted accordingly. The two grids are listed in Table 1. Each knot
+interval contains≥15–20 SNe.
+Table 1: Spline knot redshiftsz k for the four SNe Ia compilations. Pantheon, Pantheon+,
+and Union3 share the same 12-knot grid covering 0≤z≤2.27; DES-Dovekie uses a 12-knot
+grid truncated atz 11 = 1.15 to match itsz max ≈1.14. Only 11 knots withz k >0 carry
+cosmological information and are used for downstream cosmological inference.
+k0 1 2 3 4 5 6 7 8 9 10 11
+Pantheon
+0 0.05 0.15 0.30 0.40 0.50 0.60 0.70 0.80 1.00 1.60 2.27Pantheon+
+Union3
+DES-Dovekie 0 0.05 0.15 0.30 0.40 0.50 0.60 0.70 0.80 0.90 1.00 1.15
+2.3 Without flux averaging: closed-form estimator
+The spline forward model in Eq. (2.5) is exactly linear in the knot valuesy:µ th =ν+M1+
+Ay, whereνis the cosmology-independent function (Eq. 2.6) collected over the SN redshifts
+andAis the base matrix of cubic-spline basis functions evaluated at those redshifts. With
+the standard SN Ia assumption thatµ obs is Gaussian with covarianceC µ, this is alinear-
+Gaussian model: after analyticMmarginalization (Eq. 2.7), the posterior onyis exactly
+Gaussian [25], with mean and covariance given by the best linear unbiased estimator (BLUE),
+ˆy= (A TMA)−1 ATM(µ obs −ν),Σ y = (ATMA)−1.(2.8)
+The base matrixAand theM-marginalization projectionMare
+Aik = 5
+ln10 Sk(zi), i= 1, . . . , N SN, k= 1, . . . , K−1,(2.9)
+M=C −1
+µ − C−1
+µ 11TC−1
+µ
+1TC−1µ 1 .(2.10)
+Thek= 0 column is dropped becausey 0 = 0 is fixed kinematically. In practiceAis built
+numerically column by column: for eachk, sety=e k (the indicator vector, withy 0 = 0 held
+fixed), pass the result through any natural cubic-spline solver (e.g.,DataInterpolations.jl),
+and evaluate at the SN redshifts{z i}. No closed-form expression forS k(z) is needed; the
+spline solver does one tridiagonal solve per column inO(N) operations.
+Operationally, no iteration or MCMC is needed: buildAfrom the spline basis at the
+SN redshifts, evaluateνfrom{z i}, computeMfromC µ, and solve Eq. (2.8). The total
+cost isO(10 −2) s per dataset, four-to-five orders of magnitude faster than the equivalent
+MCMC chain, and the BLUE agrees with direct NUTS sampling to within Monte-Carlo
+noise (Sec. 3.1).
+2.4 With flux averaging: iterative Newton estimator
+Atz≳1 weak gravitational lensing produces a non-Gaussian magnification PDF in mag-
+nitude space, biasing magnitude-averaged distances through Jensen’s inequality. Averaging
+– 6 –
+
+in linear flux space removes the bias [22, 26]. Following [19, 27] and Paper I [1], the flux-
+averaging procedure at a fixed cosmologyyhas four steps: (i) convert each SN magnitude to
+fluxF i = 10−0.4(µobs,i−25); (ii) form the model-corrected scaled luminosityL i =F i d2
+L(zi;y);
+(iii) bin SNe in redshift and average within binb, ¯Lb =N −1
+b
+P
+i∈b Li at ¯zb =N −1
+b
+P
+i∈b zi;
+(iv) convert back to a flux-averaged distance modulus
+¯µb = 25−2.5 log 10
+ ¯Lb/d2
+L(¯zb;y)
+
+,(2.11)
+with bin covariance ¯C(y) =P C µ PT ,P bi =L i/(Nb ¯Lb). We use a hybrid bin layout:∼40
+equal-count bins belowz= 0.8, plus three uniform bins per knot interval abovez= 0.8. This
+places three uniformly-spaced flux-averaged bins within each knot interval abovez= 0.8 (so
+bin widths differ between intervals, matching the varying knot spacing), so the cubic-spline
+fit at every high-zknot has local data support on both sides despite the low SN density at
+high redshift. The binning choice differs from the one used in Paper I [1], but is applied
+uniformly to every flux-averaged analysis in this work.
+Both ¯µ(y) and ¯C(y) depend ony, so the model is no longer linear inyand the BLUE
+of Sec. 2.3 no longer applies in one solve. The bin-level negative log-likelihood is
+−2lnL(y) =χ 2
+bin(y) + ln det ¯C(y) + const,(2.12)
+withχ 2
+bin(y) the BLUE-style quadratic of Equation (2.7) evaluated on the bin-level data
+(¯µ, ¯C). The extra ln det ¯C(y) term is the model-dependent normalisation of the binned
+Gaussian: it is absent in Sec. 2.3 because the per-SN covarianceCµ is parameter-independent,
+but here ¯Cvaries withythrough the flux-averaging projectionP(y). We minimize−2lnL
+by Newton iteration,
+y(j+1) =y (j) −H −1(y(j))∇(−2lnL)(y (j)),(2.13)
+where the Hessian
+H(y)≡ ∇∇ T
+−2lnL(y)
+
+(2.14)
+and the gradient∇(−2lnL) are computed at each step by automatic differentiation through
+the flux-averaging pipeline. The iteration converges in two Newton steps to max|∆y| ≤
+10−7 on Pantheon, with posterior covarianceΣ y = 1
+2H−1. The total cost isO(10) s per
+dataset, compared to a few hours for direct NUTS sampling of the full nonlinear flux-averaged
+likelihood (Sec. 3.1).
+2.5 Practical recipe
+The compressed logr p is designed to simple and straightforward to use. Recipe A extracts
+the Gaussian posterior ( ˆy,Σ y) from a SNe Ia compilation; Recipe B uses it in a downstream
+cosmological MCMC. Together they make explicit which nuisance parameters are analytically
+marginalized and which physical parameters are sampled.
+2.5.1 Recipe A: compressing SN distance moduli intologr p knots
+Inputs:Per-SN distance moduli{µ obs,i}NSN
+i=1 with the fullN SN ×N SN covarianceC µ, the
+redshift-knot grid{z k}11
+k=0 from Table 1, and the rescalingW(z) in Eq. (2.2).
+Steps:
+1. Build theN SN ×11 base matrixAfrom Eq. (2.9), withS k(z) the natural cubic-spline
+basis on the 11 free knots.
+– 7 –
+
+2. Build the cosmographic baselineνby evaluatingν(z i) of Eq. (2.6) at each SN redshift.
+3. Build theM-marginalization projectionMof Eq. (2.10); this step analytically marginal-
+izes the nuisance parameter combiningH 0 andM B.
+4. Solve the closed-form BLUE of Eq. (2.8) for the mean ˆyand covarianceΣ y. For the
+flux-averaged variant, replace this step with the iterative Newton procedure of Sec. 2.4
+on the bin-level data; convergence takes two Newton steps.
+Output:( ˆy,Σ y), the Gaussian posterior on the 11 free logr p knots, with logr p(z= 0) = 0
+fixed by FLRW kinematics. No MCMC is required and no cosmological parameters are
+sampled.
+2.5.2 Recipe B: cosmological inference withlogr p and covariance
+Inputs:( ˆy,Σ y) from Recipe A or directly from Appendix B, and the set of cosmological
+model parametersθthrough the expansion rateE(z;θ)≡H(z;θ)/H 0.
+Steps.At each step of the cosmological MCMC:
+1. Compute the theory logr p at the 11 redshift knotsz k, using the sameW(z) as Recipe A:
+yth
+k (θ) = log
+ 1
+zk
+Z zk
+0
+dz′
+E(z ′;θ)
+
++W(z k) log(1 +z k).
+TheH 0 andM B dependence are absorbed into the kinematic anchory 0 = 0 and the
+Mmarginalization of Recipe A, respectively, soy th(θ) depends only onθ.
+2. Evaluate the SNe Ia log-likelihood,
+−2lnLSN(θ) = ( ˆy−y th(θ))T Σ−1
+y (ˆy−y th(θ)).
+3. Sampleθ. For joint analyses with CMB or BAO, additional parameters such asH 0
+andω b enter through their own likelihoods; the SNe term remains a pure Gaussian on
+θ.
+Output:Posterior samples ofθ. A single MCMC step requires one 11-dimensional matrix-
+vector product and one one-dimensional redshift integral per knot, independent ofN SN.
+The three flat-universe cosmological models we apply Recipe B to, following Paper I [1],
+haveE(z;θ) as
+E(z) =
+
+
+
+
+Ωm(1 +z) 3 + (1−Ω m)
+1/2 ,flat ΛCDM
+h
+Ωm(1 +z) 3 + (1−Ω m) (1 +z)3(1+w0+wa) exp
+
+− 3waz
+1+z
+i1/2
+,flatw 0waCDM
+
+Ωm(1 +z) 3 + (1−Ω m)X(z)
+1/2 , X(z) dark energy
+(2.15)
+Forw 0waCDM [28, 29] the dark-energy equation of state isw(a) =w 0 +w a(1−a), giving
+θ= (Ω m, w0, wa). For the non-parametric modelX(z)≡ρ DE(z)/ρDE(0) is sampled at five
+free knotsz∈ {1/3,2/3,1,4/3,2.33}withX(0) = 1 fixed and intermediate values from linear
+interpolation inz, givingθ= (Ω m, ωb, H0, X1, . . . , X5). SNe Ia alone do not place meaningful
+constraints on the latter two models, so for those we combine the SNe likelihood of Recipe B
+with the Planck 2015 CMB distance priors of [16] and the DESI DR2 BAO measurements [8].
+The full priors and sampling settings follow Paper I [1]. The losslessness of the two-step
+pipeline (Recipe A then Recipe B) against the per-SN reference is demonstrated across all
+datasets and flux-averaging configurations and these three cosmological models in Sec. 3.3.
+– 8 –
+
+3 Results
+Following the recipe in Sec. 2.5, we present the compression of per-SN distance moduliµ
+into logr p values at 11 redshift knots for the same four SNe Ia compilations as in Paper I [1]:
+Pantheon [30], Pantheon+ [4], DES-Dovekie [5, 6], and Union3 [7]. We then perform the
+cosmological analysis based on these 11 logr p knots and their covariance matrix. For the
+flux-averaged analyses, we apply a quality cutσ µ <0.5 to retain 1726 SNe of DES-Dovekie.
+Union3 is pre-binned at the catalog level and flux-averaging cannot be applied. We refer to
+Paper I [1] for further details on data preparation and quality cuts.
+In Sec. 3.1 we validate our estimators for logr p and covariance matrix by comparing
+against the direct MCMC sampling in both flux-averaged and not-flux-averaged cases. We
+also show that logr p posterior is Gaussian while ther p posterior is not at the highest red-
+shifts where the uncertainties are the largest. We then present the compressed logr p results
+for all four datasets in Sec. 3.2. Finally, in Sec. 3.3 we provide an apples-to-apples compar-
+ison between the cosmological inference using logr p and usingµ(z), showing that the logr p
+pipeline can accurately reproduce the cosmological parameter posteriors of Paper I but with
+much lower computational cost. The compressed{logr p(zk)}values and their covariance
+matrices are tabulated in Appendix B to enable downstream cosmological analyses using the
+methodology presented in this paper.
+3.1 Validation of estimators and Gaussian posterior
+0.0 0.5 1.0 1.5 2.0 2.5
+z
+−0.25
+−0.20
+−0.15
+−0.10
+−0.05
+0.00
+0.05
+0.10
+0.15
+logrp(z)
+Pantheon (flux-avg.)
+MCMC (4 × 105 samples, 1.7 hours)
+iterative Newton estimator (15.7 s)
+0.0 0.5 1.0 1.5 2.0 2.5
+z
+Pantheon (not flux-avg.)
+MCMC (4 × 105 samples, 0.9 hours)
+BLUE estimator (11 ms)
+Figure 2: Validation of the analytic logr p estimators against MCMC, for Pantheon.Left:
+flux-averaged data; the iterative Newton estimator (green circles, 16 s) overlays the full non-
+linear flux-averaged NUTS posterior (4×10 5 samples,∼1.7 h, black squares).Right: not-
+flux-averaged data; the closed-form BLUE estimator (open green circles, 11 ms) overlays the
+direct NUTS posterior (open black squares,∼0.9 h). The two sets of measurements overlap
+completely, and are shifted by±0.025 inzfor visualization.
+We first verify, on Pantheon, that our two estimators (closed-form BLUE for the not-
+flux-averaged data, and iterative Newton for the flux-averaged data) reproduce the full
+Bayesian posterior obtained by direct MCMC sampling of the eleven logr p knot values. The
+MCMC takes four chains of 105 NUTS samples and runs for∼0.9 h (without flux averaging)
+– 9 –
+
+0.96 0.98 1.00 1.02 1.04 1.06
+rp
+posterior density
+z = 0.5
+Pantheon
+(not flux-avg.)
+MCMC posterior
+best-fit Gaussian
+−0.04 −0.02 0.00 0.02 0.04 0.06
+logrp
+z = 0.5
+Pantheon
+(not flux-avg.)
+0.6 0.8 1.0 1.2 1.4
+rp
+posterior density
+z = 2.27
+Pantheon
+(not flux-avg.)
+−0.6 −0.4 −0.2 0.0 0.2 0.4
+logrp
+z = 2.27
+Pantheon
+(not flux-avg.)
+Figure 3: Marginal posteriors ofr p (left column) and logr p (right column) at two redshift
+knots,z= 0.5 (top row) andz= 2.27 (bottom row), for the Pantheon without flux averaging.
+Blue histograms represent the MCMC posteriors. Red dashed curves are the best-fit Gaussian
+to each histogram. Atz= 0.5 the per-knot uncertainty is small enough that ther p and logr p
+marginals are visually indistinguishable. Atz= 2.27 the per-knot uncertainty is large, and
+ther p marginal develops a clear positive skew while the logr p marginal stays Gaussian.
+and∼1.7 h (with flux averaging). The corresponding estimators complete in 11 ms and 16 s
+respectively.
+Figure 2 compares the two estimators against MCMC at all eleven knots. The agree-
+ment is well within the chains’ Monte-Carlo sampling noise per knot in both panels. In the
+not-flux-averaged case this is the linear-Gaussian theorem made explicit: the reconstruction
+of logr p through cubic spline interpolation is linear in distance modulusµand the SNe Ia
+likelihood is Gaussian inµ obs, so the posterior mean and the covariance matrix obtained
+from MCMC is guaranteed to converge to the BLUE result (Sec. 2.3). The flux-averaging
+is intrinsically nonlinear inµso there is no closed-form estimator, but the iterative Newton
+procedure converges to the full MCMC results within sampling noise, in which flux averag-
+ing is dynamically applied at each step. The analytic estimators thus provide a posterior
+numerically consistent with MCMC at four to five orders of magnitude lower cost.
+The check above establishes mean–and–variance agreement between the estimators and
+MCMC. We also test the Gaussianity of the logr p posterior, which justifies treating it as
+a Gaussian likelihood in the downstream cosmology analysis. Sec. 2.3 predicts that the
+marginal posterior on the logrp knots is exactly Gaussian under the standard SN Ia likelihood,
+which implies that the posterior ofr p =e logr p is log-normal, with skewness that grows with
+the per-knot uncertainty and is therefore most visible at the highest-redshift knot, where
+the data constrainr p least. We verify this directly in Fig. 3, which compares the marginal
+posterior ofr p(zk) and logr p(zk) against a best-fit Gaussian at two representative knots
+– 10 –
+
+(z= 0.5 andz= 2.27) of the Pantheon SN Ia data set. At low redshift the per-knot
+uncertainty is small enough that the two parameterizations are indistinguishable. At the
+highest knot, ther p posterior develops a clear positive skew while the logr p marginal at the
+same knot remains Gaussian.
+Working in logr p rather thanr p is therefore the optimal choice for accuracy and con-
+sistency for downstream cosmological analysis. Propagating anr p-knot mean and covariance
+as if it were a Gaussian likelihood would misrepresent the data at the high-zknots where
+the per-knot uncertainty is large. The logr p marginal is exactly Gaussian by construction
+(Sec. 2.3), so the downstream Gaussian-likelihood treatment of{logr p(zk)}and their covari-
+ance matrix is completely consistent with the standard distance-modulus-based analysis.
+The Gaussianity of logr p rests on an assumptionplusan additional statistical robust-
+ness advantage. The standard SN Ia likelihood assumesµ obs is Gaussian, and under that
+assumption the linear-Gaussian theorem (Sec. 2.3) makes each logr p knotexactlyGaussian.
+On the other hand, the actual per-SN distribution ofµ obs is itself only assumed Gaussian
+and not directly verifiable in the data. The linear compression step nevertheless provides a
+central-limit-theorem guarantee that the logr p knots are closer to Gaussian than the input
+µobs. Each knot is a weighted linear combination ofO(10 2) per-SN distance moduli , so
+any departure of the underlying per-SN error distribution from the assumed Gaussian form
+is suppressed in ˆyk by∼1/
+√
+N. In this sense the logr p representation is the more robust
+statistically: the Gaussian-likelihood treatment we adopt in the downstream cosmological
+inference is consequently a better-justified approximation for logr p than it is forµ obs.
+3.2 Compression of distance measurement
+Figure 4 presents the logr p(z) results for all four datasets in both not-flux-averaged and
+flux-averaged configurations using the estimators of Sec. 2.3 and Sec. 2.4. The different
+absolute logr p levels visible across the four panels reflect each dataset’s preferred ˆM, the
+global offset already analytically marginalized at the compression step (Sec. 2.3). SinceM
+is degenerate withH 0 andM B, these per-dataset offsets have no effect on the cosmological
+parameter posteriors. The full uncertainty on the 11 knot values, including the amplitude
+information contributed by SNe in the low-zanchor region [z 0, z1] = [0,0.05] via the FLRW
+kinematic constraint logr p(0) = 0, is captured by the 11×11 covariance matrixΣ y, which
+the downstream Gaussian likelihood weights correctly throughΣ −1
+y .
+We also plot the originalµ obs data and their uncertainties as the faint grey error bars,
+rescaled to the same logr p axis. The per-SN scatter is large, particularly at high redshift,
+and the underlying distance–redshift trend is essentially invisible from the grey cloud alone.
+The eleven coloured knot values, each effectively averagingO(10 2) SNe through the BLUE
+projection, compress this cloud into a clean reconstruction that makes the data-driven shape
+of logr p(z) directly readable, with per-knot uncertainties roughly an order of magnitude
+tighter than per individual SN.
+The largest per-knot uncertainties appear at the highest-zknots (z≳0.8), where the
+flux-averaging weighting is most sensitive to the SNe Ia with the largest scatter.
+3.3 Cosmological inference with compressed data
+Sec. 3.1 establishes that the estimators and the direct MCMC of logr p coincide at the per-
+knot level, and that the logr p posterior is genuinely Gaussian. The remaining question—and
+the central claim of this paper—is whether the resulting eleven Gaussian-distributed logr p
+values together carry the same cosmological-parameter information that the original per-SN
+– 11 –
+
+−0.1
+0.0
+0.1
+logrp(z)
+Pantheon
+SNe Ia (flux−avg. )
+SNe Ia (not flux−avg. )
+−0.1
+0.0
+0.1
+logrp(z)
+Pantheon+
+−0.1
+0.0
+0.1
+logrp(z)
+DES-Dovekie
+0.0 0.5 1.0 1.5 2.0 2.5
+z
+−0.1
+0.0
+0.1
+logrp(z)
+Union3
+Figure 4: Closed-form logr p(z) reconstruction from the four SNe Ia compilations. Open
+markers show the not-flux-averaged BLUE knots, and filled markers show the iterative-
+Newton flux-averaged knots (Union3 is pre-binned and has no flux-avg. mode). The two
+sets are shifted by±0.015 inzfor visualization only. The faint grey error bars in the back-
+ground are the individual SN distance moduli rescaled to logr p, which the colored markers
+compress into eleven knot values. The knot values are tabulated for each dataset in Ap-
+pendix B.
+– 12 –
+
+Table 2: Flat ΛCDM Ω m from the closed-form logr p(z) posterior with downstream MCMC
+(106 ×4 samples), compared with the full distance–modulus fits (10 5 ×4 samples). The not-
+flux-averagedµ(z) entries are the original Paper I [1] chains; the flux-averagedµ(z) entries
+for Pantheon+ and DES-Dovekie are recomputed in this work using the hybrid binning
+choice of Sec. 2.4 so that they share the same flux-averaging configuration as the logr p-side
+analysis. Each logr p value is followed in parentheses by the fractional difference ∆Ωm/Ωm ≡
+Ωlogr p
+m −Ω µ(z)
+m
+
+/Ωµ(z)
+m .
+logr p (this work) (∆Ω m/Ωm)µ(z) [1]
+Dataset not flux-avg. flux-avg. not flux-avg. flux-avg.
+Pantheon 0.301±0.022 (−0.1%) 0.292±0.022 (−0.1%) 0.301±0.022 0.292±0.023
+Pantheon+ 0.331±0.018 (−0.1%) 0.336±0.028 (−0.9%) 0.332±0.018 0.339±0.029
+DES-Dovekie 0.329±0.015 (+0.1%) 0.324±0.022 (−0.6%) 0.329±0.015 0.326±0.022
+Union3 0.358±0.027 (−0.04%) — 0.358±0.027 —
+analysis would have produced. We test this by feeding the compressed product ( ˆy,Σ y) in
+Appendix B into a downstream MCMC for the same three cosmological models analysed
+in Paper I [1] (flat ΛCDM, flatw 0waCDM, and the non-parametric dark-energy density
+X(z)≡ρ DE(z)/ρDE(0)), and comparing every cosmological parameter posterior against the
+corresponding per-SN reference. The downstream cosmology in this section is therefore a
+validation test of the compression rather than a fresh constraint, but the dramatic speed-up
+the compression unlocks makes the same chains practical to rerun for any future dark-energy
+model.
+3.3.1 FlatΛCDM
+We start with the simplest case, flat ΛCDM. We sample Ω m alone (SNe-only), running
+106 ×4 NUTS chains, which complete in approximately one minute per dataset. Results are
+summarized in Table 2.
+The logr p-derived Ω m values reproduce the directµ-based fits to high precision. The
+not-flux-averaged chains agree to within|∆Ω m|/Ωm ≲0.1% for every dataset. The flux-
+averaged chains shift slightly more: Pantheon+ with flux averaging differs from itsµ-based
+counterpart by 0.9% and DES-Dovekie with flux averaging by 0.6%, while Pantheon with flux
+averaging stays at 0.1%. Figure 5 compares the two Ω m posteriors visually for Pantheon,
+where the eleven logr p data points reproduce the full 1048-SNµ-based posterior to within
+sampling noise in both flux-averaged and not-flux-averaged modes.
+3.3.2 Flatw 0waCDM
+Once dark-energy freedom is included, SNe Ia alone do not place meaningful constraints on
+cosmological parameters, so we combine the logr p likelihood with the Planck 2015 CMB
+distance priors of [16] and DESI DR2 BAO (D M /rd,D H /rd at 12 redshift bins plus the
+BGSD V /rd point) [8]. For thew 0waCDM parameterizationw(a) =w 0 +w a(1−a), we
+jointly sample (Ω m, ωb, H0, w0, wa). Chains comprise 2×10 5 ×4 NUTS samples (vs 10 5 ×4
+in Paper I); each runs in∼10 minutes. Results are listed in Table 3.
+– 13 –
+
+0.24 0.26 0.28 0.30 0.32 0.34 0.36
+Ωm
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2
+Normalized posterior
+Pantheon (ΛCDM, flux-avg.)
+Pantheon µ Pantheon logrp
+0.24 0.26 0.28 0.30 0.32 0.34 0.36
+Ωm
+Pantheon (ΛCDM, not flux-avg.)
+Figure 5: Posterior on Ω m from the closed-form logr p analysis (this work, green dashed)
+compared with the direct distance-modulus analysis of [1] (black solid) for Pantheon under
+flat ΛCDM.Left:not flux-averaged case.Right:flux-averaged case. The eleven logr p data
+points reproduce the 1048-SNµ-based posterior precisely.
+0.28 0.29 0.30 0.31 0.32
+Ωm
+−1.1
+−1.0
+−0.9
+−0.8
+−0.7
+−0.6
+w0
+0.28 0.29 0.30 0.31 0.32
+Ωm
+−1.2
+−1.0
+−0.8
+−0.6
+−0.4
+−0.2
+0.0
+0.2
+0.4
+wa
+−1.0 −0.8 −0.6
+w0
+−1.2
+−1.0
+−0.8
+−0.6
+−0.4
+−0.2
+0.0
+0.2
+0.4
+wa
+flux-avg.
+Pantheon µ (flux-avg.)
++ Planck15 + DESI DR2
+Pantheon logrp (flux-avg.)
++ Planck15 + DESI DR2
+0.28 0.29 0.30 0.31 0.32
+Ωm
+−1.1
+−1.0
+−0.9
+−0.8
+−0.7
+−0.6
+w0
+0.28 0.29 0.30 0.31 0.32
+Ωm
+−1.2
+−1.0
+−0.8
+−0.6
+−0.4
+−0.2
+0.0
+0.2
+0.4
+wa
+−1.0 −0.8 −0.6
+w0
+−1.2
+−1.0
+−0.8
+−0.6
+−0.4
+−0.2
+0.0
+0.2
+0.4
+wa
+not flux-avg.
+Pantheon µ (not flux-avg.)
++ Planck15 + DESI DR2
+Pantheon logrp (not flux-avg.)
++ Planck15 + DESI DR2
+Figure 6: Joint posteriors on (Ω m, w0, wa) in flatw 0waCDM for Pantheon, comparing the
+closed-form logr p analysis (this work, green dashed) with the direct distance-modulus anal-
+ysis of [1] (black solid).Top row:Pantheon with flux averaging.Bottom row:Pantheon
+without flux averaging. Within each column, both panels share the samey-axis range so the
+small flux-averaging shift can be read off directly. All chains include the Planck 2015 CMB
+distance priors of [16] and DESI DR2 BAO.
+– 14 –
+
+Table 3: Flatw 0waCDM constraints from the closed-form logr p(z) posterior plus the
+Planck 2015 CMB distance priors of [16] and DESI DR2 BAO (top section), compared with
+the corresponding full distance–modulus chains (bottom section). The not-flux-averagedµ(z)
+chains are the original Paper I [1] runs; the flux-averagedµ(z) chains for Pantheon+ and
+DES-Dovekie are recomputed in this work using the hybrid binning choice of Sec. 2.4, so the
+two sides differ only in whether the binned distance moduli are first compressed to logr p.
+In the top section each logr p row is followed by a subrow giving the fractional difference
+∆θ/θ≡
+ 
+θlogr p −θ µ(z)
+/θµ(z). Each logr p-based chain uses 2×10 5 ×4 samples and com-
+pletes in∼10 min per dataset.
+logr p (this work)
+Dataset flux-avg. mode Ω m w0 wa
+Pantheon
++ Planck15 + DESI DR2
+not flux-avg. 0.304±0.007−0.925±0.070−0.34±0.25
+(−0.2%) (−0.2%) (+1.5%)
+flux-avg. 0.302±0.007−0.945±0.071−0.29±0.25
+(−0.1%) (−0.1%) (−0.2%)
+Pantheon+
++ Planck15 + DESI DR2
+not flux-avg. 0.311±0.006−0.863±0.056−0.48±0.22
+(−0.1%) (−0.04%) (+0.1%)
+flux-avg. 0.311±0.008−0.874±0.076−0.43±0.26
+(−0.4%) (−3.1%) (+18.9%)
+DES-Dovekie
++ Planck15 + DESI DR2
+not flux-avg. 0.313±0.006−0.834±0.058−0.60±0.24
+(−0.1%) (0.0%) (−0.2%)
+flux-avg.,σ µ <0.5 0.313±0.007−0.833±0.073−0.60±0.27
+(−0.3%) (−2.5%) (+12.2%)
+Union3
++ Planck15 + DESI DR2
+not flux-avg. 0.327±0.009−0.693±0.091−0.97±0.32
+(−0.1%) (−0.2%) (+0.1%)
+µ(z) [1]
+Dataset flux-avg. mode Ω m w0 wa
+Pantheon
++ Planck15 + DESI DR2
+not flux-avg. 0.304±0.007−0.923±0.070−0.35±0.25
+flux-avg. 0.302±0.007−0.944±0.072−0.29±0.25
+Pantheon+
++ Planck15 + DESI DR2
+not flux-avg. 0.311±0.006−0.863±0.056−0.48±0.22
+flux-avg. 0.312±0.008−0.847±0.077−0.54±0.26
+DES-Dovekie
++ Planck15 + DESI DR2
+not flux-avg. 0.313±0.006−0.834±0.057−0.59±0.24
+flux-avg.,σ µ <0.5 0.313±0.007−0.813±0.073−0.68±0.27
+Union3
++ Planck15 + DESI DR2 not flux-avg. 0.327±0.009−0.692±0.091−0.97±0.32
+Thew 0waCDM comparison differs for not-flux-averaged and flux-averaged data. The
+four not-flux-averaged chains reproduce theµ-based reference essentially exactly: fractional
+shifts of≲0.2% on both Ω m andw 0 and≲1.5% onw a for every dataset, with 68% C.L. ranges
+agreeing at the percent level. The flux-averaged chains, in contrast, show dataset-dependent
+– 15 –
+
+residuals: shifts of≲0.2% for Pantheon, but 3.1% inw 0 / 18.9% inw a for Pantheon+ and
+2.5% / 12.2% for DES-Dovekie, with 68% C.L. ranges inflated by≲5%. This is because the
+two pipelines do not implement flux averaging identically: the logr p-side estimator and the
+µ-side MCMC apply the luminosity-weighting step at different cosmologies (Sec. 2.4), so the
+binned data feeding the downstream likelihoods differ slightly. As an example, the full joint
+(Ωm, w0, wa) posterior comparison is shown in Fig. 6 for Pantheon; all three two-dimensional
+contours and all three one-dimensional marginals overlap between the compressed and full
+analyses, in both flux-averaged and not-flux-averaged modes.
+3.3.3 Model-independent dark energy measurementX(z)CDM
+For the model-independent dark-energy reconstruction, we sample (ω m, ωb, h, X1, . . . , X5) at
+the fivezknots{1/3,2/3,1,4/3,2.33}, again combining the logr p likelihood with the same
+CMB+BAO priors. Results are listed in Table 4. Note that theω b is constrained by CMB
+only so we do not list it for comparison.
+The non-parametricX(z) reconstructions show the same dichotomy between flux-averaged
+and not-flux-averaged chains. Not-flux-averaged chains match theµ-based references es-
+sentially exactly:|∆X k|/Xk ≲0.3% at every knot for all four datasets. Flux-averaged
+chains again show a small residual: Pantheon+ with flux averaging reaches up to 0.9%
+atX(2.33) and DES-Dovekie with flux averaging up to 0.4% atX(2/3), mirroring their
+w0waCDM behavior, while Pantheon with flux averaging remains at≲0.2%. The full
+(Ωm, H0, X1, . . . , X5) joint posteriors for Pantheon are shown in Fig. 7 (not-flux-averaged)
+and Fig. 8 (flux-averaged). All 1D marginals and lower-triangle 2D contours overlap between
+the compressed and full analyses.
+As an additional cross-check we evaluate the Figure-of-Merit (FoM≡1/√detC θ, Sec. 1)
+on chains, both on the dark-energy subspace and on the full sampled parameter space. For
+w0waCDM the dark-energy FoM(w 0, wa) is preserved between the two pipelines to within
+∼2% across all four datasets in both flux-averaging modes (ratios 0.998–1.021), while the
+full five-parameter FoM(Ω m, ωb, H0, w0, wa) is preserved to within∼6%, with the logr p-
+side posterior systematically slightly tighter (ratios 1.045–1.063). The non-parametricX(z)
+chains follow the same qualitative pattern. The variation across datasets is at the percent
+level.
+To summarize the computational cost across the three cosmologies and seven dataset/flux-
+averaged configurations, the closed-form analytical logr p extraction (App. A.1) takes<0.1 s
+per dataset, and the downstream cosmology MCMC takes 1–12 min per chain: roughly 1 min
+for flat ΛCDM (Ω m alone), 8–12 min forw 0waCDM, and 5–7 min for the non-parametric
+X(z). The complete reproduction of Paper I’s three-cosmology constraint set (21 chains in
+total, with sample sizes equal to or larger than Paper I) finishes in∼1 h of wall clock time
+when the three pipelines are run in parallel, compared to∼20 h for the original full-µMCMC;
+each Paper I full-µCPL chain takes∼4 h for the flux-averaged Pantheon+ (230 min) and
+DES-Dovekie (247 min) datasets, against∼10 min per chain on the logr p side, a factor of
+∼25 speedup per chain. The logr p posterior compresses∼1600 distance moduli into an
+11×11 Gaussian, eliminating theN SN ×N SN matrix operations at each downstream MCMC
+step.
+– 16 –
+
+Table 4: Non-parametricX(z) =ρ DE(z)/ρDE(0) knot values from the closed-form logr p(z)
+posterior plus the Planck 2015 CMB distance priors of [16] and DESI DR2 BAO (top sec-
+tion), compared with the corresponding full distance–modulus chains (bottom section). Not-
+flux-averagedµ(z) entries are the original Paper I [1] chains; flux-averagedµ(z) entries for
+Pantheon+ and DES-Dovekie are recomputed using the hybrid binning of Sec. 2.4. The five
+Xk columns give the dark-energy density at the knot redshiftsz k ∈ {1/3,2/3,1,4/3,2.33}.
+In the top section each logr p row is followed by a subrow giving the fractional difference
+∆θ/θ≡
+ 
+θlogr p −θ µ(z)
+/θµ(z). We use four chains, each uses 2×10 5 ×4 samples (∼6 min
+per dataset).
+logr p (this work)
+Dataset flux-avg. mode Ω m H0 X( 1
+3)X( 2
+3)X(1)X( 4
+3)X(2.33)
+Pantheon
+not flux-avg. 0.304±0.007 68.54±0.74 1.00±0.04 1.12±0.07 0.91±0.10 0.84±0.16 0.72±0.31
+(−0.02%) (<0.01%) (−0.04%) (+0.03%) (<0.01%) (+0.1%) (+0.3%)
+flux-avg. 0.302±0.007 68.78±0.76 0.99±0.04 1.11±0.07 0.90±0.10 0.83±0.16 0.71±0.30
+(−0.01%) (<0.01%) (+0.03%) (−0.1%) (−0.1%) (+0.01%) (+0.2%)
+Pantheon+
+not flux-avg. 0.312±0.006 67.64±0.60 1.05±0.03 1.19±0.07 0.91±0.10 0.86±0.17 0.75±0.32
+(−0.03%) (+0.02%) (−0.1%) (−0.1%) (+0.03%) (−0.1%) (−0.3%)
+flux-avg. 0.311±0.008 67.76±0.82 1.03±0.05 1.22±0.08 0.91±0.11 0.87±0.17 0.73±0.32
+(−0.4%) (+0.2%) (−0.8%) (−0.5%) (−0.7%) (−0.4%) (−0.9%)
+DES-Dovekie
+not flux-avg. 0.312±0.006 67.69±0.57 1.07±0.03 1.09±0.06 1.01±0.11 0.85±0.16 0.76±0.32
+(+0.02%) (−0.01%) (+0.04%) (+0.1%) (−0.01%) (+0.1%) (+0.2%)
+flux-avg.(σµ <0.5) 0.310±0.007 67.83±0.75 1.05±0.05 1.12±0.07 0.97±0.11 0.85±0.17 0.75±0.32
+(−0.2%) (+0.1%) (−0.3%) (−0.4%) (−0.1%) (−0.2%) (+0.1%)
+Union3 not flux-avg. 0.324±0.009 66.42±0.88 1.15±0.06 1.21±0.08 1.01±0.12 0.92±0.18 0.80±0.34
+(−0.1%) (+0.03%) (−0.1%) (−0.1%) (−0.1%) (−0.1%) (+0.04%)
+µ(z) [1]
+Dataset flux-avg. mode Ω m H0 X( 1
+3)X( 2
+3)X(1)X( 4
+3)X(2.33)
+Pantheon not flux-avg. 0.304±0.007 68.53±0.74 1.00±0.04 1.12±0.07 0.91±0.10 0.84±0.16 0.72±0.31
+flux-avg. 0.302±0.007 68.79±0.77 0.99±0.04 1.11±0.07 0.90±0.10 0.83±0.16 0.71±0.30
+Pantheon+ not flux-avg. 0.312±0.006 67.63±0.60 1.05±0.03 1.19±0.07 0.91±0.10 0.86±0.17 0.75±0.32
+flux-avg. 0.312±0.008 67.63±0.82 1.04±0.05 1.23±0.09 0.92±0.11 0.87±0.17 0.74±0.32
+DES-Dovekie not flux-avg. 0.312±0.006 67.69±0.57 1.07±0.03 1.09±0.06 1.01±0.11 0.85±0.16 0.76±0.32
+flux-avg.(σµ <0.5) 0.311±0.007 67.78±0.75 1.05±0.05 1.13±0.07 0.97±0.11 0.85±0.17 0.75±0.32
+Union3 not flux-avg. 0.324±0.009 66.41±0.88 1.15±0.06 1.21±0.08 1.01±0.12 0.92±0.18 0.80±0.33
+4 Discussion and Conclusions
+We have presented a model-independent and lossless compression of the SNe Ia distance–
+redshift information into a Gaussian posterior on logr p(z) knots. The pipeline has two parts:
+a simple estimator completes the efficient compression for each dataset (closed-form BLUE
+for the not-flux-averaged data, two-step Newton iteration for the flux-averaged data), and
+a downstream cosmological MCMC that uses ( ˆy,Σ y) as a plug-in 11-dimensional Gaussian
+likelihood and runs in minutes per chain regardless of which cosmological model is being
+tested.
+Across all 21 chains we ran (seven dataset/flux-averaged configurations×three cosmo-
+logical models: ΛCDM,w 0waCDM, and a non-parametricX(z)), the downstream parameter
+contours and figures of merit reproduce the corresponding direct distance-modulus analyses
+– 17 –
+
+66
+68
+70
+H0
+0.9
+1.0
+1.1
+X(z = 1/3)
+1.0
+1.2
+X(z = 2/3)
+0.6
+0.8
+1.0
+1.2
+X(z = 1)
+0.5
+1.0
+X(z = 4/3)
+0.300 0.325
+Ωm
+0
+1X(z = 2.33)
+67.5 70.0
+H0
+0.9 1.0 1.1
+X(z = 1/3)
+1.00 1.25
+X(z = 2/3)
+0.75 1.00 1.25
+X(z = 1)
+0.5 1.0
+X(z = 4/3)
+0 1
+X(z = 2.33)
+Pantheon µ (not flux-avg.)
++ Planck15 + DESI DR2
+Pantheon logrp (not flux-avg.)
++ Planck15 + DESI DR2
+Figure 7: Joint posteriors on (Ω m, H0, X1, . . . , X5) from the non-parametricX(z) analysis
+of the Pantheon dataset (not flux-averaged), comparing the closed-form logr p pipeline (this
+work, green dashed) with the direct distance-modulus pipeline of [1] (black solid). Diagonal
+panels show the 1D marginals; lower-triangle panels show the 68% and 95% confidence con-
+tours. Grey dashed reference lines mark the ΛCDM valueX= 1. Both chains include the
+Planck 2015 CMB distance priors in [16] and DESI DR2 BAO.
+of [1] to within statistical sampling noise for the not-flux-averaged data. The flux-averaged
+chains show small dataset-dependent residuals (Sec. 3.3) that trace back to a difference in
+how the two pipelines implement the flux-averaging step rather than to information loss in
+the compression. The compression is therefore lossless in the operational sense defined in
+Sec. 1: a downstream cosmological analysis cannot tell whether the SNe Ia information was
+supplied as the full (µ,C µ) or as the eleven logr p values with their covariance matrix.
+– 18 –
+
+68
+70
+H0
+0.9
+1.0
+1.1
+X(z = 1/3)
+1.0
+1.2
+X(z = 2/3)
+0.6
+0.8
+1.0
+1.2
+X(z = 1)
+0.5
+1.0
+X(z = 4/3)
+0.300 0.325
+Ωm
+0
+1X(z = 2.33)
+67.5 70.0
+H0
+0.9 1.0 1.1
+X(z = 1/3)
+1.00 1.25
+X(z = 2/3)
+0.75 1.00
+X(z = 1)
+0.5 1.0
+X(z = 4/3)
+0 1
+X(z = 2.33)
+Pantheon µ (flux-avg.)
++ Planck15 + DESI DR2
+Pantheon logrp (flux-avg.)
++ Planck15 + DESI DR2
+Figure 8: Same as Fig. 7 but for the flux-averaged Pantheon dataset.
+The practical implication grows with the data volume of the next decade. Roman,
+Euclid, and LSST will deliver SNe Ia samples one to three orders of magnitude larger than
+current compilations. For the direct distance-modulus analysis the per-likelihood-evaluation
+cost scales withN SN through theN SN ×N SN covariance, so the chain wall clock time grows
+accordingly, and exploring different dark-energy parameterizations becomes much more ex-
+pensive. The compressed pipeline behaves very differently: the analytic estimator runs as a
+one-shot precompute and produces the same 11×11 Gaussian regardless ofN SN; the down-
+stream MCMC then operates on a fixed-dimensional likelihood whose per-step cost is set by
+the number of knots, not byN SN. Increasing the number of knots to track the additional
+SN density that Roman and Euclid will deliver atz≳0.8 is cheap: the analytic-estimator
+cost isO(K×N SN) and the downstream per-step likelihood cost isO(K 2), so going from
+– 19 –
+
+K= 11 to, say,K= 15 knots adds only a constant-factor overhead to an already sub-second
+extraction and minute-scale MCMC.
+Two concrete applications follow from this scaling. First, the same compressed product
+(ˆy,Σ y) serves as a portable, deterministic, bit-reproducible SN Ia distance prior for joint
+analyses with CMB, BAO, and other probes, putting SNe Ia on the same operational footing
+already enjoyed by the CMB through the shift parameters (R, l a, ωb) of [15, 16]. Second,
+any dark-energy model that has not yet been written down can be tested by feeding ( ˆy,Σ y)
+into a downstream MCMC with the new theory while the upstream compression cost is paid
+once.
+Code and data availability.The compressed ( ˆy,Σ y) data products are tabulated in
+Appendix B. The pipeline code will be made publicly available upon the publication of this
+paper.
+Acknowledgments
+ZW thanks Henry S Grasshorn Gebhardt, Utkarsh Giri, and Fei Ge for useful discussion. We
+gratefully acknowledge support from NASA Grant #80NSSC24M0021, “Project Infrastruc-
+ture for the Roman Galaxy Redshift Survey”, and NASA ROSES Grant 12-EUCLID11-0004.
+A Mathematical Background
+This appendix reviews two ingredients underlying the main-text estimators: the optimal
+Gaussian-posterior estimator for linear-Gaussian models (Sec. A.1) and Newton’s method
+for non-quadratic objectives (Sec. A.2).
+A.1 Linear-Gaussian model and the BLUE estimator
+Consider a linear forward model
+d=Aθ+ϵ,(A.1)
+whered∈R N is the observeddata,θ∈R K is the vector ofparametersto be inferred,
+A∈R N×K is the (parameter-independent)linear forward modelthat maps parameters to
+expected data, andϵ∼ N(0,C) is theGaussian noisewith known covarianceC. The
+negative log-likelihood,
+−2lnL(θ) = (d−Aθ) T C−1 (d−Aθ),(A.2)
+is quadratic inθ. Setting its gradient to zero,
+− 1
+2
+∂(−2lnL)
+∂θ =A TC−1 (d−Aθ) = 0,(A.3)
+gives the best linear unbiased estimator (BLUE),
+ˆθ= (A TC−1A)−1 ATC−1 d.(A.4)
+Expanding−2lnLaround ˆθidentifies the Fisher informationF≡A TC−1Aas the Hessian
+of−lnL, so under a flat prior the posterior is exactly Gaussian,p(θ|d) =N( ˆθ,Σ) with
+Σ=F −1.
+– 20 –
+
+For the SNe Ia application the model carries an additional unknown global offsetM,
+i.e.d=Aθ+M1+ϵ, that we marginalise out analytically under a flat prior. Setting
+∂(−2lnL)/∂M= 0 at fixedθgives
+ˆM(θ) = 1TC−1(d−Aθ)
+1TC−11 ,(A.5)
+and substituting back yields a marginal likelihood that is again quadratic inθbut withC −1
+replaced by the rank-(N−1) projection
+M=C −1 − C−111TC−1
+1TC−11 ,(A.6)
+which annihilates the data subspace parallel to1. Re-running the gradient-zero argument
+above withC −1 →Mgives theM-marginalised BLUE used in Eqs. (2.8) and (2.10) of
+Sec. 2.3, withθ=y,d=µ obs −ν.
+A.2 Newton’s method and the Hessian
+For a smooth objectivef(θ), Newton’s method approximatesfnear the current iterateθ (j)
+by its second-order Taylor expansion,
+f(θ (j) + ∆θ)≈f(θ (j)) + (∇f)T ∆θ+ 1
+2 ∆θTH∆θ,(A.7)
+where the HessianH≡ ∇∇ T fis the matrix of second partial derivatives. Setting the
+derivative with respect to ∆θto zero gives ∆θ=−H −1 ∇f, so each Newton step is
+θ(j+1) =θ (j) −H −1(θ(j))∇f(θ (j)).(A.8)
+The Hessian rescales the gradient by the local curvature, so flat directions take large steps and
+steep directions take small ones. Near a local minimum the iteration converges quadratically,
+much faster than the linear convergence of plain gradient descent. Forf=−2lnLwith
+an approximately Gaussian posterior at the optimumθ ∗, the Hessian is twice the inverse
+posterior covariance,
+Σ∗ = 1
+2H−1(θ∗),(A.9)
+which is the relation used in Sec. 2.4 to obtain ¯Σfrom the Hessian of Eq. (2.12). In our
+pipeline,∇fandHare evaluated at each step by automatic differentiation through the full
+forward model.
+B Compressedlogr p Data Products
+Tables 5–8 report the compressed data product ( ˆy,Σ y) for the four SNe Ia compilations
+(Pantheon, Pantheon+, DES-Dovekie, Union3). Each table consists of two halves: the not-
+flux-averaged BLUE estimator of Sec. 2.3, and the flux-averaged iterative-Newton estimator
+of Sec. 2.4; Union3 is pre-binned at the catalogue level and only compressed without flux
+averaging. All values are reported with the FLRW kinematic anchor logr p(z0 = 0) = 0 fixed.
+Mean values are quoted to five significant digits and covariance entries to four significant
+digits. The knot redshiftsz k are listed in Table 1 and reproduced in each table for conve-
+nience. These tables are intended as the self-contained, archive-quality SNe Ia distance prior
+of this work. Downstream cosmological pipelines can plug ( ˆy,Σ y) directly into a Gaussian
+likelihood and recover the constraints reported in Sec. 3 to within Monte-Carlo noise on the
+chain.
+– 21 –
+
+References
+[1] Z. Wang and Y. Wang,Model-Independent Analysis of Type Ia Supernova Datasets and
+Implications for Dark Energy,arXiv e-prints(2026) [2604.11883].
+[2] A.G. Riess et al.,Observational Evidence from Supernovae for an Accelerating Universe and a
+Cosmological Constant,Astron. J.116(1998) 1009 [astro-ph/9805201].
+[3] S. Perlmutter et al.,Measurements ofΩandΛfrom 42 High-Redshift Supernovae,Astrophys.
+J.517(1999) 565 [astro-ph/9812133].
+[4] D. Scolnic et al.,The Pantheon+ Analysis: The Full Data Set and Light-curve Release,
+Astrophys. J.938(2022) 113 [2112.03863].
+[5] T.M.C. Abbott et al.,The Dark Energy Survey: Cosmology Results With∼1,500New
+High-redshift Type Ia Supernovae Using The Full 5-year Dataset,Astrophys. J. Lett.973
+(2024) L14 [2401.02929].
+[6] B. Popovic, P. Shah, W.D. Kenworthy, R. Kessler et al.,The Dark Energy Survey Supernova
+Program: A Reanalysis Of Cosmology Results And Evidence For Evolving Dark Energy With
+An Updated Type Ia Supernova Calibration,Mon. Not. R. Astron. Soc.548(2026)
+[2511.07517].
+[7] D. Rubin et al.,Union Through UNITY: Cosmology with 2,000 SNe Using a Unified Bayesian
+Framework,Astrophys. J.986(2025) 231 [2311.12098].
+[8] DESI Collaboration,DESI DR2 Results II: Measurements of Baryon Acoustic Oscillations and
+Cosmological Constraints,Phys. Rev. D112(2025) 083515 [2503.14738].
+[9] K. Lodha et al.,Extended Dark Energy analysis using DESI DR2 BAO measurements,arXiv
+e-prints(2025) [2503.14743].
+[10] P. Astier, C. Balland, M. Brescia et al.,Extending the supernova Hubble diagram to z∼1.5
+with the Euclid space mission,Astron. Astrophys.572(2014) A80 [1409.8562].
+[11] R. Hounsell et al.,Simulations of the WFIRST Supernova Survey and Forecasts of
+Cosmological Constraints,Astrophys. J.867(2018) 23 [1702.01747].
+[12] B.M. Rose, C. Baltay, R. Hounsell et al.,A Reference Survey for Supernova Cosmology with
+the Nancy Grace Roman Space Telescope,arXiv e-prints(2021) [2111.03081].
+[13] R. Kessler et al.,Cosmology Constraints from Type Ia Supernova Simulations of the Nancy
+Grace Roman Space Telescope Strategy Recommended by the High Latitude Time Domain
+Survey Definition Committee,arXiv e-prints(2025) [2506.04402].
+[14] LSST Science Collaboration,LSST Science Book, Version 2.0(2009), [0912.0201].
+[15] Y. Wang and P. Mukherjee,Observational constraints on dark energy and cosmic curvature,
+Phys. Rev. D76(2007) 103533 [astro-ph/0703780].
+[16] Y. Wang and M. Dai,Exploring uncertainties in dark energy constraints using current
+observational data with Planck 2015 distance priors,Phys. Rev. D94(2016) 083521
+[1509.02198].
+[17] Y. Wang,Figure of Merit for Dark Energy Constraints from Current Observational Data,
+Phys. Rev. D77(2008) 123525 [0803.4295].
+[18] Y. Wang,Distance Measurements from Supernovae and Dark Energy Constraints,Phys. Rev.
+D80(2009) 123525 [0910.2492].
+[19] Z. Zhai and Y. Wang,Robust and model-independent cosmological constraints from distance
+measurements,JCAP07(2019) 005 [1811.07425].
+[20] T. Holsclaw, U. Alam, B. Sans´ o et al.,Nonparametric Dark Energy Reconstruction from
+Supernova Data,Phys. Rev. Lett.105(2010) 241302 [1011.3079].
+– 22 –
+
+[21] A. Shafieloo, A.G. Kim and E.V. Linder,Gaussian Process Cosmography,Phys. Rev. D85
+(2012) 123530 [1204.2272].
+[22] Y. Wang,Flux-averaging Analysis of Type Ia Supernova Data,Astrophys. J.536(2000) 531
+[astro-ph/9907405].
+[23] Y. Wang, D.E. Holz and D. Munshi,A universal probability distribution function for
+weak-lensing amplification,Astrophys. J. Lett.572(2002) L15 [astro-ph/0204169].
+[24] Y. Wang,Observational Signatures of the Weak Lensing Magnification of Supernovae,JCAP
+03(2005) 005 [astro-ph/0406635].
+[25] W.H. Press, S.A. Teukolsky, W.T. Vetterling and B.P. Flannery,Numerical Recipes: The Art
+of Scientific Computing, Cambridge University Press, 3rd ed. (2007).
+[26] Y. Wang,Supernova Pencil Beam Survey,Astrophys. J.531(2000) 676 [astro-ph/9806185].
+[27] Y. Wang and P. Mukherjee,Model-Independent Constraints on Dark Energy Density from
+Flux-averaging Analysis of Type Ia Supernova Data,Astrophys. J.606(2004) 654
+[astro-ph/0312192].
+[28] M. Chevallier and D. Polarski,Accelerating Universes with Scaling Dark Matter,Int. J. Mod.
+Phys. D10(2001) 213 [gr-qc/0009008].
+[29] E.V. Linder,Exploring the Expansion History of the Universe,Phys. Rev. Lett.90(2003)
+091301 [astro-ph/0208512].
+[30] D.M. Scolnic et al.,The Complete Light-curve Sample of Spectroscopically Confirmed SNe Ia
+from Pan-STARRS1 and Cosmological Constraints from a New Supernova Compilation
+(Pantheon),Astrophys. J.859(2018) 101 [1710.00845].
+– 23 –
+
+Table 5: Compressed logr p data product for Pantheon.
+Pantheon (not flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=1.00z=1.60z=2.27
+102logrp 1.6699 2.4215 1.3705 3.0354 2.1871 2.6020 1.6244 2.1486 3.0401−1.4147−5.7041
+104Σkl, k=1 2.466
+k=2 2.380 3.198
+k=3 2.445 2.810 3.051
+k=4 2.165 2.876 2.699 3.255
+k=5 2.330 2.687 2.705 2.696 3.749
+k=6 2.449 3.059 2.905 3.003 2.978 4.551
+k=7 2.400 2.926 2.833 2.887 3.085 3.437 4.955
+k=8 2.293 2.856 2.760 2.839 2.960 3.222 3.490 4.442
+k=9 2.012 2.228 2.252 2.233 2.637 2.781 3.078 2.805 5.511
+k=10 1.760 1.728 1.567 1.494 1.905 2.411 2.005 3.387 2.359 22.79
+k=11 1.484 1.127 1.244 0.9116 1.709 1.580 2.755 0.6574 6.165 3.064 125.1
+Pantheon (flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=1.00z=1.60z=2.27
+102logrp 2.0306 3.1632 2.0042 3.4568 2.9392 3.6122 2.7396 3.1216 3.7599 0.25188−5.7477
+104Σkl, k=1 2.599
+k=2 2.488 3.346
+k=3 2.565 2.939 3.208
+k=4 2.256 3.007 2.825 3.446
+k=5 2.433 2.810 2.826 2.814 3.962
+k=6 2.543 3.182 3.024 3.127 3.063 4.794
+k=7 2.507 3.055 2.961 3.005 3.219 3.549 5.244
+k=8 2.394 2.979 2.880 2.957 3.083 3.341 3.636 4.636
+k=9 2.095 2.320 2.349 2.321 2.740 2.861 3.216 2.856 5.979
+k=10 1.826 1.797 1.639 1.554 1.966 2.473 2.009 3.567 2.136 25.67
+k=11 1.553 1.192 1.314 0.9591 1.781 1.606 2.862 0.7416 6.469 2.788 129.4
+– 24 –
+
+Table 6: Compressed logr p data product for Pantheon+.
+Pantheon+ (not flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=1.00z=1.60z=2.27
+102logrp −0.77829−1.5318−0.89756−1.4297−2.6729−2.6291−2.5855−4.4896 5.1462−4.4898 0.81718
+104Σkl, k=1 1.358
+k=2 1.137 1.277
+k=3 1.248 1.150 1.478
+k=4 1.113 1.144 1.200 1.491
+k=5 1.243 1.155 1.337 1.221 1.996
+k=6 1.176 1.161 1.267 1.264 1.279 2.289
+k=7 1.207 1.155 1.313 1.244 1.468 1.380 2.949
+k=8 1.170 1.149 1.294 1.262 1.310 1.482 0.9304 4.875
+k=9 1.125 1.111 1.269 1.141 1.162 1.215 0.5992 2.994 8.493
+k=10 1.148 1.120 1.290 1.175 1.192 1.247 0.6686 2.496−0.4112 16.37
+k=11 1.202 1.137 1.420 1.288 1.457 1.207 1.562 0.9683 6.004−0.1832 72.46
+Pantheon+ (flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=1.00z=1.60z=2.27
+102logrp 1.1086 0.53686 0.27506 1.3596−0.67832−1.7122−0.78229−4.5276 2.8494−6.4285 2.5618
+104Σkl, k=1 2.203
+k=2 1.927 2.379
+k=3 2.063 2.226 2.744
+k=4 2.003 2.143 2.245 2.826
+k=5 2.132 2.206 2.546 2.445 3.600
+k=6 2.107 2.328 2.607 2.603 2.814 4.528
+k=7 2.062 2.276 2.673 2.477 3.103 3.373 5.797
+k=8 2.042 2.264 2.528 2.532 2.609 3.273 2.154 8.430
+k=9 2.058 2.414 2.695 2.409 2.423 2.698 1.646 5.699 13.68
+k=10 2.590 2.804 3.190 3.309 3.230 3.739 2.636 5.958 2.855 27.70
+k=11 3.061 3.135 3.548 4.081 3.919 3.552 3.729 3.636 10.16 5.728 86.58
+– 25 –
+
+Table 7: Compressed logr p data product for DES-Dovekie.
+DES-Dovekie (not flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=0.90z=1.00z=1.15
+102logrp −0.59803−2.3717−1.8972−2.1900−2.1823−1.9003−1.2380−2.2045−2.6148−3.5809−6.8597
+104Σkl, k=1 3.398
+k=2 3.088 3.586
+k=3 3.157 2.943 3.404
+k=4 2.915 2.962 2.946 3.096
+k=5 3.070 2.946 3.139 2.911 3.339
+k=6 3.014 2.977 3.041 2.911 2.975 3.236
+k=7 3.087 2.977 3.112 2.890 3.117 2.977 3.486
+k=8 3.037 2.998 3.078 2.916 3.018 3.068 3.069 3.787
+k=9 3.020 2.954 3.115 2.943 3.132 3.013 3.155 3.052 5.364
+k=10 3.067 3.004 3.086 2.914 3.067 3.084 3.150 3.195 3.062 5.964
+k=11 2.969 2.935 3.142 2.969 3.176 3.039 3.161 3.086 3.973 1.394 21.73
+DES-Dovekie (flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=0.90z=1.00z=1.15
+102logrp 0.17156−2.3919−1.4898−1.7585−1.0210−1.6659−0.40884−1.9147−0.62430−2.0344−6.1991
+104Σkl, k=1 5.108
+k=2 4.239 4.883
+k=3 4.339 4.011 4.653
+k=4 3.853 4.008 3.951 4.244
+k=5 4.264 4.059 4.251 4.024 4.778
+k=6 4.320 4.039 4.110 3.948 4.251 4.644
+k=7 4.358 4.060 4.206 3.902 4.365 4.257 4.896
+k=8 4.274 4.072 4.189 3.964 4.284 4.400 4.391 5.406
+k=9 4.241 3.972 4.082 3.966 4.407 4.414 4.511 4.351 7.760
+k=10 4.599 4.175 4.226 3.976 4.525 4.657 4.686 4.801 4.596 8.518
+k=11 4.089 3.769 4.199 3.975 4.481 4.549 4.644 4.612 5.847 3.249 27.76
+Table 8: Compressed logr p data product for Union3 (pre-binned at the catalog level so we
+don’t apply flux averaging).
+Union3 (not flux-avg.)
+k=1k=2k=3k=4k=5k=6k=7k=8k=9k=10k=11
+z=0.05z=0.15z=0.30z=0.40z=0.50z=0.60z=0.70z=0.80z=1.00z=1.60z=2.27
+102logrp 3.8188 3.5421 1.7181 2.7186 1.8590 2.2943−0.16623−0.03631 4.1078−2.6234−6.7699
+104Σkl, k=1 15.79
+k=2 18.43 22.28
+k=3 18.79 22.48 23.20
+k=4 17.95 21.72 22.17 21.70
+k=5 18.61 22.35 22.91 22.07 23.34
+k=6 18.27 22.04 22.57 21.82 22.51 22.96
+k=7 18.44 22.20 22.79 21.95 22.80 22.56 24.01
+k=8 18.42 22.20 22.79 22.00 22.82 22.67 23.17 24.20
+k=9 18.43 22.20 22.75 21.96 22.85 22.55 22.92 23.03 25.91
+k=10 18.40 22.19 22.75 22.00 22.72 22.66 22.47 23.81 21.12 39.84
+k=11 18.53 22.32 22.99 22.18 23.19 22.57 23.84 21.99 28.01 17.63 230.5
+– 26 –

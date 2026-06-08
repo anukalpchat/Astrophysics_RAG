@@ -1,0 +1,1325 @@
+Title: Increasing the Precision of Surrogate Models for Weak Lensing Mass Maps with Flow Matching
+Authors: Guangjian Li, Tomasz Kacprzak
+Published: 2026-05-22
+Categories: astro-ph.CO
+
+Prepared for submission to JCAP
+Increasing the Precision of Surrogate
+Models for Weak Lensing Mass Maps
+with Flow Matching
+Guangjian Li a Tomasz Kacprzakb
+aInstitute of Astrophysics, University of Zurich,
+Winterthurerstrasse 190, 8057 Zurich, Switzerland
+bInstitute for Data Science, University of Applied Sciences and Arts Northwestern Switzerland,
+Bahnhofstrasse 6, 5210 Windisch, Switzerland
+E-mail: guangjian.li@uzh.ch, tomasz.kacprzak@fhnw.ch
+Abstract.Weak gravitational lensing maps compactly encode the evolution of cosmic large-
+scale structure and have become a key tool for cosmological analyses in astronomical surveys.
+Performing inference directly on the map-level allows for flexibility in the choice of statistics,
+which can lead to increased constraining power from the same data. Conventional methods
+rely solely on N-body simulations and are computationally expensive. Generative machine
+learning emulators, fitted to relatively small N-body training sets, can accelerate map-level
+theory prediction. However, existing map-level surrogates, such as those based on generative
+adversarial networks (GAN), have not yet reached the quality needed for their practical appli-
+cation in survey analyses: they match summaries with limited precision, produce over-smooth
+maps, have difficulties in capturing the distribution of generated map sets correctly, and can
+be difficult to train. Continuous normalizing flows trained with flow matching have recently
+emerged as a powerful method for generative artificial intelligence. We present a residual
+label-conditional flow matching (RLCFM) generative network that conditions explicitly on
+the matter density Ω m and clustering amplitudeσ 8 for a fixed source redshift distribution
+n(z). The model learns a continuous probability flow in a residual space from label-specific
+noise distributions to convergence maps. We evaluate it using a comprehensive set of valida-
+tion metrics, including pixel and peak statistics, the power spectrum, bispectrum, correlation
+matrices of the power spectra, and others. Our RLCFM method greatly improves on the
+previous GAN benchmark, increasing the typical fidelity of generated maps from previous
+levels of<10% (<20%) to<1% (<5%) for basic (higher-order) statistics. Importantly, the
+agreement at the level of map distributions is very good: the distribution of maps generated
+with our surrogate from random noise matches well with the distribution of maps generated
+with N-body code from random initial conditions. This work brings us closer to a practical
+mass map emulator that captures the cosmological signal while supporting multiple forms of
+data analysis.
+Keywords:weak gravitational lensing, mass maps, convergence fields, conditional generative
+models, normalizing flows, flow matching, cosmological simulations
+arXiv:2605.23114v1  [astro-ph.CO]  22 May 2026
+
+Contents
+1 Introduction 1
+2 Conditional flow matching 3
+2.1 Continuous normalizing flows 3
+2.2 Flow matching 4
+2.3 Residual label-conditional flow matching 4
+3 Convergence maps dataset 7
+3.1 Convergence map 7
+3.2 Dataset 8
+4 Quantitative comparison metrics with summary statistics 9
+5 Results 11
+5.1 Visual comparison 11
+5.2 Summary statistics 11
+5.3 Distribution-level comparison of summary statistics 16
+6 Conclusion 19
+A Network architecture 22
+B Experiments and analysis 25
+B.1 Comparison with GAN 25
+B.2 Ablation study 26
+C Theorem proofs and reparameterization 28
+C.1 Theorems and proofs 28
+C.2 Reparameterization of the Gaussian probability path 30
+1 Introduction
+Weak gravitational lensing is the small distortion of distant galaxy shapes caused by the
+matter distribution along the line-of-sight. It has become a key probe in modern cosmology
+[1, 2]. Because lensing is directly sensitive to the projected total matter distribution and does
+not rely on galaxy bias, cosmic shear measurements provide a powerful probe of the growth
+of structure and the expansion history of the Universe. Current and future wide-field weak-
+lensing surveys, such as KiDS [3], DES [4], HSC [5], Euclid [6], and the Rubin Observatory
+LSST [7], aim to measure key cosmological parameters, such as the matter density Ω m, the
+amplitude of matter fluctuationsσ 8, and the properties of dark energy, with percent-level
+precision.
+In weak-lensing analyses, projected mass maps (e.g., convergence fields) provide a direct
+view of the matter distribution and enable the extraction of non-Gaussian information beyond
+two-point statistics. Accurate forward modeling of such maps typically relies on large-volume,
+high-resolution N-body simulations coupled with ray tracing [8, 9]. These simulations capture
+– 1 –
+
+non-linear evolution, scale coupling, and non-Gaussian features that strongly affect higher-
+order observables such as bispectrum and Minkowski functionals. However, each simulation
+is computationally expensive, and exploring multi-dimensional cosmological parameter space
+requires many realizations [10, 11].
+Deep learning has recently emerged as a powerful framework for working with weak-
+lensing data. Convolutional neural networks (CNNs) can infer cosmological parameters di-
+rectly from mass maps and often outperform traditional two-point statistics [12–14]. GAN-
+based models have been trained to produce convergence maps [15–17]. Diffusion and score-
+based methods have been applied to weak-lensing mass map denoising and reconstruction
+[18–20].
+Flow-based models have recently emerged as a powerful engine for generative artificial
+intelligence (AI). They learn an invertible transport from a simple base distribution to the
+data distribution, enabling efficient sampling and robust conditional generation [21–23]. In
+particular, flow matching [FM, 24, 25] trains continuous normalizing flows [CNF, 26] by
+directly regressing the time-dependent vector field that transports a prior to the data dis-
+tribution. This formulation turns training into a supervised regression problem and reduces
+the need to repeatedly solve ODE trajectories during optimization. CNF-FM achieves com-
+petitive performance relative to diffusion models while enabling efficient sampling [24, 27].
+Recently, flow matching has been applied to field-level cosmological data, including weak-
+lensing convergence maps and three-dimensional matter fields [28–30].
+Despite these advances, existing generative emulators for mass maps do not yet reach
+satisfactory precision. The GAN-based emulators [16, 17] show agreement on the central
+values of summary statistics at the 5%-10% level, when averaged over initial conditions.
+They can exhibit non-uniform performance across cosmological parameter space, with more
+pronounced errors in non-Gaussian statistics and in challenging regimes such as grid edges or
+extrapolation. Furthermore, the agreement on the distribution of summary statistics drawn
+from random initial conditions was not reproduced well. This showed that GANs were able
+to fit the “mode” of the map properties, but not their full probabilistic distribution. These
+works also showed that GAN-based mass map emulators can be computationally demanding
+to train and sensitive to training instabilities, which may limit their practical scalability [31].
+More broadly, conditional generation across continuous labels is inherently challenging, since
+the target distributionq(x|y) can vary substantially withy, leading to heterogeneous learn-
+ing difficulty across the label space. In the context of flow-based generative modeling, recent
+studies on prior design suggest that adopting a more informative, data-driven source distribu-
+tion that is closer to the corresponding conditional targets can simplify the learned transport
+and improve training stability and sampling efficiency across diverse domains [32–34]. Moti-
+vated by these observations, we develop a conditional flow-matching emulator and evaluate
+it through extensive experiments, with a particular focus on interpolation performance at
+held-out test cosmologies.
+In this work, we present a map-level emulator for weak-lensing convergence that is
+based on conditional flow matching and trained on suites of N-body simulations. We start
+by designing a simple, data-driven Gaussian prior for the convergence field, then learn a
+label-conditional continuous flow in a residual space that transports this prior into realis-
+tic mass maps at given cosmological parameters Ω m andσ 8. After training, the model can
+rapidly generate large ensembles of mass maps and smoothly interpolate to unseen cosmo-
+logical parameters, while being significantly cheaper than N-body simulations and requir-
+ing substantially shorter training times. We show that the RLCFM emulator reproduces
+– 2 –
+
+key statistics of the simulation maps, such as pixel distributions, power spectra, and non-
+Gaussian observables such as peak counts, bispectrum, and Minkowski functionals, across
+cosmological parameter space. Thus, it achieves consistently improved accuracy and robust-
+ness compared to existing generative emulators. Performance remains stable at both training
+and test cosmologies, enhancing the practical usability of the model for forward modeling
+applications. These results demonstrate that conditional flow matching is a useful tool for
+precise weak-lensing forward modeling and a step toward fully generative, simulation-based
+cosmological inference pipelines.
+This paper is structured as follows. Section 2 introduces the residual label-conditional
+flow matching model. Section 3 describes the dataset used for training. Section 4 outlines the
+validation metrics. Section 5 presents the generated maps and compares them to the N-body
+simulations. Conclusions and future directions are given in Section 6. Appendix A details
+the neural network architectures, Appendix B shows a comparison with the existing GAN
+model results and ablation experiments. Appendix C provides proofs of the main theorems
+and the reparameterization of the Gaussian probability path.
+2 Conditional flow matching
+In this section, we give an introduction to the standard continuous normalizing flow and flow
+matching models, as well as our proposed extension to the residual label-conditional model.
+2.1 Continuous normalizing flows
+Generative models aim to learn the underlying data distribution and enable drawing new
+samples from it. Continuous Normalizing Flows [CNF, 26] realize this via a flow-based
+approach that learns a neural velocity field defining an ordinary differential equation (ODE),
+thereby transporting a base distribution into the target distribution. LetR n denote the data
+space with data pointsx= (x (1), . . . , x(n))∈R n, we can define a time-dependent probability
+pathp: [0,1]×R n →R >0 satisfying
+R
+pt(x)dx= 1 for allt∈[0,1], and a time-dependent
+probability vector fieldu: [0,1]×R n →R n. The time-dependent flowϕ: [0,1]×R n →R n
+is then induced byu t(x) via an ODE:
+d
+dt ϕt(x) =u t
+ 
+ϕt(x)
+
+, ϕ 0(x) =x(2.1)
+The vector field can be parameterized as a neural networkv t(x;θ) with learnable parameters
+θ[26]. Eq. (2.1) then determines the associated flowϕ t(x), thereby yielding a CNF. Given a
+prior distributionp 0 att=0, the forward dynamics induce a time-dependent distributionp t
+via the push-forward equation [24]:
+pt(x) = [ϕt]∗ p0(x) =p 0
+ 
+ϕ−1
+t (x)
+
+det
+ ∂ϕ−1
+t
+∂x (x)
+
+(2.2)
+In particular, ifp 1 att= 1 is the desired target distribution, the flow transportsp 0 top 1.
+The goal in CNF is to train the neural networkv θ(t, x) such that the ODE induced flowϕ t(x)
+(Eq. (2.1)) maps the base distributionp 0 onto the targetp 1 (Eq. (2.2)). One key challenge of
+classic CNFs is high computational cost: the neural networkv t(x;θ) learns the target velocity
+field indirectly by maximizing likelihood along the continuous flow, and both training and
+sampling require numerous ODE solver evaluations, which may increase during training and
+limit scalability.
+– 3 –
+
+2.2 Flow matching
+Lipman et al. (2022) proposed Flow Matching [24] (FM), an efficient method for regressing
+velocity fields directly. FM is a simulation-free approach for training CNFs by regressing
+time-dependent vector fields explicitly without frequent ODE evaluations, thereby acceler-
+ating convergence and reducing the overall training time. The goal of FM is to match the
+probability pathp t, enabling transport fromp 0 top 1. We say a time-dependent velocity field
+vt generates a probability density pathp t if its flowϕ t satisfies Eq. (2.2). This can be checked
+via the continuity equation:
+d
+dt pt(x) +∇ x ·
+ 
+pt(x)u t(x)
+
+= 0 (2.3)
+Given a pathp t, any velocity fieldu t satisfying this continuity equation is consistent withp t.
+The FM objective is then:
+LFM(θ) =E t∼U[0,1], p t(x)
+vθ(t, x)−u t(x)
+2 (2.4)
+In practice, the pathp t and its inducing velocityu t are typically unknown, andu t rarely
+admits a closed form. Consequently, the FM objective cannot be applied directly. In general,
+only data samplesx 1 from some unknown distributionq(x 1) are observed, we therefore
+introduce a conditional probability pathp t(x|x1) with boundary conditions:p 0(x|x1) =p 0(x)
+att=0 and a distribution concentrated nearx=x 1 att=1, e.g.,p 1(x|x1) =N(x|x 1, σ2I) with
+smallσ. Letu t(x|x1) denote the conditional velocity field that generatesp t(x|x1) via the
+continuity equation. The Conditional Flow Matching (CFM) objective then trainsv θ(t, x)
+to match this conditional target by minimizing
+LCFM(θ) =E t∼U[0,1], q(x 1), p t(x|x1)
+vθ(t, x)−u t(x|x1)
+2 (2.5)
+up to a constant independent ofθ, the CFM and FM losses coincide; hence∇ θLFM(θ) =
+∇θLCFM(θ) [24]. This equivalence allows us to train the network using samples from the
+conditional velocity fieldu t(x|x1), while the corresponding population objective has the same
+gradients as the marginal FM objective foru t(x), without requiring a closed form expression
+foru t(x). Moreover, the CFM objective supports any conditional probability path that
+satisfies the boundary conditions, along with compatible conditional velocity fields, thereby
+enabling flexible path and target design.
+2.3 Residual label-conditional flow matching
+In many scientific applications, downstream analysis requires generating label-specific maps.
+For continuous labels in particular, we desire a model that interpolates smoothly across the
+label space, an ability that is crucial when expensive simulations make dense sampling infea-
+sible. A practical FM strategy is to inject label informationydirectly into the neural velocity
+fieldv θ(t, x, y). If the target distribution is label-dependent, i.e.q(x|y), a straightforward
+label-conditioned extension of CFM is
+Ly
+CFM(θ) =E t∼U[0,1], q(x 1,y), p t(x|x1)
+vθ(t, x, y)−u t(x|x1)
+2 (2.6)
+Here, the superscriptyindicates that the neural velocity field is conditioned on the labely,
+while the conditional probability pathp t(x|x1) and the target velocity fieldu t(x|x1) remain
+shared across labels. Conceptually, this corresponds to a shared-prior conditional model: the
+– 4 –
+
+labelymodulates the learned velocity field, but all labels are still transported from the same
+source distribution toward their corresponding target distributionsq(x|y).
+However, in many scientific settings, especially in cosmology and astrophysics, the statis-
+tics of the physical field vary substantially with the label (e.g., mean fields and covariances).
+Starting all labels from a single shared source distribution can therefore induce different
+transport distances acrossy, which often leads to unstable training and non-uniform perfor-
+mance across the parameter space. A natural approach is to employ a label-specific source
+prior so that source samples are, on average, closer to their corresponding targetsq(x|y); see
+Fig. 12. This design reduces the effective transport length and variability across labels, sim-
+plifying the learned transport and improving optimization stability and sampling efficiency
+across diverse conditional generation tasks [32, 33].
+Nevertheless, in our interpolation-focused evaluation on test cosmological parameter
+points, we find that a label-specific prior alone does not improve generalization; instead,
+it consistently degrades performance across the full set of validation metrics, indicating re-
+duced robustness at interpolation points. We provide further discussion and an explanation
+of this behavior in Appendix B. This motivates an additional representation-level reparame-
+terization: we learn the conditional dynamics in a residual space obtained by per-label mean
+subtraction, which removes trivial label-dependent mean shifts and yields more stable in-
+terpolation across cosmological parameters. In Appendix B, we conduct an ablation study
+comparing these design choices and their combinations. The results show that combining the
+label-specific prior with residual-space training achieves the lowest errors across the reported
+validation metrics. This suggests that reducing the source–target mismatch and simplifying
+the transport in residual space leads to more stable learning and more uniform performance
+across the label space.
+Label-specific prior.Given a particular samplex 1 with label y, we denote the label-
+conditional probability path byp t(x|x1, y). By integrating outx 1, we obtain the marginal
+conditional pathp t(x|y):
+pt(x|y) =
+Z
+pt(x|x1, y)q(x 1|y)dx 1 (2.7)
+We further define a label-marginal vector fieldu t(x|y):
+ut(x|y) :=
+Z
+ut(x|x1, y) pt(x|x1, y)q(x 1|y)
+pt(x|y) dx1 (2.8)
+whereu t(x|x1, y) generatesp t(x|x1, y). As formally proven in Appendix C.1, for any distri-
+butionq(x 1|y), the vector fieldu t(x|y) defined in (2.8) generates the marginal pathp t(x|y)
+in (2.7). The corresponding label-marginal flow matching objective is
+Ly
+FM(θ) =E t∼U[0,1], q(y), p t(x|y)
+vθ(t, x, y)−u t(x|y)
+2 (2.9)
+Since the label-marginal vector fieldu t(x|y) is generally intractable, we instead optimize the
+Label-Conditional Flow Matching (LCFM) objective:
+LLCFM(θ) =E t∼U[0,1], q(x 1,y), p t(x|x1,y) ∥vθ(t, x, y)−u t(x|x1, y)∥2 (2.10)
+As shown in Appendix C.1,L y
+FM andL LCFM differ only by a constant independent ofθ, and
+therefore have identical gradients with respect toθ. Thus, optimizingL LCFM is equivalent, in
+– 5 –
+
+expectation, to optimizing the label-marginal flow matching objective foru t(x|y). Since this
+equivalence holds for any valid probability path, we can construct a label-specific Gaussian
+probability path:
+pt(x|x1, y) =N(x|µ t(x1, y), σ2
+t (x1, y)I) (2.11)
+whereµ t(x1, y) andσ t(x1, y) are explicitly label-dependent, defining a label-specific proba-
+bility path. We design it by satisfying the boundary conditions: att=0:
+µ0(x1, y) =µ 0(y), σ 0(x1, y) =σ 0(y), p 0(x|y) =N(x|µ 0(y), σ0(y)2I) (2.12)
+and att=1:
+µ1(x1, y) =x 1, σ 1(x1, y) =σ small, p 1(x|y)≃q(x|y) (2.13)
+For finiteσ small, this endpoint should be interpreted as a Gaussian-smoothed approximation
+toq(x|y), becoming exact in the limitσ small →0. Instead of integrating the flow directly, we
+simplify the computation by reparameterizing the probability path in terms of a standard
+normal variablez 0 ∼ N(0, I) (we refer the reader to Appendix C.2 for the step-by-step inter-
+mediate derivations of the associated flow and vector fields). Under this reparameterization,
+samples from the conditional path can be written as
+xt =µ t(x1, y) +σ t(x1, y)z0 (2.14)
+Therefore, the LCFM loss can be written as:
+LLCFM(θ) =E t∼U[0,1], q(x 1,y), p(z 0) ∥vθ(t, xt, y)−( ˙µt + ˙σtz0)∥2 (2.15)
+In this way, minimizing the LCFM objective provides a tractable training objective for ap-
+proximating the label-marginal vector fieldu t(x|y), which transports the label-specific Gaus-
+sian priorp(x 0|y) att= 0 toward an approximation of the target distributionq(x|y) at
+t= 1.
+Prior setting for mass maps.For our work of generating mass maps, we adopt the
+following parameterization:
+µt(x1, y) =tx 1 + (1−t)µ 0(y) (2.16)
+σt(x1, y)≡σ t(y) =tσ 1(y) + (1−t)σ 0(y) (2.17)
+µ0(y),σ 0(y), andσ 1(y) are parameters determined by the conditional distributionq(x 1|y)
+statistics, i.e.
+µ0(y) =E[x 1|y] (2.18)
+σ0(y) =α
+r
+1
+dtr(Cov[x1|y]) (2.19)
+σ1(y) =β σ 0(y) (2.20)
+wheredis the dimensionality of the map,µ 0(y) denotes the mean of the target distribution
+q(x1|y), (σ 0(y)/α)2 is the average marginal variance, i.e. the average of the diagonal entries
+of the conditional covariance matrix Cov[x 1|y], andαandβare two hyperparameters. In
+the theoretical formulation,µ 0(y) may be interpreted as a full map-shaped conditional mean
+vector. In our implementation, motivated by the approximate statistical homogeneity of the
+maps at fixed cosmology, we approximateµ 0(y) by a spatially constant scalar mean and
+broadcast it to all pixels; see Appendix A for details. In this setting, we define an isotropic
+Gaussian prior with meanµ 0(y) and varianceσ 2
+0(y).
+– 6 –
+
+Improving interpolation statistics.To stabilize conditional flow matching across cos-
+mological labels, we introduce a key reparameterization: per-label mean subtraction. For
+our mass mapping task, we are primarily interested in an emulator that can accurately inter-
+polate across the cosmological parameter space. Although the label-specific prior provides
+a more informative initialization, our ablation results on test interpolation points show that
+using the label-specific prior alone can lead to systematically worse performance across val-
+idation metrics (see Fig. 11). This indicates that, for our setting, improving interpolation
+robustness requires not only an informative prior but also an appropriate representation for
+learning conditional dynamics. Directly training the model in the original coordinate space
+xforces the network to simultaneously model (i) a largely trivial label-dependent translation
+(mean field shift), and (ii) the true residual structure, while the conditional data distri-
+butionsq(x 1|y) exhibit substantial label-dependent variations in their mean fields, overall
+amplitudes, and higher-order structure (see Appendix B for details). To reduce this burden
+and stabilize interpolation, we introduce a residual-space reparameterization via per-label
+mean subtraction:
+rt =x t −µ 0(y) (2.21)
+which removes the label-dependent mean component from the learning problem and allows
+the network to focus on modeling the residual structure that is more transferable across
+nearby cosmologies. The corresponding conditional path in residual space can be sampled
+through the reparameterization
+rt =µ t −µ 0 +σ tz0 =t(x 1 −µ 0 + (σ1 −σ 0)z0) +σ 0z0 (2.22)
+In this residual space, we haver 0 ∼ N(0, σ 2
+0I) andr 1 ∼ N(x 1 −µ 0, σ2
+1I). Differentiating this
+path with respect to time gives the pathwise target velocity
+˙rt =x 1 −µ 0 + (σ1 −σ 0)z0 (2.23)
+Now we introduce theResidual Label-Conditional Flow Matching (RLCFM) objec-
+tive:
+LRLCFM(θ) =E t∼U[0,1], q(x 1,y), p(z 0) ∥vθ(t, rt, y)−˙r t∥2 (2.24)
+At inference time, we generater 1 by integrating the learned ODE in residual space and
+reconstruct the corresponding transformed map asx 1 =r 1 +µ 0(y). In Appendix B, we em-
+pirically show that this residual-space formulation improves interpolation robustness across
+cosmological parameters.
+3 Convergence maps dataset
+3.1 Convergence map
+A convergence map represents the two-dimensional projection of the three-dimensional matter
+perturbations along the line-of-sight, weighted by the lensing efficiency. Because it directly
+traces the projected matter fluctuations, the convergence map is often referred to as a mass
+map. The convergence field can be written as
+κ(θ) =
+Z χh
+0
+dχ g(χ)δ(χθ, χ) (3.1)
+– 7 –
+
+Figure 1. Cosmological parameter grid from [16]. The
+diamonds and circles denote the 11 test sets and 46
+training sets, respectively. The cosmologies labeled A,
+B, C, and D are examined in more detail in Section 5.
+whereχis the comoving distance,χ h is the comoving distance to the horizon,δis the
+matter density contrast andg(χ) is the lensing efficiency, which serves as an “average” weight
+function:
+g(χ) = 3H 2
+0Ωm
+2c2
+χ
+a(χ)
+Z χh
+χ
+dχ′ ns(z)
+¯ns
+dz
+dχ′
+χ′ −χ
+χ′ (3.2)
+wheren s(z) is the redshift distribution of the source galaxies and ¯n s is their mean number
+density. The lensing efficiency thus depends on the source galaxy redshift distributionn s(z).
+In this work, we adopt the non-tomographic source redshift distribution, which yields a single
+source-averaged lensing efficiencyg(χ) for the full source sample.
+3.2 Dataset
+The convergence map dataset employed in this work was introduced in [16, 35]. It consists
+of 57 different cosmological models within the standard flat ΛCDM framework. Each model
+is specified by a pair of parameters, Ω m andσ 8, and provides 12,000 maps, yielding a total
+of 684,000 samples. The convergence maps are represented as 128×128 pixel maps, each
+covering a 5◦×5◦ patch of the sky. In this work, we select 46 cosmologies (552,000 samples)
+as training set and 11 cosmologies (132,000 samples) as the test set [16], as depicted in Fig. 1.
+Data pre-processing.Applying suitable reversible transformations to the original data
+can make the generative model easier to train. The convergence field is well approximated
+by a lognormal random field [36–38], which we parametrize asκ=e x −κ min wherexis a
+Gaussian random field. In the dataset used here the stored maps already contain the shifted
+fieldκ+κ min, i.e. the pixel values correspond toκ shifted ≡κ+κ min =e x. We therefore apply
+an element-wise logarithm to the stored maps and use the resulting fieldx= logκ shifted as
+the target for training. Next, we standardize the data by subtracting the global meanµ g(x)
+and dividing by the global standard deviationσ g(x) of all pixels across the training maps,
+˜x= x−µ g(x)
+σg(x) (3.3)
+Then we subtract the mean to get a residual variabler= ˜x−µ 0, as depicted in Section 2.3.
+We train our RLCFM model to predict the approximated Gaussian fieldrin this transformed
+space, and at inference time we map the generated samples back to the shifted convergence
+field by inverting these transformations.
+– 8 –
+
+4 Quantitative comparison metrics with summary statistics
+To evaluate how well the RLCFM-generated mass maps reproduce the statistical properties of
+the N-body simulations, we combine cosmology-oriented summary statistics with computer-
+vision similarity metrics. We adopt the same statistical evaluation procedure as in [16],
+thereby assessing both the visual agreement and the physical consistency of the generated
+maps.
+1. Pixel and peak value distributions.We first consider one-point statistics of the
+convergence field. The pixel distribution is characterized by the histogram of pixel values,
+Npixels(κ), binned in the threshold variableκ. This statistic traces the marginal probability
+distribution function of the field and is sensitive to departures from Gaussianity, such as
+skewness and heavy tails induced by non-linear structure formation. In addition, we measure
+the distribution of local maxima,N peak(κ), defined as pixels whose values exceed those of their
+neighbors. The peak histogram directly probes the abundance of highκfeatures associated
+with massive halos and projected large-scale structures. Together,N pixels andN peak provide
+a compact yet informative characterization of the one-point properties of the field and its
+peak population, capturing both the Gaussian baseline and simple non-Gaussian deviations
+in the amplitude of convergence fluctuations.
+2. Angular power spectrumC ℓ.We characterize the two-point statistics of the con-
+vergence field by its angular power spectrumC ℓ. The quantityC ℓ encodes the variance of
+Fourier modes as a function of multipoleℓand thus describes the amplitude of fluctuations
+across angular scales. As a standard observable in large-scale structure and weak-lensing
+analyses, it provides a compact description of the field in the Gaussian regime and is closely
+connected to the underlying matter power spectrum and the growth of structure. In our con-
+text, matchingC ℓ between simulated and generated mass maps ensures that the two-point
+statistics and scale-dependent variance are correctly reproduced.
+3. BispectrumB ℓ.As a three-point statistic, the bispectrum probes higher-order corre-
+lations of the convergence field and is intrinsically sensitive to its non-Gaussian structure.
+While the power spectrumC ℓ fully describes a Gaussian field, it cannot capture phase corre-
+lations or the mode coupling generated by non-linear structure formation. The bispectrum,
+defined for triplets of modes forming a closed triangle in multipole space, directly quanti-
+fies these effects and is particularly sensitive to the presence of massive halos, filamentary
+structures, and other non-linear features. As such, it provides information that is comple-
+mentary toC ℓ and enhances the discriminating power between different cosmological models
+and between simulated and generated mass maps.
+4. Minkowski functionalsV 0, V1, V2.To quantify the morphology of the convergence
+fields, we measure the Minkowski functionals on thresholded maps. For a given threshold
+ν, we define the excursion setQ ν ={x|κ(x)≥ν}. In two dimensions, this set is fully
+characterized by three Minkowski functionals (V 0, V1, V2):
+V0(ν) = 1
+A
+Z
+Qν
+dA, V 1(ν) = 1
+4A
+Z
+∂Qν
+ds, V 2(ν) = 1
+2πA
+Z
+∂Qν
+κg ds,(4.1)
+whereAis the total area of the map,∂Q ν its boundary, andκ g the geodesic curvature.
+Intuitively,V 0 describes the area fraction above the threshold,V 1 the total boundary length
+– 9 –
+
+of the excursion set, andV 2 the Euler characteristic, i.e. the number of connected com-
+ponents minus the number of holes. These statistics provide a compact characterization
+of the geometric and topological properties of the convergence field and are sensitive to its
+non-Gaussian features.
+5. Power spectrum correlation matricesR ℓℓ′.We estimate the covariance of the
+binned power spectrum and its normalized Pearson correlation matrixR ℓℓ′ in order to char-
+acterize the cross-scale coupling ofC ℓ. The correlation matrix removes the overall amplitude
+of the covariance and isolates the pattern of linear dependence between different multipoles,
+thereby encoding how fluctuations on different angular scales are correlated within the en-
+semble. In our context,R ℓℓ′ is particularly useful to assess whether the RLCFM model
+reproduces the mode coupling and sample variance structure of the N-body simulations:
+significant deviations of the RLCFM correlation matrix from the N-body reference would
+indicate mismatches in higher-order statistics, even if the mean power spectrum is well re-
+produced. In addition, we summarize its overall correlation strength using the Frobenius
+norm.
+6. Multi-scale structural similarity (MS-SSIM).MS-SSIM [39, 40] provides a mea-
+sure of image similarity that is sensitive to structure across multiple spatial scales. Unlike
+one-point statistics or purely correlation-based measures, it captures how local contrast, lu-
+minance and morphological features are arranged in the maps, and is therefore closely related
+to the overall appearance of sharpness, filamentarity and halo-like peaks. In our analysis,
+MS-SSIM quantifies to what extent the RLCFM-generated mass maps preserve the small
+and large-scale spatial organization seen in the N-body simulations, and thus complements
+the cosmological summary statistics by probing the structural realism of the samples.
+We quantify the agreement between RLCFM and N-body pixel and peak distributions
+using the Wasserstein-1 distanceW 1(P, Q), defined as the minimal average transport cost be-
+tween two probability distributions. SinceW 1 is sensitive to the overall scale of the variables,
+we first standardize the pixel values by subtracting the mean and dividing by the standard
+deviation measured from the N-body maps at the corresponding cosmology, and apply the
+same transformation to the RLCFM samples. We then evaluate the Wasserstein-1 distance
+on these standardized variables, yielding a normalizedW 1.
+For each statisticS(x) (e.g., power spectrumC ℓ, bispectrumB ℓ and Minkowski func-
+tionalsV 0,1,2), we compute the sample mean over the RLCFM-generated maps and over the
+N-body maps. On a fixed evaluation rangex∈[x min, xmax], we then define the bin-wise
+fractional difference
+fS ≡
+D SRLCFM(x)−S N-body(x)
+SN-body(x)
+
+E
+x∈[xmin,xmax]
+(4.2)
+where⟨·⟩ x∈[xmin,xmax] denotes an average over bins within the evaluation range, so thatf S
+summarizes the typical relative error between the RLCFM emulator and the N-body reference
+for the statisticS(x).
+To summarize the overall strength of the correlation matrices, we rely on the Frobenius
+norm∥R∥ F ≡
+P
+i,j |rij|2
+1/2
+as a scalar summary. Accordingly, we report the fractional
+contrast between the norms of the RLCFM and N-body correlation matrices as
+fR ≡
+ ∥RRLCFM∥F − ∥RN-body ∥F
+∥RN-body ∥F
+ (4.3)
+– 10 –
+
+The Multi-Scale Structural Similarity Index (MS-SSIM) provides a means to probe
+mode collapse, i.e. situations in which the generator concentrates on a limited subset of the
+training distribution. Since conventional summary statistics can remain unchanged under
+such failures, MS-SSIM provides a complementary measure of structural similarity across
+many image pairs. It returns a score in [0,1] for any two inputs (1 for identical and 0
+for maximally dissimilar images). Focusing on ensemble-level behavior, and following the
+terminology of Ref. [16], we quantify the significance of the difference in average scores via
+sSSIM ≡ ⟨SSIMRLCFM⟩ − ⟨SSIMN-body ⟩ 
+σ[SSIMRLCFM] +σ[SSIM N-body]
+
+/2 (4.4)
+where⟨·⟩denotes the sample mean andσ[·] the sample standard deviation. Large values
+of|s SSIM|indicate a significant discrepancy between the two ensembles, while small values
+suggest comparable structural variability.
+5 Results
+We trained the RLCFM model described in Appendix A and it took us about 7 hours to
+train the model for 65,000 steps (about 15 epochs) on an NVIDIA A100 Tensor Core GPU.
+Unless otherwise stated, all samples and statistics reported below are generated using the
+checkpoint at 50,000 training steps. For each pair of labels, we generated 5,000 RLCFM maps
+and randomly sampled 5,000 N-body maps for statistical comparisons. In this section, we
+first show the maps generated by the RLCFM model. We then present a series of statistical
+comparisons for labels A, B, C, and D on the test set shown in Fig. 1, and finally, we present
+the statistical results for all labels on both the training and test sets.
+5.1 Visual comparison
+Fig. 2 presents example mass maps from the RLCFM model alongside the representative
+N-body maps for the A, B, C and D choices of (Ω m, σ8). The generated and original maps
+are visually almost indistinguishable, and the morphology of the structures evolves in a
+consistent way as the cosmological parameters are varied. In particular, as expected from
+theory, increasing Ω m enhances the overall mass content of the maps, while largerσ 8 leads
+to maps with a higher variance in pixel intensities. Fig. 3 shows mass maps generated by
+the conditional model for a grid of cosmological parameters. The smooth transition from low
+to high mass density across the grid demonstrates that the model has learned a continuous
+mapping from (Ω m, σ8) to the corresponding mass distributions: increasing Ω m raises the
+overall convergence level, while largerσ 8 produces more pronounced small-scale fluctuations
+in the maps.
+5.2 Summary statistics
+Fig. 4 shows the histograms of pixels (top) and peaks (bottom) for RLCFM-generated maps
+(red) and N-body maps (blue) for the four models A, B, C, and D. Peaks are defined as pixels
+whose values exceed all other pixels within a 5×5 neighborhood (i.e., the 24 surrounding
+pixels). The solid line corresponds to the median of the histogram, and the bands correspond
+to the 32% and 68% percentiles. The lower panel in each subplot shows the fractional
+difference of the median histograms,f median = (x F M −x N−body )/xN−body . The x-axisκ
+represents the pixel intensity. We compared the normalized Wasserstein-1 distances for pixel
+– 11 –
+
+Figure 2. Representative N-body maps and RLCFM-generated maps for the four representative
+cosmological parameter sets A, B, C, and D in Fig. 1. The generated maps are in very good visual
+agreement with the N-body references, with closely matched large-scale morphology and small-scale
+structures across the different cosmologies.
+distribution inκ∈[0.02,0.08], and peak distribution inκ∈[0.025,0.09]. For the pixel
+value distribution, the distances areW pixel = 0.004,0.012,0.003,0.002 for models A, B, C,
+and D, respectively. For the peak value, the distances areW peak = 0.014,0.012,0.008,0.008.
+These results indicate that the normalized Wasserstein-1 distances between the RLCFM and
+N-body pixel and peak histograms are below 0.02 over the evaluated ranges.
+The power spectra and bispectra are evaluated usingLensTools[41]. For the bis-
+pectrum, we adopt the folded configuration, using the default ratio of 0.5 between one of
+the triangle sides and the base. Fig. 5 shows the comparison of the two-point (top) and
+three-point (bottom) statistics. We bin the multipole rangeℓ∈[200,6000] into 200 bins for
+the power spectrum and 50 bins for the bispectrum, and evaluate the difference defined in
+Eq. (4.2) overℓ∈[300,3000] in both cases. For the two-point statistics, the differences are
+fCℓ = 0.014,0.005,0.008,0.012 for models A-D, all below 2%. For the three-point statistics,
+we obtainf Bℓ = 0.077,0.031,0.027,0.032, indicating similarly good agreement. These re-
+sults demonstrate that the RLCFM model successfully reproduces both the Gaussian and
+non-Gaussian information encoded in the mass field.
+The Minkowski functionals are shown in Fig. 6 and are also computed withLensTools[41].
+The x-axis shows the thresholdκ, above which the excursion set (the “islands”) is de-
+fined. For each threshold,V 0 (top row) measures the area of these islands,V 1 (middle
+row) their total boundary length, andV 2 (bottom row) their Euler characteristic. We eval-
+uateV 0,1,2 at 100 thresholds uniformly spaced inκ∈[0.01,0.1], and compute the differ-
+ence over the intervalκ∈[0.02,0.08]. The large variations in the median fractional dif-
+ference plots arise from numerical instability nearV= 0. Since the relative difference
+becomes meaningless in this regime, forf V1,2 we restrict its evaluation to|V 1,2|>10 −5.
+The resulting values aref V0 = 0.027,0.014,0.006,0.002,f V1 = 0.031,0.031,0.007,0.019, and
+– 12 –
+
+Figure 3. Maps generated from the same initial noise under different cosmological parameters
+(Ωm, σ8). The smooth changes across the grid indicate that the model has learned a continuous
+parameter dependence. As expected from theory, increasing Ω m enhances the overall mass content
+and raises the mean convergence level, while increasingσ 8 produces stronger clustering and larger
+small-scale fluctuations in the maps.
+fV2 = 0.030,0.039,0.072,0.022. These small deviations indicate that the RLCFM-generated
+maps successfully reproduce the morphological and topological information encoded in the
+Minkowski functionals of the N-body mass fields.
+The Pearson correlation matrices are shown in Fig. 7. The upper and lower triangular
+parts of each matrix correspond to the correlations measured from the N-body realizations
+and from the RLCFM samples. We summarize the overall correlation strength over the range
+ℓ∈[300,3000] by comparing the Frobenius norms of the RLCFM and N-body correlation
+matrices using Eq. (4.3). The resulting values aref R = 0.037,0.023,0.002,0.013, indicating
+a small contrast in the total Frobenius-norm amplitude of the correlation matrices.
+We calculate the MS-SSIM between the RLCFM and N-body maps, then evaluate the
+significance of the difference in average scores via Eq. (4.4). The significance values for
+models A, B, C and D are:s SSIM = 0.023,−0.159,0.205,−0.092. This indicates very good
+agreement in the MS-SSIM statistic for these models.
+Finally, using the same grids of training and test cosmologies shown in Fig. 1, we ex-
+amine how the different summary statistics vary across the cosmological parameter space.
+Figure 8 displays the resulting nine summary measures over the (Ω m, σ8) plane: (i) top
+left: significance of the differences SSIM in the multi–scale structural similarity index be-
+– 13 –
+
+Figure 4. Comparison of pixel histograms (top) and peak histograms (bottom) between N-body and
+RLCFM-generated mass maps for models A, B, C, and D. The solid line corresponds to the median
+histogram, and the bands correspond to the 32% and 68% percentiles of the ensemble of histograms.
+The lower panel in each subplot shows the fractional difference of the median histograms.
+Figure 5. Comparison of power spectra (top) and bispectra (bottom) between N-body and RLCFM-
+generated mass maps for models A, B, C, and D. The structure of this figure is the same as for Fig. 4.
+– 14 –
+
+Figure 6. Comparison of the Minkowski functionalsV 0 (top),V 1 (middle), andV 2 (bottom) between
+N-body and RLCFM-generated mass maps for models A, B, C, and D. The structure of this figure
+is the same as for Fig. 4. The large differences in the median fractional difference plots are due to
+numerical instability close to the value ofV= 0.
+Figure 7. Pearson’s correlation matrices for models A, B, C, and D. In each matrix, the upper
+triangular part shows the correlations from the N-body realizations, while the lower triangular part
+shows those from the RLCFM samples.
+– 15 –
+
+tween RLCFM and N-body maps; (ii) top center: normalized Wasserstein-1 distance of the
+pixel value distributions,W pixel
+1 ; (iii) top right: normalized Wasserstein-1 distance of the
+peak value distributions,W peak
+1 ; (iv) middle left: mean absolute fractional difference of the
+power spectrum,f Cℓ; (v) middle center: fractional difference in the Frobenius norm of the
+power spectrum correlation matrices,f R; (vi) middle right: mean absolute fractional dif-
+ference of the bispectrum,f Bℓ; (vii) bottom left: mean absolute fractional difference of the
+Minkowski functionalV 0,f V0; (viii) bottom center: mean absolute fractional difference of the
+Minkowski functionalV 1,f V1; and (ix) bottom right: mean absolute fractional difference of
+the Minkowski functionalV 2,f V2. In all panels, circles denote cosmologies from the training
+set and diamonds denote cosmologies from the test set, while the color encodes the value
+of the corresponding statistic for a given (Ω m, σ8). Averaging separately over the training
+and test cosmologies, we obtain mean absolute SSIM significances of 0.131 and 0.111, respec-
+tively. The mean normalized Wasserstein-1 distances are 0.004 and 0.006 for the pixel-value
+distribution and 0.004 and 0.010 for the peak distribution. The mean discrepancies are 0.006
+and 0.010 for the power spectrum, 0.017 and 0.019 for the Frobenius-norm contrast of the
+power spectrum correlation matrices, and 0.039 and 0.047 for the bispectrum, while for the
+Minkowski functionals they are 0.009 and 0.010 forV 0, 0.011 and 0.017 forV 1, and 0.014 and
+0.026 forV 2.
+Overall, the agreement between the RLCFM maps and the N-body simulations is very
+good over most of the grid. The Wasserstein distance of the pixel histograms is small and
+almost constant (typicallyW pixel
+1 <0.01) 1, indicating that the one–point distributions are
+reproduced accurately for all cosmologies. The peak histogram (typicallyW peak
+1 <0.01),
+power spectrum (typicallyf Cℓ <1%), and Minkowski functional (typicallyf V0 <1%,f V1 <
+2%,f V2 <3%) fractional differences are at the level of only a few percent, with the smallest
+discrepancies found near the center of the parameter grid, where neighboring cosmologies
+also show very similar values of these statistics. Slightly larger deviations appear towards
+the edges of the grid: in particular, the correlation matrix statistic (typicallyf R <3%)
+and the SSIM significance show enhanced differences for high Ω m and lowσ 8, whereas the
+bispectrum fractional difference (typicallyf Bℓ <5%) peaks at low Ω m and highσ 8. We
+further find that the magnitude of the statistical differences between the RLCFM maps
+and the N-body simulations is very stable across the cosmological parameter space: at each
+cosmological parameter point the values of all statistics for the training and test maps are
+nearly identical, with the test and edge cosmologies showing only slightly larger discrepancies
+on average, and the differences vary smoothly from one cosmology to the next, indicating
+that the model generalizes well across the sampled parameter grid.
+5.3 Distribution-level comparison of summary statistics
+We compare a distribution of summary statistics calculated from: (1) N-body maps generated
+from random initial conditions and (2) emulator maps generated from random noise att=0.
+This comparison enables us to assess the fidelity of the emulator as a probabilistic generator.
+We compare the distributions of representative pixel-count, power spectrum, and bis-
+pectrum quantities for cosmologies A, B, C, and D, using the corresponding N-body and
+RLCFM results. As shown in Fig. 9, for the pixel statistic we fix a representative pixel-value
+bin aroundκ≈0.03 andκ≈0.05, count for each map the number of pixels falling into this
+1Here and in the following, “typically” refers to the 80th percentile over the 57 cosmological parameter
+points.
+– 16 –
+
+Figure 8. Differences between the summary statistics measured from the N-body and RLCFM-
+generated maps over the (Ω m, σ8) grid. The panels show the SSIM significance, the normalized
+Wasserstein-1 distances for the pixel-value and peak distributions, the mean absolute fractional dif-
+ferences for the power spectrum and bispectrum, the fractional difference in the Frobenius norm of
+the power spectrum correlation matrix, and the mean absolute fractional differences for the three
+Minkowski functionalsV 0,V 1, andV 2. Circles correspond to training cosmologies and diamonds to
+test cosmologies. The color indicates the magnitude of the discrepancy for each cosmological pa-
+rameter point. The agreement is generally very good across the grid, with only slightly enhanced
+discrepancies in a small number of edge and test cosmologies.
+bin, and then construct the distribution of map counts as a function of this pixel number.
+For the power spectrum and bispectrum, we instead fix a representative multipole bin around
+ℓ≈1000 andℓ≈2000, compute the correspondingC ℓ andB ℓ values for each map, and then
+obtain the distributions ofC ℓ andB ℓ across the ensemble of maps. For all three represen-
+tative quantities, the N-body and RLCFM distributions are broadly consistent for the four
+test cosmologies. In particular, the peak locations and overall widths of the distributions are
+generally well matched, indicating that the model reproduces not only the typical values of
+these statistics but also their map-to-map variability.
+To summarize the bin-wise difference over the full cosmological grid, we compute the
+– 17 –
+
+Figure 9. Distributions at representative bins of pixel-value, power spectrum, and bispectrum quan-
+tities for the four cosmologies A, B, C, and D. Top: distribution of map counts as a function of the
+number of pixels per map falling within representative pixel-value bins centered aroundκ≈0.03 and
+κ≈0.05. Middle and bottom: distributions of the corresponding power spectrum and bispectrum
+values for representative multipole bins aroundℓ≈1000 andℓ≈2000. In each panel, the blue (light
+blue) and red (light red) curves denote the N-body and RLCFM results, respectively.
+Figure 10. Average bin-wise normalized Wasserstein-1 distances between the N-body and RLCFM
+distributions across the cosmological grid for the pixel statistic (left), power spectrumC ℓ (middle),
+and bispectrumB ℓ (right). For each cosmology, the scalar value shown is obtained by computing the
+normalized Wasserstein-1 distance in every individualκorℓbin and then averaging over all bins.
+– 18 –
+
+normalized Wasserstein-1 distance, as defined in Section 4, between the N-body and RLCFM
+distributions for each individualκorℓbin. We then average these bin-wise Wasserstein-1
+distances over the full set of bins, thereby obtaining a single scalar measure for each cosmology
+and for each summary statistic, as shown in Fig. 10. The mean values over the training and
+test cosmologies are 0.039 and 0.058 for the pixel statistic, 0.033 and 0.046 for the power
+spectrum, and 0.035 and 0.042 for the bispectrum, respectively. The differences remain small
+in all cases, and the increase from the training to the test set is modest, indicating stable
+generalization across the cosmological grid. These figures therefore serve as a supplementary
+consistency check and support the conclusion that the model captures not only the mean
+behavior of the summary statistics, but also their distribution-level structure.
+6 Conclusion
+We present a residual label-conditional flow matching framework for cosmological mass map
+generation conditioned on cosmological parameters. We demonstrate our method on 2D
+mass maps conditioned on Ωm andσ 8, following previous work [16]. Our model substantially
+improves statistical fidelity of the generated maps and accelerates training convergence.
+We evaluate the model using a comprehensive suite of quantitative metrics. For low-
+order statistics such as pixel histograms, peak histograms, and the power spectrum, the
+agreement is excellent, with typical discrepancies below 0.01 or 1%. For higher-order statis-
+tics, including Minkowski functionals and the bispectrum, our generated maps also achieve
+strong agreement, generally below 5%. The Structural Similarity Index (SSIM) and corre-
+lation matrix also show good agreement: the overall SSIM significance is well below unity,
+and the Frobenius-norm contrast of the correlation matrices is typically below 3% for most
+cosmologies. We observe that errors are smallest near the center of the parameter grid, and
+that the degradation at the boundaries is now greatly reduced, with edge points exhibiting
+only a mild deterioration compared to the central region, which is expected because there is
+naturally less surrounding support in label space near the boundaries.
+Overall, our results demonstrate that conditional flow matching, when combined with
+a residual-space formulation and a well-designed data-driven prior, provides a powerful and
+efficient framework for generating cosmological mass maps with high-fidelity non-Gaussian
+structure. These design choices substantially reduce optimization difficulties while improving
+generalization across cosmologies. They also lead to faster training and more stable perfor-
+mance at both boundary and interpolated parameter points, thereby enhancing the practical
+usability of the model. Compared to the GAN baseline of [16], our model achieves consis-
+tently smaller fractional differences across all evaluated summary statistics, while requiring
+substantially fewer training epochs to reach stable validation performance.
+Looking ahead, several directions appear promising for extending this work. Jointly
+generating mass maps and shear fields could enable more realistic forward modeling of weak-
+lensing surveys. Incorporating redshift-dependent conditioning could enable tomographic
+mass map generation and reconstruction [17, 20, 42, 43]. Using full-sky simulation suites such
+as CosmoGridV1 [44] would allow us to train on spherical maps and to include a larger set
+of cosmological parameters, following recent spherical mass map emulators [17, 42]. Finally,
+integrating simulation-based inference techniques or uncertainty quantification could allow
+the model to serve directly as a likelihood-free tool for cosmological parameter estimation
+[45–47]. We leave these directions for future work.
+– 19 –
+
+Acknowledgments
+We acknowledge excellent previous work by Nathana¨ el Perraudin on the GAN emulator
+and the well-documented codes/data from that project, which is at the highest standard of
+reproducibility.
+References
+[1] M. Bartelmann and P. Schneider,Weak gravitational lensing,Physics Reports340(2001) 291.
+[2] M. Kilbinger,Cosmology with cosmic shear observations: a review,Reports on Progress in
+Physics78(2015) 086901.
+[3] J.T. de Jong, G.A. Verdoes Kleijn, K.H. Kuijken, E.A. Valentijn, KiDS and
+A.-W. Consortiums,The Kilo-Degree Survey,Experimental Astronomy35(2013) 25.
+[4] D.E.S. Collaboration:, T. Abbott, F. Abdalla, J. Aleksi´ c, S. Allam, A. Amara et al.,The Dark
+Energy Survey: more than dark energy–an overview,Monthly Notices of the Royal
+Astronomical Society460(2016) 1270.
+[5] H. Aihara, R. Armstrong, S. Bickerton, J. Bosch, J. Coupon, H. Furusawa et al.,First data
+release of the Hyper Suprime-Cam Subaru Strategic Program,Publications of the Astronomical
+Society of Japan70(2018) S8.
+[6] R. Laureijs, J. Amiaux, S. Arduini, J.-L. Augueres, J. Brinchmann, R. Cole et al.,Euclid
+definition study report,arXiv preprint arXiv:1110.3193(2011) .
+[7] ˇZ. Ivezi´ c, S.M. Kahn, J.A. Tyson, B. Abel, E. Acosta, R. Allsman et al.,LSST: from science
+drivers to reference design and anticipated data products,The Astrophysical Journal873
+(2019) 111.
+[8] B. Jain, U. Seljak and S. White,Ray-tracing simulations of weak lensing by large-scale
+structure,The Astrophysical Journal530(2000) 547.
+[9] R. Takahashi, T. Hamana, M. Shirasaki, T. Namikawa, T. Nishimichi, K. Osato et al.,Full-sky
+gravitational lensing simulation for large-area galaxy surveys and cosmic microwave background
+experiments,The Astrophysical Journal850(2017) 24.
+[10] A. Petri, Z. Haiman and M. May,Sample variance in weak lensing: How many simulations are
+required?,Physical Review D93(2016) 063524.
+[11] J. Harnois-Deraps, B. Giblin and B. Joachimi,Cosmic shear covariance matrix inwCDM:
+cosmology matters,Astronomy & Astrophysics631(2019) A160.
+[12] D. Ribli, B. ´A. Pataki, J.M. Zorrilla Matilla, D. Hsu, Z. Haiman and I. Csabai,Weak lensing
+cosmology with convolutional neural networks on noisy data,Monthly Notices of the Royal
+Astronomical Society490(2019) 1843.
+[13] J. Fluri, T. Kacprzak, A. Lucchi, A. Schneider, A. Refregier and T. Hofmann,FullwCDM
+analysis of KiDS-1000 weak lensing maps using deep learning,Physical Review D105(2022)
+083518.
+[14] D. Sharma, B. Dai and U. Seljak,A comparative study of cosmological constraints from weak
+lensing using convolutional neural networks,Journal of Cosmology and Astroparticle Physics
+2024(2024) 010.
+[15] M. Mustafa, D. Bard, W. Bhimji, Z. Luki´ c, R. Al-Rfou and J.M. Kratochvil,CosmoGAN:
+creating high-fidelity weak lensing convergence maps using generative adversarial networks,
+Computational Astrophysics and Cosmology6(2019) 1.
+– 20 –
+
+[16] N. Perraudin, S. Marcon, A. Lucchi and T. Kacprzak,Emulation of cosmological mass maps
+with conditional generative adversarial networks,Frontiers in Artificial Intelligence4(2021)
+673062.
+[17] T.W.H. Yiu, J. Fluri and T. Kacprzak,A tomographic spherical mass map emulator of the
+KiDS-1000 survey using conditional generative adversarial networks,Journal of Cosmology and
+Astroparticle Physics2022(2022) 013.
+[18] B. Remy, F. Lanusse, N. Jeffrey, J. Liu, J.-L. Starck, K. Osato et al.,Probabilistic
+mass-mapping with neural score estimation,Astronomy & Astrophysics672(2023) A51.
+[19] S.D. Aoyama, K. Osato and M. Shirasaki,Denoising weak lensing mass maps with diffusion
+model: systematic comparison with generative adversarial network,arXiv preprint
+arXiv:2505.00345(2025) .
+[20] S.S. Boruah, M. Jacob and B. Jain,Diffusion-based mass map reconstruction from weak lensing
+data,Physical Review D111(2025) 083542.
+[21] L. Dinh, J. Sohl-Dickstein and S. Bengio,Density estimation using Real NVP,arXiv preprint
+arXiv:1605.08803(2016) .
+[22] D.P. Kingma and P. Dhariwal,Glow: generative flow with invertible 1x1 convolutions,
+Advances in neural information processing systems31(2018) .
+[23] G. Papamakarios, E. Nalisnick, D.J. Rezende, S. Mohamed and B. Lakshminarayanan,
+Normalizing flows for probabilistic modeling and inference,Journal of Machine Learning
+Research22(2021) 1.
+[24] Y. Lipman, R.T. Chen, H. Ben-Hamu, M. Nickel and M. Le,Flow matching for generative
+modeling,arXiv preprint arXiv:2210.02747(2022) .
+[25] X. Liu, C. Gong and Q. Liu,Flow straight and fast: Learning to generate and transfer data
+with rectified flow,arXiv preprint arXiv:2209.03003(2022) .
+[26] R.T. Chen, Y. Rubanova, J. Bettencourt and D.K. Duvenaud,Neural ordinary differential
+equations,Advances in neural information processing systems31(2018) .
+[27] A. Tong, K. Fatras, N. Malkin, G. Huguet, Y. Zhang, J. Rector-Brooks et al.,Improving and
+generalizing flow-based generative models with minibatch optimal transport,arXiv preprint
+arXiv:2302.00482(2023) .
+[28] K. Diao, B. Dai and U. Seljak,Detecting modeling bias with continuous time flow models on
+weak lensing maps,Journal of Cosmology and Astroparticle Physics2025(2025) 004.
+[29] J. Zeghal, B. Remy, Y. Hezaveh, F. Lanusse and L.P. Levasseur,Bridging simulators with
+conditional optimal transport,arXiv preprint arXiv:2510.24631(2025) .
+[30] S. Kannan, T. Qiu, C. Cuesta-Lazaro and H. Jeong,CosmoFlow: scale-aware representation
+learning for cosmology with flow matching,arXiv preprint arXiv:2507.11842(2025) .
+[31] A. Tamosiunas, H.A. Winther, K. Koyama, D.J. Bacon, R.C. Nichol and B. Mawdsley,
+Investigating cosmological gan emulators using latent space interpolation,Monthly Notices of
+the Royal Astronomical Society506(2021) 3049.
+[32] M. Kollovieh, M. Lienen, D. L¨ udke, L. Schwinn and S. G¨ unnemann,Flow matching with
+gaussian process priors for probabilistic time series forecasting,arXiv preprint
+arXiv:2410.03024(2024) .
+[33] N. Issachar, M. Salama, R. Fattal and S. Benaim,Designing a conditional prior distribution for
+flow-based generative models,arXiv preprint arXiv:2502.09611(2025) .
+[34] J. Wu, X. Kong, N. Sun, J. Wei, S. Shan, F. Feng et al.,FlowDesign: Improved design of
+antibody CDRs through flow matching and better prior distributions,Cell Systems16(2025)
+101270.
+– 21 –
+
+[35] J. Fluri, T. Kacprzak, A. Lucchi, A. Refregier, A. Amara, T. Hofmann et al.,Cosmological
+constraints with deep learning from KiDS-450 weak lensing maps,arXiv preprint
+arXiv:1906.03156(2019) .
+[36] A. Taruya, M. Takada, T. Hamana, I. Kayo and T. Futamase,Lognormal property of
+weak-lensing fields,The Astrophysical Journal571(2002) 638.
+[37] L. Clerkin, D. Kirk, M. Manera, O. Lahav, F. Abdalla, A. Amara et al.,Testing the
+lognormality of the galaxy and weak lensing convergence distributions from Dark Energy Survey
+maps,Monthly Notices of the Royal Astronomical Society466(2017) 1444.
+[38] S.S. Boruah, E. Rozo and P. Fiedorowicz,Map-based cosmology inference with lognormal
+cosmic shear maps,Monthly Notices of the Royal Astronomical Society516(2022) 4111.
+[39] Z. Wang, A.C. Bovik, H.R. Sheikh and E.P. Simoncelli,Image quality assessment: from error
+visibility to structural similarity,IEEE Transactions on Image Processing13(2004) 600.
+[40] Z. Wang, E.P. Simoncelli and A.C. Bovik,Multiscale structural similarity for image quality
+assessment, inThe Thirty-Seventh Asilomar Conference on Signals, Systems & Computers,
+2003, vol. 2, pp. 1398–1402, IEEE, 2003.
+[41] A. Petri,Mocking the weak lensing universe: the LensTools Python computing package,
+Astronomy and Computing17(2016) 73.
+[42] S.S. Boruah, P. Fiedorowicz, R. Garcia, W.R. Coulton, E. Rozo and G. Fabbian,GANSky: fast
+curved-sky weak lensing simulations using generative adversarial networks,arXiv preprint
+arXiv:2406.05867(2024) .
+[43] S.S. Boruah, P. Fiedorowicz and E. Rozo,Bayesian mass mapping with weak lensing data using
+KaRMMa: validation with simulations and application to Dark Energy Survey Year 3 data,
+Physical Review D110(2024) 023524.
+[44] T. Kacprzak, J. Fluri, A. Schneider, A. Refregier and J. Stadel,CosmoGridV1: a simulated
+ΛCDM theory prediction for map-level cosmological inference,Journal of Cosmology and
+Astroparticle Physics2023(2023) 050.
+[45] J. Alsing, B. Wandelt and S. Feeney,Massive optimal data compression and density estimation
+for scalable, likelihood-free inference in cosmology,Monthly Notices of the Royal Astronomical
+Society477(2018) 2874.
+[46] N. Jeffrey, L. Whiteway, M. Gatti, J. Williamson, J. Alsing, A. Porredon et al.,Dark Energy
+Survey Year 3 results: likelihood-free, simulation-basedwCDM inference with neural
+compression of weak-lensing map statistics,Monthly Notices of the Royal Astronomical Society
+536(2025) 1303.
+[47] J. Zeghal, D. Lanzieri, F. Lanusse, A. Boucaud, G. Louppe, E. Aubourg et al.,Simulation-based
+inference benchmark for weak lensing cosmology,Astronomy & Astrophysics699(2025) A327.
+A Network architecture
+Dataset.The dataset used in this work is described in Section 3. Each mass map has
+a pixel dimension of 1×128×128. We select 46 cosmologies (552,000 samples) as the
+training set and 11 cosmologies (132,000 samples) as the test set. For the original maps, we
+first apply the lognormal transformation to the training data, then we standardize the maps
+using the global mean and standard deviation computed over all training pixels, as described
+in Section 3.
+– 22 –
+
+Predictor for conditional mean and variance.After data preprocessing, we designed
+a predictor to estimate the conditional meanµ 0(y) and standard deviationσ 0(y) of the
+prior distribution, as described in Section 2. Because the mass maps are approximately
+statistically homogeneous and isotropic at a fixed cosmology, the one-point statistics are
+invariant under translations and rotations, implying that the ensemble mean is (to a good
+approximation) independent of pixel position. Consistent with this expectation, we find
+empirically that pixel-wise averaging over many realizations at the same cosmology yields an
+almost spatially constant mean map. We therefore model only its global mean, reducing the
+task to predicting a single scalarµ 0(y), which is then broadcast to a constant 1×128×128
+mean map. Thus, the main task of our predictor is to predict two scalar values:µ 0(y) and
+σ0(y). This prediction model is trained only on the 46 training cosmologies, and the values
+for held-out test cosmologies are obtained by interpolation without using any test maps.
+We modelσ 0(y) with a two-stage scheme. First, a low-order Polynomial Ridge regressor
+is fit to{(y i, σi)}to obtain a smooth baselineσ base(y). Second, we fit a Gradient Boosted
+Decision Trees (GBDT) regressor to the residuals and add a bounded correction:
+σ0(y) =σ base(y) + ∆σ(y) (A.1)
+where the correction is clipped as|∆σ| ≤κ σ max{σbase(y), ϵσ}withκ σ = 0.02 to ensure
+positivity and numerical stability.
+We modelµ 0(y) analogously. As a baseline, we train a Gaussian Process Regressor
+(GPR) with a squared-exponential kernel and additive white noise on{(y i, µi)}(after stan-
+dardizing inputs and targets), yieldingµ base(y). A second-stage GBDT predicts residuals,
+giving
+µ0(y) =µ base(y) + ∆µ(y),(A.2)
+where|∆µ| ≤κ µ max{σ0(y), ϵµ}withκ µ = 0.02 to prevent unphysical excursions. During
+sampling, we broadcastµ 0(y) to a constant mean map and useσ 0(y) to set the noise schedule
+in the flow matching process.
+For hyperparameters, we setα= 1.2 in Eq. (2.19) andβ= 0.04 in Eq. (2.20). The
+choice ofα >1 increases the coverage of the initial distribution, which improves learning of
+large-scale structure.
+U-Net model.We use a U-Net architecture for the velocity network, operating on 128×
+128 single channel maps, described in Table 1. In particular, we designed a time and label
+embedding block, and specifically for label embedding, we incorporated physical features.
+First, we apply a Fourier feature mapping to the parameters with a learnable scaleγthat
+controls the feature bandwidth. To preventγfrom becoming excessively large and inducing
+high frequency oscillations, we apply a small weight decay to this parameter. Beyond the
+Fourier representation, we further augment the input with physics-inspired features, including
+anS 8 term with learnable gating, logarithmic terms, and physically motivated ratios, thereby
+embedding prior structural knowledge of the underlying problem into the representation. The
+time and label embedding block is then embedded separately into the resblock and attention
+block, i.e., the CondResBlock and CondAttentionBlock in the Table 1.
+The network comprises four downsampling stages with channel widths 32→64→128→
+128, followed by a bottleneck at 16×16, and a symmetric upsampling path with skip connec-
+tions from the corresponding downsampling stages. Each downsampling stage consists of two
+conditioning ResNet blocks and a downsampling operation; at the lowest resolution (16×16)
+– 23 –
+
+Layer Input shape Output shape
+Downsampling layers
+Conv2d [128, 1, 128, 128] [128, 32, 128, 128]
+Cond ResBlock [128, 32, 128, 128] [128, 32, 128, 128]
+Cond ResBlock [128, 32, 128, 128] [128, 32, 128, 128]
+Downsample [128, 32, 128, 128] [128, 32, 64, 64]
+Cond ResBlock [128, 32, 64, 64] [128, 64, 64, 64]
+Cond ResBlock [128, 64, 64, 64] [128, 64, 64, 64]
+Downsample [128, 64, 64, 64] [128, 64, 32, 32]
+Cond ResBlock [128, 64, 32, 32] [128, 128, 32, 32]
+Cond ResBlock [128, 128, 32, 32] [128, 128, 32, 32]
+Downsample [128, 128, 32, 32] [128, 128, 16, 16]
+Cond ResBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond ResBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Middle layers
+Cond ResBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond ResBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Upsampling layers
+Cond ResBlock [128, 256, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond ResBlock [128, 256, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Cond ResBlock [128, 256, 16, 16] [128, 128, 16, 16]
+Cond AttentionBlock [128, 128, 16, 16] [128, 128, 16, 16]
+Upsample [128, 128, 16, 16] [128, 128, 32, 32]
+Cond ResBlock [128, 256, 32, 32] [128, 128, 32, 32]
+Cond ResBlock [128, 256, 32, 32] [128, 128, 32, 32]
+Cond ResBlock [128, 192, 32, 32] [128, 128, 32, 32]
+Upsample [128, 128, 32, 32] [128, 128, 64, 64]
+Cond ResBlock [128, 192, 64, 64] [128, 64, 64, 64]
+Cond ResBlock [128, 128, 64, 64] [128, 64, 64, 64]
+Cond ResBlock [128, 96, 64, 64] [128, 64, 64, 64]
+Upsample [128, 64, 64, 64] [128, 64, 128, 128]
+Cond ResBlock [128, 96, 128, 128] [128, 32, 128, 128]
+Cond ResBlock [128, 64, 128, 128] [128, 32, 128, 128]
+Cond ResBlock [128, 64, 128, 128] [128, 32, 128, 128]
+Conv2d [128, 32, 128, 128] [128, 1, 128, 128]
+Table 1. Summary of the conditional U-Net architecture used as the velocity network in the RLCFM
+model. The network operates on 128×128 single channel maps and is composed of four downsampling
+stages, a middle bottleneck, and a symmetric four stage upsampling path with skip connections. Time
+and label conditioning are implemented through dedicated embeddings that are injected into the
+conditional residual and attention blocks. The table lists the main layers and their input and output
+tensor shapes.
+we additionally apply conditioning attention blocks to capture long range dependencies. The
+middle (bottleneck) consists of a conditioning ResNet block, a conditioning Attention block,
+and a second conditioning ResNet block. The upsampling path mirrors the encoder: at each
+– 24 –
+
+resolution we concatenate the skip features with the current activations, apply conditioning
+ResNet blocks (with conditioning attention blocks at 16×16), and then upsample back to
+the original resolution. A final 3×3 convolution maps the 32-channel output back to a single
+channel.
+Training.We train the model with the AdamW optimizer, using a starting learning rate
+of 2×10 −4 that is decayed with a cosine schedule to 3×10 −5 by the end of training. We use
+a batch size of 128, with each batch constructed by mixing samples from multiple training
+cosmologies. An exponential moving average (EMA) of the network weights is maintained
+throughout training, and we use the EMA weights for all subsequent sampling.
+Sampling.We generate samples using thedopri5ODE solver. Since the dynamics are
+integrated in the residual spacer, we recover the field in the original space using the mean
+predictionµ 0(y) from Eq. (A.2), i.e.
+˜x=r+µ 0(y) (A.3)
+Finally, we apply the inverse of the data preprocessing transformations. First, we invert the
+global standardization in Eq. (3.3)
+x=σ g(x)˜x+µg(x) (A.4)
+Since the stored maps correspond to the shifted convergence field, the inverse logarithmic
+transform gives
+κshifted =e x (A.5)
+All generated maps and summary statistics in this work are evaluated using this shifted field,
+consistent with the stored dataset. On average, it takes about 4 minutes to generate 5000
+maps on an NVIDIA A100 GPU.
+B Experiments and analysis
+B.1 Comparison with GAN
+We compare our mass map emulator against the GAN-based emulator of [16], using the same
+dataset and data split, and the same validation metrics. Overall, our RLCFM model achieves
+consistently smaller fractional differences than the GAN across all summary statistics. We
+mainly show the corresponding comparisons for the pixel value distribution, power spectrum,
+the correlation matrix, and the bispectrum.
+For the pixel value distribution, the GAN shows normalized Wasserstein-1 distances at
+the level of a few percent, with the largest values approaching or exceeding 5%. In contrast,
+the RLCFM model remains below 1% for nearly all training and test points. For the power
+spectrum, the GAN typically shows fractional differences of order a few percent, reaching or
+exceeding 5% at several boundary parameter points. In contrast, the RLCFM model yields
+fractional differences below 1% for most test points, with only a small subset reaching∼2%.
+For the correlation matrix, the GAN often exhibits approximate differences at the∼5%-15%
+level, with the largest deviations reaching∼40%. The RLCFM model performs substantially
+better: aside from a few points reaching∼9%, most points cluster around∼3%. For the
+bispectrum, the GAN typically reaches fractional differences of order∼10%, while several
+– 25 –
+
+edge points reach or exceed 20%. By comparison, the RLCFM model achieves differences
+below 5% for most test points, with only a few points falling in the range 5%-10%.
+In addition to improved accuracy, our RLCFM model is more training-efficient. While
+the GAN baseline in [16] is trained for 40 epochs, RLCFM already reaches stable validation
+metrics after approximately∼15 epochs, with no noticeable improvement thereafter. This
+reduces the required training budget and accelerates model development.
+Overall, these results demonstrate that our RLCFM emulator provides a clear improve-
+ment over the GAN baseline. Across all four summary statistics, it not only reduces the
+typical fractional differences, but also suppresses the worst case errors at boundary cos-
+mologies, where the GAN degrades most strongly. This indicates that our approach better
+preserves both two-point and higher-order statistics, yielding more reliable mass map gener-
+ation over the full (Ω m, σ8) grid. Moreover, RLCFM reaches stable validation performance
+within a substantially smaller epoch budget, further improving computational efficiency.
+B.2 Ablation study
+To assess the impact of the label-specific prior and residual-space reparameterization on
+interpolation generalization across cosmological parameters, we conduct ablation experiments
+on 11 test cosmological parameter points (lower is better), and report the results in Fig. 11.
+Baseline (CFM).We use the standard CFM, where all labels share a standard Gaussian
+prior and the model is trained in the original data space.
+Ablation A (LCFM; label-specific prior only).We replace the shared prior with a
+label-specific prior, while still training the model in the original data space.
+Ablation B (RCFM; residual space only).We keep the shared prior as in the baseline,
+but train the model in the residual space via a residual-space reparameterization (mean
+subtraction)r=x−µ 0(y).
+Ablation C (RLCFM; full).We adopt the label-specific prior and train the model in
+the residual space using the same reparameterizationr=x−µ 0(y).
+Figure 11 summarizes interpolation-focused performance on 11 test cosmological pa-
+rameter points. We report the validation metrics (as in Section 4) aggregated across these
+test cosmologies, including the mean, maximum (worst case), and standard deviation (cross
+cosmology variability) as a function of training steps, where lower values indicate better per-
+formance. Across all statistics, including|SSIM|, pixel, peak, power spectrum, correlation,
+bispectrum, and Minkowski functionals, LCFM (label-specific prior only) consistently ex-
+hibits the largest mean values, the worst max values, and the highest variability, indicating
+degraded interpolation generalization and reduced robustness at test interpolation points.
+A plausible explanation is that the neural vector field shares parameters across all labels,
+whereas the label-specific prior induces different source distributions and thus different start-
+ing locations in the state space for differenty. As a result, the model has to approximate
+a family of label-conditional vector fields whose dependence onymay become less smooth,
+especially when the source distributions for neighboring labels have limited overlap. This
+can increase the effective functional complexity ofv θ(t,·, y) in the label direction and lead to
+poor interpolation generalization between the training labels, which is reflected by degraded
+performance at test interpolation points.
+In contrast, residual-space reparameterization alone (RCFM) removes the per-label
+mean component viar=x−µ 0(y). This aligns the conditional distributions aroundr= 0
+– 26 –
+
+Figure 11. Validation metric summaries across 11 test cosmologies (lower is better). Columns
+report mean, max (worst case), and std across the 11 test cosmological parameter points as a function
+of training steps. Colors denote CFM (blue), LCFM (orange), RCFM (green), and RLCFM (red).
+RLCFM achieves the lowest mean/max/std across metrics, while LCFM consistently performs worst,
+highlighting the benefit of combining residual-space training with the label-specific prior for robust
+interpolation.
+– 27 –
+
+Figure 12.Motivation for a label-specific source prior.Left: using a shared source prior
+p(x0) for all labels, source samples (dots; “prior”) can be far from the corresponding label-conditional
+targetsq(x|y) (crosses; “target”), leading to long and different transport. Right: a label-specific prior
+p(x0|y) places source samples closer to their corresponding targets on average, yielding shorter and
+more similar transport across labels.
+and reduces label-dependent variability in the input space, thereby making the family of
+label-conditional vector fields more consistent acrossyunder a shared parameter network.
+As a result, the conditional learning problem becomes easier and the model can devote its
+capacity to modeling the residual, non-Gaussian structures that are more transferable across
+nearby cosmologies. Correspondingly, RCFM improves most non-Gaussian statistics, for
+example peak counts and Minkowski functionals, relative to the CFM baseline.
+Importantly, combining the label-specific prior with residual-space training (RLCFM)
+gives the best overall performance. It achieves the lowest mean and worst case values and the
+smallest standard deviations across all reported validation metrics, and it remains stable over
+training steps. This indicates that the two components are complementary. Residual-space
+training first removes the main label-dependent mean shifts, making the learning problem
+more similar across labels and improving interpolation with shared network parameters.
+The label-specific prior then brings the starting distribution closer to the residual target
+distribution for eachyby using a physically motivated variance (see Fig. 12). This provides
+a better scaled initialization for each cosmology and effectively injects data-informed prior
+knowledge into the model, improving training stability and leading to stronger generalization
+at interpolation points. Together, these two choices lead to more accurate and more robust
+interpolation across the cosmological parameter space, which motivates the joint design.
+C Theorem proofs and reparameterization
+C.1 Theorems and proofs
+Theorem 1.Given the label-conditional vector fieldu t(x|x1, y)that generatesp t(x|x1, y),
+the marginal conditional vector fieldu t(x|y)in Eq.(2.8)generates the marginal conditional
+probability path in Eq.(2.7).
+Proof.We assume sufficient smoothness and integrability to interchange differentiation with
+respect tot, as well as the spatial divergence with respect tox, with integration overx 1.
+– 28 –
+
+We also assume thatp t(x|y)>0 on the region of interest. Becauseu t(x|x1, y) generates
+pt(x|x1, y), they satisfy the continuity equation Eq. (2.3):
+∂pt(x|x1, y)
+∂t =−∇ x ·(p t(x|x1, y)ut(x|x1, y)) (C.1)
+Then we can prove thatu t(x|y) andp t(x|y) also satisfy the continuity equation:
+∂pt(x|y)
+∂t = ∂
+∂t
+Z
+pt(x|x1, y)q(x1|y)dx1
+=
+Z ∂
+∂t pt(x|x1, y)·q(x 1|y)dx1
+=−
+Z
+∇x ·(p t(x|x1, y)ut(x|x1, y))·q(x 1|y)dx1
+=−∇ x ·
+Z
+pt(x|x1, y)ut(x|x1, y)q(x1|y)dx1
+=−∇ x ·(p t(x|y)ut(x|y)) (C.2)
+where in first equation we used the Eq. (2.7), in the last equation we used the Eq. (2.8).
+Thereforeu t(x|y) we defined generatesp t(x|y).
+Theorem 2.Assume thatp t(x|y)>0for allx∈R d,y∈ Y, andt∈[0,1]. Then the
+label-marginal flow matching objective
+Ly
+FM(θ) =E t∼U[0,1], q(y), p t(x|y)
+vθ(t, x, y)−u t(x|y)
+2
+and the label-conditional flow matching objective
+LLCFM(θ) =E t∼U[0,1], q(x 1,y), pt(x|x1,y)
+vθ(t, x, y)−u t(x|x 1, y)
+2
+differ only by a constant independent ofθ. Hence,
+∇θLy
+FM(θ) =∇ θLLCFM(θ)
+Proof.For notational simplicity, we omit the explicit dependence ontin some intermediate
+expressions. Using the bilinearity of the squared norm, we have
+vθ(t, x, y)−u t(x|y)
+2 =
+vθ(t, x, y)
+2 −2
+
+vθ(t, x, y), ut(x|y)
+
++
+ut(x|y)
+2
+and
+vθ(t, x, y)−u t(x|x1, y)
+2 =
+vθ(t, x, y)
+2 −2
+
+vθ(t, x, y), ut(x|x1, y)
+
++
+ut(x|x1, y)
+2
+The last terms in the two expressions are independent ofθ. It remains to show that the two
+θ-dependent terms are identical under the corresponding expectations.
+First, using the definition of the label-marginal probability path in Eq. (2.7),
+pt(x|y) =
+Z
+pt(x|x1, y)q(x1|y)dx 1
+– 29 –
+
+we obtain
+Eq(y), pt(x|y)
+vθ(t, x, y)
+2 =
+Z
+q(y)p t(x|y)
+vθ(t, x, y)
+2 dx dy
+=
+Z
+q(y)
+Z
+pt(x|x1, y)q(x1|y)dx 1
+vθ(t, x, y)
+2 dx dy
+=
+Z
+q(y)q(x 1|y)pt(x|x1, y)
+vθ(t, x, y)
+2 dx dx1 dy
+=
+Z
+q(x1, y)pt(x|x1, y)
+vθ(t, x, y)
+2 dx dx1 dy
+=E q(x1,y), pt(x|x1,y)
+vθ(t, x, y)
+2
+Second, using the definition of the label-marginal vector field in Eq. (2.8),
+ut(x|y) =
+Z
+ut(x|x1, y) pt(x|x1, y)q(x1|y)
+pt(x|y) dx1
+we have
+Eq(y), pt(x|y)
+
+vθ(t, x, y), ut(x|y)
+
+=
+Z
+q(y)p t(x|y)
+
+vθ(t, x, y),
+Z
+ut(x|x1, y) pt(x|x1, y)q(x1|y)
+pt(x|y) dx1
+
+dx dy
+=
+Z
+q(y)
+
+vθ(t, x, y),
+Z
+ut(x|x1, y)pt(x|x1, y)q(x1|y)dx 1
+
+dx dy
+=
+Z
+q(y)q(x 1|y)pt(x|x1, y)
+
+vθ(t, x, y), ut(x|x1, y)
+
+dx dx1 dy
+=
+Z
+q(x1, y)pt(x|x1, y)
+
+vθ(t, x, y), ut(x|x1, y)
+
+dx dx1 dy
+=E q(x1,y), pt(x|x1,y)
+
+vθ(t, x, y), ut(x|x1, y)
+
+Therefore, the∥v θ(t, x, y)∥2 terms and the cross terms are identical inL y
+FM(θ) andL LCFM(θ).
+The only remaining terms,
+Eq(y), pt(x|y)
+ut(x|y)
+2
+and
+Eq(x1,y), pt(x|x1,y)
+ut(x|x1, y)
+2
+do not depend onθ. Hence, the two objectives differ only by a constant independent ofθ.
+Consequently,
+∇θLy
+FM(θ) =∇ θLLCFM(θ)
+C.2 Reparameterization of the Gaussian probability path
+In Section 2.3, we define a label-specific Gaussian probability pathp t(x|x1, y). To evaluate
+the Label-Conditional Flow Matching (LCFM) loss efficiently, we reparameterize the path.
+Given an initial positionx 0, the associated flowψ t(x0|x1, y) that transportsx 0 tox t is given
+by:
+xt|x1,y =ψ t(x0|x1, y) =µ t +σ t
+ x0 −µ 0
+σ0
+
+(C.3)
+– 30 –
+
+By applying the reparameterization trick and settingz 0 = (x 0 −µ 0)/σ0, we obtainz 0 ∼
+N(0, I). The flow can then be simplified as:
+xt|x1,y =ψ t(z0|x1, y) =µ t +σ tz0 (C.4)
+Taking the time derivative along this reparameterized path gives the pathwise velocity
+˙xt = ˙µt + ˙σtz0 (C.5)
+where ˙µt and ˙σt denote the time derivatives of the mean and standard deviation, respectively.
+Substituting this parameterization into the LCFM objective allows us to train the neural
+network to regress the target vector field by sampling from a standard normal distribution,
+leading to the final objective function in Eq. (2.15).
+– 31 –

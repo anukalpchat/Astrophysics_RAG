@@ -1,0 +1,1764 @@
+Title: End-to-End Population Inference from Gravitational-Wave Strain using Transformers
+Authors: Konstantin Leyde, Stephen R. Green, Maximilian Dax, Matthew Mould, Cecilia Maria Fabbri, Jonathan Gair
+Published: 2026-05-11
+Categories: gr-qc, astro-ph.CO, hep-ph
+
+End-to-End Population Inference from Gravitational-Wave Strain using Transformers
+Konstantin Leyde, 1, 2,∗ Stephen R. Green, 3,† Maximilian Dax, 4,‡
+Matthew Mould, 3,§ Cecilia Maria Fabbri, 3,¶ and Jonathan Gair 5,∗∗
+1Center for Computational Astrophysics, Flatiron Institute, 162 5th Ave, New York, NY 10010
+2Institute of Cosmology and Gravitation, University of Portsmouth,
+Burnaby Road, Portsmouth PO1 3FX, United Kingdom
+3Nottingham Centre of Gravity & School of Mathematical Sciences,
+University of Nottingham, University Park, Nottingham NG7 2RD, United Kingdom
+4ELLIS Institute T¨ ubingen, Max Planck Institute for Intelligent Systems, T¨ ubingen AI Center, T¨ ubingen, Germany
+5Max Planck Institute for Gravitational Physics (Albert Einstein Institute)
+Am M¨ uhlenberg 1, 14476 Potsdam, Germany
+(Dated: May 13, 2026)
+The population of compact binaries encodes information about their astrophysical origins and
+the expansion of the universe. Hierarchical Bayesian methods infer these properties by combining
+single-event posteriors. As catalogs grow, however, this approach becomes computationally expensive
+and is subject to increasing Monte Carlo uncertainty. We introduceDingo-Pop, a simulation-based
+framework that infers population posteriors directly from gravitational-wave strain data. The data
+for each event are embedded into low-dimensional tokens and combined using a transformer trained
+on simulated catalogs subject to selection effects. This enables (i) population inference without
+per-event Monte Carlo sampling noise, (ii) amortization across variable catalog sizes using a single
+network, and (iii) end-to-end inference in about one second. We train a network for catalog sizes
+of 25 to 1000 events, and obtain well-calibrated posteriors consistent with traditional methods. By
+avoiding per-event analyses that can take hours to days,Dingo-Popenables new classes of large-scale
+injection studies; as an application, we examine how spectral-siren Hubble constant uncertainties
+change with catalog size.
+Introduction.—Population inference is now central to
+gravitational-wave (GW) astronomy. The latest catalog,
+GWTC-4.0 [1, 2], contains 218 events observed by the
+LIGO–Virgo–KAGRA Collaboration (LVK) [ 3–5]. By
+combining information across events, one can measure
+merger rates and source distributions [ 6], perform tests
+of general relativity [ 7], and constrain the expansion of
+the universe [ 8]. Current approaches, however, rely on
+hierarchical Bayesian analysis (HBA) methods built on
+per-event parameter estimation (PE), a workflow that
+becomes increasingly expensive and noisy as the catalog
+grows [9–12]. As detection rates rise with next-generation
+observatories such as Einstein Telescope [ 13] and Cos-
+mic Explorer [ 14], these computational and statistical
+bottlenecks will be exacerbated.
+Population inference starts from a forward model
+ppop(θ| Λ) predicting event parameters θ from population
+hyperparameters Λ. Given N observed events, with data
+Di for eventi, the population likelihood is [15–17]
+p({Di}N
+i=1 |Λ) =
+NY
+i=1
+R
+p(Di |θ)p pop(θ|Λ) dθR
+pdet(θ)p pop(θ|Λ) dθ .(1)
+Here, p(D |θ ) is the single-event likelihood [ 1, 18]. The
+denominator accounts for selection effects, withpdet(θ) the
+probability that an event with parametersθis observed.
+The integrals in Eq. (1) are typically evaluated using
+Monte Carlo estimates, introducing uncertainty in the like-
+lihood computation. For the numerator, single-event PE
+samples computed under a fiducial prior are reweighted to
+the population prior ppop(θ| Λ). Meanwhile, the selection
+function in the denominator is evaluated by importance
+sampling from a set of simulated events passing a detec-
+tion threshold [ 19, 20]. Due to finite sample sizes, the
+Monte Carlo variance in the estimate of the log population
+likelihood can scale as badly asN 2 [9–12].
+A separate problem is that standard analyses require
+evaluating ppop(θ| Λ), which makes it difficult to com-
+pare observations directly to astrophysical simulations
+without utilizing surrogate models [ 21–27]. In previous
+work [28], some of us showed how neural posterior esti-
+mation (NPE) [29–31] can be applied to GW population
+analysis. This removed the need for explicit likelihood
+evaluations by instead training neural networks for in-
+ference based on simulated catalogs (including selection
+effects). However, our work still relied on PE samples as
+an intermediate step and required fixing the catalog size
+in advance of training.
+In thisLetter, we introduceDingo-Pop, an end-to-end
+simulation-based inference (SBI) [ 32] framework for pop-
+ulation analysis that operates directly on GW strain data
+(Fig. 1, left). The strain data from individual events are
+first encoded into compact latent representations using
+aDingoembedding network [ 33]. These embeddings
+serve as tokens for a transformer encoder [ 34, 35] that
+accommodates variable catalog sizes. Finally, the trans-
+former output is mapped to a population posterior using
+a normalizing flow. To train, we simulate populations
+according to the likelihood (1) (Λ → {θ i} → {D i}), avoid-
+ing the expensive likelihood evaluations of HBA. In ad-
+arXiv:2605.11274v1  [gr-qc]  11 May 2026
+
+2
+Dingo-Pop
+D1 D2 . . . DN
+Z1 Z2 . . . ZN
+DingoembeddingZ i =f(D i)
+Transformer encoder
+Summary token
+Zpop
+Normalizing flow
+Hyperparameter samples
+Λ∼q ϕ(Λ| Z pop)
+37.5
+39.0
+40.5
+42.0
+mmax [M⊙]
+45 60 75
+H0
+[km s−1 Mpc−1]
+−2
+0
+2
+4
+α
+37.5
+39.0
+40.5
+42.0
+mmax [M⊙]
+−2 0 2 4
+α
+DingoPop
+Hyperparameters
+Λ∼p(Λ)
+Population size
+N∼p(N)
+Event parameters
+θ∼p pop(θ|Λ)
+Detection filter
+pdet(θ)
+Detected embedding
+Z ∼p(Z |θ,det)
+yes
+no
+×N
+Token set{Z i}N
+i=1
+Dingo-Popmodel
+(transformer + normalizing flow)
+Loss (NLL)
+L=− 1
+B
+PB
+b=1 logq ϕ(Λb | Z b
+pop)
+Batch ofBpopulations
+Inference T raining
+Figure 1.Dingo-Popframework, showing inference (left) and training (right). Blue boxes indicate sampling from the population
+forward model, orange boxes neural networks, cyan boxes network outputs, and purple observed data. To accelerate training, we
+use auxiliary neural networks that estimatep det(θ) and emulatedetectedembeddings.
+dition, as an SBI method,Dingo-Popenables training
+directly on astrophysical simulations. Transformers have
+also been applied in general-purpose amortized SBI [ 36].
+While transformers have recently been applied to popu-
+lation inference [37],Dingo-Popis the first framework
+to move beyond PE-based workflows and fixed catalog
+sizes. We further develop an efficient training pipeline
+that generates detected catalogs by combining population
+draws with detection-probability and strain-embedding
+surrogate networks (Fig. 1, right).
+In our experiments, we trainDingo-Popon a paramet-
+ricPower Law + Peakmass model [ 38], augmented
+with cosmological parameters estimated through the mass-
+spectrum method [39–41]. We allow for catalog sizes rang-
+ing from 25 to 1000 events. Once trained, inference from
+strain data takes approximately 1 s and (on simulated
+data) agrees with standard HBA to within its Monte
+Carlo uncertainty. As an application, we explore the
+dependence of the spectral-siren Hubble constant uncer-
+tainty on catalog size.
+Method.—A key obstacle in treating individual GW
+events as tokens stems from the dimension and complex-
+ity of strain data. GW data for a black hole binary has
+dimensionality ∼ 105, consisting of a signal in multiple
+detectors (potentially with precession and higher modes)
+deeply embedded in detector noise (assumed stationary
+Gaussian). Interpreting each event in terms of the source
+parameters is thus already a challenging task for a neural
+network. We therefore leverage pre-trained single-event
+Dingomodels to compress events into low-dimensional
+embeddings. ADingomodel consists of an embedding
+network that encodes raw strain data and power spectral
+densities D into a low-dimensional summary Z = f(D),
+followed by a normalizing flow conditioned on Z for PE.
+Here, we use just the encoder part of a trainedDingo
+model, obtaining a low-dimensional summary that con-
+tains the information needed to efficiently construct the
+full posterior. To simplify the representation, we use a
+specializedDingomodel that infers only the parameters
+relevant for our population model (masses and luminosity
+distance), with a 32-dimensional embedding.
+We pass each embedding Zi for event i through a resid-
+ual network to produce tokens. The population poste-
+rior does not depend on event orderings, so (in contrast
+to other applications) we do not include any positional
+information with the tokens; the naturally permutation-
+invariant transformer architecture then preserves this
+invariance [42, 43]. To the event token sequence, we
+prepend a learnable summary token [ 44, 45], which ag-
+gregates information from the event tokens through self-
+attention layers. Denoting the tokenizer, summary token,
+and transformer encoder jointly by Tψ, we obtain the
+output summary Zpop = Tψ({Zi}N
+i=1). We take this as
+context for a normalizing flow, which learns an approx-
+imation qϕ(Λ | Z pop) to the population posterior. The
+architecture is illustrated in Fig. 1. Self-attention scales
+
+3
+quadratically with catalog size; however, for our stud-
+ies, training is still bottlenecked by data generation. For
+larger catalogs, alternatives to full self-attention may be
+needed, e.g., sparse or linear attention [46–49], or decou-
+pled set-encoding approaches [50].
+We trainDingo-Popusing the negative log-likelihood
+loss,
+L=E p(Λ)p(N)p({D i}N
+i=1|Λ)
+
+−logq ϕ
+ 
+Λ|T ψ({f(D i)}N
+i=1)
+
+,
+(2)
+but with several optimizations discussed below. Here, the
+learnable flow and transformer parameters ϕ and ψ are
+jointly optimized with the embedding f fixed, p(Λ) is the
+hyperparameter prior, and p(N) is a uniform distribution
+over catalog sizes. Given N and Λ, we generate a source
+population including selection effects to obtain detected
+events. For each population seen in training, we mask
+events beyond a random size N; this trains the network
+to interpret variable catalog sizes. At inference time, we
+pass the actual observed events (for anyN).
+Because of selection effects, the data generative process
+involves producing large numbers of events that are never
+detected, which is computationally wasteful. Moreover,
+our networks (with ∼108 trainable parameters) are prone
+to overfitting if populations are re-used excessively in
+training. Thus, we developed an efficient approach to ac-
+celerate data production, enabling on-the-fly generation
+during training: two auxiliary networks that allow us to
+avoid generating unobserved events and to produce data
+directly in the embedding space (Fig. 1, right). First,
+we train a network to estimate the detection probability
+pdet(θ), marginalized over event parameters not directly
+predicted by the population model (e.g., everything but
+m1,d, m2,d, dL in our case) and over noise (see Supple-
+mental Material). After sampling event parameters, we
+use rejection sampling to decide whether a given event is
+observed. Second, we train a conditional normalizing flow
+as an emulator for detected embeddings, p(Z |θ,det ),
+with the same marginalization; this allows us to directly
+sample an embeddingZ i given that eventiis observed.
+Results.—For our population model, we combine the
+Power Law + Peakmass distribution with a flat
+ΛCDM cosmology (fixed Ωm = 0.3, variable H0). Primary
+masses follow a power law ∝m −α
+1,s between the minimum
+and maximum masses, mmin and mmax, with a fraction
+λg falling into a truncated Gaussian with mode µg and
+width σg; secondary masses follow a power law ∝m β
+2,s
+between mmin and m1,s; both mass distributions are ta-
+pered from mmin over a mass interval of width δm (see
+App. A of [ 51]). Redshifts z are drawn according to a
+constant merger rate over comoving volume and source-
+frame time; the luminosity distance dL follows from z and
+the cosmological parameters. All other source properties
+follow standard distributions. GW signals are generated
+using the IMRPhenomXPHM precessing, higher-mode wave-
+form model [52, 53], to which we add stationary Gaussian
+0 0.2 0.4 0.6 0.8 1
+p
+0
+0.2
+0.4
+0.6
+0.8
+1
+CDF(p)
+mmin (0.540)
+mmax (0.731)
+H0 (0.022)
+α(0.199)
+β(0.429)
+δm (0.936)
+λg (0.545)
+σg (0.333)
+µg (0.100)
+Figure 2. P–P plot for 2500 simulated catalogs with random
+sizes N∼ U (25, 1000). Gray bands show 1-, 2-, and 3- σ
+intervals under perfect calibration; Kolmogorov–Smirnov p-
+values are listed in the legend (combinedp-value: 0.20).
+noise. We assume a two-detector configuration of LIGO
+Hanford and Livingston at O3 sensitivity [ 3, 54–56]. We
+use a signal-to-noise ratio of 12 as our detection thresh-
+old. In total, the population model is described by nine
+hyperparameters: H0, mmin, mmax, α, β, λg, µg, σg, and
+δm. Priors are constrained by the single-eventDingo
+model, which covers detector-frame component masses up
+to 100 M⊙, limiting mmax to 42 M⊙, see the Supplemental
+Material.
+TheDingo-Popnetwork uses a 10-layer transformer
+encoder with embedding dimension 1024, followed by a
+14-step neural spline flow [ 57], with 1 .5 × 108 trainable
+parameters in total. During training, the network sees
+4.0×107 unique populations (2.1×1010 total GW events),
+divided into batches of 128. Training takes 11 days on an
+NVIDIA A100 GPU (see the Supplemental Material).
+We validateDingo-Popon simulated catalogs, both
+with probability–probability (P–P) plots to check model
+calibration and with comparisons against standard HBA.
+The P–P plot in Fig. 2 is based on 2500 simulated cat-
+alogs, each with randomly chosen N. We draw 5000
+posterior samples per catalog. For each hyperparame-
+ter, we compute the percentile score of the true value
+within its one-dimensional marginal, and we plot the cu-
+mulative distributions of these scores across all catalogs.
+For well-calibrated posteriors, the percentiles should be
+uniformly distributed—indeed, Fig. 2 shows that the dis-
+tributions are consistent with the diagonal (combined
+p-value of 0.20). By randomly sampling the catalog sizes,
+
+4
+Table I. Comparison ofDingo-Popand conventional HBA
+applied to two example populations, showing medians and
+90% credible regions for each hyperparameter. Each catalog
+consists of 500 events.
+Population 1 Population 2
+Λ Truth SBI HBA Truth SBI HBA
+mmin 18.1 18.7 +0.9
+−0.9 18.5+0.8
+−0.8 21.6 21.1 +1.0
+−1.2 21.3+0.8
+−0.9
+mmax 40.8 40.7 +1.1
+−1.7 40.8+1.0
+−1.1 38.4 40.4 +1.4
+−2.1 40.9+1.0
+−1.8
+H0 64.7 65.8 +10.9
+−9.9 65.6+10.0
+−9.7 72.3 68.1 +9.9
+−10.9 67.8+9.6
+−8.6
+α1.1 1.2 +2.4
+−2.4 1.1+2.4
+−2.3 −0.4 2.3 +1.6
+−3.6 2.3+1.5
+−3.5
+β−1.1−0.5 +2.5
+−1.3 −0.8+1.3
+−1.0 2.3 1.5 +2.2
+−2.9 1.6+2.1
+−2.6
+δm 4.7 3.5 +2.1
+−1.3 4.0+1.7
+−1.8 3.8 4.3 +1.5
+−2.0 4.3+1.5
+−2.0
+λg 0.0 0.3 +0.5
+−0.3 0.3+0.4
+−0.3 0.7 0.7 +0.3
+−0.5 0.8+0.2
+−0.5
+σg 6.0 7.5 +2.3
+−5.0 7.7+2.1
+−5.0 7.6 5.6 +3.0
+−3.0 5.9+2.4
+−2.5
+µg 25.0 28.7 +5.4
+−7.6 28.4+5.9
+−7.4 21.1 25.2 +3.7
+−4.6 25.1+3.3
+−4.4
+this test is sensitive to the full range of N used in training.
+To our knowledge, a calibration test of this scale is un-
+precedented; even producing the requisite per-event PE
+samples by conventional means would require ∼107 CPU-
+hours—compared to less than an hour of inference time
+forDingo-Pop.
+Passing a P–P test does not guarantee accurate pos-
+teriors. Thus, we also compareDingo-Popposteriors
+directly against standard HBA. We analyze two example
+catalogs of 500 events each. For the conventional anal-
+ysis, we generate single-event PE samples using a mix
+ofDingoandBilby[ 58], and use icarogw [41, 59] for
+the population analysis. Because we applied our selec-
+tion cut based on true parameters and data (through the
+matched-filter SNR using the true template) in training
+Dingo-Pop, we apply a corresponding cut to PE samples
+in the HBA likelihood for consistency [60].
+The median and 90% credible regions agree across both
+populations (Tab. I). We further provide a partial corner
+plot and reconstructed mass spectra for Population 2 in
+Fig. 3. Some marginals show mild tension betweenDingo-
+Popand HBA. To assess whether the HBA analysis has
+fully converged, we perform this analysis with two different
+injection sets (of sizes 3 ×106 and 3.8 ×106). We find that
+the deviation between HBA analyses is of similar order to
+the discrepancy withDingo-Pop, indicating that Monte
+Carlo uncertainty in the selection-function estimate is a
+dominant source of error; theDingo-Popdistribution
+is also slightly broader. Reaching this level of agreement
+required several iterations of the HBA analysis to identify
+and reconcile subtle effects (such as the selection-cut
+consistency noted above), withDingo-Popserving as a
+rapid independent check. TheDingo-Popmass spectra
+are also very slightly broader than HBA.
+Finally, as an application that leverages the speed of
+Dingo-Pop, we perform an injection study to explore the
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+45 60 75
+H0
+[km s−1 Mpc−1]
+24
+28
+32
+µg [M⊙]
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24 28 32
+µg [M⊙]
+Dingo-Pop
+HBA (3.8M injections)
+HBA (3M injections)
+15 20 25 30 35 40
+m1,s [M⊙]
+10−2
+10−1
+ppop(m1,s)
+15 20 25 30 35 40
+m2,s [M⊙]
+10−2
+10−1
+ppop(m2,s)
+Dingo-Pop
+HBA
+Truth
+Figure 3. Hyperparameter posterior (top) and inferred mass
+spectra (bottom) from Population 2. We compareDingo-Pop
+(blue) with two HBA analyses (orange: 3 .8 × 106 injections;
+green: 3 × 106; the mass spectra panel only shows the higher-
+injection HBA). Contours and shaded bands give 90% credible
+regions; dashed black lines mark the true population. Full
+corner plots for both populations are in the Supplemental
+Material.
+dependence of spectral-siren H0 constraints on catalog
+size. We simulate 128 populations with hyperparameters
+drawn from the prior and, for each, we compute the
+Dingo-Popposterior as events are added incrementally.
+Fig. 4 shows the relative H0 uncertainty as a function
+
+5
+200 400 600 800 1000
+Catalog size N
+0.10
+0.15
+0.20
+0.25
+0.30
+0.35
+Relative H0 error
+Figure 4. Relative H0 uncertainty (2-σ width divided by me-
+dian) versus catalog size for 128 simulated populations. Gray:
+individual populations as events are added; black: median;
+blue band: 1- σ scatter across populations. Plots for the other
+hyperparameters are in the Supplemental Material.
+of N. The uncertainty decreases with N, though with
+significant population-to-population scatter reflecting the
+specific hyperparameters and catalog realizations. The
+relative H0 uncertainty reaches ∼23% at 200 events and
+∼ 15% at 1000 events, with a N −0.28 scaling between
+500 and 1000 events. These numbers are sensitive to our
+narrow mmax prior, imposed by the underlyingDingo
+model.
+Conclusions.—We presentedDingo-Pop, a
+transformer-based framework for end-to-end GW
+population inference directly from strain data. It
+circumvents per-event parameter estimation (and the
+associated biases [ 9–12]), allows for variable catalog sizes,
+and gives inference in just 1 s. We trained a network for
+catalogs of up to 10 3 events and validated it using P–P
+plots and direct comparisons against standard HBA.
+There remain several steps before applying our frame-
+work to real data. First, the detection threshold for the
+population simulator must be made to match that of the
+LVK detectors, e.g., training the pdet(θ) network based
+on LVK pipeline injections [ 61–64]. Second, the under-
+lyingDingoembedding network must be extended to
+cover the full range of observed events, detector configura-
+tions, and data conditioning settings. Recent transformer-
+based models for flexible single-event inference provide a
+roadmap for suitable embeddings [65].
+A further challenge is model misspecification, which
+is likely to be more severe at the population level than
+for single events (where general relativity is very well un-
+derstood). For conventional HBA, one will still infer the
+“correct” hyperparameter posterior for the incorrect popu-
+lation model, whereas NPE can fail due to observations
+being out of the training distribution. We demonstrated
+basic robustness [ 66–68] in the Supplemental Material,
+but additional mitigation strategies may be necessary in
+practice, such as training across a range of population
+models to better cover plausible catalog realizations.
+Beyond the setting of conditionally independent events
+explored here, the transformer architecture ofDingo-Pop
+can capture correlations between events. Natural exten-
+sions include strongly-lensed event pairs sharing source
+parameters, or joint analyses with galaxy catalogs or elec-
+tromagnetic counterparts to account for cross-correlations
+with GW data. These problems lie outside the scope
+of methods that aggregate per-event posteriors, such as
+compositional score matching [69].
+The speed ofDingo-Popenables real-time population
+updates during future observing runs [ 70], and forecast-
+ing and systematics studies at scales out of reach for
+conventional methods. As GW catalogs grow to O(105−6)
+events with next-generation detectors, the approach de-
+veloped here provides a foundation for fully realizing their
+scientific potential.
+Acknowledgments.—We thank N. Gupte, C. Talbot,
+A. Toubiana, and M. Williams for helpful discussions.
+K.L. is supported by ERC Starting Grant SHADE (grant
+no. StG 949572). S.R.G. is supported by a UKRI Future
+Leaders Fellowship (grant number MR/Y018060/1). M.M.
+is supported by a Royal Commission for the Exhibition of
+1851 research fellowship. Numerical computations were
+(in part) carried out on the Sciama High Performance
+Computing (HPC) cluster, which is supported by the
+Institute of Cosmology and Gravitation (ICG), the South-
+East Physics Network (SEPNet) and the University of
+Portsmouth. The computations reported in this paper
+were (in part) performed using resources made available
+by the Flatiron Institute. The Center for Computational
+Astrophysics at the Flatiron Institute is supported by the
+Simons Foundation. This material is based upon work
+supported by NSF’s LIGO Laboratory which is a major
+facility fully funded by the National Science Foundation.
+∗ kleyde@flatironinstitute.org
+† stephen.green2@nottingham.ac.uk
+‡ maximilian.dax@tuebingen.mpg.de
+§ matthew.mould@nottingham.ac.uk
+¶ cecilia.fabbri@nottingham.ac.uk
+∗∗ jonathan.gair@aei.mpg.de
+[1] A. G. Abacet al.(LIGO Scientific, VIRGO, KA-
+GRA), GWTC-4.0: An Introduction to Version 4.0
+of the Gravitational-Wave Transient Catalog, (2025),
+arXiv:2508.18080 [gr-qc].
+[2] A. G. Abacet al.(LIGO Scientific, VIRGO, KAGRA),
+GWTC-4.0: Updating the Gravitational-Wave Transient
+Catalog with Observations from the First Part of the
+Fourth LIGO-Virgo-KAGRA Observing Run, (2025),
+arXiv:2508.18082 [gr-qc].
+
+6
+[3] J. Aasiet al.(LIGO Scientific), Advanced LIGO, Class.
+Quant. Grav.32, 074001 (2015), arXiv:1411.4547 [gr-qc].
+[4] F. Acerneseet al.(VIRGO), Advanced Virgo: a second-
+generation interferometric gravitational wave detector,
+Class. Quant. Grav.32, 024001 (2015), arXiv:1408.3978
+[gr-qc].
+[5] T. Akutsuet al.(KAGRA), Overview of KAGRA: Detec-
+tor design and construction history, PTEP2021, 05A101
+(2021), arXiv:2005.05574 [physics.ins-det].
+[6] A. G. Abacet al.(LIGO Scientific, VIRGO, KAGRA),
+GWTC-4.0: Population Properties of Merging Compact
+Binaries, (2025), arXiv:2508.18083 [astro-ph.HE].
+[7] R. Abbottet al.(LIGO Scientific, VIRGO, KAGRA),
+Tests of General Relativity with GWTC-3, (2021),
+arXiv:2112.06861 [gr-qc].
+[8] A. G. Abacet al.(LIGO Scientific, VIRGO, KAGRA),
+GWTC-4.0: Constraints on the Cosmic Expansion Rate
+and Modified Gravitational-wave Propagation, (2025),
+arXiv:2509.04348 [astro-ph.CO].
+[9] W. M. Farr, Accuracy Requirements for Empirically-
+Measured Selection Functions, Research Notes of the AAS
+3, 66 (2019), arXiv:1904.10879 [astro-ph.IM].
+[10] R. Essick and W. Farr, Precision Requirements for
+Monte Carlo Sums within Hierarchical Bayesian Infer-
+ence, (2022), arXiv:2204.00461 [astro-ph.IM].
+[11] C. Talbot and J. Golomb, Growing pains: understand-
+ing the impact of likelihood uncertainty on hierarchical
+Bayesian inference for gravitational-wave astronomy, Mon.
+Not. Roy. Astron. Soc.526, 3495 (2023), arXiv:2304.06138
+[astro-ph.IM].
+[12] J. Heinzel and S. Vitale, When (not) to trust Monte
+Carlo approximations for hierarchical Bayesian inference,
+(2025), arXiv:2509.07221 [astro-ph.HE].
+[13] M. Branchesiet al., Science with the Einstein Tele-
+scope: a comparison of different designs, JCAP07, 068,
+arXiv:2303.15923 [gr-qc].
+[14] D. Reitzeet al., Cosmic Explorer: The U.S. Contribution
+to Gravitational-Wave Astronomy beyond LIGO, Bull.
+Am. Astron. Soc.51, 035 (2019), arXiv:1907.04833 [astro-
+ph.IM].
+[15] I. Mandel, W. M. Farr, and J. R. Gair, Extracting distri-
+bution parameters from multiple uncertain observations
+with selection biases, Mon. Not. Roy. Astron. Soc.486,
+1086 (2019), arXiv:1809.02063 [physics.data-an].
+[16] M. Fishbach, D. E. Holz, and W. M. Farr, Does the Black
+Hole Merger Rate Evolve with Redshift?, Astrophys. J.
+Lett.863, L41 (2018), arXiv:1805.10270 [astro-ph.HE].
+[17] S. Vitale, D. Gerosa, W. M. Farr, and S. R. Taylor, Infer-
+ring the properties of a population of compact binaries
+in presence of selection effects 10.1007/978-981-15-4702-
+7 45-1 (2020), arXiv:2007.05579 [astro-ph.IM].
+[18] C. Talbotet al., Inference with finite time series: II. The
+window strikes back, Class. Quant. Grav.42, 235023
+(2025), arXiv:2508.11091 [gr-qc].
+[19] R. Essicket al., Compact binary coalescence sensitivity
+estimates with injection campaigns during the LIGO-
+Virgo-KAGRA Collaborations’ fourth observing run, Phys.
+Rev. D112, 102001 (2025), arXiv:2508.10638 [gr-qc].
+[20] V. Tiwari, Estimation of the Sensitive Volume for
+Gravitational-wave Source Populations Using Weighted
+Monte Carlo Integration, Class. Quant. Grav.35, 145009
+(2018), arXiv:1712.00482 [astro-ph.HE].
+[21] J. W. Barrett, I. Mandel, C. J. Neijssel, S. Stevenson,
+and A. Vigna-Gomez, Exploring the Parameter Space of
+Compact Binary Population Synthesis, IAU Symp.325,
+46 (2016), arXiv:1704.03781 [astro-ph.HE].
+[22] S. R. Taylor and D. Gerosa, Mining Gravitational-wave
+Catalogs To Understand Binary Stellar Evolution: A
+New Hierarchical Bayesian Framework, Phys. Rev. D98,
+083017 (2018), arXiv:1806.08365 [astro-ph.HE].
+[23] M. Zevin, S. S. Bavera, C. P. L. Berry, V. Kalogera,
+T. Fragos, P. Marchant, C. L. Rodriguez, F. Antonini,
+D. E. Holz, and C. Pankow, One Channel to Rule Them
+All? Constraining the Origins of Binary Black Holes
+Using Multiple Formation Pathways, Astrophys. J.910,
+152 (2021), arXiv:2011.10057 [astro-ph.HE].
+[24] K. W. K. Wong, K. Breivik, K. Kremer, and T. Callis-
+ter, Joint constraints on the field-cluster mixing fraction,
+common envelope efficiency, and globular cluster radii
+from a population of binary hole mergers via deep learn-
+ing, Phys. Rev. D103, 083021 (2021), arXiv:2011.03564
+[astro-ph.HE].
+[25] M. Mould, D. Gerosa, and S. R. Taylor, Deep learning
+and Bayesian inference of gravitational-wave populations:
+Hierarchical black-hole mergers, Phys. Rev. D106, 103013
+(2022), arXiv:2203.03651 [astro-ph.HE].
+[26] S. Colloms, C. P. L. Berry, J. Veitch, and M. Zevin,
+Exploring the Evolution of Gravitational-wave Emitters
+with Efficient Emulation: Constraining the Origins of
+Binary Black Holes Using Normalizing Flows, Astrophys.
+J.988, 189 (2025), arXiv:2503.03819 [astro-ph.HE].
+[27] C. Plunkett, M. Mould, and S. Vitale, Constraining Pop-
+ulation III stellar demographics with next-generation
+gravitational-wave observatories, Phys. Rev. D112,
+023039 (2025), arXiv:2504.18615 [gr-qc].
+[28] K. Leyde, S. R. Green, A. Toubiana, and J. Gair, Grav-
+itational wave populations and cosmology with neural
+posterior estimation, Phys. Rev. D109, 064056 (2024),
+arXiv:2311.12093 [gr-qc].
+[29] G. Papamakarios, E. Nalisnick, D. J. Rezende, S. Mo-
+hamed, and B. Lakshminarayanan, Normalizing Flows for
+Probabilistic Modeling and Inference, J. Machine Learn-
+ing Res.22, 2617 (2021), arXiv:1912.02762 [stat.ML].
+[30] J.-M. Lueckmann, P. J. Gon¸ calves, G. Bassetto, K.¨Ocal,
+M. Nonnenmacher, and J. H. Macke, Flexible statistical
+inference for mechanistic models of neural dynamics, in
+Proceedings of the 31st International Conference on Neu-
+ral Information Processing Systems(2017) pp. 1289–1299.
+[31] D. Greenberg, M. Nonnenmacher, and J. Macke, Auto-
+matic posterior transformation for likelihood-free infer-
+ence, inInternational Conference on Machine Learning
+(PMLR, 2019) pp. 2404–2414.
+[32] K. Cranmer, J. Brehmer, and G. Louppe, The frontier
+of simulation-based inference, Proc. Nat. Acad. Sci.117,
+30055 (2020), arXiv:1911.01429 [stat.ML].
+[33] M. Dax, S. R. Green, J. Gair, J. H. Macke, A. Buonanno,
+and B. Sch¨ olkopf, Real-Time Gravitational Wave Science
+with Neural Posterior Estimation, Phys. Rev. Lett.127,
+241103 (2021), arXiv:2106.12594 [gr-qc].
+[34] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones,
+A. N. Gomez, L. Kaiser, and I. Polosukhin, Attention Is
+All You Need, arXiv e-prints , arXiv:1706.03762 (2017),
+arXiv:1706.03762 [cs.CL].
+[35] A. Paszkeet al., PyTorch: An Imperative Style,
+High-Performance Deep Learning Library, (2019),
+arXiv:1912.01703 [cs.LG].
+[36] M. Gloeckler, M. Deistler, C. Weilbach, F. Wood, and
+
+7
+J. H. Macke, All-in-one simulation-based inference, arXiv
+preprint arXiv:2404.09636 (2024).
+[37] J.-Q. Jiang, H.-L. Huang, J. He, Y.-T. Wang, and Y.-S.
+Piao, A fast deep-learning approach to probing primor-
+dial black hole populations in gravitational wave events,
+(2025), arXiv:2505.15530 [gr-qc].
+[38] C. Talbot and E. Thrane, Measuring the binary black
+hole mass spectrum with an astrophysically moti-
+vated parameterization, Astrophys. J.856, 173 (2018),
+arXiv:1801.02699 [astro-ph.HE].
+[39] S. R. Taylor, J. R. Gair, and I. Mandel, Hubble without
+the Hubble: Cosmology using advanced gravitational-
+wave detectors alone, Phys. Rev. D85, 023535 (2012),
+arXiv:1108.5161 [gr-qc].
+[40] W. M. Farr, M. Fishbach, J. Ye, and D. Holz, A Future
+Percent-Level Measurement of the Hubble Expansion at
+Redshift 0.8 With Advanced LIGO, Astrophys. J. Lett.
+883, L42 (2019), arXiv:1908.09084 [astro-ph.CO].
+[41] S. Mastrogiovanni, K. Leyde, C. Karathanasis,
+E. Chassande-Mottin, D. A. Steer, J. Gair, A. Ghosh,
+R. Gray, S. Mukherjee, and S. Rinaldi, On the importance
+of source population models for gravitational-wave cosmol-
+ogy, Phys. Rev. D104, 062009 (2021), arXiv:2103.14663
+[gr-qc].
+[42] M. Zaheer, S. Kottur, S. Ravanbakhsh, B. Poczos, R. R.
+Salakhutdinov, and A. J. Smola, Deep sets, Advances in
+neural information processing systems30(2017).
+[43] J. Lee, Y. Lee, J. Kim, A. Kosiorek, S. Choi, and Y. W.
+Teh, Set transformer: A framework for attention-based
+permutation-invariant neural networks, inInternational
+conference on machine learning(PMLR, 2019) pp. 3744–
+3753.
+[44] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova,
+BERT: Pre-training of deep bidirectional transformers
+for language understanding, inProceedings of the 2019
+Conference of the North American Chapter of the Asso-
+ciation for Computational Linguistics: Human Language
+Technologies, Volume 1 (Long and Short Papers), edited
+by J. Burstein, C. Doran, and T. Solorio (Association for
+Computational Linguistics, 2019) pp. 4171–4186.
+[45] T. Darcet, M. Oquab, J. Mairal, and P. Bojanowski,
+Vision transformers need registers, inThe Twelfth Inter-
+national Conference on Learning Representations(2024).
+[46] A. Katharopoulos, A. Vyas, N. Pappas, and F. Fleuret,
+Transformers are rnns: Fast autoregressive transform-
+ers with linear attention, inInternational conference on
+machine learning(PMLR, 2020) pp. 5156–5165.
+[47] N. Kitaev, L. Kaiser, and A. Levskaya, Reformer: The ef-
+ficient transformer, inInternational Conference on Learn-
+ing Representations(2020).
+[48] R. Child, S. Gray, A. Radford, and I. Sutskever, Gen-
+erating long sequences with sparse transformers (2019),
+arXiv:1904.10509 [cs.LG].
+[49] I. Beltagy, M. E. Peters, and A. Cohan, Long-
+former: The long-document transformer, arXiv preprint
+arXiv:2004.05150 (2020).
+[50] A. Wehenkel, M. Kagan, L. Heinrich, and C. Pollard, It
+just takes two: Scaling amortized inference to large sets
+(2026), arXiv:2605.07972 [cs.LG].
+[51] R. Abbottet al.(LIGO Scientific, Virgo,, KAGRA,
+VIRGO), Constraints on the Cosmic Expansion His-
+tory from GWTC–3, Astrophys. J.949, 76 (2023),
+arXiv:2111.03604 [astro-ph.CO].
+[52] G. Prattenet al., Computationally efficient models for the
+dominant and subdominant harmonic modes of precessing
+binary black holes, Phys. Rev. D103, 104056 (2021),
+arXiv:2004.06503 [gr-qc].
+[53] A. Ramos-Buades, A. Buonanno, H. Estell´ es, M. Khalil,
+D. P. Mihaylov, S. Ossokine, L. Pompili, and M. Shiferaw,
+Next generation of accurate and efficient multipo-
+lar precessing-spin effective-one-body waveforms for bi-
+nary black holes, Phys. Rev. D108, 124037 (2023),
+arXiv:2303.18046 [gr-qc].
+[54] A. Buikemaet al.(aLIGO), Sensitivity and performance
+of the Advanced LIGO detectors in the third observing
+run, Phys. Rev. D102, 062003 (2020), arXiv:2008.01301
+[astro-ph.IM].
+[55] M. Tseet al., Quantum-Enhanced Advanced LIGO Detec-
+tors in the Era of Gravitational-Wave Astronomy, Phys.
+Rev. Lett.123, 231107 (2019).
+[56] R. Abbottet al.(KAGRA, VIRGO, LIGO Scientific),
+GWTC-3: Compact Binary Coalescences Observed
+by LIGO and Virgo during the Second Part of the
+Third Observing Run, Phys. Rev. X13, 041039 (2023),
+arXiv:2111.03606 [gr-qc].
+[57] C. Durkan, A. Bekasov, I. Murray, and G. Papamakarios,
+Neural spline flows, Advances in neural information pro-
+cessing systems32(2019), arXiv:1906.04032 [stat.ML].
+[58] G. Ashton, M. H¨ ubner, P. D. Lasky, C. Talbot, K. Ackley,
+S. Biscoveanu, Q. Chu, A. Divakarla, P. J. Easter, B. Gon-
+charov, and et al., BILBY: A User-friendly Bayesian In-
+ference Library for Gravitational-wave Astronomy, Astro-
+phys. J. Suppl.241, 27 (2019), arXiv:1811.02042 [astro-
+ph.IM].
+[59] S. Mastrogiovanni, D. Laghi, R. Gray, G. C. Santoro,
+A. Ghosh, C. Karathanasis, K. Leyde, D. A. Steer, S. Per-
+ries, and G. Pierra, Joint population and cosmological
+properties inference with gravitational waves standard
+sirens and galaxy surveys, Phys. Rev. D108, 042002
+(2023), arXiv:2305.10488 [astro-ph.CO].
+[60] R. Essick and M. Fishbach, Ensuring Consistency between
+Noise and Detection in Hierarchical Bayesian Inference,
+Astrophys. J.962, 169 (2024), arXiv:2310.02017 [gr-qc].
+[61] C. Talbot and E. Thrane, Flexible and Accurate Evalua-
+tion of Gravitational-wave Malmquist Bias with Machine
+Learning, Astrophys. J.927, 76 (2022), arXiv:2012.01317
+[gr-qc].
+[62] D. Gerosa, G. Pratten, and A. Vecchio, Gravitational-
+wave selection effects using neural-network classifiers,
+Phys. Rev. D102, 103020 (2020), arXiv:2007.06585 [astro-
+ph.HE].
+[63] T. A. Callister, R. Essick, and D. E. Holz, Neural net-
+work emulator of the Advanced LIGO and Advanced
+Virgo selection function, Phys. Rev. D110, 123041 (2024),
+arXiv:2408.16828 [astro-ph.HE].
+[64] A. Lorenzo-Medina and T. Dent, A physically modelled se-
+lection function for compact binary mergers in the LIGO-
+Virgo O3 run and beyond, Class. Quant. Grav.42, 045008
+(2025), arXiv:2408.13383 [gr-qc].
+[65] A. Kofler, M. Dax, S. R. Green, J. Wildberger, N. Gupte,
+J. H. Macke, J. Gair, A. Buonanno, and B. Sch¨ olkopf,
+Flexible Gravitational-Wave Parameter Estimation with
+Transformers, (2025), arXiv:2512.02968 [gr-qc].
+[66] P. Cannon, D. Ward, and S. M. Schmon, Investigating
+the impact of model misspecification in neural simulation-
+based inference, arXiv preprint arXiv:2209.01845 (2022).
+[67] M. Schmitt, P.-C. B¨ urkner, U. K¨ othe, and S. T. Radev,
+Detecting model misspecification in amortized bayesian in-
+
+8
+ference with neural networks, inDagm german conference
+on pattern recognition(Springer, 2023) pp. 541–557.
+[68] A. Wehenkel, J. L. Gamella, O. Sener, J. Behrmann,
+G. Sapiro, J.-H. Jacobsen, and M. Cuturi, Addressing
+misspecification in simulation-based inference through
+data-driven calibration, arXiv preprint arXiv:2405.08719
+(2024).
+[69] T. Geffner, G. Papamakarios, and A. Mnih, Composi-
+tional score modeling for simulation-based inference, in
+International Conference on Machine Learning(PMLR,
+2023) pp. 11098–11116.
+[70] N. E. Wolfe, M. Mould, J. Veitch, and S. Vitale,
+Neural Bayesian updates to populations with grow-
+ing gravitational-wave catalogs, arXiv:2602.20277 [astro-
+ph.IM] (2026).
+
+9
+Supplemental Material
+PRIOR DISTRIBUTIONS
+TheDingo-Popframework involves two levels of prior
+distributions: (1) the single-event priors used to train
+the underlyingDingoembedding network (Tab. II) and
+(2) the population hyperparameter priors used to train
+Dingo-Popitself (Tab. III). Since theDingomodel is
+trained only on the parameter ranges in Tab. II, these
+ranges constrain what population modelsDingo-Pop
+can study.
+Table II. Summary of priors used to generate training sets for
+the single-eventDingomodels, from which only the embedding
+networks are used inDingo-Pop. We use the shorthand
+notation sin(0, π) for a sine distribution between 0 and π, ct
+for a constraint (chirp mass and mass ratio prior simply act
+as constraints on the component masses), and U for a uniform
+distribution.
+Parameter Prior
+Intrinsic
+Primary mass (m 1,d) [M⊙]U(10, 100)
+Secondary mass (m 2,d) [M⊙]U(10, 100)
+Chirp mass (M) [M ⊙] ct(15,120)
+Mass ratio (q) ct(0.1,1.0)
+Orbital phase (ϕ) [rad]U(0,2π)
+Inclination angle (θ J N) [rad] sin(0, π)
+Primary spin magnitude (a 1)U(0.0,0.99)
+Secondary spin magnitude (a 2)U(0.0,0.99)
+Primary spin–orbit tilt (θ 1) [rad] sin(0, π)
+Secondary spin–orbit tilt (θ 2) [rad] sin(0, π)
+Primary–secondary azimuth (ϕ 12) [rad]U(0,2π)
+Total–orbital azimuth (ϕJ L) [rad]U(0,2π)
+Extrinsic
+Right ascension (α) [rad]U(0,2π)
+Declination (δ) [rad] cos(−π/2, π/2)
+Geocentric time (t g) [s]U(−0.10,0.10)
+Polarization angle (ψ) [rad]U(0, π)
+Luminosity distance (d L) [Mpc]U(100,8000)
+For the population model, we use thePower Law +
+Peakmass model [ 38, 51] but limit both components
+to the maximum mass mmax rather than the Gaussian
+peak having a separate limit of µg + 5σg as in icarogw;
+otherwise, the mass range for theDingomodel would be
+exceeded (cf. Tab. II). Recall that detector-frame ( md)
+and source-frame mass (ms) are related through md = (1+
+z)ms. Thus, for a given upper limit on the detector-frame
+mass and a maximum luminosity distance, this implies
+a maximum source-frame mass. To relate the luminosity
+distance to a redshift, cosmological parameters are needed,
+and the redshift is maximized for the largest H0 allowed
+under the prior. In our case, for a luminosity distance
+of 8000 Mpc and a maximum H0 = 80 km s−1 Mpc−1,
+this gives a maximum redshift of 1.3, translating into a
+maximum source-frame mass of∼43M ⊙.
+The hyperparameter priors are summarized in Tab. III.
+For source properties other than masses and distance,
+we use the same fixed distributions as in Table II. For
+distance, we instead use the population distribution corre-
+sponding to a merger rate that is constant over comoving
+volume and source-frame time.
+Table III. Summary of distributions for the hyperparameters
+of the population model used to generate training data for
+Dingo-Pop, which also corresponds to the Bayesian prior for
+the trained posterior. The uniform prior is denoted asU.
+Hyperparameter Prior
+H0 [km s−1 Mpc−1]U(40,80)
+mmin [M⊙]U(17.5,22.5)
+mmax [M⊙]U(37,42)
+αU(−2,4)
+βU(−2,4)
+δm [M⊙]U(2,6)
+λg U(0,1)
+µg [M⊙]U(20,35)
+σg [M⊙]U(1,10)
+DINGO-POP ARCHITECTURE
+In this work, we adopt a transformer-based architecture
+[34] for population NPE. The model has four components:
+a tokenizer, a transformer encoder, a final feedforward
+network, and a normalizing flow that estimates the hyper-
+parameter posterior. The architectures ofDingo-Pop
+and its two auxiliary networks are detailed in Tab. IV. The
+neural networks are implemented inPyTorch[ 35], with
+layer normalization (rather than batch normalization)
+throughout.
+First, the tokenizer transforms theDingoembeddings
+for each event into a high-dimensional embedding space,
+resulting in a sequence ofNtokens.
+These are then processed by a transformer, which trans-
+forms the sequence through 10 successive self-attention
+layers. In each such layer, token representations are up-
+dated through a weighted sum over the sequence, with
+weights determined by learned pairwise compatibilities.
+This embeds the tokens in the global context, allowing
+for interactions across the sequence. We further append a
+learnable, randomly initialized cls-token [44, 45] to the
+sequence, which then interacts with the tokens through-
+out the transformer layers, aggregating information from
+the full sequence. Transformers are well suited to popu-
+lation inference for two reasons: they naturally handle
+
+10
+Table IV. Summary of theDingo-Poparchitecture and auxiliary networks.
+Component Property V alue
+Dingo-Popmain network
+Tokenizer Type Fully connected residual network
+Blocks 5
+Hidden dimension 1024
+Normalization Layer normalization (no batch normalization)
+Positional encoding None (permutation invariant)
+Transformer encoder Layers 10
+Embedding dimension 1024
+Self-attention heads 8
+Feedforward hidden dimension 1024
+Poolingcls-token
+Final feedforward network Type Fully connected residual network
+Blocks 5
+Hidden dimension 1024
+Output dimension 512
+Normalizing flow Type Neural spline flow (NSF)
+Flow steps 14
+Spline bins 8 (rational quadratic)
+Conditioner network Residual network, 5 blocks, 512 units
+Dimensionality 9 (hyperparameters)
+Auxiliary networks
+Embedding emulator Type Neural spline flow (NSF)
+Flow steps 28
+Spline bins 8 (rational quadratic)
+Conditioner network Residual network, 5 blocks, 512 units
+Conditioning inputsm 1,d, m 2,d, d L
+Output dimensions 32 (embedding dimension)
+Detection probability Type Fully connected residual network
+Blocks 5
+Hidden dimension 128
+Detection criterion Matched-filter SNR≥12
+Conditioning inputsm 1,d, m 2,d, d L
+Output dimension 1 (detection probability)
+variable-length inputs, enabling a single network to amor-
+tize across catalogs of different sizes; and in the absence
+of positional encodings, self-attention is permutation-
+equivariant, which matches the permutation invariance
+of the population posterior under reordering of events.
+From the transformer output, we only extract the cls-
+token, which acts as a global summary of the data. This
+is then processed with a final feedforward neural network.
+The output of this network then conditions a neural
+spline flow (NSF) [ 57], which estimates the population
+posterior over the nine hyperparameters.
+TRAINING
+We trainDingo-Popusing the AdamW optimizer with
+initial learning rate 8 .0 × 10−5 and weight decay 0 .01.
+The learning rate follows cosine annealing from this value
+to zero over 800 epochs. Training takes ∼11 days on an
+A100 GPU, with 50,000 populations per epoch (batch size
+128). Inference takes 1.1 s per 5,000 samples.
+We use two auxiliary networks (the detection probabil-
+ity estimator and the embedding emulator) to accelerate
+training, replacing waveform generation and embedding
+computation with fast emulation.
+
+11
+30 35 40 45 50 55 60
+m1 [M⊙]
+1000
+2000
+3000
+4000
+5000dL [Mpc]
+Network prediction
+30 40 50 60
+m1 [M⊙]
+Numerical estimate
+−6
+−5
+−4
+−3
+−2
+−1
+0
+log p(det |θ)
+Figure 5. Log detection probability as a function of detector-frame mass and luminosity distance, for secondary mass of
+m2,d = 26 M⊙. The left panel estimates the detection probability from the detection probability estimator, while the right
+panel relies on 2 .5 × 106 injections. Note the non-negligible scatter of the estimated detection probability through samples due
+to Poisson noise. Also clearly apparent is the detection horizon where GW detectability decreases by a factor ofO(e 6).
+Detection probability estimator
+The detection probability for an event with source
+parametersθis
+p(det|θ) =
+Z
+p(det| D)p(D |θ)dD,(3)
+which marginalizes over all possible noise realizations to
+which signals are added. For real data, the detection
+function p(det| D ) is a deterministic function of data
+D alone; using an SNR threshold computed by filtering
+data against signal templates for the exact true source
+properties is not realistic and instead implies a detection
+function p(det| D, θ ) [60]. As we are solely interested
+in generating GW data with given component masses
+and distance, we would like to estimate the detection
+probability
+p(det|m 1,d, m2,d, dL) =
+Z
+p(det|θ)p( eθ) deθ ,(4)
+where θ = {m1,d, m2,d, dL,eθ}, with eθ containing the
+source parameters in Table II other than m1,d, m2,d,
+andd L, andp( eθ) the fixed single-event prior over eθ.
+We train a network to predict the detection probability;
+the architecture is summarized in Tab. IV. To optimize the
+network we use the binary cross-entropy loss, where the
+data are waveforms associated to m1,d, m2,d, dL that are
+labeled as either detected ( yi = 1) or undetected ( yi = 0).
+With ˆp(m1,d, m2,d, dL) the estimate of the network, the
+loss can be written as
+Loss =− 1
+N
+NX
+i=1
+h
+(1−y i) log(1−ˆpi) +y i log ˆpi
+i
+,
+with N the batch size. We follow standardDingotraining
+augmentation techniques (drawing the extrinsic parame-
+ters on the fly) and use as detection criteria a matched-
+filter SNR threshold of 12. We train for 200 epochs with
+a dataset containing 5 × 106 waveforms. During training,
+the model thus iterates over 10 9 GW signals.
+In Fig. 5, we show the detection probability as a func-
+tion of detector-frame primary mass and luminosity dis-
+tance, fixing the secondary mass tom 2,s = 26M ⊙.
+Embedding emulator
+We train a normalizing flow to estimate p(Z |
+m1,d, m2,d, dL,det ), as described in the main text; the
+architecture is summarized in Tab. IV. We sample source
+properties from the distribution in Tab. II, generate syn-
+thetic waveforms with detector noise, and discard samples
+below our SNR detection threshold. The detected samples
+are passed through the single-eventDingoembedding
+network; conditioning the flow on m1,d, m2,d, dL marginal-
+izes over the remaining source parameters and noise to
+givep(Z |m 1,d, m2,d, dL,det).
+
+12
+−3.0
+−1.5
+Z2
+−2
+0
+2
+Z3
+−1.5
+0.0
+1.5
+Z4
+−3 −2 −1
+Z1
+0
+2
+4
+Z5
+−3.0
+−1.5
+Z2
+−2 0 2
+Z3 −1.5 0.0 1.5
+Z4
+0 2 4
+Z5
+Embedding emulator
+From GW strain through Dingo NPE
+Figure 6. Distribution of embeddings in five out of the 32 em-
+bedding dimensions. For reference parameters of Md = 20.5,
+mass ratio q = 0.8 and luminosity distance dL = 1263 Mpc we
+generate detected embeddings through the embedding emu-
+lator (blue) and by passing the GW strain data through the
+DingoNPE network (orange). Plotted are the 0 .5 and 0 .9
+levels.
+After training the embedding emulator, we subsequently
+use it to directly sample event embeddings during training
+of the population transformer: parameters are drawn
+from the population model and accepted by the pdet
+rejection step; for each accepted event, we sample Z ∼
+p(Z |m 1,d, m2,d, dL,det ) from the emulator. Examples
+are shown in Fig. 6. This bypasses waveform generation
+and replaces it with fast sampling of Z. For all tests of
+our trained model, we generate noisy waveforms and pass
+them through the original single-eventDingoembedding
+network, thus not relying on the embedding emulator.
+V ALIDA TION
+V alidating individual network components
+Dingo-Popis based on three distinct models, each of
+which can be inaccurate: (1) the estimator for detection
+probabilities given the detector-frame masses and luminos-
+ity distance; (2) the emulator used only for training that
+produces detectable strain embeddings conditioned on
+the detector-frame component masses and luminosity dis-
+tance; and (3) the population transformer and normalizing
+flow that predicts the population posterior conditioned
+on the combined single-event embedding. We test these
+after training to identify which (if any) is inaccurate.
+The first test consists of computing a P–P plot us-
+ing the detection estimator and embedding emulator to
+generate the data. Since this data generation process is
+exactly the same as during training, this test validates
+whether the population transformer and the normalizing
+flow (3) reproduce the expected coverage according to
+the hyperparameter posterior. Failing this test requires
+improving model (3). This test provides no information
+about whether models (1) and (2) are accurate.
+If the above P–P test passes (using the embedding
+emulator and detection estimator) but then fails the P–P
+test described in the main text (using true waveforms
+that are then passed through the first part of theDingo
+network to obtain the embeddings), this indicates that
+either model (1) or (2) are inaccurate. These models can
+be individually tested.
+The samples from the embedding emulator can be com-
+pared to samples obtained by passing simulated signals
+added to detector noise through the single-eventDingo
+embedding network. For the detection estimator, conven-
+tional Monte Carlo estimates (i.e., using injection studies,
+recovering simulated waveforms, and running detection
+pipelines) can be used to assess detection probabilities
+that can be readily compared. In practice, the embedding
+emulator is more likely to fail since the model is generative
+(hence much more complex), sampling a 32-dimensional
+distribution.
+For our trained networks, both variations of the P–P
+test pass, so the SBI approach is internally consistent:
+model (3) has been correctly trained, and the emulator
+and detection estimator are working to sufficient accuracy.
+The emulator-based variant is consistent with the full-
+pipeline variant and is not shown for brevity. The left
+panel of Fig. 7 shows the full-pipeline P–P test for 2500
+realizations of a GW catalog of size 1000. Compared
+to Fig. 2 (with N∼ U (25, 1000)), this tests the model
+at the upper end of its training range, where sharper
+posteriors make the test more sensitive to residual biases;
+the lower p-values reflect both this increased sensitivity
+and degradation at the training-set boundary. The right
+panel of Fig. 7 shows the P–P test as a function of catalog
+size. While H0, α, and mmax show weak N dependence,
+the µg posterior approximation worsens with increasing
+N.
+A final concern is that the 32-dimensional embeddings
+might be insufficient to capture all information from each
+BBH signal needed for population inference. In this case,
+theDingo-Popposterior would be broader than the
+conventional result (without being biased) even when
+both P–P variants pass, since information has been lost.
+This is addressed by direct comparison to the conventional
+likelihood-based result.
+
+13
+0 0.2 0.4 0.6 0.8 1
+p
+0
+0.2
+0.4
+0.6
+0.8
+1
+CDF(p)
+mmin (0.540)
+mmax (0.731)
+H0 (0.022)
+α(0.199)
+β(0.429)
+δm (0.936)
+λg (0.545)
+σg (0.333)
+µg (0.100)
+−0.05
+0.00
+0.05
+CDF - p
+H0
+N = 1000
+N = 750
+N = 400
+N = 200
+N = 100
+−0.05
+0.00
+0.05
+CDF - p
+α
+−0.05
+0.00
+0.05
+CDF - p
+µg
+0.0 0.2 0.4 0.6 0.8 1.0
+p
+−0.05
+0.00
+0.05
+CDF - p
+mmax
+Figure 7. (Left) P–P plot for posterior calibration for catalog size N = 1000, with 2500 catalog realizations. For each
+hyperparameter and simulated catalog, we compute the percentile rank of the true value within the marginal posterior. The
+cumulative distribution function (CDF) of these ranks is plotted; for well-calibrated posteriors, this follows the diagonal. Gray
+bands indicate 1- σ, 2-σ, and 3- σ intervals expected under perfect calibration; Kolmogorov–Smirnov p-values are given in the
+legend. (Right) For the four hyperparameters with the lowest p-values, the deviation CDF(p) −p from the diagonal is shown
+as a function of catalog size N. A curve consistently above (below) zero indicates the posterior is biased high (low) for that
+parameter; an “S” shape indicates over-dispersion.
+Comparison to standard HBA
+For each of the two populations defined by the hy-
+perparameter sets of Tab. I, we draw 500 events and
+corresponding strain data. WithDingo-IS, we produce
+single-event posterior samples with which we perform con-
+ventional HBA with icarogw. As 56 (20) of these events
+have low effective sample size for Population 1 (2), we
+run these events withBilbyto avoid biased single-event
+posterior samples. We compute the population-level selec-
+tion function using 3 .8 × 106 sources that pass our SNR
+threshold.
+Figures 8 and 9 compare the conventional andDingo-
+Popresults for the hyperparameter posterior. They agree
+well, with the largest discrepancies in the hyperparam-
+eters β, δm, mmax, and µg. There are several possible
+explanations for this discrepancy: (1) the SBI posterior
+may be biased, but the P–P test of Fig. 2 passes, which
+makes this scenario less likely; (2) the event embeddings
+may not be expressive enough, and while this would not
+necessarily entail a bias, it should lead to a broadening
+of theDingo-Popposterior; (3) the Monte Carlo uncer-
+tainties of the conventional HBA approach may not be
+under control. We perform a sensitivity analysis to test
+this last possibility.
+We note that the SBI approach is closer to the true
+hyperparameter values for the minimum and maximum
+masses mmin and mmax in Population 2, suggesting that
+the SBI posterior is more robust than the likelihood-based
+result. Since these parameters represent the boundary of
+the population, they are more affected than the remaining
+parameters by the Monte Carlo uncertainty from the
+single-event posteriors.
+Sensitivity of HBA to Monte Carlo approximations
+To ensure that the analysis results are independent of
+the number of single-event posterior samples, we repeat
+the analysis twice with different PE sample sizes. A
+comparison of results is given in Fig. 10. There is no clear
+change with the number of samples per event.
+Similarly, in Fig. 11, we test for dependence on the
+number of signals contained in the injection set. While
+most hyperparameters show a weak dependence, there
+are several exceptions: mmax, δm, and λg, indicating that
+these parameters are particularly vulnerable to the Monte
+Carlo uncertainty. The Monte Carlo uncertainty related
+to the injection set is non-negligible and leads to scatter
+in the hyperparameter posterior. These deviations are
+comparable to the differences withDingo-Pop, indicat-
+ing that injection-set MC uncertainty is the dominant
+contributor to theDingo-Pop–HBA discrepancy. How-
+ever, the SBI posterior is still broader in β, a parameter
+
+14
+which appears to be robust to the number of injection
+samples.
+Out-of-distribution datasets
+SBI results can be unpredictable in case of model mis-
+specification. In this section we test howDingo-Pop
+performs on datasets from a different population model
+than the one assumed during training. As an out-of-
+distribution dataset, we generate a population from the
+Power Law + Peakmodel but create a gap in the pri-
+mary mass. We first generate 200 events from thePower
+Law + Peakwith mmin = 18 M⊙, mmax = 40 M⊙,
+H0 = 70 km s−1 Mpc−1, α = 3, β = 1, δm = 4 M⊙,
+λg = 0 .5, σg = 2 M⊙, and µg = 30 M⊙. We then re-
+move the 100 events with primary mass closest to 27 M⊙.
+Under the assumption of the incorrectPower Law +
+Peakmass model, we then analyze the out-of-distribution
+dataset using both the conventional method and SBI. For
+the conventional analysis, we use 4 × 105 injections and
+5000 PE samples generated using aDingoGNPE net-
+work [33] with importance sampling. No thresholds are
+applied to the Monte Carlo variance of the likelihood.
+In Fig. 12, the corner plot and mass spectra show that
+the results fromDingo-Popare broadly consistent with
+the conventional analysis.Dingo-Popexhibits a weak
+bimodality on the right tail of α and µg that is absent
+from the conventional analysis. The presence of these
+extended tails results in broader credible intervals in the
+Dingo-Popmass spectra, particularly for the primary
+mass. Table V reports medians and 90% credible intervals
+for both analyses.
+Table V. Comparisons ofDingo-Popand conventional HBA
+approaches applied to an out-of-distribution population. The
+hyperparameters are used to generate a 200-event catalog from
+thePower Law + Peakmodel. We then make it out-of-
+distribution by creating a gap in the primary mass, removing
+the 100 events with primary mass closest to 27M ⊙.
+Hyperparameters ΛDingo-PopHBA
+mmin [M⊙] 18.0 +1.1
+−0.5 18.0 +0.7
+−0.4
+mmax [M⊙] 39.8 +1.7
+−2.0 40.6 +1.2
+−1.9
+H0 [km s−1 Mpc−1] 50.8 +14.1
+−9.3 47.3 +12.3
+−6.4
+α−1.5 +4.4
+−0.5 −1.7 +1.0
+−0.3
+β3.3 +0.6
+−1.8 2.9 +1.0
+−2.0
+δm [M⊙] 3.2 +2.3
+−1.1 3.4 +2.2
+−1.3
+λg 0.5 +0.2
+−0.3 0.5 +0.2
+−0.2
+σg [M⊙] 1.4 +2.1
+−0.4 1.5 +0.9
+−0.5
+µg [M⊙] 21.0 +12.5
+−0.4 21.1 +1.3
+−1.0
+ADDITIONAL RESUL TS
+We plot the relative uncertainties of all inferred hyper-
+parameters as a function of the catalog size in Fig. 13.
+The parameters mmin, mmax, H0, β, σg, and µg show the
+expected trend of decreased uncertainty with increasing
+catalog size, but the parameters α, δm, and λg do not
+show this trend. For these latter variables, the uncer-
+tainties decrease for some population realizations (blue,
+semi-transparent lines), while the median is almost con-
+stant, indicating that for most realizations the result is
+prior driven.
+
+15
+0
+2
+α
+0
+2
+β
+18.4
+19.2
+20.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24
+28
+32
+µg [M⊙]
+2.5
+5.0
+7.5
+σg [M⊙]
+0.3
+0.6
+0.9
+λg
+45 60 75
+H0
+[km s−1 Mpc−1]
+3.0
+4.5
+δm [M⊙]
+0 2
+α
+0 2
+β
+18.4
+19.2
+20.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24 28 32
+µg [M⊙]
+2.5 5.0 7.5
+σg [M⊙]
+0.3 0.6 0.9
+λg
+3.0 4.5
+δm [M⊙]
+Dingo-Pop
+HBA
+Figure 8. Comparison between the conventional likelihood-based (orange) and likelihood-free SBI (blue) methods for Population 1
+(cf Tab. I) with 500 events analyzed. The two methods agree well. The true hyperparameters are marked with gray solid lines.
+Also indicated are the 50% and 90% credible regions.
+
+16
+0
+2
+α
+0
+2
+β
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24
+28
+32
+µg [M⊙]
+2.5
+5.0
+7.5
+σg [M⊙]
+0.3
+0.6
+0.9
+λg
+45 60 75
+H0
+[km s−1 Mpc−1]
+3.0
+4.5
+δm [M⊙]
+0 2
+α
+0 2
+β
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24 28 32
+µg [M⊙]
+2.5 5.0 7.5
+σg [M⊙]
+0.3 0.6 0.9
+λg
+3.0 4.5
+δm [M⊙]
+Dingo-Pop
+HBA
+Figure 9. As in Fig. 8 but for Population 2.
+
+17
+−1.5
+0.0
+1.5
+3.0
+α
+−1.5
+0.0
+1.5
+β
+18.4
+19.2
+mmin [M⊙]
+39
+40
+41
+mmax [M⊙]
+24
+28
+32
+µg [M⊙]
+2.5
+5.0
+7.5
+σg [M⊙]
+0.25
+0.50
+0.75
+λg
+50 60 70
+H0
+[km s−1 Mpc−1]
+3
+4
+5
+δm [M⊙]
+−1.5 0.0 1.5 3.0
+α −1.5 0.0 1.5
+β
+18.4
+19.2
+mmin [M⊙]
+39 40 41
+mmax [M⊙]
+24 28 32
+µg [M⊙]
+2.5 5.0 7.5
+σg [M⊙]
+0.25 0.50 0.75
+λg
+3 4 5
+δm [M⊙]
+2048 PE samples
+4096 PE samples
+Figure 10. Conventional analysis for Population 1, comparing the hyperparameter posterior for different numbers of single-event
+samples, as indicated in the legend. The catalog contains 500 events and 8 × 105 injections are used to compute the selection
+effect. Panels with marginal two-dimensional posteriors show 50% and 90% credible regions. True parameter values are marked
+with black lines.
+
+18
+−1.5
+0.0
+1.5
+3.0
+α
+−1.5
+0.0
+1.5
+3.0
+β
+20.0
+20.8
+21.6
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24
+28
+32
+µg [M⊙]
+2.5
+5.0
+7.5
+σg [M⊙]
+0.25
+0.50
+0.75
+λg
+50 60 70
+H0
+[km s−1 Mpc−1]
+3
+4
+5
+δm [M⊙]
+−1.5 0.0 1.5 3.0
+α −1.5 0.0 1.5 3.0
+β
+20.0
+20.8
+21.6
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+24 28 32
+µg [M⊙]
+2.5 5.0 7.5
+σg [M⊙]
+0.25 0.50 0.75
+λg
+3 4 5
+δm [M⊙]
+3.8M injections
+3M injections
+Figure 11. Conventional analysis for Population 2, comparing the hyperparameter posterior for different numbers of injections
+to estimate selection effects, as indicated in the legend. The catalog contains 500 events with 4096 samples each. Panels with
+marginal two-dimensional posteriors show 50% and 90% credible regions. True parameter values are marked with black lines.
+
+19
+0
+2
+β
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+45
+60
+75
+H0
+[km s−1 Mpc−1]
+0.25
+0.50
+0.75
+λg
+24
+28
+32
+µg [M⊙]
+2.5
+5.0
+7.5
+σg [M⊙]
+0 2
+α
+3.0
+4.5
+δm [M⊙]
+0 2
+β
+18.0
+19.5
+21.0
+mmin [M⊙]
+37.5
+39.0
+40.5
+mmax [M⊙]
+45 60 75
+H0
+[km s−1 Mpc−1]
+0.25 0.50 0.75
+λg
+24 28 32
+µg [M⊙]
+2.5 5.0 7.5
+σg [M⊙]
+3.0 4.5
+δm [M⊙]
+Dingo-Pop
+HBA
+15 20 25 30 35 40
+m1,s [M⊙]
+10−2
+10−1
+ppop(m1,s)
+15 20 25 30 35 40
+m2,s [M⊙]
+10−2
+10−1
+ppop(m2,s)
+Dingo-Pop
+HBA
+dataset
+Figure 12. Comparison for the 100-event out-of-distribution catalog (cf. Tab. V) between the conventional likelihood-based
+(green) and likelihood-free SBI (blue) methods. In the corner plot, contours contain 50% and 90% credible regions. The top-right
+panels show the posterior medians and 90% credible regions of the inferred source population over primary and secondary masses.
+The black histogram shows the distribution of events in the simulated catalog (not the underlying astrophysical population).
+
+20
+0.04
+0.06
+0.08
+0.10
+0.12
+Relative mmin error
+0.02
+0.03
+0.04
+0.05
+0.06
+Relative mmax error
+0.10
+0.15
+0.20
+0.25
+0.30
+0.35
+Relative H0 error
+2.2
+2.4
+2.6
+2.8
+3.0
+Relative α error
+1.50
+1.75
+2.00
+2.25
+2.50
+2.75
+3.00
+Relative β error
+0.35
+0.40
+0.45
+0.50
+0.55
+0.60
+Relative δm error
+200 400 600 800 1000
+Catalog size N
+0.2
+0.3
+0.4
+0.5
+Relative λg error
+200 400 600 800 1000
+Catalog size N
+0.6
+0.8
+1.0
+1.2
+Relative σg error
+200 400 600 800 1000
+Catalog size N
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+Relative µg error
+Figure 13. Repetition of Fig. 4 but for all hyperparameters. To reduce fluctuations, for α, β, and λg we use only the 2- σ
+interval (not dividing by the median as for the rest of the parameters).

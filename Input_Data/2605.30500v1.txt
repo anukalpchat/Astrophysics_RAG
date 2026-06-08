@@ -1,0 +1,1982 @@
+Title: Transformer-Based Source Detection and Morphological Classification in LOFAR Deep-Field Continuum Images
+Authors: Guangwen Chen, Kristian Z. Adami, John Abela, Caijuan Yue, Weibin Sun, Fujia Li, Zhaoting Chen, Daniel Magro, Yogesh Wadadekar, Leah K. Morabito
+Published: 2026-05-28
+Categories: astro-ph.IM, astro-ph.GA
+
+MNRAS000, 1–17 (2026) Preprint 1 June 2026 Compiled using MNRAS L ATEX style file v3.3
+Transformer-Based Source Detection and Morphological Classification in
+LOFAR Deep-Field Continuum Images
+Guangwen Chen1,2,3★, Kristian Z. Adami1,4†, John Abela5, Caijuan Yue6, Weibin Sun7,8, Fujia Li7,8,
+Zhaoting Chen9, Daniel Magro4, Yogesh Wadadekar10, Leah K. Morabito11,12
+1Sub-department of Astrophysics, Department of Physics, University of Oxford, Keble Road, Oxford OX1 3RH, UK
+2Instituto de Astrofísica de Canarias, calle Vía Láctea s/n, E-38205 La Laguna, Tenerife, Spain
+3Departamento de Astrofísica, Universidad de La Laguna, Avenida Astrofísico Francisco Sánchez s/n, E-38206 La Laguna, Spain
+4Institute of Space Sciences and Astronomy, University of Malta, Msida MSD2080, Malta
+5Department of Information Systems, Faculty of ICT, University of Malta, Msida MSD2080, Malta
+6School of Physics and Astronomy, Anqing Normal University, Anqing 246133, China
+7Department of Astronomy, University of Science and Technology of China, Hefei 230026, China
+8School of Astronomy and Space Sciences, University of Science and Technology of China, Hefei 230026, China
+9Institute for Astronomy, School of Physics and Astronomy, The University of Edinburgh, Royal Observatory, Edinburgh EH9 3HJ, UK
+10National Centre for Radio Astrophysics, TIFR, Post Bag 3, Ganeshkhind, Pune 411007, India
+11Centre for Extragalactic Astronomy, Department of Physics, Durham University, South Road, Durham DH1 3LE, UK
+12Institute for Computational Cosmology, Department of Physics, Durham University, Durham DH1 3LE, UK
+Accepted XXX. Received YYY; in original form ZZZ
+ABSTRACT
+Radiosourcedetectionandmorphologicalclassificationarefundamentalforexploitingthescientificpotentialofmodernradio
+continuumsurveys.However,therapidlyincreasingdatavolumesandthewidediversityofradiomorphologiesmaketraditional
+visual inspection infeasible and pose significant challenges for automated source finding. We apply a transformer-based set-
+predictiondetector(RF-DETR)to150MHzcontinuumimagesfromtheLOFARDeepFieldsforinstance-levelsourcedetection
+andmorphologicalclassification.Themethodisadaptedtomulti-frequency-synthesisimagesofinterferometricdataandtrained
+with a morphology-driven scheme using five mutually exclusive classes. The model is trained on the ELAIS-N1 Deep Field,
+where it achieves high detection and classification performance (F1≃91percent), and is then applied without retraining to
+the other three LOFAR Deep Fields. Across all four fields, the model yields consistent catalogues with modest field-to-field
+differences arising from survey depth and calibration. Compared with widely used PyBDSF catalogues, RF-DETR recovers the
+majorityofPyBDSFsourceswhilerepresentingclassicalmulti-componentradiogalaxiesassinglesource-leveldetectionsrather
+thanfragmentedGaussiancomponents.Artefact-affectedandspuriousdetectionsareidentifiedasexplicitclasses,allowingthese
+detections to be distinguished from general astrophysical sources in the resulting catalogues. As external validation, RF-DETR
+recovers the majority of visually identified extended and giant radio galaxies in the LOFAR Deep Fields and assigns them
+predominantly to extended morphological classes. These results indicate that transformer-based detectors provide a practical,
+scalable, morphology-aware approach to source finding in deep radio surveys, with clear relevance for forthcoming facilities
+such as SKA-Low.
+Key words:radio continuum: galaxies — methods: data analysis — methods: statistical
+1 INTRODUCTION
+Radio observations provide dust-unbiased views of star formation
+and nuclear activity in galaxies (e.g., Best & Heckman 2012; Bendo
+et al. 2015, 2016; Hardcastle & Croston 2020; Cochrane et al. 2023;
+Chen et al. 2023, 2024b). Large-area, deep surveys with Square
+Kilometre Array (SKA) pathfinders, including the LOw Frequency
+ARray(LOFAR;vanHaarlemetal.2013),theMurchisonWidefield
+Array(MWA;Tingayetal.2013)andtheAustralianSKAPathfinder
+★ E-mail: guangwen.chen@physics.ox.ac.uk
+†E-mail: kristian.zarbadami@physics.ox.ac.uk
+(ASKAP; Hotan et al. 2021), are transforming how we discover and
+characterise the extragalactic radio sky.
+Accuratedetectionandclassificationareprerequisitesfortwocom-
+plementaryoutcomes.Ontheonehand,complete,well-characterised
+catalogues enable number counts, angular clustering and cross-
+correlations that link galaxy populations to their dark-matter en-
+vironments and test structure growth on large scales (e.g., Jarvis
+et al. 2015; Alonso et al. 2021; Hale et al. 2024, 2025; Tanidis et al.
+2025).Ontheotherhand,morphologicallabels,incombinationwith
+multi-wavelength observations, provide indicators of the dominant
+emissionmechanismsandfacilitatetheseparationofstar-formation-
+©2026 The Authors
+arXiv:2605.30500v1  [astro-ph.IM]  28 May 2026
+
+2Chen et al.
+dominated systems from jetted active galactic nuclei (AGN), allow-
+ing interpretable inferences about AGN feedback, galaxy evolution,
+and environments (e.g., Mingo et al. 2019, 2022; Chen et al. 2020,
+2022; Cochrane et al. 2023; Morabito et al. 2025; Horton et al.
+2025). Within this landscape, the LOFAR Two-metre Sky Survey
+(LoTSS)deliversarcsecond-scaleimagingwithsub-0.1mJybeam −1
+sensitivityat120–168MHz,enablingthedetectionofcomplex,low-
+surface-brightness structures over tens of square degrees (Shimwell
+etal.2017,2019;Tasseetal.2021;Shimwelletal.2022,2025).Atthe
+sametime,thegrowingheterogeneityofradio-galaxymorphologies,
+spanningfromcompactcorestoextendedmulti-componentsystems,
+complicates catalogue production at survey scale (Rudnick 2021;
+Ndung’u et al. 2023). Looking ahead, SKA Phase 1 will increase
+sensitivities and survey speed and confront the community with ex-
+ascale data volumes, making automation essential (e.g., Braun et al.
+2019; Bonaldi et al. 2021, 2025).
+Classical radio source finders—such as the Python Blob Detec-
+tion and Source Finder (PyBDSF; Mohan & Rafferty 2015) and
+AEGEAN(Hancocketal.2012,2018)—havebeentheworkhorsesof
+continuumimagingformorethanadecade.Theymodelemissionvia
+thresholding and Gaussian decomposition (PyBDSF) or Laplacian-
+of-Gaussian clustering (AEGEAN), returning catalogues of com-
+pact/extended components with fitted shapes and fluxes. Despite
+their maturity, challenging regimes persist: artefacts around bright
+sources, diffuse or filamentary emission (e.g., Mohan & Rafferty
+2015; Riggi et al. 2021), and physically connected multi-component
+systems that are split into separate islands and require a subsequent
+association step before cross-matching (e.g., Magliocchetti et al.
+1998; Williams et al. 2019). These difficulties motivate methods
+that learn morphological priors directly from the data and provide
+richer, instance-level outputs beyond simple Gaussian components.
+Motivated by these limitations, deep learning source find-
+ers—particularly those based on convolutional architectures—have
+evolved from early point-source detectors into multi-class, instance-
+level systems that jointly localise and label sources.DeepSource
+benchmarked point-source detection and reported complete-
+ness–purity gains over PyBDSF on simulations at fixed thresholds
+(VafaeiSadretal.2019).Region-basedmodelswerethenexploredfor
+radiomaps,suchasClaRAN,aFasterR–CNN(Renetal.2017)variant
+that detects and assigns morphology labels using radio and infrared
+inputs(Wuetal.2019),andConvoSourceforsemanticsegmentation
+trained on SKA Science Data Challenge 1–style skies (Lukic et al.
+2019a). More recently, instance-segmentation frameworks based on
+MaskR–CNN(Heetal.2017) havebeenadaptedtoradioimagesto
+jointly detect and classify compact and extended sources as well as
+spuriousdetections,enablingpixel-levelmasksanddownstreammor-
+phological analyses; examples include thecaesar–mrcnnline and
+relatedapplicationstoASKAPandtheMeerKarooArrayTelescope
+(MeerKAT) data (Riggi et al. 2023, 2024). In parallel, one-stage de-
+tectorsintheYOLOfamilyhavealsobeenadaptedtoradiodata;for
+example,YOLO–CIANNAintroduces astronomy-specific adaptations
+and reports strong performance on the SKAO SDC1 simulations
+(Cornu et al. 2024). Hybrid designs that blend convolutional back-
+boneswithTransformerblocksreportimprovedhandlingofextended
+and diffuse emission via stronger context modelling (e.g., HeTu–v2;
+Lao et al. 2023). Recent work has also begun to explore the ap-
+plicability of Vision Transformers (ViTs) and foundation models
+to astrophysical data, demonstrating strong performance in optical
+classification and competitive results in detection settings, while re-
+vealing significant limitations for radio galaxy morphology due to
+domain shift and task-specific challenges (Lastufka et al. 2025).
+Complementary to detectors, supervised image-level classi-
+fiers operating on pre-centred cutouts—together with increasingly
+adoptedself-andsemi-supervisedrepresentationlearning—aidmor-
+phology studies and improve label efficiency (e.g., Alhassan et al.
+2018; Lukic et al. 2019b; Samudre et al. 2022; Brand et al. 2023;
+Ndung’u et al. 2024; Baron Perez et al. 2025), yet they presuppose
+existing candidates and provide no localisation, and therefore can-
+not substitute for instance-level detection in catalogue production.
+In addition, practical constraints of current models persist at survey
+scale:anchordesignandnon-maximumsuppressionmayyielddupli-
+cateorfragmenteddetectionsnearbright,multi-componentsystems;
+dense-mask architectures increase annotation burden and memory
+footprint; and performance can degrade under domain shift across
+fields/instruments and when running tiled inference on large images
+(e.g., Ndung’u et al. 2023; Sortino et al. 2023; Cornu et al. 2024).
+Beyondconvolutionalpipelines,transformer-baseddetectorsoffer
+a unified route to localisation and labelling. The DEtection TRans-
+former (DETR; Carion et al. 2020) casts detection as set prediction
+with bipartite (Hungarian) matching, which removes anchors and,
+byconstruction,duplicateassignments,whileself-attentionprovides
+long-range context that is well suited to extended, multi-component
+radio morphology. For survey-grade cataloguing, such properties
+are attractive because they reduce reliance on hand-tuned anchors
+and non-maximum suppression and allow reasoning over diffuse
+structures within large tiles. A recent radio benchmark that evalu-
+ates DETR alongside Mask R-CNN and YOLO across cutouts from
+ASKAP, the Australia Telescope Compact Array (ATCA), the Karl
+G.JanskyVeryLargeArray(VLA),andtheRadioGalaxyZoo(RGZ;
+Banfield et al. 2015) project finds transformer detectors competitive
+yet still comparatively underused in this domain, indicating both
+potential and room for further development (Sortino et al. 2023).
+BuildingontheoriginalDETRframework,successorssuchasDe-
+formable DETR, Conditional DETR and Lightweight DETR further
+improve convergence and small-object sensitivity (Zhu et al. 2021;
+Mengetal.2021;Chenetal.2024a).Amongthese,RF-DETRattains
+afavourableaccuracy–throughputtrade-offontheCommonObjects
+in Context (COCO) benchmark by coupling a ViT encoder with a
+shallowDETRdecoderandtraining-orientedrefinements(Robinson
+et al. 2026). RF-DETR has already been applied beyond natural-
+imagebenchmarks(e.g.,Sapkotaetal.2025;Dahiyaetal.2025),yet
+it has not been systematically evaluated on radio astronomical data.
+Inthiswork,weinvestigatewhetheraDETR-family,set-prediction
+transformerwithstrongself-supervisedpretrainingcanbeeffectively
+repurposed for LOFAR deep-field continuum imaging. Specifically,
+weadaptRF-DETRtodeliverunified,instance-levelsourcedetection
+with five mutually exclusive morphological classes, and assess its
+performance not only in terms of detection accuracy but also in
+terms of catalogue-level scientific usability. Our aim is to determine
+whether such a framework can produce scalable and morphology-
+aware source catalogues across deep fields with differing depths
+and calibration characteristics, providing a practical reference for
+forthcoming SKA-Low surveys.
+This paper is organised as follows. In Section 2, we describe the
+LoTSS Deep Fields data and the source classification scheme, to-
+gether with the construction of the training and validation datasets.
+Section 3 introduces the RF-DETR transformer-based detector and
+outlines the methods adopted in this work. The model evaluation,
+the source catalogues, and the comparison with PyBDSF are pre-
+sented in Section 4. A brief summary of the main results is given in
+Section 5.
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification3
+2 DATASET
+2.1 LoTSS Deep Fields DR1
+The LoTSS Deep Fields data release 1 (DR1) 1 provide ultra-
+deep 120−168MHz imaging in four extragalactic regions: Euro-
+pean Large-Area ISO Survey-North 1 (ELAIS-N1), Lockman Hole,
+Boötes, and the Euclid Deep Field North (EDFN), reaching root
+mean square (rms) depths in the central regions down to∼20, 22,
+32 and32𝜇Jy beam −1 at central frequencies∼150 MHz, respec-
+tively (Tasse et al. 2021; Sabater et al. 2021; Bondi et al. 2024).
+These depths are comparable to those anticipated for SKA1-Low
+(∼26𝜇Jy beam −1 at∼110MHz for a 1-hour continuum observa-
+tion;Braunetal.2019).Eachpointingcoversapproximately20 deg 2,
+withanangularresolutionof≃6arcsec.TheDeepFieldsalsobenefit
+fromextensivemulti-wavelengthcoveragefromX-raytofar-infrared
+overacombinedcross-matchedareaof∼26 deg 2 (Kondapallyetal.
+2021), which we use for verification and contextual interpretation of
+radio sources.
+It is worth noting that a DR2 release for ELAIS–N1 is now avail-
+able, but DR2 products for the other Deep Fields have not yet been
+released. To maintain uniformity across training and evaluation, we
+adopt DR1 throughout and will use DR2 for future analysis. Specif-
+ically, we train and validate on the ELAIS–N1 DR1 continuum im-
+ages, and assess generalisation by applying the trained model to the
+Lockman Hole, Boötes, and EDFN DR1 continuum images.
+2.2 Source classification scheme
+Weadoptamorphology–driventaxonomyoffivemutuallyexclusive
+classes, designed for automated source finding in next–generation
+radio surveys and conceptually aligned with Riggi et al. (2023).
+Throughout, an island denotes a contiguous region of emission in
+the radio image as identified by standard source finders.
+(i)Compact—single–island system with point-like or only
+slightly resolved structure, broadly consistent with the synthesized
+beam. Blending of one or more unresolved components within the
+same island is allowed.
+(ii)Single-Extended—single–island system exhibiting clear,
+intrinsic resolved structure beyond that expected from ionospheric
+smearing or beam broadening (e.g., lobes, jets, or extended haloes),
+possibly comprising several blended components within one con-
+nected island.
+(iii)Multi-Extended—physically associated system compris-
+ing two or more disconnected islands judged to belong to the same
+astrophysical source (e.g., classical double-lobed radio galaxies, a
+corewithlobes,ormulti–knotjets).Forsuchsystems,asinglesource-
+level annotation is defined as a rectangular bounding box drawn to
+enclose the full spatial extent of the system, covering the combined
+area spanned by all constituent islands.
+(iv)Flagged—single–island system with compact or extended
+morphology whose measurements are unreliable because of severe
+imaging artefacts or dynamic-range limitations near bright objects.
+Suchsourcesarekeptforcompletenessinstatisticsbutareexplicitly
+flagged in science catalogues since derived quantities (flux density,
+size, morphology) are not trustworthy.
+(v)Spurious—false detection produced by different types of
+artefacts (e.g., sidelobes, ripples, striping) introduced by calibration
+and/orimaging.Wefocusonthesidelobes,whichcanmimiccompact
+1 https://lofar-surveys.org/deepfields.html
+or elongated sources and frequently exceed standard5𝜎thresholds,
+thereby compromising catalogue reliability.
+This scheme is intentionally conservative and oriented toward
+source detection rather than detailed astrophysical taxonomy. It
+nonetheless covers nearly all kinds of sources in radio observations:
+Compactcaptures most ordinary radio sources;Single-Extended
+togetherwithMulti-Extendedencompassthemajorityofclassical
+Fanaroff–Riley I/II galaxies; andFlaggedplusSpuriouscapture
+artefact-related detections, supporting quality control and reliability
+assessment.
+Definitions are based on the LOFAR 150MHz continuum image
+from the ELAIS-N1 field. Ancillary images, including 4.5𝜇m data
+fromtheSpitzerWide-areaInfraredExtragalacticsurvey(SWIRE;
+Lonsdale et al. 2003),𝐾-band imaging from the UK Infrared Deep
+Sky Survey (UKIDSS) Deep Extragalactic Survey (DXS) DR10
+(Lawrence et al. 2007), and𝑖-band data from the Panoramic Survey
+Telescope and Rapid Response System (Pan-STARRS; Kaiser et al.
+2010), are used exclusively during the manual annotation process.
+Theyprovidecomplementarymorphologicalinformationtoassistin
+judging source association and in identifying artefact-affected and
+spurious detections, particularly forMulti-Extended,Flagged,
+andSpuriouscases. These ancillary images are not used as inputs
+to the model during training or inference and serve no role beyond
+human-guided annotation and visual verification (Figure 1).
+2.3 Dataset preparation
+Annotations were created by a team of trained annotators within a
+private Zooniverse project. Annotators performed direct visual in-
+spection of the LOFAR 150MHz deep-field continuum images and
+were not provided with any pre-existing source catalogues or auto-
+mated source-finding outputs. Radio sources were identified solely
+onthebasisofvisualassessmentofthecontinuumimages,following
+themorphologicaldefinitionsdescribedinSection2.2.Foreachiden-
+tified source, annotators manually drew an axis-aligned rectangular
+bounding box enclosing the perceived radio emission and assigned
+one of the five mutually exclusive classes. Each bounding box to-
+gether with its assigned class constitutes one annotation. Sources
+near the edges of the cutouts were treated in the same manner as
+interior sources and were annotated whenever clear radio emission
+was visible within the cutout.
+Illustrative examples of all classes and the associated colour key
+are shown in Figure 2. ForMulti-Extendedsystems, these bound-
+ingboxesareintendedtorepresentsource-levelenvelopesenclosing
+all physically associated islands, rather than precise morphological
+outlines. While more general inclined rectangles could in princi-
+ple provide a tighter geometric description, we adopt axis-aligned
+bounding boxes throughout to ensure consistency with the repre-
+sentation required by DETR-style detectors used in this work. The
+set-prediction framework of RF-DETR allows multiple, potentially
+overlapping bounding boxes to be predicted, enabling compact or
+single-extended sources embedded within largerMulti-Extended
+envelopes to be detected and classified without ambiguity.
+To minimise confusion between genuine radio sources and
+artefact-induced responses around bright objects, annotators con-
+sidered not only the morphology in the LOFAR 150MHz images
+but also the spatial context and symmetry of emission, as well as
+information from ancillary infrared and optical images, which were
+used to identify likely sidelobes or calibration artefacts that lack
+plausible multi-wavelength counterparts. Ambiguous cases in the
+MNRAS000, 1–17 (2026)
+
+4Chen et al.
+LOFAR 150 MHz
+ Spitzer 4.5 µm band
+ UKIDSS-DXS K-band
+ PanSTARRS i-band
+Figure 1.Examples of LOFAR 150MHz and ancillary imaging for a132×132pixel cutout (3.3×3.3arcmin at 1.5 arcsec pixel−1), displayed with a ZScale
+stretch (contrast=0.2). Left to right: LOFAR 150MHz,Spitzer4.5𝜇m, UKIDSS–DXS𝐾, and Pan-STARRS𝑖. Upper panels: native ancillary images (no PSF
+convolution). Lower panels: ancillary images PSF-matched to the LOFAR synthesized beam (FWHM≃6′′) to enable direct morphological comparison. Red
+contours trace LOFAR surface brightness at3𝜎and5𝜎(with𝜎estimated from the local rms noise). Ancillary images are used solely for visual verification
+and are not included in the training set.
+Manual Annotations
+Figure 2.Examples of the annotation classes shown on132×132pixel cutouts from the LOFAR 150MHz continuum images, with a ZScale stretch (contrast
+=0.2). Bounding boxes are distinguished using both colour and line style:Compact(blue, solid),Single-Extended(green, dashed),Multi-Extended
+(orange,dash–dot),Flagged(black,dotted),andSpurious(red,dash–dot–dotted).Left:predominantlyCompactsourcesandtwoSingle-Extendedsources.
+Middle:aMulti-ExtendedsystemtogetherwithnearbyCompactsources.Right:abrightsourceaffectedbysevereimagingartefactsislabelledFlagged,and
+surrounding artefact–induced false detections are marked asSpurious. All annotations are axis-aligned rectangular bounding boxes drawn by annotators.
+vicinity of bright sources were conservatively labelled asFlagged
+orSpurious, rather than as astrophysical sources.
+Asafurtherquality-controlmeasure,asubsetofidenticalorover-
+lapping cutouts was independently inspected by more than one an-
+notator, and the resulting labels were cross-checked prior to model
+training to ensure consistent application of the morphological def-
+initions. Following this quality-control step, all annotated cutouts
+wereretainedfortrainingandvalidation,includingthosewithpartial
+spatial overlap.
+Using this taxonomy, we curated1,057 132×132pixel cutouts
+from the ELAIS-N1 150MHz mosaic (1.5 arcsec per pixel), yield-
+ing13,821labelled instances distributed as:Compact=12,535,
+Single-Extended=520,Multi-Extended=112,Flagged
+=90,Spurious=564. This corresponds to an average surface
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification5
+Table 1.Class counts in our original training and validation datasets.
+Class Total Training Validation
+Compact12,535 10,199 2,336
+Single-Extended520 409 111
+Multi-Extended112 94 18
+Flagged90 62 28
+Spurious564 444 120
+densityof≈13.1sourcespercutout,i.e.,≈1.21arcmin −2.Forcom-
+parison,Riggietal.(2023)trainedMaskR-CNNsourcedetectorson
+data with a surface density of≈0.22arcmin−2 (with 0.15arcmin −2
+from VLA, 0.42arcmin −2 from ASKAP, and 0.33arcmin−2 from
+ATCA,respectively).Inaddition,Laoetal.(2023)trainedtheHeTu-
+v2 source detector on the VLA FIRST survey at≈0.10arcmin−2.
+By contrast, based on deeper observations, our dataset operates at
+∼5.5×and∼12×higher source densities, respectively, than these
+previousstudies.WhiletheincreaseddepthoftheLoTSSDeepFields
+implies higher SNRs for many detected sources, which can aid the
+identificationofindividualradiocomponents,thecorrespondingrise
+insourcedensityalsoleadstosubstantiallymorecrowdedfields.This
+introduces additional challenges for source-level morphology clas-
+sification, including increased blending, ambiguous association of
+neighbouringemission,andthecoexistenceofcompactandextended
+structures within small angular scales. Consequently, classification
+in deep LOFAR images constitutes a particularly stringent test of
+a model’s ability to reason over complex spatial context at survey
+depth.
+We split the dataset≈80:20by cutout into training (850) and
+validation (207) subsets to avoid leakage. Because the cutouts are
+partiallyoverlapping,asmallfractionofvalidationcutoutsalsoover-
+lap spatially with those in the training set. In practice, such overlap
+is mostly confined to sources located near cutout boundaries, and
+involves only a small number of instances (≈1.8%of the validation
+annotations). This limited overlap does not materially affect the sta-
+tistical independence of the validation set. The details of the subsets
+are summarised in Table 1. No explicit rebalancing or resampling
+was applied to the class composition. Training and evaluation under
+such survey-like conditions allows us to assess the performance of
+RF-DETRinarealisticcatalogueproductionsetting,ratherthanopti-
+mising detection or classification metrics under artificially balanced
+class proportions. In this context, our primary aim is to evaluate
+whether RF-DETR can reliably detect and classify the full range of
+radio source morphologies encountered in LOFAR deep-field data,
+including rarer extended and multi-component systems.
+To improve robustness to source orientation and image contrast
+variations, we apply a uniform data augmentation scheme to the
+training subset. Each training cutout is randomly rotated by mul-
+tiples of90 ◦ with equal probability and horizontally flipped with a
+probabilityof0.6,sothatextendedandelongatedsourcesareseenun-
+derdifferentorientationswithoutalteringtheirintrinsicmorphology.
+In addition, a ZScale-style contrast remapping is applied with prob-
+ability 0.6, with the contrast parameter independently sampled per
+cutout in the range 0.1–0.6, to account for variations in background
+level and dynamic range across the images. The original training
+instances are retained, and multiple augmented views are generated
+per cutout. Taken together with the probabilities above, this results
+in approximately 15% of training instances remaining unchanged in
+both geometry and contrast. All geometric transformations are ap-
+plied consistently to the corresponding bounding boxes and class
+labels,andtheaugmenteddataareconvertedintothemodel-specific
+input formats described in Section 3.
+3 METHODS
+3.1 Transformer detector: RF-DETR
+We adopt RF-DETR v1.3.02 (Robinson et al. 2026) as our deep-
+learning detector for LOFAR 150 MHz continuum images. The
+public implementation follows the DETR set–prediction paradigm
+(Carionetal.2020),inwhichafixedsetofobjectqueriesismatched
+one-to-onetoground-truthinstancesviatheHungarianalgorithm.A
+visionbackbonetogetherwithaTransformerencoder–decodermaps
+the queries to class logits and normalised bounding-box parameters.
+A schematic overview of the RF-DETR architecture as used in this
+work is shown in Figure 3.
+RF-DETR builds on LW–DETR by coupling a ViT backbone
+with a real-time transformer decoder and introducing a number of
+training-effective refinements (Chen et al. 2024a). The backbone is
+initialised with DINOv2 self-supervised features to provide strong
+general-purposerepresentationsacrossdomains(Oquabetal.2024),
+whiledecoderconditioningwithlearnedreferencepointsfollowsthe
+Conditional-DETRformulation(Mengetal.2021).Akeycomponent
+of RF-DETR is multi-scale deformable attention (Zhu et al. 2021).
+Rather than attending densely over all spatial positions, each object
+querysamplesasmallnumberoflocationsaroundlearnedreference
+points across multiple feature scales. This sparse attention mecha-
+nismreducesthecomputationalcostassociatedwithhigh-resolution
+feature maps while focusing attention on informative regions of the
+image.Inradiocontinuumdata,wherefaintcompactsourcesoccupy
+onlyafewpixelsandextendedsystemsspanawiderangeofangular
+scales, this combination of multi-scale representation and spatially
+focusedattentionprovidesaneffectiveframeworkforcapturingboth
+compact and complex morphologies.
+Given the optimal Hungarian matching, the loss is computed on
+the matched prediction–target pairs. For each decoder output, the
+objective is
+L=𝜆 cls Lcls +𝜆 ℓ1 Lℓ1 +𝜆 giou Lgiou,(1)
+whereL cls is a sigmoid focal classification loss, andLℓ1 andL giou
+are the standard𝐿1 and generalised-intersection-over-union (GIoU)
+losses for box regression. The focal formulation down-weights easy
+negativepredictionsandmitigatesthestrongclassimbalancearising
+fromthelargenumberofunmatchedqueries.Thesameweightedloss
+is applied to intermediate decoder layers as auxiliary supervision,
+while the final layer provides the main predictions. A cardinality
+term is evaluated for monitoring purposes but is not included in the
+optimisation.
+For training, the annotations described in Section 2.3 were con-
+verted to the COCO format using axis-aligned bounding boxes pa-
+rameterised as[𝑥, 𝑦, 𝑤, ℎ], where(𝑥, 𝑦)denotes the coordinates of
+theupper-leftcorneroftheboxand𝑤andℎitswidthandheight,re-
+spectively.Allgeometricaugmentationswereappliedconsistentlyto
+theboundingboxes.Single-channelLOFARcutoutswerereplicated
+tothreechannelstomatchtheRGBinputexpectedbythepre-trained
+encoder. We adopted theRFDETRMediumvariant with a DINOv2
+encoder (specified asdinov2_windowed_small), initialised from
+a COCO-pretrained checkpoint. The network was trained for 200
+2 https://github.com/roboflow/rf-detr
+MNRAS000, 1–17 (2026)
+
+6Chen et al.
+Block 4
+Block 3
+Block 2
+Non-Windowed Encoder Layer
+Windowed Encoder Layer x 2
+ Projector
+ViTBackbone 
+Multi-layer Encoder
+Query Embeddings
+Layer 3
+Layer 2
+Feed Forward
+Deformable Cross Attend
+Self Attention
+Query 
+Selection
+Transformer Decoder
+Detection Head
+Box Head
+Class Head
+Positional 
+Embeddings
+Detected Sources 
+(Boxes & Classes)
+Radio Image Patches
+Figure3.SchematicoverviewoftheRF-DETRarchitectureasusedinthiswork.ALOFAR150MHzradioimagecutoutisprocessedbyaViT-basedbackbone
+with interleaved windowed and non-windowed encoder layers to extract image features, which are then passed to a Transformer encoder–decoder. A fixed set
+of object queries interacts with the encoded features and produces a set of predictions through the detection head, yielding source-level bounding boxes and
+correspondingclasslabels.Thisformulationenablesone-to-onematchingbetweenpredictionsandradiosources,providingaunifiedframeworkforinstance-level
+source detection and morphological classification.
+epochs using mixed-precision training and synchronized batch nor-
+malization. Optimisation employed AdamW with a base learning
+rate of5×10 −5 (encoder learning rate2×10 −5), a weight decay
+of 0.02, and a cosine learning-rate schedule with a 10-epoch linear
+warm-up and a final minimum learning-rate factor of 0.05. Gradi-
+ent accumulation was used (effective batch size4×4) to stabilise
+optimisation, and exponential moving average (EMA) tracking was
+enabled with a decay factor of 0.9998. Prediction–target assignment
+followed DETR’s bipartite (Hungarian) matching. We retained the
+default matching costs and loss coefficients for classification,𝐿1,
+and GIoU, giving the usual stronger weight to the𝐿1 box term rel-
+ative to GIoU, following standard DETR formulation (Carion et al.
+2020). Transformer drop-path regularisation was left at the model
+defaultforthisrun.Checkpointswereselectedbythehighestvalida-
+tionmeanAveragePrecisionfromper-epochCOCOevaluation.The
+main parameters are summarised in Table 2.
+3.2 Evaluation protocol and metrics
+WeevaluateRF-DETRonthevalidationsetunderastrictone-to-one
+matching between ground-truth (GT) sources and model detections
+(DTs). For each image, we retain detections with score≥0.5and
+deem a GT–DT pair valid when their axis-aligned bounding boxes
+have intersection-over-union (IoU)≥0.5. All valid pairs are sorted
+by IoU and greedily matched to enforce that each GT and each DT
+appearsinatmostonepair;tiesarebrokenbyhigherIoUandthenby
+higher detection score. This protocol prevents double counting and
+therefore yields more conservative estimates than more permissive
+matching schemes.
+Weadoptmetricdefinitionsconsistentwithpriormachinelearning
+studiesonradiodata(e.g.,Riggietal.2023,2024).Forthedetection
+metrics, we compute
+𝐶= |A 1–1|
+|𝐺| , 𝑅= |A 1–1|
+|𝐷| ,F1 det = 2𝐶 𝑅
+𝐶+𝑅 .(2)
+where𝐺is the set of GT objects,𝐷is the set of filtered detections,
+andA 1–1⊆𝐺×𝐷istheone-to-onematched-pairsetdefinedabove.
+Here,completeness(𝐶) is the fraction of true sources recovered
+by a matched detection,reliability(𝑅) is the fraction of detections
+corresponding to true sources, andF1det is their harmonic mean.
+Classification is assessed only on the matched pairsA1–1. For
+each class, a GT–DT pair counts as a true positive (TP) if the GT
+label and the predicted label are the same; otherwise it contributes a
+false negative (FN) for the GT class and a false positive (FP) for the
+predicted class. We then compute
+R= TP
+TP+FN ,P= TP
+TP+FP ,F1 cls = 2P R
+P + R .(3)
+Here,recall(R) is the fraction of matched GT objects of a class
+that are correctly classified;precision(P) is the fraction of matched
+detections predicted as that class that are correct; andF1cls is their
+harmonic mean. Both the detection metrics (F1det) and the classi-
+fication metrics (F1cls) are computed separately for each class. The
+overall classification metrics referred to as “All” are obtained by
+pooling matched pairs across classes (micro average). By construc-
+tion, classification metrics are conditional on successful detection
+andmatching;end-to-endperformanceisboundedbydetectioncom-
+pleteness.
+All detection and classification metrics are computed in the same
+manner for all five classes. However, the interpretation of these met-
+rics differs between genuine source classes and theSpuriouscat-
+egory. TheCompact,Single-Extended,Multi-Extended, and
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification7
+Table 2.Main parameters of RF-DETR used in this work.
+Component Value
+Architecture & Initialisation
+Model variantRFDETRMedium
+Backbonedinov2 windowed
+Pretrained checkpointrf-detr-medium
+Number of classes 5
+Number of decoding layers 3
+Number of query slots 300
+Optimisation & Schedule
+Optimizer AdamW
+Base learning rate5×10 −5
+Backbone learning rate2×10 −5
+LR schedule cosine
+Warm-up epochs 10
+Weight decay 0.02
+Batching & Train length
+Multi-scale training on
+Batch size 4
+Gradient accumulation 4
+Max epochs 200
+Stability
+EMA on
+EMA decay 0.9998
+Matching & Loss
+Matching cost (class) 2
+Matching cost (𝐿1) 5
+Matching cost (GIoU) 2
+Loss coefficient (cls) 2
+Loss coefficient (bbox𝐿1) 5
+Loss coefficient (GIoU) 2
+Flaggedclasses all correspond to real sources, withFlaggediden-
+tifying systems whose measurements are unreliable owing to se-
+vere imaging artefacts or dynamic-range limitations. By contrast,
+theSpuriousclass represents false detections induced by imaging
+artefacts rather than genuine sources. For this reason, the detection
+completeness or reliability of theSpuriousclass is not a primary
+determinant of catalogue quality. The purpose of introducing an ex-
+plicitSpuriousclass is to distinguish artefact-induced detections
+fromrealsources.Accordingly,theprimaryconcerniswhethergen-
+uine astrophysical sources are incorrectly classified asSpurious,
+which would lead to their exclusion from subsequent analyses.
+3.3 Inference on LoTSS Deep Field continuum maps
+WerunRF-DETRoneachLoTSSDeepFieldmosaicusingapadded
+sliding window and a two-stage consolidation of per tile detections.
+Windows of132×132pixels with a stride of 66 pixels in both
+directions are laid out with end compensation so that the right and
+bottom edges are fully covered. Each window is extracted with a
+symmetrichaloof4×FWHM(in16pixels)usingreflectionpadding
+outside the image. RF-DETR is applied to the haloed tile; we then
+perform per tile non-maximum suppression (NMS) and retain only
+boxes whose centroids fall inside the inner132×132region to
+avoidhaloartefacts.Survivingdetectionsaremappedbacktomosaic
+coordinates and concatenated.
+A class-aware consolidation step encodes radio-specific priors
+consistent with the annotation scheme used for training and eval-
+uation.First,weretaindetectionswithscore≥0.5andremoveboxes
+with width or height<3pixels that are consistent with noise frag-
+ments. Next, a global per-class suppression step resolves duplicate
+detections while applying class-dependent overlap rules that pre-
+serveMulti-Extendedenvelopes, which are intended to represent
+physically associated multi-component radio systems. Finally, con-
+tainmentandsameclassoverlaprulesprunenestedornearduplicate
+boxes that arise from tile boundaries or closely spaced detections,
+keeping the highest confidence instance so that each source is rep-
+resented once. These consolidation rules are designed to reflect the
+same source-level assumptions encoded in the training annotations.
+The resulting catalogue provides world coordinate system (WCS)
+positions, pixel space boxes, and corresponding classes as well as
+their fluxes. Details on the computational resources and runtimes
+associated with training and inference are provided in Appendix B.
+4 RESULTS
+4.1 Model performance on the validation set
+We trained RF-DETR on the LOFAR images with the main settings
+listed in Table 2. Figure 5 illustrates representative RF-DETR eval-
+uation examples on the validation set for the same image cutouts
+shown in Figure 2. In fields dominated byCompactsources with
+occasionalSingle-Extendedobjects (left), detections are dense
+and labels are correct. In the presence of large, multi-component
+systems (middle), the model assigns theMulti-Extendedlabel to
+the aggregate structure while preserving nearbyCompactsources;
+this behaviour is desirable for radio surveys, as accurate identifi-
+cation of extended and especiallyMulti-Extendedmorphologies
+facilitatesthediscoveryofnearbyFanaroff–RileyI/IIgalaxiesand/or
+giantradiogalaxies.AroundbrightFlaggedregions(right),thede-
+tector also returnsFlaggedandSpuriouspredictions; however,
+predicted bounding boxes can differ from the human annotations,
+and the model occasionally produces multiple detections associated
+with ambiguous artefacts, which locally reduces completeness and
+reliability. This is expected because artefact morphology depends
+on bright-source sidelobes,𝑢 𝑣coverage, and calibration residuals,
+and thus lacks a stable pattern. Nevertheless, the detector seldom
+confuses real sources withSpuriousdetections, so the uncertainty
+in these classes—being imaging artefacts rather than astrophysical
+objects—does not bias detections of real galaxies.
+To assess the robustness of the detection metrics with respect to
+the IoU threshold, we examine completeness–reliability curves (as
+defined in Section 3.2) as a function of the IoU threshold, shown
+in Figure 4. For the three main morphological classes (Compact,
+Single-Extended,andMulti-Extended),bothcompletenessand
+reliability remain nearly unchanged over the range0.4≲IoU≲0.6,
+indicating that the detection performance is stable within this in-
+terval. At higher IoU thresholds (≳0.7), both metrics decrease, as
+expected from the increasingly stringent matching criterion, which
+amplifies small spatial mismatches between predicted and reference
+bounding boxes. This effect is more pronounced for diffuse or ex-
+tended radio emission, where axis-aligned bounding boxes act as
+source-level envelopes rather than precise geometric descriptions.
+The shaded regions indicate the variation across detection score
+thresholds, demonstrating robustness to both IoU and score thresh-
+olds.Asasensitivitycheck,adoptingmorepermissiveIoUthresholds
+(e.g. IoU≥0.3) leads to a modest increase in completeness for the
+Single-ExtendedandMulti-Extendedclasses, without altering
+the relative ordering of classes or the overall conclusions. We there-
+fore adopt IoU and score thresholds both set to 0.5 throughout this
+MNRAS000, 1–17 (2026)
+
+8Chen et al.
+0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+IoU threshold
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0CompletenessAll
+Compact
+Single-Extended
+Multi-Extended
+Spurious
+Flagged
+0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+IoU threshold
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0Reliability
+Figure4.Detectioncompleteness(left)andreliability(right)asafunctionoftheIoUthresholdforthefullsample(All)andthefivemorphologicalclasses.The
+curves correspond to the reference score threshold of 0.5, while shaded regions indicate the variation of score thresholds in the range 0.25–0.75.
+AI Model Predictions
+0.96
+0.96
+0.95
+0.95
+0.94
+0.94
+0.91 0.910.90
+0.90
+0.89 0.86
+0.86
+0.85
+0.84
+0.97
+0.96
+0.92
+0.91
+0.91
+0.90
+0.80
+0.70
+0.91
+0.91
+0.90
+0.90
+0.86
+0.80
+0.79
+0.76
+0.74
+0.63
+0.58
+0.51
+Figure5.RF-DETRpredictionsonthevalidationsetforthesameimagecutoutsshowninFigure2,withboundingboxesfollowingthesamecolourandline-style
+scheme. Predicted source instances are shown with thicker bounding boxes and annotated with detector confidence scores, while ground-truth annotations are
+shownwiththinnerboxes.Onlypredictionswithscore≥0.5aredisplayed.TheleftpanelshowsCompactandSingle-Extendedpredictions,themiddlepanel
+shows aMulti-Extendedsystem together with nearbyCompactsources, and the right panel containsSpuriousdetections around aFlaggedsource.
+Table 3.Validation results for RF–DETR on the validation set using one-to-one matching at IoU≥0.5and score≥0.5.
+Class Detection Classification
+Completeness (%) Reliability (%) F1 score (%) Recall (%) Precision (%) F1 score (%)
+All 90.7 91.4 91.1 98.7 98.7 98.7
+Compact93.2 92.9 93.1 99.9 99.1 99.5
+Single-Extended90.1 96.8 93.3 85.0 95.5 89.9
+Multi-Extended88.9 90.0 89.4 100 88.9 94.1
+Flagged82.1 85.7 83.9 73.9 94.4 82.9
+Spurious45.8 53.5 49.4 89.1 92.5 90.7
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification9
+work as a conservative and uniform operating point. Table 3 reports
+the corresponding overall and per-class detection and classification
+metrics evaluated under this configuration.
+Under this configuration, RF-DETR achieves strong performance
+ontheELAIS-N1validationset,withanoveralldetectionF1scoreof
+≃91% (completeness𝐶≃91%, reliability𝑅≃91%). Classifica-
+tionperformanceafterone-to-onesourcematchingisexcellent,with
+bothrecallandprecisionexceeding98%,yieldingaclassificationF1
+of≃99%.Weemphasisethattheseclassificationmetricsarecondi-
+tional on successful detection and matching; the overall catalogue-
+levelperformanceisaccordinglyboundedbythedetectioncomplete-
+ness.ForthedominantCompactpopulation,themodelperformsex-
+ceptionally well in both detection and classification (F1det ≃93%;
+F1cls ≃99%), reflecting the relative morphological simplicity and
+abundanceofthesesources.Single-Extendedsystemsaredetected
+reliably(F1 det ≃93%),whileclassificationisslightlymorechalleng-
+ing due to their structural diversity, with recall≃85%, precision
+≃96%, and F1 cls ≃90%.Multi-Extendedsources exhibit mod-
+erately lower completeness (≃89%) but high reliability (≃90%),
+consistent with occasional partial overlaps between predicted and
+reference bounding regions for complex, multi-component systems.
+Importantly, their classification is robust, achieving perfect recall
+and a classification F1 of≃94%, demonstrating that physically
+associated multi-island systems are rarely misidentified once de-
+tected. TheFlaggedclass shows moderate detection performance
+(F1det ≃84%) and lower but still reasonable classification accuracy
+(F1cls ≃83%), reflecting the heterogeneous morphologies and lim-
+itedtrainingsupportforthiscategory.FortheSpuriouscategory,the
+reduced detection completeness is primarily driven by ground-truth
+Spuriousinstancesthatarenotdetectedatall,ratherthanbysystem-
+atic confusion with astrophysical source classes. These unmatched
+cases correspond to artefact-like structures in the radio images that
+do not give rise to sufficiently confident detections. This behaviour
+is consistent with the high classification precision achieved for the
+Spuriousclass (precision≃93per cent), indicating that genuine
+radio sources are rarely assigned aSpuriouslabel once detected.
+ThespatialassociationofSpuriousdetectionswithregionsaffected
+by strong imaging artefacts, as reflected by theFlaggedclass, fur-
+thersupportsthisinterpretation.Othermorphologicalclassesdonot
+exhibit comparable clustering around such regions. Consequently,
+theSpuriousclasspredominantlycapturesartefact-relatedfeatures,
+and does not significantly impact the identification of genuine radio
+sources.
+Recently,Riggietal.(2023)developedcaesar-mrcnnfromMask
+R–CNNandsuccessfullyappliedittoVLA/ASKAP/ATCAdatasets.
+WithIoUandscorethresholdsof0.6and0.5,theyreportoverall𝐶≃
+88%and𝑅≃64%,withatypicalclassordering:Compactshowing
+thehighestincompleteness,Extendedclassestradingcompleteness
+for reliability, andSpuriousdifficult to detect (𝐶≃46%,𝑅≃
+37%). Our results follow the same qualitative trend while operating
+at,onaverage,≃5.5×highersourcedensitydrivenbydeeperLOFAR
+imaging(Section2.3).Toprovideacontrolledin-domainbenchmark,
+we also trained the latestcaesar-mrcnn-tf2on our training set
+andevaluateditonourLOFARvalidationsetatthesamethresholds
+(see Table A2 in Appendix A). It remains competitive onCompact
+sources(F1 det ≃88%),butshowslargergapsonthecomplexclasses
+relative to RF-DETR, indicating that RF-DETR handles complex
+morphology better in our denser and class-imbalanced dataset.
+4.2 RF-DETR source catalogues in the LoTSS Deep Fields
+We apply the trained RF-DETR model to the full continuum maps
+of all four LoTSS Deep Fields (ELAIS-N1, Lockman Hole, Boötes,
+and EDFN) using the tiled inference and consolidation procedure
+described in Section 3.3. Although the model is trained exclusively
+on ELAIS-N1,the same inferenceconfiguration andoperating point
+are adopted for all fields. The four Deep Fields cover comparable
+sky areas of order∼20 deg2, but differ in achieved depth and cali-
+bration history, providing a realistic test of cross-field transfer under
+heterogeneous imaging conditions.
+Table4summarisestheRF-DETRdetectionsineachfield,report-
+ing the total number of sources and their breakdown by morpho-
+logical class. As expected, fields reaching lower central rms levels,
+such as ELAIS-N1 and Lockman Hole, yield systematically larger
+detection counts than the shallower Boötes and EDFN fields. In all
+cases, however, the resulting catalogues are strongly dominated by
+Compactsources, which account for≃92–95% of all detections,
+in line with expectations for deep low-frequency radio surveys. The
+relative contributions ofSingle-ExtendedandMulti-Extended
+sourcesaresmallandremarkablystableacrossthefourDeepFields,
+together comprising only≃2–3% of the catalogues. This consis-
+tency indicates that the RF-DETR detector generalises well beyond
+the training field, producing comparable morphological populations
+despite differences in depth, sky coverage, and calibration strategy.
+Representativecutoutsfromeachfield,selectedtoillustratetherange
+ofdetectedmorphologies,areshowninFigure6.Minorfield-to-field
+variationsareprimarilyconfinedtotheFlaggedandSpuriouscat-
+egories. Such behaviour is consistent with differences in imaging
+characteristics, including stronger sidelobes, elevated or spatially
+varying noise, and direction-dependent calibration residuals, rather
+thanwithintrinsicchangesintheunderlyingsourcepopulation(Tasse
+et al. 2021; Sabater et al. 2021; Bondi et al. 2024). Overall, these
+variationsdonotaffectthestabilityoftheprimarysourcepopulations
+and have no impact on the scientific interpretation of the resulting
+catalogues.
+4.3 Comparison with PyBDSF catalogues
+Having characterised the RF-DETR catalogues in the LoTSS Deep
+Fields,wenowcomparethemwiththewidelyusedcomponent-based
+catalogues produced by PyBDSF on the same continuum maps so
+as to assess catalogue-level completeness, overlap, and structural
+differences between the two approaches. The PyBDSF catalogues
+usedinthiscomparisonarethepubliclyreleasedLoTSSDeepFields
+DR1 products (e.g. Sabater et al. 2021; Tasse et al. 2021). To es-
+tablish correspondences between the two catalogues, we adopt a
+PyBDSF-centric containment-based matching scheme. Specifically,
+a PyBDSF source is considered matched if its catalogue position
+(RA, Dec) lies within the area of a predicted RF-DETR bounding
+box. In cases where a PyBDSF source falls within more than one
+RF-DETR bounding box, the match is assigned to the RF-DETR
+detection whose bounding-box centre is closest to the PyBDSF po-
+sition. Because multiple PyBDSF sources can be associated with a
+single RF-DETR bounding box, the number of Py-matched sources
+issystematicallylargerthanthenumberofRF-DETRdetectionsthat
+contain at least one PyBDSF source.
+Figure 7 illustrates the overlap between RF-DETR and PyBDSF
+catalogues across all four LoTSS Deep Fields, showing the total
+number of detections, as well as the Py-only, RF-only, and matched
+populations. The majority of PyBDSF sources are successfully re-
+coveredbyRF-DETR.IntheELAIS-N1field,approximately96%of
+MNRAS000, 1–17 (2026)
+
+10Chen et al.
+16h09m30s 00s 08m30s
+55°35'
+30'
+25'
+RA
+Dec
+0.93
+0.95
+0.89
+0.91
+0.93
+0.95
+0.98
+10h28m00s 27m30s 00s 26m30s
+59°05'
+00'
+58°55'
+RA
+Dec
+0.97
+0.940.74
+0.97
+14h26m30s 15s 00s 25m45s 30s
+32°35'
+30'
+25'
+RA
+Dec 0.97
+0.89
+0.98
+17h55m00s 54m30s 00s 53m30s 00s
+67°50'
+45'
+40'
+RA
+Dec
+0.91
+0.74
+0.97
+0.95
+0.96
+0.95
+0.76
+Figure 6.RF-DETR detections in randomly selected15′ ×15 ′ regions from the four LoTSS Deep Fields (ELAIS-N1, Lockman Hole, Boötes, and EDFN).
+Predictedboundingboxesfollowthesamecolourandline-styleschemeasdefinedinFigure2.DetectorconfidencescoresareshownonlyforSingle-Extended,
+Multi-ExtendedandFlaggedfor clarity.
+Table 4.RF-DETR detections in the LoTSS Deep Fields.
+Field AllCompact Single-Extended Multi-Extended Flagged Spurious
+ELAIS-N1 73,539 69,441 (94.4%) 1,434 (2.0%) 130 (0.18%) 246 (0.3%) 2,288 (3.1%)
+Lockman Hole 75,609 69,865 (92.4%) 1,855 (2.4%) 196 (0.26%) 390 (0.5%) 3,303 (4.4%)
+Boötes 43,805 41,187 (94.0%) 870 (2.0%) 91 (0.21%) 184 (0.4%) 1,473 (3.4%)
+EDFN 56,969 53,029 (93.1%) 1,306 (2.3%) 142 (0.25%) 266 (0.5%) 2,226 (3.9%)
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification11
+2,638
+Py-only
+7,020
+RF-only
+67,906
+Py-matched
+66,519
+RF-matched
+PyBDSF 
+70,544
+RF-DETR 
+73,539
+ELAIS-N1
+579
+Py-only
+6,908
+RF-only
+49,533
+Py-matched
+49,286
+RF-matched
+PyBDSF 
+50,112
+RF-DETR 
+56,194
+Lockman Hole
+869
+Py-only
+8,089
+RF-only
+35,898
+Py-matched
+35,716
+RF-matched
+PyBDSF 
+36,767
+RF-DETR 
+43,805
+Boötes
+147
+Py-only
+3,986
+RF-only
+23,186
+Py-matched
+22,665
+RF-matched
+PyBDSF 
+23,333
+RF-DETR 
+26,651
+EDFN
+Figure7.VenndiagramsillustratingthecatalogueoverlapbetweenPyBDSF(blue)andRF-DETR(orange)inthefourLoTSSDeepFields.Numbersinsideeach
+circleindicatethenumberofdetectionsinthecorrespondingcatalogue.TheoverlapregionshowsthenumberofPy-matchedsources,definedasPyBDSFsources
+that are associated with at least one RF-DETR bounding box, as well as the corresponding number of RF-matched detections. Py-only sources correspond to
+PyBDSFdetectionswithoutanRF-DETRcounterpart,whileRF-onlydetectionsdenoteRF-DETRboundingboxesthatarenotmatchedtoanyPyBDSFsource.
+Specifically, for the Lockman Hole and EDFN fields, both RF-DETR and PyBDSF counts are restricted to the central regions covered by the publicly available
+PyBDSF catalogues, matching the sky coverage used for the comparison. See more details in text.
+PyBDSF sources (67,906 out of 70,544) are matched to at least one
+RF-DETRdetection,withsimilarlyhighrecoveryfractions(≳97%)
+observed in the other fields. In addition to this high level of over-
+lap, RF-DETR yields a slightly larger number of catalogue entries
+than PyBDSF. This difference reflects the distinct detection strate-
+gies adopted by the two methods. At the operating point used in
+Section 3, RF-DETR applies a single confidence threshold to the
+detector’s class probabilities, without a subsequent island-growth
+stage.Incontrast,PyBDSFfirstidentifiesemissionislandsviapixel-
+thresholding and then fits one or more Gaussians; sources that do
+not seed an island are therefore not included in the catalogue. As
+a result, spatially coherent but low-surface-brightness sources that
+fallbelowper-pixelthresholdsmayberecoveredbyRF-DETRwhile
+remaining absent from PyBDSF. For the Lockman Hole and EDFN
+fields,thepubliclyavailablePyBDSFcataloguesarerestrictedtothe
+central regions of the continuum maps and therefore contain fewer
+sources overall (50,112 and 23,333, respectively). Accordingly, the
+RF-DETR counts reported in Figure 7 for these two fields are re-
+strictedtothesameskyareascoveredbythePyBDSFcatalogues.In
+view of the reduced sky coverage of the available catalogues for the
+LockmanHoleandEDFNfields,andtoavoidintroducingadditional
+field-dependentsystematicsassociatedwithvariationsinnoiseprop-
+erties and survey depth, we therefore focus the detailed comparison
+between RF-DETR and PyBDSF on the full ELAIS-N1 map, which
+servesasthedeepestandmostuniformlysensitiveLoTSSDeepField
+andthusprovidesanaturalreferenceforcatalogue-levelcomparisons
+(e.g. Sabater et al. 2021).
+Figure 8 compares total (left) and peak (right) flux densities for
+matchedRF-DETRandPyBDSFsourcesintheELAIS-N1field.To-
+tal flux densities are obtained by summation within each RF-DETR
+bounding box and within the associated PyBDSF island, while peak
+flux densities correspond to the maximum pixel intensity inside the
+RF-DETR bounding box and the fitted Gaussian peak for PyBDSF.
+For bright sources, including those classified asFlagged, the flux
+densities measured by RF-DETR and PyBDSF closely follow the
+one-to-one relation in both total and peak flux, down to approxi-
+mately0.01Jy and0.01Jy beam −1, respectively.Flaggedsources
+are identified as real radio sources rather than false detections; this
+class reflects limitations in flux measurements caused by dynamic-
+range and calibration artefacts around bright emission, rather than
+uncertaintyinsourceidentification(Section2.2).Accordingly,these
+sources are retained in the catalogue for completeness and source
+association, while their flux densities are best refined through dedi-
+cated re-imaging or improved direction-dependent calibration when
+used for quantitative analyses.
+Deviations from the one-to-one relation reflect methodologi-
+cal differences: RF-DETR often reports higher total fluxes for
+Multi-Extendedsystems because a single RF-DETR bounding
+box can enclose spatially separated components that PyBDSF treats
+as multiple islands. A systematic excess is also seen for a subset
+of RF-DETRSingle-Extendedsources, particularly in the peak
+flux comparison. This may reflect differences in how PyBDSF peak
+fluxes are derived from Gaussian component fitting and can be sup-
+pressed for structured extended emission, while RF-DETR values
+MNRAS000, 1–17 (2026)
+
+12Chen et al.
+10 5
+ 10 4
+ 10 3
+ 10 2
+ 10 1
+ 100 101
+PyBDSF T otal Flux Density [Jy]
+10 5
+10 4
+10 3
+10 2
+10 1
+100
+101
+RF-DETR T otal Flux Density [Jy]
+Compact
+Single-Extended
+Multi-Extended
+Flagged
+Spurious
+10 5
+ 10 4
+ 10 3
+ 10 2
+ 10 1
+ 100 101
+PyBDSF Peak Flux Density [Jy/beam]
+10 5
+10 4
+10 3
+10 2
+10 1
+100
+101
+RF-DETR Peak Flux Density [Jy/beam]
+Compact
+Single-Extended
+Multi-Extended
+Flagged
+Spurious
+Figure 8.Comparison of RF-DETR and PyBDSF flux densities for matched sources in the ELAIS–N1 field. Left panel: comparison of total flux densities
+obtainedviadirectpixelsummationwithinRF-DETRboundingboxesversusPyBDSFislands.Rightpanel:comparisonofpeakfluxdensities,whereRF-DETR
+valuescorrespondtothemaximumpixelintensitywithintheboundingboxes,whilePyBDSFmeasurementsarederivedfromGaussiancomponentfittingwithin
+the associated islands. Data points are shown using different colours and marker shapes according to the RF-DETR morphological class. For classes with more
+than 30 matched sources, kernel-density contours are overlaid to enclose the densest 68.3% of the points.
+are measured directly from pixel-level intensities and are more sen-
+sitive to localized brightness enhancements. At lower flux densities,
+Spuriousdetections exhibit substantial scatter, and since these de-
+tectionsareproducedbydifferenttypesofartefacts,theirfluxdensity
+measurementsarenotexpectedtobereliableandshouldnotbeused
+for quantitative analyses.Compactsources display increased scatter
+towards the faint end, and a subset of these sources show system-
+atically lower RF-DETR total flux densities relative to PyBDSF.
+This behaviour is consistent with differences in how low-surface-
+brightnessemissionnearthedetectionthresholdistreatedbythetwo
+approaches, particularly for faintCompactsources whose extended
+emission can be partially excluded by RF-DETR bounding boxes,
+and this effect is further quantified below.
+Figure 9 places these source-level differences into a popula-
+tion context by comparing total flux distributions decomposed
+by morphological class. The overall RF-DETR flux distribution
+closely tracks PyBDSF at intermediate and high fluxes, including
+Single-Extended,Multi-ExtendedandFlaggedclasses. No-
+tably, RF-DETR shows a modest excess of faint detections relative
+to PyBDSF that is dominated byCompactsources. To interpret this
+excess,weexaminethedetectionbehaviourasafunctionofsignal-to-
+noiseratio(SNR),focusingonCompactsourceswherediscrepancies
+aremostpronounced.ThepeakSNRisdefinedastheratioofthepeak
+fluxdensitytothelocalbackgroundrms.Usingthematchingmethod
+described above, approximately 7,000 RF-DETR detections are not
+matched to any PyBDSF source, of which about 5,000 are classi-
+fied asCompactand about 2,000 asSpurious. These RF-DETR-
+onlyCompactdetections are predominantly low-SNR candidates;
+approximately half of these sources have peak SNR below 5, with
+a median peak SNR of≃5.1, compared to a median peak SNR of
+9.0 forCompactsources matched between RF-DETR and PyBDSF.
+In addition, these RF-DETR-onlyCompactdetections are not spa-
+tially clustered around regions classified asFlaggedorSpurious;
+none lie within 10 arcsec of such regions, and fewer than 5 per cent
+are located within 60 arcsec. This indicates that the majority of the
+additional low-SNR compact detections returned by RF-DETR are
+not trivially attributable to obvious imaging artefacts, but instead
+represent a broader population of low-SNR compact source candi-
+dates near the detection threshold. Conversely, approximately 2,600
+PyBDSFsourcesarenotmatchedtoanyRF-DETRdetection.These
+unmatched PyBDSF sources are systematically faint, with a median
+total flux density of2.5×10 −4 Jy, compared to3.4×10 −4 Jy for
+PyBDSF sources recovered by RF-DETR. A Kolmogorov–Smirnov
+test confirms that the detected and missing PyBDSF populations are
+statistically distinct (𝑝≪0.01), indicating that incompleteness in
+both catalogues is concentrated toward the low-SNR, faint source
+regime.TheseresultsindicatethatRF-DETRtendstoreturnalarger
+population of low-SNR compact candidates, whereas PyBDSF is
+more conservative in this regime but may recover some faint Gaus-
+sian components that RF-DETR does not.
+Nevertheless, the modest increase in RF-DETR faint detections
+does not lead to a higher catalogue-level integrated flux density;
+summing the total flux densities over all detected sources in the
+ELAIS-N1 field yields 150 Jy for RF-DETR, compared to 157 Jy
+for the PyBDSF catalogue, corresponding to a relative difference of
+−4.6%. In particular, RF-DETR total fluxes are obtained by direct
+pixel summation within annotation-driven bounding boxes, which
+can be conservative around low-surface-brightness emission, while
+PyBDSF measurements integrate emission over the contiguous is-
+lands, including flux associated with fitted Gaussian wings (Mohan
+& Rafferty 2015). As a result, although RF-DETR returns a slightly
+larger number of faint detections, their individual flux contributions
+are typically small and do not offset the systematically larger per-
+source apertures adopted by PyBDSF, leading to a modestly lower
+total integrated flux density for RF-DETR at the catalogue level.
+In this sense, RF-DETR can be regarded as a generator of faint
+compactsourcecandidates,forwhichSNR-basedpost-processingor
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification13
+10 5
+ 10 4
+ 10 3
+ 10 2
+ 10 1
+ 100 101
+T otal Flux Density [Jy]
+100
+101
+102
+103
+104
+Number of Sources
+Compact
+Single-Extended
+Multi-Extended
+Flagged
+Spurious
+PyBDSF
+10 5
+ 10 4
+ 10 3
+ 10 2
+ 10 1
+ 100 101
+T otal Flux Density [Jy]
+100
+101
+102
+103
+104
+Number of Sources
+RF-DETR Compact
+RF-DETR Single-Extended
+PyBDSF Single Gaussian
+10 5
+ 10 4
+ 10 3
+ 10 2
+ 10 1
+ 100 101
+T otal Flux Density [Jy]
+100
+101
+102
+103
+104
+Number of Sources
+RF-DETR Single-Extended
+RF-DETR Multi-Extended
+PyBDSF Non-single Gaussian
+Figure 9.Total flux distributions for sources detected in the ELAIS-N1 field. Left: RF-DETR catalogue decomposed by morphological class (histograms
+with different colours and hatch patterns:Compact,Single-Extended,Multi-Extended,FlaggedandSpurious), overlaid with the PyBDSF total flux
+distribution (black open histograms). Middle: Comparison between RF-DETRCompact,Single-Extendedand PyBDSF single-Gaussian sources. Right:
+Comparison between RF-DETR extended classes and PyBDSF component groupings (MandC).
+additional validation should be applied to balance completeness and
+reliability according to specific scientific objectives.
+Figure 10 presents a qualitative comparison between RF-DETR
+detections(leftpanels)andPyBDSFcatalogueentries(rightpanels)
+overrepresentative15 ′ ×15 ′ regionsoftheELAIS-N1field.Theup-
+per panels illustrate a region containing a classical double-lobed ra-
+diogalaxyembeddedinadensefieldofcompactsources.RF-DETR
+assigns a singleMulti-Extendeddetection whose bounding box
+encloses both lobes and the core, corresponding to the astrophysical
+interpretation of a single radio source. In contrast, the PyBDSF cat-
+alogue decomposes the same system into multiple Gaussian compo-
+nents,listedasseparatecatalogueentries.Itisimportanttonotethat
+thePyBDSFstructuralflagencodesthecompositionoftheGaussian
+model(S:singleGaussian;M:multipleGaussians;C:singleGaussian
+withinanislandcontainingothersources),ratherthanasource-level
+morphological classification (Mohan & Rafferty 2015). As a result,
+physically connected multi-component systems appear as multiple
+rows in the PyBDSF catalogue and require an additional associa-
+tion step before they can be treated as a single astrophysical source.
+By construction, RF-DETR instead provides a unified, source-level
+entry, which is advantageous for cross-identification and catalogue
+compactness.
+Thelowerpanelsshowaregiondominatedbythreebrightsources
+with pronounced sidelobes and deconvolution artefacts. RF-DETR
+correctly identifies the bright artefact-affected systems asFlagged
+and labels a small number of nearby responses asSpurious, while
+simultaneously preserving numerous genuine faintCompactdetec-
+tions in the surrounding area. PyBDSF relies on fitting Gaussian
+componentstoemissionislandsidentifiedaboveuser-definedthresh-
+oldsanddoesnotprovideexplicitlabelsforartefacts.WhilePyBDSF
+supports adjustable parameters such as rms estimation boxes and is-
+landthresholdsthatcanbetunedtomitigatetheinclusionofsidelobe
+and other instrumental artefacts, these settings do not categorically
+exclude artefact emission. In practice, under conditions of elevated
+andspatiallyvaryingnoiseduetobrightsources,artefact-dominated
+islands can still be fitted with Gaussian components that enter the
+PyBDSFcatalogue.TheexplicitFlaggedandSpuriouslabelspro-
+duced by RF-DETR thus enable artefact-aware catalogue filtering
+without image-specific parameter tuning, while retaining genuine
+sources in the vicinity of bright objects.
+4.4 Recovery of extended and giant radio galaxies
+To further assess the practical performance of our RF-DETR–based
+source finder, we cross-matched our LOFAR deep-field catalogues
+with the sample of extended radio galaxies (ERGs) compiled by
+Simonte et al. (2024), which was constructed through careful visual
+inspectionoftheELAIS-N1,LockmanHoleandBoötesdeepfields.
+Their study provides a stringent external benchmark, as it targets
+large, morphologically complex radio galaxies that are known to be
+challenging for automated source-finding algorithms.
+Restricting the comparison to ERGs whose host positions lie
+within the LOFAR image footprints, we find that RF-DETR suc-
+cessfully recovers the vast majority of these sources across all three
+fields.Overall,approximately94%(1,512outof1,609)oftheERGs
+are detected by RF-DETR, while the recovery fraction for giant ra-
+dio galaxies (GRGs; defined as systems with projected linear sizes
+LLS≥0.7 Mpc) remains high at≃86%. In this analysis, a source
+is considered recovered if the host position reported by Simonte
+etal.(2024)fallswithinatleastoneRF-DETRboundingbox,which
+constitutes a conservative matching criterion, particularly for very
+large, lobe-dominated systems. More than 83% of recovered ERGs
+and GRGs are assigned to extended morphological classes by RF-
+DETR, eitherSingle-ExtendedorMulti-Extended. The latter
+class is frequently associated with classical double-lobed and multi-
+componentsystems,consistentwiththephysicalnatureoflargeradio
+galaxies. Only a small fraction of ERGs are classified asFlagged
+orCompact, indicating that RF-DETR does not confuse genuine
+extended emission with artefacts or noise features.
+Beyond recovering the majority of visually identified ERGs, RF-
+DETRassignsasubstantiallylargernumberofsourcesintheLoTSS
+DeepFieldstoextendedmorphologicalclassesthanthoseincludedin
+the Simonte et al. (2024) catalogue. While not all sources classified
+asSingle-ExtendedorMulti-Extendedby RF-DETR neces-
+sarily correspond to genuine ERGs as defined by projected linear
+size, this indicates the presence of additional extended radio galaxy
+candidates beyond those identified in visual catalogues. Given that
+compact sources constitute more than 90% of detections in LoTSS
+DeepFields,startingfromtheRF-DETRextendedclassesprovidesa
+highlyefficientandphysicallymotivatedpre-selectionforsubsequent
+ERG and GRG searches. These results demonstrate that RF-DETR
+notonlyachieveshighcompletenessonavisuallycuratedsampleof
+extended radio galaxies, but also produces morphologically consis-
+MNRAS000, 1–17 (2026)
+
+14Chen et al.
+16h02m30s 00s 01m30s
+55°35'
+30'
+25'
+RA
+Dec
+0.95
+0.96
+0.95
+0.82
+0.94
+0.98
+16h02m30s 00s 01m30s
+55°35'
+30'
+25'
+RA
+Dec
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+M
+S
+S
+S
+S
+SS
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+M
+S
+S
+S
+SS
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+SS
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S S
+S
+S
+S
+16h14m30s 00s 13m30s
+57°20'
+15'
+10'
+RA
+Dec
+0.95
+0.95
+0.93
+0.90
+16h14m30s 00s 13m30s
+57°20'
+15'
+10'
+RA
+Dec
+S
+S
+S
+SS
+S
+M
+S
+S
+S
+S
+S
+M
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+M
+S
+S
+S
+S
+S
+S
+S M
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+S
+SS
+S
+S
+S
+S
+Figure 10.Left: RF-DETR detections overlaid on the15′ ×15 ′ cutouts of ELAIS-N1 mosaic. Right: PyBDSF catalogue entries on the same regions. Blue and
+green labels represent single Gaussian (S) and multiple Gaussians (M) sources, respectively.
+tent classifications in a fully automated and scalable manner, under-
+scoringitspotentialforlarge-scale,systematicsearchesforextended
+and giant radio galaxies in forthcoming wide-area radio surveys.
+5 CONCLUSIONS
+Wehavedemonstratedthatatransformer-based,set-predictiondetec-
+tor,RF-DETR,canbesuccessfullyadaptedforinstance-levelsource
+detectionandmorphologyclassificationindeep,low-frequencyradio
+continuumsurveys.Ourapproachinvolvesabalancebetweensurvey-
+scale source detection and capturing the complexity of radio mor-
+phologies, and adopts a conservative morphology scheme designed
+for automated source finding. Applied to the LoTSS Deep Fields at
+150MHz,themodeldeliversunified,source-levelcataloguesthatsi-
+multaneouslylocaliseradioemissionandassignphysicallymotivated
+morphological labels.
+Trained on the ELAIS-N1 Deep Field and applied without re-
+training to three additional fields, RF-DETR achieves robust and
+stable performance under realistic deep-field conditions. For the
+main source populations, includingCompact,Single-Extended,
+andMulti-Extendedsystems,themodelattainsdetectionandclas-
+sificationperformanceatthe≳90percentlevelonaheld-outvalida-
+tion set. Importantly, physically associated multi-lobed systems are
+preferentially detected as single instances, reflecting the astrophys-
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification15
+ical concept of a radio source rather than a collection of individual
+components.
+At the catalogue level, RF-DETR recovers the vast majority of
+sources identified by the widely used PyBDSF source finder and
+maintains good overall agreement in flux measurements, while ex-
+hibiting distinct detection behaviour in specific regimes. In partic-
+ular, RF-DETR provides source-level representations of classical
+multi-component radio galaxies as unified entries rather than frag-
+mented Gaussian components, and returns a broader set of com-
+pactsourcecandidatesnearthedetectionthreshold.Beyondconven-
+tionalmorphologyclasses,theexplicitidentificationofFlaggedand
+Spuriousdetections enables artefact-aware filtering and facilitates
+reliable catalogue construction in the vicinity of bright sources.
+As an external validation, we compared the RF-DETR catalogues
+with a visually curated sample of extended and giant radio galaxies.
+The detector successfully recovers the majority of these large, mor-
+phologically complex systems and assigns them predominantly to
+extended morphological classes. This demonstrates its effectiveness
+on physically associated, multi-component radio galaxies that are
+knowntochallengetraditionalautomatedsource-findingapproaches.
+These results demonstrate that modern transformer-based detec-
+torscanprovideapracticalandscalableframeworkformorphology-
+awaresourcefindingindeepradiocontinuumsurveys.TheRF-DETR
+approachiswellsuitedforsourcedetectionandpopulation-levelmor-
+phologicalstudies,withclearapplicabilitytoforthcominglarge-area
+surveys with facilities such as SKA-Low.
+ACKNOWLEDGEMENTS
+This work is funded by the International Science Partnerships Fund
+(ISPF) and this grant is awarded by the STFC on behalf of UK Re-
+search and Innovation (UKRI). GC acknowledges financial support
+provided by the Spanish Ministerio de Ciencia, Innovación y Uni-
+versidades (MICIU) through the project PID2023-153342NB-I00 /
+10.13039/501100011033. LKM is grateful for support from ISPF
+via STFC [ST/Y004159/1]. YW acknowledges the support of the
+Department of Atomic Energy, Government of India, under project
+no.12-R&D-TFR5.02-0700.ZCisfundedbyaUKRIFutureLeaders
+Fellowship [grant MR/X005399/1; PI: Alkistis Pourtsidou].
+This publication also uses data generated via the Zooniverse.org
+platform, development of which is funded by generous support, in-
+cluding a Global Impact Award from Google, and by a grant from
+the Alfred P. Sloan Foundation.
+DATA AVAILABILITY
+The LoTSS Deep Fields DR1 continuum images are publicly avail-
+able through the LoTSS data releases, and ancillary imaging data
+(SWIRE, UKIDSS–DXS, Pan–STARRS) are distributed by their re-
+spective surveys. The trained RF-DETR model weights and the re-
+sulting source catalogues for the LoTSS Deep Fields will be made
+publicly available upon publication. The annotation data underlying
+thisworkarenotpubliclyreleasedduetodata-useconstraintsassoci-
+atedwiththeoriginalannotationplatform,butmaybemadeavailable
+upon reasonable request to the corresponding authors.
+REFERENCES
+Alhassan W., Taylor A. R., Vaccari M., 2018, MNRAS, 480, 2085
+Alonso D., Bellini E., Hale C., Jarvis M. J., Schwarz D. J., 2021, MNRAS,
+502, 876
+Banfield J. K., et al., 2015, MNRAS, 453, 2326
+Baron Perez N., Brüggen M., Kasieczka G., Lucie-Smith L., 2025, A&A,
+699, A302
+Bendo G. J., Beswick R. J., D’Cruze M. J., Dickinson C., Fuller G. A.,
+Muxlow T. W. B., 2015, MNRAS, 450, L80
+Bendo G. J., Henkel C., D’Cruze M. J., Dickinson C., Fuller G. A., Karim
+A., 2016, MNRAS, 463, 252
+Best P. N., Heckman T. M., 2012, MNRAS, 421, 1569
+Bonaldi A., et al., 2021, MNRAS, 500, 3821
+Bonaldi A., et al., 2025, MNRAS, 543, 1092
+Bondi M., et al., 2024, A&A, 683, A179
+Brand K., Grobler T. L., Kleynhans W., Vaccari M., Prescott M., Becker B.,
+2023, MNRAS, 522, 292
+Braun R., Bonaldi A., Bourke T., Keane E., Wagg J., 2019, arXiv e-prints, p.
+arXiv:1912.12699
+Carion N., Massa F., Synnaeve G., Usunier N., Kirillov A., Zagoruyko S.,
+2020, in Vedaldi A., Bischof H., Brox T., Frahm J.-M., eds, Computer
+Vision–ECCV2020.SpringerInternationalPublishing,Cham,pp213–
+229
+Chen G., Zhang H.-X., Kong X., Lin Z., Liang Z., Chen X., Chen Z., Song
+Z., 2020, ApJ, 895, 146
+Chen G., Zhang H.-X., Kong X., Lin Z., Liang Z., Chen Z., Tang Y., Chen
+X., 2022, ApJ, 934, L35
+ChenG.,BendoG.J.,FullerG.A.,HenkelC.,KongX.,2023,MNRAS,525,
+3645
+Chen Q., et al., 2024a, arXiv e-prints, p. arXiv:2406.03459
+ChenG.,BendoG.J.,FullerG.A.,ZhangH.-X.,KongX.,2024b,MNRAS,
+530, 819
+Cochrane R. K., et al., 2023, MNRAS, 523, 6082
+Cornu D., et al., 2024, A&A, 690, A211
+DahiyaN.,PrakashD.,KunduS.,KuttanS.R.,SuwalkaI.,AyadiM.,Dubale
+M., Hashmi A., 2025, Scientific Reports, 15, 25842
+Hale C. L., et al., 2024, MNRAS, 527, 6540
+Hale C. L., et al., 2025, MNRAS, 544, 1323
+Hancock P. J., Murphy T., Gaensler B. M., Hopkins A., Curran J. R., 2012,
+MNRAS, 422, 1812
+Hancock P. J., Trott C. M., Hurley-Walker N., 2018, Publ. Astron. Soc. Aus-
+tralia, 35, e011
+Hardcastle M. J., Croston J. H., 2020, New Astron. Rev., 88, 101539
+He K., Gkioxari G., Dollár P., Girshick R., 2017, in 2017 IEEE In-
+ternational Conference on Computer Vision (ICCV). pp 2980–2988,
+doi:10.1109/ICCV.2017.322
+Horton M. A., Hardcastle M. J., Miley G. K., Tasse C., Shimwell T., 2025,
+A&A, 699, A338
+Hotan A. W., et al., 2021, Publ. Astron. Soc. Australia, 38, e009
+Jarvis M., Bacon D., Blake C., Brown M., Lindsay S., Raccanelli A., Santos
+M., Schwarz D. J., 2015, in Advancing Astrophysics with the Square
+Kilometre Array (AASKA14). p. 18, doi:10.22323/1.215.0018
+Kaiser N., et al., 2010, in Stepp L. M., Gilmozzi R., Hall H. J., eds, Soci-
+ety of Photo-Optical Instrumentation Engineers (SPIE) Conference Se-
+ries Vol. 7733, Ground-based and Airborne Telescopes III. p. 77330E,
+doi:10.1117/12.859188
+Kondapally R., et al., 2021, A&A, 648, A3
+Lao B., Jaiswal S., Zhao Z., Lin L., Wang J., Sun X., Qin S. L., 2023,
+Astronomy and Computing, 44, 100728
+Lastufka E., et al., 2025, A&A, 703, A217
+Lawrence A., et al., 2007, MNRAS, 379, 1599
+Lonsdale C. J., et al., 2003, PASP, 115, 897
+Lukic V., de Gasperin F., Brüggen M., 2019a, Galaxies, 8, 3
+Lukic V., Brüggen M., Mingo B., Croston J. H., Kasieczka G., Best P. N.,
+2019b, MNRAS, 487, 1729
+Magliocchetti M., Maddox S. J., Lahav O., Wall J. V., 1998, MNRAS, 300,
+257
+Meng D., Chen X., Fan Z., Zeng G., Li H., Yuan Y., Sun L., Wang J., 2021,
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision (ICCV). pp 3651–3660
+MNRAS000, 1–17 (2026)
+
+16Chen et al.
+Mingo B., et al., 2019, MNRAS, 488, 2701
+Mingo B., et al., 2022, MNRAS, 511, 3250
+Mohan N., Rafferty D., 2015, PyBDSF: Python Blob Detection and Source
+Finder, Astrophysics Source Code Library, record ascl:1502.007
+Morabito L. K., et al., 2025, MNRAS, 536, L32
+Ndung’u S., Grobler T., Wijnholds S. J., Karastoyanova D., Azzopardi G.,
+2023, New Astron. Rev., 97, 101685
+Ndung’u S., Grobler T., Wijnholds S. J., Karastoyanova D., Azzopardi G.,
+2024, MNRAS, 530, 783
+Oquab M., et al., 2024, Transactions on Machine Learning Research
+Ren S., He K., Girshick R., Sun J., 2017, IEEE Transactions on Pattern
+Analysis and Machine Intelligence, 39, 1137
+Riggi S., et al., 2021, MNRAS, 502, 60
+Riggi S., et al., 2023, Astronomy and Computing, 42, 100682
+Riggi S., et al., 2024, Publ. Astron. Soc. Australia, 41, e085
+Robinson I., Robicheaux P., Popov M., Ramanan D., Peri N., 2026, in Inter-
+national Conference on Learning Representations (ICLR).
+Rudnick L., 2021, Galaxies, 9, 85
+Sabater J., et al., 2021, A&A, 648, A2
+Samudre A., George L. T., Bansal M., Wadadekar Y., 2022, MNRAS, 509,
+2269
+SapkotaR.,HarshaCheppallyR.,ShardaA.,KarkeeM.,2025,arXive-prints,
+p. arXiv:2504.13099
+Shimwell T. W., et al., 2017, A&A, 598, A104
+Shimwell T. W., et al., 2019, A&A, 622, A1
+Shimwell T. W., et al., 2022, A&A, 659, A1
+Shimwell T. W., et al., 2025, A&A, 695, A80
+SimonteM.,AndernachH.,BrüggenM.,MileyG.K.,BarthelP.,2024,A&A,
+686, A21
+Sortino R., et al., 2023, Experimental Astronomy, 56, 293
+Tanidis K., et al., 2025, Publ. Astron. Soc. Australia, 42, e062
+Tasse C., et al., 2021, A&A, 648, A1
+Tingay S. J., et al., 2013, Publ. Astron. Soc. Australia, 30, e007
+VafaeiSadrA.,VosE.E.,BassettB.A.,HosenieZ.,OozeerN.,LochnerM.,
+2019, MNRAS, 484, 2793
+Williams W. L., et al., 2019, A&A, 622, A2
+Wu C., et al., 2019, MNRAS, 482, 1211
+ZhuX.,SuW.,LuL.,LiB.,WangX.,DaiJ.,2021,inInternationalConference
+on Learning Representations (ICLR).
+van Haarlem M. P., et al., 2013, A&A, 556, A2
+APPENDIX A: MASK R-CNN BASELINE:CAESAR-MRCNN
+MaskR-CNNcombinesobjectdetection,classification,andinstance
+segmentation in a two-stage framework (He et al. 2017). We adopt
+caesar-mrcnn3 as a radio-oriented Mask R-CNN baseline against
+the transformer-based RF-DETR.Caesar-mrcnnis a refactored
+TensorFlow2implementationofthesystempresentedbyRiggietal.
+(2023), featuring an improved preprocessing pipeline and additional
+backboneoptions.Inthiswork,weusecaesar-mrcnnasadetection-
+oriented baseline: for each radio cutout, it returns an instance mask,
+an associated bounding box, and a class label, while detailed source
+characterisation is deferred to downstream analysis tools.
+For comparison,caesar-mrcnnuses the same cutouts, data
+splits, and augmentation policy as RF-DETR (Section 2.3), namely
+132×132pixel single-channel LOFAR images at a scale of
+1.5′′ pixel−1. As Mask R-CNN requires per-instance binary masks,
+we derive these masks via threshold-based segmentation on the
+ZScale-remapped images using a3𝜎threshold. The segmentation
+isrecomputedaftereachgeometricaugmentationtoavoidWCSmis-
+alignment and to preserve consistency between masks, bounding
+boxes, and class labels.
+3 https://github.com/SKA-INAF/caesar-mrcnn-tf2
+Table A1.Main parameters ofcaesar-mrcnnused in this work.
+Component Value
+Architecture & Optimisation
+Backbone ResNet-101
+Backbone strides [4, 8, 16, 32, 64]
+Optimiser Adam
+Learning rate5×10 −4
+Epochs 250
+Batch size 2
+RPN / ROI configuration
+RPN anchor ratios[0.2,0.3,0.5,1,2,3,4,5]
+RPN anchor scales[8,16,32,64,128]
+RPN NMS threshold 0.7
+Train anchors per image 256
+Train ROIs per image 256
+Max GT instances 100
+Loss weights
+RPN class 1.0
+RPN bbox 0.1
+MRCNN class 1.0
+MRCNN bbox 0.1
+MRCNN mask 0.1
+Algorithmically,caesar-mrcnnfollows the standard two-stage
+Mask R–CNN pipeline: a ResNet–FPN backbone feeds a Region
+ProposalNetwork(RPN),whoseproposalsarerefinedviaROIAlign
+and passed to (i) a classification and bounding-box regression head
+and (ii) a fully convolutional mask head producing28×28per-
+instance masks. Training optimises the standard multi-task loss
+𝐿=𝐿 class +𝐿 box +𝐿 mask.Relative to a vanilla Mask R-CNN con-
+figuration, the radio-oriented implementation extends the RPN an-
+chor scales (to∼8–128px) and broadens the anchor aspect-ratio
+priors (0.2–5.0) to better capture elongated and multi-island ra-
+dio emission. In addition, the bounding-box and mask loss terms
+are down-weighted relative to the classification loss to balance the
+segmentation-dominated objective, following the recommendations
+of Riggi et al. (2023).
+Preprocessing is radio-specific and handled internally by the
+caesar-mrcnnpackage, including single-channel FITS ingestion,
+NaN sanitisation, and ZScale intensity remapping. We therefore in-
+gest LOFAR cutouts directly as single-channel FITS images, with
+conversion to network tensors performed internally. While the input
+representationdiffersfromthatofRF-DETR,thetraining/validation
+splitandaugmentationstrategyarekeptidenticalacrossbothmodels
+for consistency. We largely follow the default configuration recom-
+mended by Riggi et al. (2023), adopting a ResNet-101 backbone
+withFPN,optimisationwithAdamatalearningrateof5×10 −4,and
+wide RPN anchor ratios and scales together with reduced bounding-
+box loss weights to accommodate both compact and extended radio
+sources.ThefullmodelconfigurationissummarisedinTableA1.We
+evaluatecaesar-mrcnnonthesameELAIS-N1validationsetusing
+theidenticalmatchingcriteriaandthresholdsadoptedforRF-DETR.
+The resulting detection and classification metrics are summarised in
+Table A2, providing a useful point of reference for comparison with
+RF-DETR.
+MNRAS000, 1–17 (2026)
+
+Radio Source Detection and Classification17
+Table A2.Validation results forcaesar-mrcnnon the same ELAIS-N1 validation set at IoU≥0.5and score≥0.5.
+Class Detection Classification
+Completeness (%) Reliability (%) F1 score (%) Recall (%) Precision (%) F1 score (%)
+All 85.6 82.1 83.8 86.4 86.4 86.4
+Compact90.0 85.7 87.8 89.9 98.4 94.0
+Single-Extended80.4 86.5 83.3 41.1 95.7 57.5
+Multi-Extended65.2 35.6 46.1 52.2 32.4 40.0
+Flagged48.4 87.5 62.2 22.6 100.0 36.8
+Spurious18.6 22.1 20.2 12.1 88.2 21.3
+APPENDIX B: COMPUTATIONAL RUNTIMES
+Allcomputationswereconductedonahigh-performancecomputing
+clusterusingasingleNVIDIATeslaV100GPU.TrainingRF-DETR
+on the ELAIS-N1 dataset for 200 epochs, using the configuration
+listedinTable2,requiredapproximately70hoursofwall-clocktime
+on a single GPU. Inference on the full LoTSS Deep Field contin-
+uum images was performed using the tiled sliding-window strategy
+described in Section 3.3. For RF-DETR, wall-clock runtimes for the
+detection and consolidation stage ranged from approximately 0.4 to
+1.2 hours per field on a single GPU, depending on mosaic size and
+sourcedensity.Additionalphotometryandpost-processingstepsmay
+extend the total end-to-end pipeline runtime.
+This paper has been typeset from a TEX/LATEX file prepared by the author.
+MNRAS000, 1–17 (2026)

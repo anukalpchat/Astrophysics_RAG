@@ -1,0 +1,1027 @@
+Title: An Improved HDBSCAN-based Detection and Tracking Method for Solar Active Regions in Magnetograms
+Authors: C. X. Shi, Q. Hao, P. F. Chen, Y. Guo
+Published: 2026-05-22
+Categories: astro-ph.SR, astro-ph.IM
+
+Draft version May 25, 2026
+Typeset using LATEX twocolumn style in AASTeX7.0.1
+An Improved HDBSCAN-based Detection and T racking Method for Solar Active Regions in
+Magnetograms
+C. X. Shi
+ ,1 Q. Hao
+ ,1, 2 P. F. Chen
+ ,1, 2 and Y. Guo
+ 1, 2
+1School of Astronomy and Space Science, Nanjing University, Nanjing 210023, People’s Republic of China
+2Key Laboratory of Modern Astronomy and Astrophysics (Nanjing University), Ministry of Education, Nanjing 210023, People’s Republic
+of China
+ABSTRACT
+Solar active regions (ARs) are the primary source of solar eruptions and space weather. Accurate de-
+tection and tracking of ARs is crucial for understanding their evolution and predicting solar activities.
+In the previous work, based on the density-based spatial clustering of applications with noise (DB-
+SCAN) approach, we proposed the DBSCAN-based solar active region detection (DSARD) framework.
+To overtake its limitations, in this paper we applied the hierarchical density-based spatial clustering of
+applications with noise (HDBSCAN) approach to the detection of solar active regions, which is called
+the HDBSCAN-based solar active region detection and tracking (HARDAT) method. This enables
+the algorithm to handle multi-density magnetic structures dynamically, eliminating the need for fixed
+thresholds. Consequently, the algorithm can detect diffuse and small ARs more effectively while pre-
+serving morphological integrity. We have also developed a solar differential rotation based tracking
+algorithm that integrates physical motion models and Hamming distance similarity metrics to achieve
+robust multi-object tracking. Additionally, we propose a novel polarity inversion line extraction method
+that uses support vector classification, which offers superior generalization for complex AR boundaries.
+Processing line-of-sight magnetograms from SOHO/MDI (1996–2011) and SDO/HMI (2010–2024) and
+evaluating them against the National Oceanic and Atmospheric Administration (NOAA) and DSARD
+catalogues demonstrates that HARDAT is superior in terms of sensitivity, accuracy, and stability of
+detection and tracking. This is particularly evident when resolving clustered ARs and maintaining
+identity continuity. HARDAT therefore offers a comprehensive solution for the long-term analysis of
+AR evolution and space weather prediction.
+Keywords: The Sun (1693) — Solar active regions (1974) — Solar magnetic fields (1503) — Solar cycle
+(1487) — Astronomical techniques (1684)
+1. INTRODUCTION
+Solar active regions (ARs) are localized areas of strong
+magnetic fields on the Sun. They are often associated
+with sunspots, flares and coronal mass ejections (CMEs;
+van Driel-Gesztelyi & Green 2015). Research on ARs
+involves analysing magnetic field structures, their evo-
+lution and the mechanisms by which energy accumu-
+lates within these regions, to assess the potential risk of
+eruptive events, such as solar flares and CMEs ( Chen
+2011). Studying them is essential for understanding so-
+lar dynamics and forecasting space weather ( Toriumi &
+Wang 2019). High-resolution and high-cadence magne-
+tographs, such as the Michelson Doppler Imager (MDI;
+Corresponding author: Q. Hao
+Email: haoqi@nju.edu.cn
+Scherrer et al. 1995) on board the Solar and Heliospheric
+Observatory (SOHO; Domingo et al. 1995) and the He-
+lioseismic and Magnetic Imager (HMI; Schou et al. 2012)
+on board the Solar Dynamics Observatory (SDO; Pes-
+nell et al. 2012), have rendered traditional processing
+methods inadequate for handling their massive datasets.
+These methods rely on manual inspection or threshold-
+based image processing.
+Consequently, researchers have developed a series of
+automated detection methods for ARs in magnetograms
+(Zhang et al. 2010; Turmon et al. 2010; Bobra et al.
+2014; Quan et al. 2021; Jiang et al. 2022; Wang et al.
+2023; Chen et al. 2025). These methods provide cru-
+cial data support for the studies of solar ARs, solar
+activities, long-term solar dynamo modeling. In par-
+ticular, we recently applied the unsupervised desity-
+based spatial clustering of applications with noise (DB-
+arXiv:2605.23150v1  [astro-ph.SR]  22 May 2026
+
+2 C. X. Shi et al.
+SCAN; Schubert et al. 2017) algorithm to develop the
+DBSCAN-based solar active region detection (DSARD;
+Chen et al. 2025) method. DSARD eliminates the need
+for the vast high-quality annotated data that are in-
+herent in supervised learning, thereby reducing subjec-
+tive bias. Its density-based nature enables the adaptive
+detection of ARs across varying intensities, including
+small-scale transient magnetic features that are often
+overlooked by conventional thresholding methods. This
+significantly enhances the accuracy and robustness of
+detection. Employing staged clustering in a two-stage
+DBSCAN density clustering process effectively avoids
+the tendency of the traditional methods (such as re-
+gion growing and morphological algorithms) to exces-
+sively merge adjacent ARs or perform inappropriate seg-
+mentation within high-resolution magnetograms. This
+significantly improves the capability to analyze fine-
+scale magnetic structures. Compared with the National
+Oceanic and Atmospheric Administration (NOAA) and
+Spaceweather HMI Active Region Patch (SHARP; Bo-
+bra et al. 2014), the DSARD method achieved accuracy
+rates of 89.7% and 78.2%, respectively, whilst identi-
+fying small-scale active regions that are overlooked by
+conventional methods.
+We conducted detailed statistical analyses of charac-
+teristics such as the number, area, magnetic flux, tilt an-
+gle, and drift velocity of active regions during the solar
+cycle 24 and the rising phases of the solar cycle 25 us-
+ing the active region database generated by the DSARD
+method. The majority of the statistical results were con-
+sistent with those of previous studies, thereby validating
+the reliability of the DSARD method. Furthermore, our
+research yielded several novel key conclusions such as
+the finding that large ARs adhere to Joy’s Law, whereas
+small ARs exhibit random distribution patterns. The
+proportion of ARs that violate Hale’s Law is markedly
+higher than in previous studies.
+However, we also found that the DSARD method had
+some limitations. This is because the DBSCAN algo-
+rithm uses fixed density threshold and distance param-
+eter, which restricts its ability to detect diffuse regions
+and multi-density magnetic field structures. Further-
+more, DSARD does not track the detected ARs. To
+avoid duplicate detections and minimise the projection
+effects, a margin of ±6◦ from the center meridian of the
+solar disk is selected when evaluating the detection re-
+sults. Consequently, the true positive rate of the results
+is therefore limited.
+Hierarchical density-based spatial clustering of appli-
+cations with noise (HDBSCAN; McInnes et al. 2017;
+Campello et al. 2013) is a powerful extension of DB-
+SCAN that can handle clusters with varying densities
+by leveraging the concepts of mutual reachability dis-
+tance and cluster stability. In this paper, we pro-
+pose an HDBSCAN-based solar active region detection
+and tracking (HARDAT) method. The adoption of
+HDBSCAN makes it particularly suitable for magne-
+tograms, where ARs exhibit a wide range of sizes and
+magnetic density distributions. Our method improves
+upon DSARD by incorporating dynamic density clus-
+tering and a tracking module informed by physics that
+accounts for solar differential rotation ( Schröter 1985;
+Rao et al. 2024). We also propose a new polarity in-
+version line (PIL) extraction method based on support
+vector classification (SVC; Hearst et al. 1998). This
+method has a stronger generalization ability than the
+traditional mask-based method and can simultaneously
+extract magnetic neutral lines in dense and diffuse mag-
+netic fields. The paper is organized as follows: Section 2
+describes the data used in this study. Section 3 details
+the improved detection methodology, including HDB-
+SCAN clustering and integration strategies. Section 4
+presents the tracking algorithm based on solar differ-
+ential rotation. Section 5 introduces the SVC-based
+PIL extraction method. Section 6 provides a discussion
+and conclusion, highlighting the advantages of HAR-
+DAT over existing methods.
+2. DATA ACQUISITION
+This study uses the solar full disk line-of-sight (LOS)
+magnetograms, which were provided by SOHO/MDI
+from the year 1996 to 2011 and SDO/HMI from 2010
+to 2024. The SOHO/MDI magnetogram dataset pro-
+vides solar photospheric magnetic distribution with a
+spatial resolution of 4 ′′ (an image size of 1024×1024
+pixels). SDO/HMI, the successor to SOHO/MDI, has
+greater temporal and spatial accuracy. It provides
+solar magnetograms with a spatial resolution of 1 ′′
+(an image size of 4096×4096 pixels). And we use
+mdi.f d_M _96m_lev182 and hmi.M _720s magnetor-
+grams data series for this study. As the cadences of
+these two datasets are differ, the sampling cadence of
+the data is set to 192 minutes for SOHO/MDI magne-
+tograms and 3 hours for SDO/HMI magnetograms, en-
+suring the consistency in subsequent tracking accuracy.
+This yields solar magnetogram data spanning a total of
+approximately 28 years, from 1996 to 2024, including
+the whole solar cycles 23 and 24, and the rising phase of
+solar cycle 25. All data for this study are retrieved from
+the Joint Science Operations Center of Stanford 3.
+3 http://jsoc.stanford.edu
+
+Solar active region detection and tracking 3
+3. DETECTION
+The original DSARD method consists of the follow-
+ing four steps: (1) threshold-based image segmentation,
+(2) first global DBSCAN, (3) second reformative DB-
+SCAN, and (4) integration. The corresponding parame-
+ters are described in Table 1, except for β and γ. First,
+it extracts seed pixels with magnetic field strengths ex-
+ceeding the threshold. It then applies two iterations of
+DBSCAN clustering in the ( x, y) space to group ad-
+jacent pixels using the parameters ϵ, minSamples_1,
+and minSamples_2. Subsequently, the resulting cluster
+types are categorized according to the ratio of positive
+to negative polarity pixels. The distances between dif-
+ferent clusters are then calculated based on their types
+and compared with minDistance to determine whether
+these clusters should be merged. Finally, the area of
+each cluster is calculated and filtered using minSize
+to obtain the final result. Since the clustering results
+of DBSCAN are mainly affected by two parameters, ϵ
+and minDistance, which are actually equivalent to a
+fixed density threshold, the generalization ability of DB-
+SCAN is not strong when used alone. The advantage of
+DSARD lies in its application of two iterations of DB-
+SCAN to address the problem of uneven density distri-
+bution within the strong-field regions of active regions.
+This approach mitigates the limitations of DBSCAN to
+a certain extent. However, the model results remain
+highly dependent on parameter selection, and the use of
+two iterations of DBSCAN procedures effectively pro-
+vides only two density thresholds, thereby failing to
+achieve clustering with adaptive density thresholds. The
+same issue also arises in the integration step, where the
+merging criterion is a fixed parameter, minDistance,
+which cannot accommodate most cases. Therefore, this
+section focuses on optimizing the integration step in
+the DSARD model and proposes a new model based
+on HDBSCAN.
+3.1. Modification of the DSARD Method
+The original DSARD integration algorithm merges
+clusters based on distance and cluster type. This process
+is mainly determined by the parameters minDistance
+and ratio. However, the former parameter is derived
+from experience. It has a fixed value, and is independent
+of sample data and clustering results. Therefore, apply-
+ing the same set of integration algorithms to the clusters
+obtained after two iterations of DBSCAN clustering may
+not be optimal, potentially resulting in suboptimal mor-
+phological outcomes in the detected ARs. Figure 1(a)
+shows the magnetogram in 2000 May 20, and panel (b)
+and (c) are the results of first and second DBSCAN clus-
+tering, respectively. And in panel (d), AR2 and AR12,
+which should be considered as one AR, are splited due
+to a small minDistance. While the parameter settings
+in the example differ from those of the original DSARD
+method, they indicate the potential drawback with the
+original DSARD method. To address this issue, we in-
+troduce a term that takes cluster size into account in
+the distance calculation, and introduce two parameters
+β and γ to adjust the influence of this term. This al-
+lows us to calculate the distance between clusters more
+dynamically, thereby improving the robustness of the
+model. The specific implementation process is as fol-
+lows:
+1. In the original DSARD method, the nearest distance
+between two clusters after the second DBSCAN is
+calculated according to the cKDT ree algorithm (Vir-
+tanen et al. 2020). Here, we modify the method by
+sorting the distances and selecting 95% of them as
+the nearest distance, in order to reduce the influence
+of outliers on the calculation distances.
+2. The corrected distance is then obtained by multiply-
+ing the nearest distance by the coeﬀicient k, consist-
+ing of three terms. The first term is determined by
+the types of the two clusters and is the parameter
+α in the original DSARD method. α is a coeﬀicient
+determined by the cluster categories to define a mea-
+surement of the distance between clusters (see Table
+1 in Chen et al. (2025)). The second and third terms
+are the newly added correction terms and are deter-
+mined by the sizes of two clusters and the external
+parameters β and γ. The formula is as follows:
+Asum = A1 + A2, r = max(A1, A2)
+min(A1, A2) , (1)
+k1 = α, (2)
+k2 = β Asum
+Asum + A0
+(1 − r − 1
+r + 1 ), (3)
+k3 = γ r − 1
+r + 1 , (4)
+k = k1max(0.8, min(1 + k2 − k3, 1.2)), (5)
+where A1 and A2 represent the areas of the two clus-
+ters after projection correction. A0 represents 0.5
+times the area of the largest cluster after the two
+DBSCAN clustering iterations of the current mag-
+netogram. A0 is used as the standard by which the
+cluster size is measured. The k2 term in Equation ( 3)
+indicates that the distance between two large clusters
+increases more and the distance between two small
+clusters or between one large and one small cluster
+increases less. This reduces the probability of two
+
+4 C. X. Shi et al.
+Figure 1. The DSARD result for the SOHO/MDI magnetogram on 2000 May 20, with minDistance set to 20 Mm and
+minSize set to 70 Mm 2. Panel (a) The result after threshold segmentation. The blue box area is the target region. The right
+panels are the result of the target region after each part of DSARD processing. Panel (b) Clustering results of the first global
+DBSCAN. Panel (c) Clustering results of the second reformative DBSCAN. Panel (d) Consequence of integration. Panel (e)
+Better integration with β set to 0.5 and γ set to 0.5.
+adjacent large active regions merging into one. The
+k3 term in Equation ( 4) aims to minimize the dis-
+tance between large and small clusters. This is moti-
+vated by the diffuse nature of the AR’s edge and the
+density-based characteristics of the DBSCAN algo-
+rithm, meaning that the clustering results occasion-
+ally exhibit a large cluster surrounded by numerous
+smaller ones. These two terms k2 and k3 can facilitate
+the merging of nearby smaller clusters and enhance
+the structural integrity of the active region. With
+the modified method, the magnetogram on 2000 May
+20 is processed again, and the identification of ARs
+is displayed in Figure 1(e), which shows the result
+of better integration, i.e., AR2 has a more complete
+form than that in Figure 1(d). A small AR14 is not
+included in AR2 because it represents a bipolar re-
+gion, and the parameter α causes it not to merge
+with AR2.
+Despite the improvement, the inclusion of parame-
+ters β and γ is more appropriate for adjustment in
+individual case studies, and is not ideal for automat-
+ically detecting large samples. This is because, in
+certain scenarios such as when multiple small clus-
+ters exist between two active regions, these clusters
+may be combined as a consequence of these parame-
+ters, which would lead to an unintended outcome. A
+specific analysis of these two parameters can be found
+in Appendix B. Therefore, setting these parameters
+to zero is preferable for automated detection in sta-
+tistical studies.
+3.2. HDBSCAN-based Solar Active Region Detection
+(HARD)
+The DBSCAN clustering algorithm relies on a fixed
+density threshold, which may limit its performance when
+dealing with datasets that exhibit complex or varying
+density distributions. While the DSARD method em-
+ploys a two iterations of DBSCAN approach to address
+this challenge and detect active regions with different
+density characteristics, the generalization capability of
+this strategy could be further improved in practical ap-
+plications. Comparing Figures 2(a) and (b), the den-
+sity threshold of the first global DBSCAN clustering in
+panel (a) is too high, resulting in the failure to detect
+the small active regions including AR16, AR17, AR18
+and the dispersion such as AR15 detected in panel (b).
+At the same time, the morphology of the active regions
+in Figure 2(a) with AR8, AR11 also has the disadvan-
+tage of being incomplete. While it is possible to adjust
+the parameters of the first global DBSCAN to alter the
+density threshold and detect more small or diffuse struc-
+tures, as shown in Figure 2(b), this will cause the orig-
+inally detected regions to expand until they exceed the
+artificially set area threshold maxSize , resulting in the
+second DBSCAN clustering with high density thresh-
+
+Solar active region detection and tracking 5
+old and the destruction of the structure, as in AR11 in
+Figure 2(b).
+The purpose of the two iterations of DBSCAN is to
+address the multi-density distribution. There are cor-
+responding algorithms in the field of clustering algo-
+rithms, such as ordering points to identify the cluster-
+ing structure (OPTICS; Ankerst et al. 1999) and HDB-
+SCAN, which are derivative algorithms of the DBSCAN
+algorithm for clustering dynamic density data. There-
+fore, the effect of the two-iteration DBSCAN method in
+DSARD can be implemented by using these advanced
+clustering algorithms. After some experiments about
+these advanced algorithms, HDBSCAN is found to be a
+promising candidate.
+HDBSCAN introduces two new concepts based on
+DBSCAN, which are core distance and mutual
+reachability distance :
+• Core distance: The shortest distance that makes
+point P the core point, i.e., the distance from the
+nearest min_samples - 1 point to P .
+• Mutual reachability distance: The maximum
+among the distance between P 1 and P 2, the core
+distance of P 1 and the core distance of P 2.
+The distance matrix is constructed using mutual reach-
+ability distance, which keeps the dense points (with low
+core distance) at a similar distance from each other and
+extends the distance between diffuse points (with high
+core distance). This ultimately results in an obvious dif-
+ference in the density of the point set. A distance ma-
+trix is then obtained by calculating the mutual reach-
+ability distance between points. A hierarchical struc-
+ture is obtained by constructing a minimum spanning
+tree based on the distance matrix ( Cheriton & Tarjan
+1976). Next, the tree is simplified using the parame-
+ter minClusterSize , and the stability of the clusters is
+defined to separate or merge them. Finally, dynamic
+density clustering results are obtained without relying
+on a density threshold.
+Figure 3 shows the process of the AR detection algo-
+rithm after HDBSCAN is introduced. The aim is to use
+HDBSCAN to achieve the two iterations effect of DB-
+SCAN directly, so HDBSCAN clustering is employed
+immediatedly after the magnetic field strength thresh-
+old segmentation. Figure 3(a) shows the result of HDB-
+SCAN clustering. It can be seen that the two iterations
+effect of DBSCAN is achieved and that small structures
+and diffuse regions in the western region of the solar disk
+are detected, as well as the distinction between adjacent
+large structures. However, HDBSCAN algorithm does
+not remove the noise in the northeast region well because
+it is classified as one cluster in the HDBSCAN stability
+algorithm. Therefore, DBSCAN with a small density
+threshold is performed again in Figure 3(b), to remove
+the noise in the region. The small density threshold is
+chosen to prevent the damage to the structure in the
+detected region. The final results are displayed in Fig-
+ure 3(c). Comparing Figure 2 with Figure 3(c), it is seen
+that introducing HDBSCAN achieves smaller, more dif-
+fuse region detection while retaining the morphological
+integrity of the active region. However, this advantage
+comes at the cost of increased performance overhead.
+More details about the HDBSCAN clustering on solar
+magnetograms can be seen in Appendix A.
+3.3. Performance of The Detection Methods
+Both the DSARD method based on DBSCAN and the
+HARD method based on HDBSCAN are used for active
+region detection in SOHO/MDI and SDO/HMI magne-
+tograms. However, due to the different spatial resolu-
+tions of these two types of magnetograms, the parame-
+ters selected even with the same model are different for
+the two data sets. The parameters used in this study
+are shown in Table 1 and Table 2.
+T able 1. Parameters in the DSARD model.
+Parameter SOHO/MDI SDO/HMI
+threshold 100 Gauss 150 Gauss
+ϵ 10 pixels 30 pixels
+minSamples_1 100 pixels 200 pixels
+minSamples_2 150 pixels 500 pixels
+maxSize 3000 Mm 2 3000 Mm 2
+ratio 10 10
+minDistance 40 Mm 40 Mm
+minSize 70 Mm 2 70 Mm 2
+β 0–1 (default 0) 0–1 (default 0)
+γ 0–1 (default 0) 0–1 (default 0)
+In Table 2, the minClusterSize , minSamples_H
+and ϵ_ClusterSelection are the HDBSCAN param-
+eters, while the ϵ and minSamples are the DB-
+SCAN parameters. In the analysis of SOHO/MDI
+magnetograms, the parameters minSamples_H and
+ϵ_ClusterSelection are set to “None” . This contrasts
+with the processing of SDO/HMI magnetograms, where
+these parameters are given specific values. This dis-
+crepancy arises from the lower spatial resolution in
+SOHO/MDI magnetograms, which results in a sim-
+pler data distribution. This allows for effective out-
+comes with a single parameter configuration. Con-
+versely, the higher spatial resolution of SDO/HMI mag-
+netograms results in a more intricate data distribution.
+
+6 C. X. Shi et al.
+Figure 2. Panel (a) is the result under the parameters in Figure 1. Panel (b) is the result of setting the minSamples_1 to 60.
+Figure 3. HDBSCAN-based solar active region detection result of the SOHO/MDI magnetogram on 2000 May 20. Panel (a)
+HDBSCAN clustering results. Panel (b) DBSCAN clustering results. Panel (c) Better integration with β set to 0.5 and γ set
+to 0.5.
+This necessitates adjusting two additional parameters,
+minSamples_H and ϵ_ClusterSelection , to achieve
+optimal results.
+Figure 4 shows the detection results of DSARD and
+HARDAT on MDI and HMI magnetograms, respec-
+tively. The blue plus signs show the labeled ARs of
+NOAA. DSARD and HARD demonstrate complemen-
+tary performance characteristics across various samples.
+In Figure 4(a), DSARD identifies three active regions,
+AR2, AR3 and AR4, whereas in Figure 4(b), HARD
+identifies these ARs as the same AR1. Conversely, the
+distinct active regions AR4 and AR5 depicted in Fig-
+ure 4(d) are not separable in Figure 4(c). To objectively
+assess the advantages and disadvantages of DSARD
+and HARD, we chose the labeling outcome provided by
+NOAA as the ground truth. An accurate detection is
+defined as when the center locations reported by NOAA
+fall within the minimum bounding rectangle of the de-
+tected ARs, which is consistent with previous works
+(Zhang et al. 2010; Chen et al. 2025). After tracking
+the detection results over time in Section 4, we quanti-
+tatively calculated assessment metrics for comparison.
+
+Solar active region detection and tracking 7
+Figure 4. Solar active region detection results of the SOHO/MDI magnetogram on 1999 August 1 (a, b) and 2012 June 7 (c,
+d). Each red box with a number represents a bounding rectangle of a solar active region identified by DSARD (a, c) or HARD
+(b, d). The blue plus signs show the labeled ARs of NOAA.
+4. TRACKING
+Due to the dynamic nature of solar active regions,
+which encompasses processes such as merging, splitting,
+and migration, long-term monitoring and evolutionary
+analysis of these regions is essential. We made the im-
+provement of the DSARD method for detecting solar ac-
+tive regions and introduced a new automated detection
+method based on HDBSCAN, called HARD. However,
+the detected active regions are not tracked or numbered.
+Therefore, in this section we implement tracking of solar
+active regions based on the DSARD and HARD detec-
+tion methods.
+The process of tracking solar active regions can be
+attributed to a multiple object tracking (MOT) prob-
+
+8 C. X. Shi et al.
+T able 2. Parameters in the HARD model.
+Parameter SOHO/MDI SDO/HMI
+threshold 100 Gauss 150 Gauss
+minClusterSize 100 pixels 500 pixels
+minSamples_H N one 100 pixels
+ϵ_ClusterSelection N one 30 pixels
+ϵ 10 pixels 40 pixels
+minSamples 50 pixels 100 pixels
+ratio 10 10
+minDistance 40 Mm 40 Mm
+minSize 70 Mm 2 70 Mm 2
+β 0–1 (default 0) 0–1 (default 0)
+γ 0–1 (default 0) 0–1 (default 0)
+lem ( Luo et al. 2021), and the classic approach is the
+tracking-by-detection method. The fundamental con-
+cept behind this technique is data association, mean-
+ing that the targets detected in the current frame are
+matched with the pre-existing targets to enable contin-
+uous tracking. Despite the existence of several well-
+established MOT algorithms, such as Simple Online
+and Realtime Tracking (SORT, Bewley et al. 2016)
+and Channel and Spatial Reliability Tracking (CSRT,
+LuNežič et al. 2018), tracking solar active regions poses
+distinct challenges. These challenges arise from various
+issues including morphological transformations, projec-
+tion effects, and variable sampling time interval preci-
+sion, all of which diminish the performance of conven-
+tional tracking techniques when applied to solar active
+regions. For example, SORT tracking presupposes rela-
+tively uniform target motion. However, this assumption
+can lead to tracking errors when the sample time inter-
+vals are variant. To address these challenges, the track-
+ing algorithm should integrate the solar differential ro-
+tation to predict the location of active regions. By utiliz-
+ing the predictable movements of the solar photosphere
+surface, this technique improves the tracking accuracy
+over time. This method ensures that active regions are
+accurately identified and numbered, thereby supporting
+more robust and reliable monitoring of solar activity.
+4.1. Solar Differential Rotation based Active Region
+Track
+The solar differential rotation is characterized by vary-
+ing angular velocity across different latitudes, driven by
+internal convection and the Coriolis effect, resulting in
+higher angular velocity at lower latitudes and reduced
+angular velocity at higher latitudes ( Schou et al. 1998;
+Thompson et al. 2003; Rao et al. 2024). This variability
+helps determine the location and general morphological
+features of an active region accurately after a certain
+period, ignoring its evolutionary changes. However, it is
+important to consider the evolution of active region ac-
+tually. Thus, enhancing the temporal resolution of the
+sample and ensuring the real-time updates of the target
+are necessary. This investigation employed a tempo-
+ral sampling resolution of 192 minutes for SOHO/MDI
+magnetograms and three hours for SDO/HMI magne-
+tograms, as detailed in Section 2. The comprehensive
+method used in this study to track the detected ac-
+tive regions involves three distinct steps: Prediction,
+Match, and Update, each of which is described below.
+1. Prediction: The RotatedSunFrame framework
+within Sunpy (The SunPy Community et al. 2020)
+is used to describe a rotationally transformed coordi-
+nate system within the context of solar coordinates.
+This tool computes the displacement of each pixel in
+a solar active region over time, enabling predictions
+about its future position and configuration. The mor-
+phology of active regions is influenced by both local
+plasma flows and global differential rotation. How-
+ever, the displacement of the active region caused
+by local plasma flow is substantially smaller than
+that caused by differential rotation. Consequently,
+the effects of differential rotation become more pro-
+nounced, thereby enabling the implementation of the
+predictive method.
+2. Match: The dataset used in our study comprises
+magnetograms recorded at an interval of δt, i.e., ev-
+ery 192 minutes or every three hours. After detecting
+the active regions at time t, the time interval allows
+us to predict their location and morphology of these
+regions at time t + δt using the first step. Simultane-
+ously, we can detect the active regions at time t + δt
+to determine their actual location and morphology,
+which is referred to as the ground truth. Next, we
+compute the similarity matrix across all active re-
+gions within the Prediction results and the ground
+truth using Hamming distance ( Norouzi et al. 2012),
+a measure of the difference between two equal-length
+character strings or binary sequences. In this con-
+text, after converting each active region and others
+to binary values of 1 and 0, the Hamming distance is
+determined by summing the number of points within
+the region where the resulting value is non-zero after
+subtracting the Prediction results from the ground
+truth. Distance is the difference between the Pre-
+diction results and the ground truth, therefore, the
+similarity can be expressed by the following formula:
+Similarity = 1 − DHamming
+Size , (6)
+
+Solar active region detection and tracking 9
+where Size is the number of pixels in the active region
+in the ground truth.
+3. Update: Assuming that M ARs are present at time
+t and N ARs are present at time t + δt, an M × N
+similarity matrix can be constructed. This matrix
+helps identify the correspondence between the most
+similar active regions. Using a predetermined simi-
+larity threshold, we can determine whether the ARs
+from the two different frames are indeed the same. If
+they are deemed identical, the existing ID number is
+retained. Otherwise, a new ID is assigned. A mem-
+ory field is incorporated into the tracking algorithm
+when specific challenges arise, such as when an ob-
+ject is not detected in one frame but reappears in the
+next or when the target splits or merges due to the
+active region evolution or the outcomes of the detec-
+tion algorithm. This field employs a queue to retain
+some historical frames, with a default of ten frames.
+This approach minimizes false and missed tracking
+over extended durations.
+Figure 5 shows an example to display the entire Pre-
+diction and Match process for AR2 in Figure 3(c).
+Figure 5(b) is predicted from Figure 5(a) via differen-
+tial rotation over an interval of 192 minutes (since this
+sample is from the SOHO/MDI magnetograms). Fig-
+ure 5(a) contains 5, 227 pixels. Figure 5(c) shows the
+actual detected AR at t + δt (192 minutes), known as
+the ground truth, and includes 5, 154 pixels. Figure 5(d)
+is derived from the frame difference between Figure 5(b)
+and Figure 5(c) and contains 313 pixels, which also cor-
+responds to the Hamming distance. Finally, the similar-
+ity between the AR2 at times t and t + δt is calculated
+to be 0.94 using Equation ( 6). Figure 6 shows the tra-
+jectory of AR2 in panel (a) moving from the east to the
+west. While the morphology of the AR evolves as a re-
+sult of differential rotation and its inherent dynamics,
+the tracking method takes advantage of the predictabil-
+ity of differential rotation to ensure that the AR’s iden-
+tifier remains unchanged, as shown in panel (b–j).
+4.2. Performance of the Tracking method
+The active regions detected by the DSARD and
+HARD methods in Section 3 are tracked using the afore-
+mentioned method. The multi-objective tracking evalu-
+ation indicators MOTA, IDR and R_MT (Ristani et al.
+2016) are calculated to measure the detection and track-
+ing performance of the model with NOAA labeled as the
+ground truth ( GT). The definitions of these indicators
+are as follows:
+M OT A = 1 − F N + ID _switch
+GT , (7)
+Figure 5. An example shows the entire procedure of Pre-
+diction and Match for a specific active region AR2 in Fig-
+ure 3(c), which is shown as the black area in the image. Panel
+(a) The current position and shape of the AR. Panel (b) The
+predicted position and shape of the AR at the next moment
+according to panel (a) and the time interval. Panel (c) The
+detected position and shape of the AR at the next moment.
+Panel (d) The difference between panel (b) and panel (c).
+IDR = IDT P
+IDT P + IDF N , (8)
+R_M T = M T
+GT . (9)
+In the multi-object tracking evaluation, FN (False
+Negatives) represents the total count of instances across
+all frames where a ground truth target is present but is
+not detected by the method. In contrast, IDTP (Iden-
+tity True Positives) and IDFN (Identity False Nega-
+tives) are identity-aware metrics. IDTP counts the to-
+tal number of frames across a trajectory where a ground
+truth identity is correctly and consistently associated
+with its predicted identity. IDFN counts the total num-
+ber of frames where a ground truth identity is either
+not detected or is incorrectly associated with a different
+identity. The term ID_switch indicates that the ID as-
+sociated with the same NOAA number in the preceding
+and succeeding frames has changed. MT means most
+tracked target, signifying that no more than two frames
+within the active region remain untracked. MOTA mea-
+sures the overall accuracy of the tracker by penalizing
+detection and identity association errors. IDR measures
+the tracker’s ability to correctly recall and maintain tar-
+get identities. R_MT measures the tracker’s coverage
+
+10 C. X. Shi et al.
+Figure 6. An example of tracking result. Panel (a) The active regions detected by the HARD method on 2022 February 1.
+Panels (b–j) The trajectory of the active region AR2 from February 1 to February 9, with a time interval of one day.
+by calculating the proportion of ground truth targets
+that are successfully tracked for most of their duration.
+These three metrics are bounded within the interval
+[0, 1], where larger values denote better tracking per-
+formance.
+Figure 7 illustrates the variation of the three evalu-
+ation metrics relative to the lifetime threshold of the
+NOAA active regions. Due to NOAA’s one day temporal
+resolution, a larger abscissa value indicates a longer du-
+ration of visibility of the active region, with a maximum
+extent of approximately 15 days, corresponding to half
+of the solar rotation period. The DSARD and HARD
+methods both consistently demonstrate high evalua-
+tion indicator values. The longer the time span, the
+greater the tracking accuracy. However, when compar-
+ing these indicators between the two methods, HARD
+generally yields superior outcomes in all instances ex-
+cept for the MOTA when examining SDO/HMI magne-
+tograms. Therefore, we can quantitatively infer that
+HARD is a more effective method than DSARD for
+detecting solar active regions. We named the method
+of HDBSCAN based solar active region detection and
+tracking as HARDAT.
+5. SVC-BASED MAGNETIC POLARITY
+INVERSION LINE EXTRACTION
+The HARDAT method provides crucial insights into
+the position, morphology, and magnetic field intensity
+of an active region. With this information, we can an-
+alyze active region magnetograms to identify features
+such as the magnetic tilt angle and the polarity inversion
+line (PIL). The PIL is characterized by zero magnetic
+field strength and separates areas of opposite magnetic
+polarity within an active region. Since magnetograms
+contain only positive and negative intensity pixels, ex-
+tracting the PIL within the active region is equivalent
+to identifying the boundary between these pixels. We
+use a support vector classification (SVC; Hearst et al.
+1998) model to determine a hyperplane that separates
+positive and negative pole regions within the magne-
+togram. This approach effectively reformulates the PIL
+extraction problem as a convex quadratic programming
+problem.
+SVC is a supervised learning algorithm designed for
+classification. Its objective is to classify new data points
+into categories by identifying the optimal hyperplane
+that maximizes the margin between two data classes.
+Due to the complex and unpredictable morphology and
+magnetic field distribution in active regions, using kernel
+techniques is essential to project the data into a high-
+dimensional feature space and enabling nonlinear clas-
+sification (Shawe-Taylor & Cristianini 2004). In magne-
+togram data classification, the data are processed in an
+up-dimensional manner by using a radial basis function
+(RBF) kernel, also known as Gaussian kernel. Classi-
+fication outcomes using the SVC method with an RBF
+kernel depend on two parameters: the kernel parameter
+γ and the penalty parameter C. The penalty parameter
+C regulates the tolerance of a classifier for misclassi-
+fication. A higher value of C signifies lower tolerance
+for inaccuracies, resulting in a narrower soft margin for
+classification. The parameter γ in the RBF kernel func-
+
+Solar active region detection and tracking 11
+Figure 7. Two line charts of the three tracking evaluation indicators MOTA (blue), IDR (green) and R_MT (red) as a function
+of lifetime threshold of the NOAA active regions. The dotted line represents the DSARD method, while the solid line represents
+the HARD method. The histogram above shows the number of NOAA numbers under the current lifetime threshold. Panel (a)
+The result of SOHO/MDI magnetograms. Panel (b) The result of SDO/HMI magnetograms.
+tion determines the rate at which the kernel function
+decays. A larger γ results in a more rapid decay, which
+implies only very nearby points are treated as the same
+class. Based on this concept, selecting a larger γ will
+lead to the classifier producing more intricate and con-
+voluted decision boundaries, while selecting a smaller γ
+will yield a smoother, more linear boundary. After a
+series of parameter adjustments, C was set to 10 and γ
+to 0.02, considering the PIL extraction results and the
+generalization ability of the model.
+The process can be divided into four main steps: (1)
+adaptive downsampling, (2) threshold segmentation, (3)
+SVC classification, and (4) filtering of small contours.
+Figure 8 illustrates the process of extracting two active
+regions identified by HARD on the same magnetogram.
+These ARs exhibit distinct differences in size and mor-
+phology. Step 1 involves adaptive downsampling, which
+averages the image based on the size of the active region.
+This step aims to extract key features and enhance the
+eﬀiciency of SVC calculations. Step 2 uses threshold
+segmentation to target lower magnetic field strengths.
+This ensures that a suﬀicient number of sample points
+are available for training, which enhances the accuracy
+of the results, as shown in Figures 8(b) and (c). Step
+3 performs SVC classification operations on the images
+to maintain the decision boundaries, as shown in Fig-
+ures 8(d) and (e). Due to the small threshold estab-
+lished in Step 2, the classification outcomes include an
+excessive amount of details. This results in the pres-
+ence of small, independent, closed contours present in
+the figure. Consequently, Step 4 filters these contours
+based on the size while preserving the primary decision
+boundary as the PIL extraction outcome.
+6. DISCUSSION AND CONCLUSION
+We presented an improved automated technique based
+on the DSARD for detecting and tracking solar ac-
+tive regions using the LOS full-disk magnetograms from
+both SOHO/MDI and SDO/HMI datasets. Unlike the
+DSARD method, the proposed technique incorporates
+two additional parameters, β and γ, which are deter-
+mined by the cluster size. These parameters improve the
+cluster integration and subsequently provide a clearer
+AR structure. Due to the fixed density threshold charac-
+teristic of DBSCAN, we used an advanced clustering al-
+gorithm called HDBSCAN. HDBSCAN can group data
+points based on cluster stability to achieve dynamic den-
+sity clustering, ultimately improving the generalization
+capability of the model.
+We sampled the LOS full-disk magnetograms of
+SOHO/MDI from 1996 to 2011 and SDO/HMI from
+2010 to 2024 at time intervals of 192 minutes and three
+hours, respectively. Then, we implemented the active
+region detection using two methods: DSARD and HAR-
+DAT. Since the DSARD method does not incorporate a
+temporal tracking algorithm for active regions, we have
+independently tracked the two aforementioned detection
+outcomes. This tracking approach employs solar differ-
+ential rotation to predict the position and shape of ac-
+tive regions in the next time step. Next, we computed
+the Hamming distance between the predictions and the
+actual active regions to derive a similarity matrix to up-
+date the active region identifiers for tracking purposes.
+
+12 C. X. Shi et al.
+Figure 8. PIL extraction based on the RBF kernel SVC classification. Panel (a) The HARD detection results of the SDO/HMI
+magnetogram on 2023 February 1. The right two columns represent the PIL extraction steps for the active regions AR2 and
+AR4, respectively. Panel (b) and panel (c) represent the original image after threshold segmentation. Panel (d) and panel (e)
+show the extraction result without filtering. Panel (f) and panel (g) show the extraction result with a filter factor of 0.05.
+Figure 9. Results of PIL-mask extraction using different
+sigma and n_cluster parameters are presented, with the red
+areas denoting the extracted PIL regions. The active region
+selected is the same as that shown in Figure 8.
+We used the NOAA catalog as the ground truth to eval-
+uate the DSARD and HARDAT test and tracking out-
+comes, respectively. This evaluation was quantified us-
+ing three parameters: R_MT, IDR, and MOTA. We
+found that both DSARD and HARDAT performed well
+in all three metrics, though HARDAT performed better
+overall.
+Ran et al. (2022) extracted the active region PILs us-
+ing the mask method, referred to hereafter as PIL-mask,
+as shown in Figure 9. The PIL-mask method primarily
+involves applying DBSCAN clustering to the target ac-
+tive region again, identifying the larger clusters as the
+main components, and then applying Gaussian smooth-
+ing to the area to expand the cluster boundaries. This
+process ensures that the positive and negative regions
+overlap to some degree, with the overlapping area ulti-
+mately designated as the PIL region. However, as Fig-
+ure 9(a–d) shows, the shape of the active region is often
+intricate, with variable distances between these clusters.
+Using a larger sigma— which determines the smoothing
+radius in Gaussian filtering — causes the mask to in-
+discriminately encompass the entire local area when the
+positive and negative regions are close together. Thus,
+the PIL-mask approach has inherent limitations when it
+comes to extract the PIL in active regions.
+Therefore, we proposed a novel method for PIL ex-
+traction that relies on SVC, termed PIL-svc. This ap-
+proach primarily leverages the classification principles
+of SVC by employing the decision boundary to separate
+the positive and negative poles of the active region. Due
+to the complex structure of active regions, we employ an
+RBF kernel technique to increase the dimension of the
+data and help identify nonlinear decision boundaries.
+Although PIL-svc may not perform as well as PIL-mask
+under optimal conditions, it exhibits superior general-
+ization capabilities. This strengthens its ability to ef-
+
+Solar active region detection and tracking 13
+ficiently handle the batch processing of neutral line ex-
+traction tasks within active regions. Consequently, PIL-
+svc is more effective than PIL-mask in long-term statis-
+tical analysis. Additionally, since the SVC classifier can
+produce the decision boundaries based on discrete dis-
+tributions, PIL-svc achieves good extraction results in
+decayed or diffuse active regions with a PIL structure,
+such as AR9 shown in Figure 10. Each panel in Figure 10
+is similar to Figure 8 for the PIL extraction process.
+In summary, this study developed and applied im-
+proved automated techniques to detect, track, and an-
+alyze solar active regions using LOS full-disk magne-
+tograms from SOHO/MDI and SDO/HMI. The validity
+of these methods was evaluated by comparing them with
+the NOAA catalogs. The key methodological advance-
+ments and their resulting outcomes are summarized be-
+low:
+1. The HDBSCAN-based Solar Active Region Detec-
+tion and Tracking (HARDAT) method utilizes dy-
+namic density clustering based on cluster stability
+to demonstrate superior capability in identifying
+smaller and more diffuse magnetic structures while
+maintaining the morphological integrity of large,
+complex ARs. The HARDAT method provides
+more generalized detection performance across di-
+verse solar magnetograms with varying spatial res-
+olutions.
+2. The solar differential rotation based tracking algo-
+rithm significantly reduces identity switches and
+tracking fragmentation by integrating physical
+models of solar surface motions for prediction and
+using Hamming distance-based similarity metrics
+for data association. This method can reliably
+handle AR evolution events, such as splitting,
+merging, and migration, across extended tempo-
+ral sequences.
+3. The novel PIL extraction method redefines the
+identification of polarity inversion lines as a clas-
+sification task. It accomplishes this using support
+vector classification with a radial basis function
+kernel. This method can generate precise and
+adaptable decision boundaries that effectively dis-
+tinguish opposite magnetic polarities within com-
+plex structures of active regions.
+ACKNOWLEDGEMENTS
+We are grateful to the SOHO and SDO teams for
+providing the observational data. The present work
+was supported by National Natural Science Founda-
+tion of China (NSFC) under grants 12173019, 12333009,
+and 12127901, National Key Research and Development
+Program of China (2020YFC2201200), CNSA project
+D050101, the Fundamental Research Funds for the Cen-
+tral Universities 14380065, KG202506, and the Young
+Data Scientist Program of the China National Astro-
+nomical Data Center, as well as the AI & AI for Science
+Project of Nanjing University.
+REFERENCES
+Ankerst, M., Breunig, M. M., Kriegel, H.-P., & Sander, J.
+1999, ACM Sigmod record, 28, 49
+Bewley, A., Ge, Z., Ott, L., Ramos, F., & Upcroft, B. 2016,
+in 2016 IEEE international conference on image
+processing (ICIP), Ieee, 3464–3468
+Bobra, M. G., Sun, X., Hoeksema, J. T., et al. 2014, SoPh,
+289, 3549, doi: 10.1007/s11207-014-0529-3
+Campello, R. J., Moulavi, D., & Sander, J. 2013, in
+Pacific-Asia conference on knowledge discovery and data
+mining, Springer, 160–172
+Chen, P. F. 2011, Living Reviews in Solar Physics, 8, 1,
+doi: 10.12942/lrsp-2011-1
+Chen, R., Lu, W., Hao, Q., et al. 2025, ApJS, 280, 70,
+doi: 10.3847/1538-4365/adfdd8
+Cheriton, D., & Tarjan, R. E. 1976, SIAM journal on
+computing, 5, 724
+Domingo, V., Fleck, B., & Poland, A. I. 1995, SoPh, 162, 1,
+doi: 10.1007/BF00733425
+Hearst, M., Dumais, S., Osuna, E., Platt, J., & Scholkopf,
+B. 1998, IEEE Intelligent Systems and their
+Applications, 13, 18, doi: 10.1109/5254.708428
+Jiang, B., Liu, L., Zheng, S., et al. 2022, ChA&A, 46, 264,
+doi: 10.1016/j.chinastron.2022.09.007
+LuNežič, A., Vojíř, T., Zajc, L. Č., Matas, J., & Kristan, M.
+2018, International Journal of Computer Vision, 126, 671
+Luo, W., Xing, J., Milan, A., et al. 2021, Artificial
+intelligence, 293, 103448
+McInnes, L., Healy, J., Astels, S., et al. 2017, J. Open
+Source Softw., 2, 205
+Norouzi, M., Fleet, D. J., & Salakhutdinov, R. R. 2012,
+Advances in neural information processing systems, 25
+Pesnell, W. D., Thompson, B. J., & Chamberlin, P. C.
+2012, SoPh, 275, 3, doi: 10.1007/s11207-011-9841-3
+
+14 C. X. Shi et al.
+Figure 10. An example of PIL-svc extraction on July 15, 2023. Panel (a) The HARD detection results. Panel (b–d) are similar
+to Figure 8 for the PIL extraction process, but for a decayed active region AR9.
+Quan, L., Xu, L., Li, L., Wang, H., & Huang, X. 2021,
+Electronics, 10, doi: 10.3390/electronics10182284
+Ran, H., Liu, Y. D., Guo, Y., & Wang, R. 2022, The
+Astrophysical Journal, 937, 43
+Rao, S., Li, C., Ding, M., et al. 2024, Nature Astronomy, 8,
+1102, doi: 10.1038/s41550-024-02299-4
+Ristani, E., Solera, F., Zou, R., Cucchiara, R., & Tomasi,
+C. 2016, in European conference on computer vision,
+Springer, 17–35
+Scherrer, P. H., Bogart, R. S., Bush, R. I., et al. 1995,
+SoPh, 162, 129, doi: 10.1007/BF00733429
+Schou, J., Antia, H. M., Basu, S., et al. 1998, ApJ, 505,
+390, doi: 10.1086/306146
+Schou, J., Scherrer, P. H., Bush, R. I., et al. 2012, SoPh,
+275, 229, doi: 10.1007/s11207-011-9842-2
+Schröter, E. 1985, Solar physics, 100, 141
+Schubert, E., Sander, J., Ester, M., Kriegel, H. P., & Xu,
+X. 2017, ACM Trans. Database Syst., 42,
+doi: 10.1145/3068335
+Shawe-Taylor, J., & Cristianini, N. 2004, Kernel methods
+for pattern analysis (Cambridge university press)
+The SunPy Community, Barnes, W. T., Bobra, M. G.,
+et al. 2020, The Astrophysical Journal, 890, 68,
+doi: 10.3847/1538-4357/ab4f7a
+Thompson, M. J., Christensen-Dalsgaard, J., Miesch, M. S.,
+& Toomre, J. 2003, ARA&A, 41, 599,
+doi: 10.1146/annurev.astro.41.011802.094848
+Toriumi, S., & Wang, H. 2019, Living Reviews in Solar
+Physics, 16, 3, doi: 10.1007/s41116-019-0019-7
+Turmon, M., Jones, H. P., Malanushenko, O. V., & Pap,
+J. M. 2010, SoPh, 262, 277,
+doi: 10.1007/s11207-009-9490-y
+van Driel-Gesztelyi, L., & Green, L. M. 2015, Living
+Reviews in Solar Physics, 12, 1
+Virtanen, P., Gommers, R., Oliphant, T. E., et al. 2020,
+Nature methods, 17, 261, doi: 10.1038/s41592-019-0686-2
+Wang, R., Jiang, J., & Luo, Y. 2023, ApJS, 268, 55,
+doi: 10.3847/1538-4365/acef1b
+Zhang, J., Wang, Y., & Liu, Y. 2010, ApJ, 723, 1006,
+doi: 10.1088/0004-637X/723/2/1006
+
+Solar active region detection and tracking 15
+APPENDIX
+A. HDBSCAN PROCESSING LOGIC FOR SOLAR MAGNETOGRAMS
+In Section 3.2, we used HDBSCAN to achieve dynamic density clustering. Figure 11 shows the HDBSCAN clustering
+flowchart on solar magnetograms. Figure 11(a) shows the seed pixels after the magnetic field strength threshold
+segmentation. Subsequently, the mutual reachability distance is computed for all point pairs using the core distance
+defined by minSamples_H, and a minimum spanning tree (MST) is constructed based on these distances, as shown
+in Figure 11(b). This MST is then converted into a single linkage tree to represent the complete hierarchy of connected
+components, as shown in Figure 11(c). Given the large number of points, the plot parameter truncate_mode is set to
+“lastp” with p = 50 to simplify the tree for improved visual clarity.
+To further simplify this complex structure, we transform the single linkage tree into a condensed tree by filtering
+out clusters smaller than the minClusterSize parameter, as shown in Figure 11(d). To find the most stable clusters,
+the algorithm calculates the stability of each branch by summing the persistence of its points (defined by the inverse
+distance λ) and selects the most persistent branches based on these calculated stabilities. In Figure 11(d), the red
+ellipses indicate the most stable clusters selected by the algorithm. The ϵ_ClusterSelection then acts as a final
+decision rule to determine whether to merge these clusters.
+The extracted clusters are visualized in Figure 11(e), where different colors represent distinct identified clusters, while
+gray points represent background noise. Finally, the results are mapped back onto the original solar magnetograms
+with bounding boxes, as shown in Figure 11(f).
+B. PARAMETER BETA AND GAMMA ANALYSIS OF HARDAT
+In Section 3, we introduced the β and γ parameters to improve the completeness of the active region morphology in
+the detection process. Here, we analyze how the selection of these two parameters influences the detection results. The
+evaluation criteria are determined by the three evaluation parameters in Section 4. Three time periods were selected
+that corresponding to the different stages of a solar cycle: 2000–2002 (the maximum of solar cycle 23), 2003–2005 (the
+decay phase of solar cycle 23) and 2007–2009 (the minimum of solar cycle 23), respectively. We selected nine cases
+of the values 0, 0.5, and 1 for β and γ, respectively, to calculate the values of MOTA, IDR and R_MT in different
+parameters and different periods, as shown in Figure 12. It is evident that the parameters β and γ exert minimal
+influence on the detection and tracking outcomes, primarily affecting the ultimate morphology of the active region.
+Therefore, for the purpose of calculating eﬀiciency in statistical analysis, we assign both β and γ a value of 0.
+
+16 C. X. Shi et al.
+Figure 11. The flowchart of the HDBSCAN clustering applied to solar magnetograms on 2023 February 1. Panel (a) The
+result after threshold segmentation. Panel (b) Minimum spanning tree construction with random 5000 pixels from (a). Panel
+(c) Single linkage hierarchy. Panel (d) Condensed hierarchy tree. Panel (e) The HDBSCAN clustering result. Panel (f) The
+clusters with bounding box and the background.
+
+Solar active region detection and tracking 17
+Figure 12. Thermogram of the different evaluation indicators changes depending on the parameters β and γ. Take the lifetime
+threshold of the NOAA active regions to be 2. The first row corresponds to 2000–2002 (the maximum of solar cycle 23), the
+second row corresponds to 2003–2005 (the decay phase of solar cycle 23), and the third row corresponds to 2007–2009 (the
+minimum of solar cycle 23).

@@ -1,0 +1,762 @@
+Title: Calibrating Self-Weighted Shear Estimation via Field Distortion
+Authors: Zhenjie Liu, Jiarui Sun, Jun Zhang, Cong Liu
+Published: 2026-05-30
+Categories: astro-ph.CO
+
+Research in Astronomy and Astrophysicsmanuscript no.
+(LATEX: sample.tex; printed on June 2, 2026; 0:57)
+Calibrating Self-Weighted Shear Estimation via Field Distortion
+Zhenjie Liu1,2, Jiarui Sun1, Jun Zhang1∗ and Cong Liu1
+1 State Key Laboratory of Dark Matter Physics, School of Physics and Astronomy, Shanghai Jiao Tong
+University, Shanghai 200240, China;betajzhang@sjtu.edu.cn
+2 Division of Physics and Astrophysical Science, Graduate School of Science, Nagoya University,
+Nagoya 464-8602, Japan
+Received 20xx month day; accepted 20xx month day
+AbstractAccurate cosmic shear measurement is the key to fully realize the scientific po-
+tential of large scale galaxy surveys. The Fourier Quad shear measurement method has been
+significantly developed to avoid biases caused by various factors, including the point spread
+function (PSF), photon noise, pixelation effect, selection effects, etc.. Shear statistics has
+also been optimized by using the PDF-SYM method (symmetrization of the Probability
+Distribution Function of the shear estimators) to achieve the minimal statistical error, with-
+out introducing systematic error. Nevertheless, the iterative nature of the PDF-SYM method
+makes it computationally expensive for massive datasets. To substantially improve efficiency,
+we introduce the Self-Weighted Shear Estimation (SWSE) method, which employs a specific
+self-weighting scheme to naturally suppress the shape noise as well as to balance the contri-
+butions from the bright and faint galaxies. Because SWSE is intrinsically biased, the primary
+focus of this work is to robustly evaluate whether the field-distortion test (FD test, a way to
+calibrate the shear bias on real data) can accurately recover and correct these inherent mul-
+tiplicative and additive biases. Using both simulated and real survey data, we demonstrate
+that the FD test can successfully calibrate SWSE on galaxy-galaxy lensing measurements,
+enabling it to achieve statistical precision comparable to PDF-SYM. Our results establish the
+combination of FD test and SWSE as a robust shear estimation approach for forthcoming
+large-scale weak lensing surveys.
+Key words:weak gravitational lensing, shear estimator, field distortion, shear calibration
+1 INTRODUCTION
+Weak gravitational lensing serves as a crucial tool for probing the large-scale structure of the universe. It is
+caused by the slight bending of light paths by gravitational fields, causing subtle distortions (cosmic shear)
+in the shapes of distant galaxies. These distortions are only on the order of about one-tenth of the intrinsic
+arXiv:2606.00553v1  [astro-ph.CO]  30 May 2026
+
+2 Liu et al.
+shape of the galaxies, but they directly reflect the distribution features of dark matter halos, cosmic web, and
+the distribution of dark matter (Bartelmann & Maturi 2017). Therefore, high-precision shear measurement
+is not only a core challenge in weak lensing research but also the key to unlocking the nature of dark matter
+and cosmological parameters (Prat & Bacon 2026; Pantos & Perivolaropoulos 2026).
+Current shear estimation methods can be primarily divided into two categories: 1. Shape moment-based
+methods (e.g. Kaiser et al. 1995; Rhodes et al. 2000; Hirata & Seljak 2003), which calculate the second-
+order moments of galaxy images to represent their shapes; 2. Model-fitting techniques (e.g. Massey &
+Refregier 2005; Nakajima & Bernstein 2007; Miller et al. 2007; Zuntz et al. 2013), which fit galaxy images
+by assuming luminosity distribution models and PSF models, but they have limited adaptability to irregular
+galaxies or complex morphologies. In recent years, machine learning methods (e.g. Springer et al. 2020;
+Zhang et al. 2024) have shown potential for handling complex data. However, they face challenges such as
+high dependence on training datasets and insufficient physical interpretability.
+The Fourier Quad (FQ) method proposed by Zhang (2008); Zhang et al. (2015) is a moment-based
+method. It constructs shear estimators based on the quadrupole and hexadecapole moments of the galaxy
+power spectrum. The effects from the PSF and noise are all corrected in Fourier space in a model-
+independent way. Its accuracy is in principle unaffected by the signal-to-noise ratio (SNR) and the size of the
+source image. To further approach the theoretical limit of statistical errors, Zhang et al. (2017) introduced
+the PDF-SYM method, which optimizes the statistical uncertainties of the measurement by symmetrizing
+the PDF of the shear estimators. Its robustness has been demonstrated in weak lensing measurements with
+different imaging data sets (Fong et al. 2022; Wang et al. 2022; Wang et al. 2023; Liu et al. 2024; Shen et al.
+2025; Liu et al. 2025c,b). However, PDF-SYM requires iterative evaluations of the level of PDF symmetry,
+and the algorithm for higher precision leads to growth in computational complexity, making it challenging
+to handle the massive data from future surveys like the Large Synoptic Survey Telescope1 and EUCLID2.
+The main purpose of this paper is to simplify the shear estimators of FQ so that instead of PDF-SYM,
+one can use the usual weighted-sum method to evaluate the lensing statistics. The price to pay is likely an
+increase of the shear bias, and also possible enhancement of statistical uncertainty. In particular, Zhang &
+Komatsu (2011) argue out that there is no unbiased conventional shear estimators (i.e., averaging over a
+single quantity per galaxy to estimate each shear component). Therefore, we expect that the new way of the
+shear estimation should require careful calibrations.
+Currently, it is a common practice to calibrate shear biases via realistic image simulations (Fu et al.
+2018; Mandelbaum et al. 2018; MacCrann et al. 2022). For example, the HSC first-year analysis generates
+a suite of mock images matching its observations and derived empirical corrections that reduce the overall
+shear bias to≲1% (Mandelbaum et al. 2018). An alternative “self-calibration” approach is Metacalibration
+(Huff & Mandelbaum 2017), in which the actual survey images are artificially sheared and the shapes re-
+measured to infer the shear response. It does not rely on external simulation inputs and has been successfully
+applied to obsevational data (Gatti et al. 2021). There are also some methods that use machine learning to
+measure shear bias (Tewes et al. 2019; Pujol et al. 2020).
+1 www.lsst.org
+2 www.euclid-ec.org
+
+SWSE & FD test 3
+In this work, we rely on the field-distortion (FD) test proposed by Zhang et al. (2019) to detect multi-
+plicative and additive shear biases. FD refers to the distortion pattern across the CCD focal plane induced
+by deviations from the ideal sky-to-focal-plane projection of the optical system. It may manifest as twisting,
+stretching, or compressing of the image. This calibration method leverages the intrinsic properties of the
+data itself, without the need for simulations or external datasets. In FD test, we measure the shear values
+for galaxies at fixed FD values. These galaxies are distributed randomly on the sky, so their average cosmic
+shear should be zero. By comparing the measured FD signalsg obs
+f,i with the true signalsg f,i provided in
+the catalog, we can determine the multiplicative biasm i and additive biasc i for two shear components
+respectively:
+gobs
+f,i = (1 +m i)g f,i +c i.(1)
+The structure of this paper is as follows. In Section2, we introduce the methodology, including the FQ
+method, the PDF-SYM method, the self-weighted shear estimator (SWSE), the ESD measurement, and the
+corresponding calibration procedure. In Section3, we test the performance of the method using simulated
+data. In Section4, we further validate the method with real observations from the DECaLS and HSC surveys.
+Finally, Section5 summarizes our results.
+2 METHODOLOGY
+FQ shear estimators are constructed from the quadrupole moments of the galaxy power spectrum, supple-
+mented by several hexadecapole moments to correct for PSF effects. In the FQ method, each galaxy has
+five shear estimators:G 1,G 2,N,UandV, which are defined as follows:
+G1 =− 1
+2
+Z
+d2⃗k
+ 
+k2
+x −k 2
+y
+
+T(⃗k)M(⃗k)(2)
+G2 =−
+Z
+d2⃗kkxkyT(⃗k)M(⃗k)(3)
+N=
+Z
+d2⃗k
+
+k2 − β2
+2 k4
+
+T(⃗k)M(⃗k)(4)
+U=− β2
+2
+Z
+d2⃗k
+ 
+k4
+x −6k 2
+xk2
+y +k 4
+y
+
+T(⃗k)M(⃗k)(5)
+V=−2β 2
+Z
+d2⃗k
+ 
+k3
+xky −k xk3
+y
+
+T(⃗k)M(⃗k)(6)
+Here,G i is analogous to the ellipticity componente i, andNis a normalization factor forG i.Uis an
+additional correction term, andVis for calculatingUunder coordinate rotation, as(U, V)form a pair of
+spin-4 quantities.M( ⃗k)represents the power spectrum of the galaxy image after background subtraction
+and Poisson noise removal, and the factorT( ⃗k)is used to transform the PSF into the desired isotropic
+Gaussian form.βis the scale radius of the Gaussian function (for more details, see Zhang et al. (2015)).
+To obtain an unbiased shear estimate, they propose an unconventional averaging approach to compute
+the shear:
+⟨Gi⟩
+⟨N⟩ =g i +O
+
+g3
+(7)
+whereg i is the corresponding reduced shear component andg i =γ i/(1−κ). However, since the shear
+estimator is not luminosity-normalized, the shear results are dominated by bright galaxies, while the ma-
+jority of galaxies are faint. To address these issues, Zhang et al. (2017) propose a novel statistical method,
+
+4 Liu et al.
+the PDF-SYM method. However, considering the convenience of measuring shear, in this work, we pro-
+pose a weighted averaging shear estimation method, the SWSE method. Next, we will introduce these two
+statistical methods.
+2.1 PDF-SYM method
+PDF-SYM is an unconventional method for evaluating various weak lensing statistics. It leverages the
+full information contained in the PDF of shear estimators in the cases of shear stacking or shear-shear
+correlations, as demonstrated in Zhang et al. (2017). The shear statistics are evaluated by finding the optimal
+values that symmetrizes the PDF. It has been shown that the PDF-SYM method can bring the statistical
+errors close to theoretical limits.
+The relationship betweenG i and the reduced shear (gi =γ i/(1−κ)) can be approximated as
+Gi =G S
+i +g iBi (8)
+whereG S
+i can be regard as unlensedG i, and
+Bi =
+
+
+
+N+U(i= 1)
+N−U(i= 2)
+(9)
+Based on Eq.8, the proposal of PDF-SYM is to observe the symmetric properties of the distribution of
+ˆGi =G i −ˆgiBi =G S
+i + (gi −ˆgi)Bi.(10)
+whereˆgi is the pseudo-shear value we guess in the symmetrization process. It is demonstrated by Zhang
+et al. (2017) that, ifˆgi =g i, the PDF of ˆGi,P( ˆGi), will be symmetric about 0. Therefore, the shear value
+can be estimated by finding theˆgi that best symmetrizesP( ˆGi)relative to zero. Technically, this is achieved
+by placing bins symmetrically on both side of zero. The number of galaxies in each bin is labeled asn (p),
+wherepis the index of the bins. By varying the values ofˆg i, we have
+χ2( ˆgi) = 1
+2
+X
+p>0
+(n(p) −n (−p))2
+n(p) +n (−p) (11)
+as a function ofˆgi to characterize the symmetry of the PDF. Note that the negative bin indices (−p) refer to
+the bins on the negative side of zero. More details can be found in section 3.2 of Zhang et al. (2017).
+However, since the PDF-SYM method requires finding pseudo-shear value that symmetrize the PDF
+of the shear estimators, each guess of the shear necessitates a calculation of the PDF’s symmetry by using
+Eq. 11. If the value is guessed forNtimes, the computational cost is approximatelyNtimes that of a
+weighted averaging method. Additionally, if more bins are used for the PDF, the memory required for
+computations increases, further decreasing computational speed. As the main purpose of this paper, we
+introduce a self-weighted averaging method to expedite the shear measurement in practice, and rely on the
+FD test to guarantee its accuracy.
+2.2 Self-Weighted Shear Estimation
+We propose to use the shear estimator itself as the weight for the weighted average estimation, which we
+call Self-Weighted Shear Estimation (SWSE). For now, we defineei =G i/N, which is intrinsically biased
+
+SWSE & FD test 5
+Table 1: Shear estimators and their corresponding weights used in the SWSE scheme.
+Scheme ei w Range ofe i
+SWSE-A Gi/N sgn(N)/|e| (−∞,∞)
+SWSE-B Arg(N+ iG i) 1/|e| (−π, π)
+SWSE-C Gi/N sgn(N)w opt(|e|) (−∞,∞)
+due to the underlying noise bias and its non-linear nature. The weightw(|e|)of SWSE is dependent on the
+shear estimators, where|e|=
+p
+e2
+1 +e 2
+2. When we select the weighting function asw(|e|) = 1/|e|, ife i is
+unbiased shear estimators, it can be demonstrated that the bias is 0.5, i.e.,
+P
+k e(k)
+i w(k)(|e(k)|)P
+k w(k) = gi
+2 +O(g 2
+1,2).(12)
+The theoretical derivation of this factor is provided in Appendix A. We note that whene i diverges, the
+producte i|e|−1 approaches unity, thereby preventing outliers from driving the final result to divergence.
+Bernstein & Jarvis (2002) proposed that the optimal form of weights that can minimize statistical errors
+is
+wopt(|e|)∝3− 1− |e| 2
+|e|
+dlogP(|e|)
+d|e| .(13)
+P(|e|)denotes the intrinsic ellipticity distribution, which is formally a two-dimensional probability distri-
+bution over(e 1, e2), but is often assumed to be isotropic and hence depends only on|e|. Therefore, we also
+test this weighting scheme in our analysis.
+We consider three combinations of two weighting schemes and two shear estimators for SWSE method
+in our analysis, as summarized in Table 1. A factor ofsgn(N)is included in the weights for “SWSE-A” and
+“SWSE-C” to maintain sign consistency between the estimatorei and the signalG i. This treatment prevents
+unphysical sign reversals in low-SNR regimes (N <0), which we found to be essential for successful FD
+test to calibrate in real survey data. Alternatively, we consider another shear estimatorei = Arg(N+ iG i)
+in scheme “SWSE-B”for comparison. It represents the phase angle of the complex numberN+ iG i and
+is introduced as a complementary shear estimator exhibiting different bias properties, allowing us to assess
+the performance of the calibration scheme under different shear bias conditions.
+For low-SNR samples, the PDF of estimatore i =G i/Nexhibits pronounced long tails, with a non-
+negligible fraction of galaxies having very large|e i|values. These outliers arise from cases whereNap-
+proaches zero, leading to unstable ratios. If we simply calculate the average without weighting, the result
+will be highly unstable, with extremely large errors. The self-weighting scheme already suppresses the in-
+fluence of extremee i outliers, and therefore no explicit cutoff is required in the present analysis. In practice,
+however, a loose cutoff (e.g.|ei|<1000) may still be introduced as a numerical safeguard against extremely
+rare cases withN→0. Such a cutoff has a negligible impact on our conclusions.
+2.3 Measuring Galaxy-galaxy Lensing
+Galaxy–galaxy lensing describes the correlation between the positions of galaxies or halos and the tangen-
+tial shear of background sources. It provides a direct probe of the projected mass distribution around galax-
+ies and dark matter halos, independent of their dynamical state or baryonic content. It is widely used to mea-
+sure halo properties and also serves as a valuable cosmological probe. In this work, we use galaxy–galaxy
+
+6 Liu et al.
+lensing as a test case to evaluate the performance of different shear estimation methods and the effectiveness
+of the FD test.
+The observable quantity is the excess surface density (ESD), defined as
+∆Σ(R)≡ Σ(< R)−Σ(R) = Σ cγt(R).(14)
+Σ(< R)represents the average surface density within a projected radius ofR. The comoving critical surface
+density is
+Σc = c2Ds
+4πGDlDls(1 +z l)2 ,(15)
+with c the speed of light,Gthe gravitational constant, andD s,D l, andD ls the angular diameter distances
+to the source, to the lens, and from the lens to the source, respectively.
+For the PDF-SYM method, measuring the ESD follows a procedure similar to shear estimation de-
+scribed in Sec.2.1, with the only modification being the inclusion of the critical surface density factorΣ c.
+Specifically, Eq. 10 is rewritten as
+Σc ˆGt = ΣcGt −g∆Σ(N+U t),(16)
+whereG t is a spin-2 quantity andU t is a spin-4 quantity. The parameterg∆Σdenotes a pseudo-ESD value
+introduced to symmetrize the PDF ofΣ c ˆGt. The value of g∆Σthat maximizes the symmetry of the PDF
+corresponds to the measured ESD.
+For the SWSE method, in addition to the shear-estimation weights defined in Table 1, we further incor-
+porate an inverse-variance factor to obtain a minimum-variance estimator of∆Σ. Since the variance of an
+individual ESD estimate scales asΣ 2
+c, the optimal weight for each source galaxy is given by the product
+of the shear-estimation weight and an additional factor of1/Σ 2
+c. This weighting scheme naturally down-
+weights source galaxies with largeΣ c, which contribute disproportionately higher noise, thereby ensuring
+a minimum-variance ESD measurement. The ESD estimator is therefore written as
+d∆Σ =
+P
+k Σce(k)
+t w′(k)
+P
+k w′(k) ,(17)
+with
+w′ = w
+Σ2c
+.(18)
+The modified weightw ′ is also adopted in the FD tests to ensure consistency between shear-bias measure-
+ments and ESD estimation. In Appendix B, we show that the weights used in the FD test should be kept
+consistent with those adopted in the ESD measurement in order to properly correct for shear bias.
+2.4 Calibration for the shear estimators
+It is important to note that the FD contribution and additive biases have already been removed from the
+shear estimators in the catalog used in our analysis (Zhang et al. 2022; Liu et al. 2025a). Therefore, be-
+fore applying our calibration procedure, these contributions should be added back to recover the original
+estimators:
+Gf,1 =G 1 + (gf,1 +c ′
+1)(N+U) + (g f,2 +c ′
+2)V,(19)
+Gf,2 =G 2 + (gf,2 +c ′
+2)(N−U) + (g f,1 +c ′
+1)V,(20)
+
+SWSE & FD test 7
+whereg f,i is the FD values provided in catalog, andc ′
+i represents the additive shear bias measured from the
+full galaxy sample.
+We apply the multiplicative and additive bias corrections measured from the FD test separately to each
+shear estimator. For the PDF-SYM method, the corrected quantities are
+Gcorr
+1 = Gf,1 −c 1(N+U)
+1 +m 1
+−g f,1(N+U)−g f,2 V,(21)
+Gcorr
+2 = Gf,2 −c 2(N−U)
+1 +m 2
+−g f,2(N−U)−g f,1 V.(22)
+For the conventional shear estimators, the calibration is applied as
+ecorr
+i = ef,i −c i
+1 +m i
+−g f,i ,(23)
+wheree f,i denotes eitherG f,i /NorArg(N+ iG f,i)as used in this work. We should be aware that the
+weights during the correction process should remain in their uncorrected state.
+Note that the above procedures are essential for removing the residual additive biases from FD. This is
+however not easily achievable in other shear measurement methods, as the FD signals are typically believed
+to be removed once for all from the shear estimators.
+3 RESULTS FROM MOCK GALAXIES
+In this section, we generate realistic galaxy images to evaluate the calibration performance of different shear
+estimation methods. In our simulations, we input both the Cartesian shear componentsgf,1 andg f,2, ranging
+from−0.04to0.04, as well as the tangential shearg t corresponding to the ESD signals. By first measuring
+the shear biases of various estimators forg f,1 andg f,2 fields, we can then apply the resulting calibration to
+the tangential shearg t. This procedure captures the core principle of our FD test.
+3.1 Mock Galaxies
+We adopt galaxy properties from the simulated galaxy catalogue of Li et al. (2023), which was developed
+for the KiDS-Legacy weak-lensing image simulations. In this catalogue, the large-scale galaxy distribution
+and photometric properties are based on the SURFS cosmologicalN-body simulations (Elahi et al. 2018)
+combined with the Shark semi-analytic galaxy formation model (Lagos et al. 2018), while the galaxy mor-
+phological parameters are learned from HST observations of the COSMOS field. For more information,
+please refer to Li et al. (2023).
+Each galaxy is modelled using a S´ersic surface-brightness profile. The morphological parameters of the
+S´ersic model include the half-light radius, axis ratio, and S ´ersic index. These parameters provide realistic
+distributions of galaxy sizes and intrinsic ellipticities. The orientations of galaxies are randomly assigned.
+The simulated galaxy catalogue spans a wide redshift range up toz s ∼2, ensuring a realistic distribution
+of background sources for weak-lensing analyses. The magnitude and size distributions of galaxies are also
+consistent with those observed in the KiDS survey. Using these parameters, we generate galaxy images and
+convolve them with a Gaussian PSF ofσ= 1.6grids. Uniform Gaussian background noise is then added to
+mimic observational conditions.
+
+8 Liu et al.
+For the tangential shear mentioned above, each background galaxy (z s) is assigned a projected separa-
+tion from a foreground lens (zl = 0.1), with the number of galaxies at different radii distributed proportion-
+ally to the area of the corresponding annulus. The tangential shearg t is then computed from the input ESD
+profile together with the correspondingΣ c(zl, zs), and applied according to the lens–source geometry.
+3.2 Shear Measurements and Biases
+Fig. 1: Comparison of shear measurement biases for the two shear components,g f,1 (top panels) andg f,2
+(bottom panels), in mock data. The vertical axis shows the difference between the measured and input shear,
+gout
+f,i −g in
+f,i. Each column corresponds to a different SNR cut. The orange shaded regions represent the results
+from the PDF-SYM method. The red solid points and blue open points refer the results using SWSE method
+with shear estimatorse i =G i/Nande i = Arg(N+G i i)respectively.
+Figure 1 presents the recovered shear signals forg f,1 andg f,2 in the mock simulations, obtained using
+the PDF-SYM and SWSE methods under different SNR cuts. Figure 2 shows the corresponding shear
+biases forg f,1 (solid symbols) andg f,2 (open symbols). Firstly, we note that SWSE approaches effectively
+suppresses the impact of extremee i, yielding statistical uncertainties comparable to those of the PDF-
+SYM method. Regarding shear biases, the PDF-SYM method delivers nearly unbiased shear estimates,
+with both multiplicative and additive biases consistent with zero. In contrast, the SWSE method exhibits
+distinct multiplicative bias behaviors depending on the specific combination of weighting schemes and shear
+estimators. For “SWSE-A”, the multiplicative biasm i remains remarkably stable across a wide range of
+SNR, with values close to−0.5. This aligns closely with the theoretical prediction from Eq. 12. The slight
+deviation ofm i above the theoretical value−0.5is attributed to the intrinsic bias of theG i/Nestimator,
+arising from its non-linear response to noise. For ”SWSE-B”, the results are nearly identical to those of
+
+SWSE & FD test 9
+Fig. 2: The multiplicative and additive biases ofg f,1 (solid markers) andg f,2 (open markers) for both the
+PDF-SYM and SWSE methods with shear estimatorse i =G i/N(red) ande i = Arg(N+G i i)(blue)
+under different SNR cuts in mock data.
+”SWSE-A” in the high-SNR regime. However, as the SNR decreases, the multiplicative bias increases
+significantly. For ”SWSE-C”, the optimal weight is calculated based on the sample withSNR>10as
+follows:
+W mock
+opt (|e|) =
+
+
+
+10−11|e| (|e|<1.2)
+|e|−2/14.5 (|e| ≥1.2)
+(24)
+We find that the multiplicative bias of this scheme varies with SNR, as expected. Regarding the additive
+bias, no detectable signal is observed across all schemes, owing to the idealized nature of our simulation
+data.
+3.3 Calibration for ESD Measurements
+Using the shear biases measured fromgf,1 andg f,2 (Figure 2), we apply the corresponding calibration to the
+simulated ESD signals. For each galaxy, the shear estimator is corrected by its multiplicative bias according
+toe cal
+i =e i/(1+m i). Here we correct only for the multiplicative bias, since the additive bias is small in the
+mock data and it is effectively averaged out during the azimuthal stacking in the ESD measurement. The up-
+per panels of Figure 3 display the uncorrected ESD measurements for the three estimations. In agreement
+with the results from theg f,1 andg f,2 tests, the “SWSE-A” scheme yields results that are systematically
+lower by about 50% compared to the PDF-SYM method, and the results of “SWSE-B” and “SWSE-C”
+become increasingly underestimated at lower SNR. Upon applying the shear bias calibration (bottom pan-
+els), all methods successfully reproduce the input ESD profiles (black dashed lines), exhibiting excellent
+agreement with the truth. Notably, “SWSE-C” yields the results with the smallest statistical uncertainties.
+These mock tests validate the efficacy of the FD test in calibrating self-weighted shear estimators across
+various weighting schemes.
+
+10 Liu et al.
+Fig. 3: ESD signals measured using different shear estimation methods in mock data, before (top panels)
+and after (bottom panels) applying the multiplicative shear calibration obtain from Fig.1. Each column
+corresponds to a different signal-to-noise ratio (SNR) cut. The orange shaded regions represent the results
+from the PDF-SYM method. The red solid points and blue open points refer the results using SWSE method
+with shear estimatorse i =G i/Nande i = Arg(N+G ii)respectively. The black dashed lines indicate the
+input ESD signals.
+4 ONSITE SHEAR CALIBRA TION IN REAL DA TA
+In real observations, shear measurements are affected by a variety of unknown systematics and selection ef-
+fects beyond those introduced by shear estimator biases, making it essential to validate calibration methods
+on real data. In this section, we apply our SWSE methods and calibration framework to real survey data to
+assess their performance and to evaluate the effectiveness.
+4.1 Data
+The data includes foreground galaxy cluster catalogs and two background shear catalogs from different
+surveys. For the background shear catalogs, we use two shear catalogs for multiple validations. One is from
+the Dark Energy Camera Legacy Survey (DECaLS) and the other one is from the third public data release
+of the Hyper Suprime-Cam (HSC) Survey. Both datasets are processed using the FQ shear measurement
+pipeline (Zhang et al. 2022; Liu et al. 2025a). According to the FD tests presented in these works, the mul-
+tiplicative and additive biases for the sample used in this study are consistent with zero within the statistical
+uncertainties. Therefore, no additional bias correction is applied to the shear catalog. In the galaxy-galaxy
+lensing analysis, we ensure that background galaxies have a photo-zlarger than the lens redshift by 0.2, i.e.,
+zs > z l + 0.2, to reduce the dilution of cluster and background galaxies.
+
+SWSE & FD test 11
+Table 2: The multiplicative and additive biases of the two shear components of the background galaxies in
+ESD measurements using the PDF-SYM and SWSE methods. The background galaxy catalogs come from
+the DECaLS and HSC surveys, respectively. The ESD signals and their calibrations for different subsamples
+are displayed in Figure 5. The shear biases are derived from the fitting results in Figure 4, using the FD test.
+Samples Method m1 ×10 2 c1 ×10 4 m2 ×10 2 c2 ×10 4
+DECaLS PDF-SYM −3.0±11.5−3.9±1.0 −4.5±9.8 1.7±0.9
+SWSE-A −50.7±4.6−1.8±0.4 −51.7±4.6 0.6±0.4
+SWSE-B −51.0±4.5−1.7±0.4 −52.6±4.5 0.8±0.4
+SWSE-C −32.9±6.0−3.2±0.5 −25.7±6.0 3.1±0.5
+HSC PDF-SYM −1.0±1.0−6.3±1.0 −0.8±1.0−2.8±1.0
+SWSE-A −47.9±0.5−3.4±0.5 −48.1±0.5−1.3±0.5
+SWSE-B −51.9±0.5−3.3±0.4 −52.2±0.5−1.3±0.4
+SWSE-C −34.4±0.6−5.8±0.5 −35.0±0.6−2.3±0.5
+Our galaxy cluster catalog comes from Yang et al. (2021), based on the Dark Energy Spectroscopic
+Instrument (DESI; Dey et al. (2019)) Image Legacy Surveys DR9. In this study, we select galaxy clusters
+with halo masses in the range of10 14 −10 14.5M⊙/hfor stronger shear signals.
+DECaLS is one of the three public imaging surveys within DESI, designed primarily for target selection
+under relatively poor seeing conditions (typically∼1.5 ′′). The survey covers roughly 10,000 deg 2 in the
+g,r, andzbands, with thezband offering the highest image quality. Accordingly, in our tests we use only
+thez-band data and exclude galaxies withSNR<20. We further find that galaxies fainter than magnitude
+21 exhibit large photometric-redshift uncertainties, which lead to a systematic suppression of the measured
+ESD signal, which is an effect that cannot be recovered through shear calibration alone. Therefore, we
+restrict our DECaLS source sample to galaxies withz-band magnitude<21. The optimal weight for the
+“SWSE-C” scheme for this sample is given by
+W DECaLS
+opt (|e|) =
+
+
+
+101.2−1.2|e| (|e|<1)
+|e|−3 (|e| ≥1)
+(25)
+HSC provides exceptionally deep optical imaging, reaching a limiting magnitude of∼26over approx-
+imately 1,400 deg2. The survey includes five bands (g,r,i,z, andy), with theiband delivering the highest
+image quality. In our analysis, we use only thei-band images and impose a minimum SNR of 10 on the
+source galaxies. The optimal weight for the “SWSE-C” scheme for HSC sample is given by
+W HSC
+opt (|e|) =
+
+
+
+10−1.4|e| (|e|<0.5)
+|e|−2/20 (|e| ≥0.5)
+(26)
+4.2 Results
+We employ the same background galaxy samples in FD test as used in the ESD measurements. The results
+for various methods and datasets are presented in Figure 4, where the x-axis represents the real FD values
+(gf,1 andg f,2) provided in the catalog, and the y-axis shows the residuals between our measurements and the
+truth. Table 2 summarizes the multiplicative and additive biases obtained by fitting the linear model defined
+
+12 Liu et al.
+Fig. 4: Field distortion test for the PDF-SYM method (orange shaded regions) and the SWSE methods. The
+left and right columns correspond to background galaxies from the DECaLS and HSC surveys, respectively,
+used in the galaxy–galaxy lensing measurements shown in Fig. 5.
+in Eq. 1. We observe a slight inconsistency between the two multiplicative bias components (m 1 andm 2)
+for “SWSE-C” in the DECaLS data, whereas other methods yield more consistent results. This discrepancy
+likely stems from certain systematics coupled with the PDF of the shear estimators. In real survey data, the
+observed biases originate not only from the intrinsic properties of the weights and estimators identified in
+simulations but also from measurement-induced systematics within the data processing pipeline. Notably,
+non-zero additive biases are detected across all datasets.
+Figure 5 presents the ESD measurements for the DECaLS (left) and HSC (right) surveys. The upper
+panels show the raw results obtained using the PDF-SYM method and various SWSE schemes before ap-
+plying any shear calibration. The lower panels display the corresponding calibrated results, along with the
+fractional difference between the SWSE-based ESD and the PDF-SYM benchmark. Our analysis reveals
+that the calibrated results from both “SWSE-A” (ei =G i/N) and “SWSE-B” (ei = Arg(N+ iG i)) are in
+excellent agreement with the PDF-SYM reference, demonstrating the reliability of the FD test in mitigating
+the intrinsic biases of SWSE in observations. However, “SWSE-C” exhibits a slight but noticeable system-
+atic deficit. We hypothesize that this behavior originates from the coupling between the optimal weighting
+scheme and certain focal-plane-dependent systematics, a topic we will discuss in Section5. Regardless of
+this minor discrepancy, our results validate the overall efficacy of the FD test for SWSE in large-scale galaxy
+surveys.
+5 CONCLUSION AND DISCUSSION
+This work introduces a shear estimation method, named SWSE, which adopts a self-weighting scheme that
+naturally suppresses shape noise and balances the contributions from bright and faint galaxy populations,
+thereby improving the stability of shear estimation. Since SWSE is intrinsically biased, we further investi-
+
+SWSE & FD test 13
+Fig. 5: ESD measurements derived using the PDF-SYM method (orange shaded regions) and the SWSE
+methods. The left and right columns correspond to background galaxy samples from the DECaLS and HSC
+surveys, respectively. The upper panels show the results without shear calibration, while the lower panels
+present the measurements after correcting for shear biases.
+gate whether FD tests can robustly diagnose and calibrate the associated multiplicative and additive shear
+biases under different estimators and weighting schemes. Using both simulated data and real survey obser-
+vations, we demonstrate that FD test reliably calibrates these biases for different estimators and weighting
+schemes. After calibration, SWSE achieves statistical precision and accuracy comparable to those of PDF-
+SYM while being substantially more computationally efficient. In this work, the performance of SWSE and
+FD test is primarily validated using ESD measurements, while the application to shear-shear correlation
+statistics will be presented in a companion paper (Liu et. al 2026), where similarly promising performance
+is obtained. These results establish the combination of SWSE and FD test as a robust framework for future
+large weak lensing surveys in the era of increasingly massive datasets.
+While the FD test has been demonstrated to accurately recover shear biases under idealized conditions
+(Sec. 3), its efficacy in practical applications can be compromised by instrumental systematics that are spa-
+tially correlated with the FD. Specifically, if image properties exhibit non-uniform distributions across the
+focal plane, the resulting coupling between local noise and the FD signal may introduce biased calibration.
+Figure 6 presents the distributions of galaxy SNR (top panels) and the estimatore 1 =G 1/N(bottom pan-
+els) across different|g f |bins, normalized by their overall distributions for DECaLS and HSC. It is evident
+that in both surveys, galaxy SNR is slightly coupled with|g f |, generally showing higher SNRs near the
+focal-plane center. This behavior can be attributed to spatial variations in the PSF, optical aberrations, and
+effective depth across the field of view, which collectively yield higher SNRs and more reliable shape mea-
+
+14 Liu et al.
+Fig. 6: Distributions of galaxy SNR (top panels) and the estimatore 1 =G 1/N(bottom panels) in different
+|gf |bins for DECaLS (left) and HSC (right). In each case, the distributions are normalized and then divided
+by the corresponding normalized distribution of the full sample, such that deviations from unity indicate
+differences relative to the overall population.
+surements toward the focal-plane center. Hence, populations with lower SNRs exhibit significantly broader
+and more extended distributionsP(e i)as shown in the lower panel of Figure 6.
+However, such spatially varying image properties imply that the shear bias itself may also vary across
+the focal plane. In this situation, the underlying assumption of a linear response between the measured
+shear bias and the FD signal is violated, as the bias dependent on additional observational variables, such
+as SNR, PSF properties, and focal-plane position. Consequently, a simple linear fit to the FD test does not
+necessarily recover the true mean shear bias of the sample, and the resulting calibration may therefore be
+inaccurate. However, our mock results indicate that the biases of the PDF-SYM method and the SWSE-A
+scheme remain largely insensitive to the distribution of shear estimators, and hence to SNR variations, as
+shown in Figure 2. In contrast, the SWSE-C scheme exhibits a clear dependence of shear bias on SNR,
+implying that its shear bias varies with focal-plane position. This dependence may partially explain the
+slight underestimation observed in the calibrated results of the “SWSE-C” scheme in Figure 5. Extending
+the FD framework to account for spatially varying shear biases across the focal plane will therefore be an
+important direction for future work.
+AcknowledgementsThis work is supported by the National Key Basic Research and Development
+Program of China (2023YFA1607800, 2023YFA1607802), the NSFC grant (12573004), and the science
+research grants from China Manned Space Project (No. CMS-CSST-2021-A01). The computations in this
+paper were run on theπ2.0 cluster supported by the Center of High Performance Computing at Shanghai
+Jiaotong University.
+
+SWSE & FD test 15
+Appendix A: THE MULTIPLICA TIVE BIAS OF SWSE-INV
+SWSE-Inv is a weighted averaging method that uses the inverse of the estimator as the weight, as shown in
+Eq. 12. Since the weight depends explicitly on the estimator itself, this weighting scheme generally intro-
+duces a multiplicative bias. Importantly, this bias is not specific to shear estimators, but arises generically
+for any random variable whose PDF is symmetric about a small value. Here, we derive the multiplicative
+bias in this general case.
+Suppose there are two sets of random numbers,e S1 ande S2, which follow same PDFs and symmetric
+about 0, i.e.,P(e S1) =P(e S2)and⟨e S1⟩=⟨e S2⟩= 0. These two sets of random numbers can be
+considered as the unlensed conventional shear estimators. After respectively adding small shearsg 1 andg 2
+to them, we have
+ei =e Si +g i.(A.1)
+Additionally, Eq. 12 can also be expressed as
+⟨ei⟩SWSE−Inv =
+R ∞
+−∞ de1
+R ∞
+−∞ de2P(e 1, e2) ei√
+e2
+1+e2
+2
+R ∞
+−∞ de1
+R ∞
+−∞ de2P(e 1, e2) 1√
+e2
+1+e2
+2
+(A.2)
+whereP(e 1, e2)is the joint distribution ofe 1 ande 2. Sincee i =e Si +g i, we haveP(e 1, e2) =
+PS (eS1, eS2), whereP S is the distribution of(e S1, eS2). Sinceg 1 andg 2 are tiny, we can apply a Taylor
+expansion to Eq.A.2, and here we takeg 1 as example,
+⟨e1⟩SWSE−Inv =
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) [(eS1 +g 1)2 + (eS2 +g 2)2]− 1
+2 (eS1 +g 1)
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) [(eS1 +g 1)2 + (eS2 +g 2)2]− 1
+2
+=
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) [(e2
+S1 +e 2
+S2)− 1
+2 −(e S1g1 +e S2g2)(e2
+S1 +e 2
+S2)− 3
+2 +O(g 2
+1,2)](eS1 +g 1)
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) [(e2
+S1 +e 2
+S2)− 1
+2 −(e S1g1 +e S2g2)(e2
+S1 +e 2
+S2)− 3
+2 +O(g 2
+1,2)]
+≈g 1 ×
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) (e2
+S1 +e 2
+S2)− 3
+2 e2
+S2
+R ∞
+−∞ deS1
+R ∞
+−∞ deS2PS (eS1, eS2) (e2
+S1 +e 2
+S2)− 1
+2
+= g1
+2 (A.3)
+In this formula, we perform a Taylor expansion of the expression from the first step up to the first order in
+shear. Then, we eliminate the terms whose integrals are 0 by utilizing the parity ofP S (eS1, eS2). Finally,
+we exploit the fact that exchanging the indices ‘1’ and ‘2’ would not change the result, so the numerator
+should be half of the denominator. Thus, we demonstrate that the SWSE method can stably estimate the
+shear value wheng 1,2 is small.
+Appendix B: CONSISTENCY OF WEIGHTS BETWEEN THE FD TEST AND ESD
+MEASUREMENT
+In weak lensing, the observed ellipticity of a galaxy can be modeled as:
+ei = (1 +m i)γi +e s
+i (B.1)
+wherem i is the multiplicative shear bias,γ i is the true shear, ande s
+i is the intrinsic galaxy shear. Here
+we consider only the multiplicative bias and assume it to be identical for different shear components. The
+estimator for the ESD is given by
+(1 +m A)∆Σ =
+P
+i wkΣk
+c ek
+tP
+i wk ,(B.2)
+
+16 Liu et al.
+wherem A is the multiplicative bias for∆Σ. Substituting the expression fore i and assuming∆Σ = Σ i
+cγi
+t
+in the absence of redshift errors, we have
+(1 +m A)∆Σ =
+P
+k wkΣk
+c(1 +m k)γk
+tP
+k wk =⇒1 +m A =
+P
+k wk(1 +m k)P
+k wk (B.3)
+in whichm k denotes the multiplicative bias for thek th galaxy. For the FD test, the observed ellipticity
+responds to the known shearγ f induced by field distortion. The corresponding estimator can be written as
+(1 +m B)γf =
+P
+k wk
+f ek
+P
+k wk
+f
+.(B.4)
+wherem B is the bias measured in FD tests. It reduces to
+1 +m B =
+P
+k wk
+f(1 +m k)P
+k wk
+f
+.(B.5)
+Thus, in order for the bias measured in the FD test to correctly calibrate the bias in the ESD measurement
+(i.e.m B =m A), the same weighting scheme must be adopted, namelyw k
+f =w k.
+However, if redshift errors exist, the critical surface density can be written as ˜Σk
+c = (1 +δ k
+c )Σk
+c . So the
+ESD bias then becomes
+1 + ˜mA =
+P
+k wk(1 +m k)(1 +δ k
+c )P
+k wk ̸=
+P
+k wk(1 +m k)P
+k wk (B.6)
+Therefore, photo-zerrors introduce additional biases that cannot be corrected by the FD test alone.
+References
+Bartelmann, M., & Maturi, M. 2017, Scholarpedia, 12, 32440, revision #186553 2
+Bernstein, G. M., & Jarvis, M. 2002, AJ, 123, 583 5
+Dey, A., Schlegel, D. J., Lang, D., et al. 2019, The Astronomical Journal, 157, 168 11
+Elahi, P. J., Welker, C., Power, C., et al. 2018, MNRAS, 475, 5338 7
+Fong, M., Han, J., Zhang, J., et al. 2022, Monthly Notices of the Royal Astronomical Society, 513, 4754 2
+Fu, L., Liu, D., Radovich, M., et al. 2018, MNRAS, 479, 3858 2
+Gatti, M., Sheldon, E., Amon, A., et al. 2021, MNRAS, 504, 4312 2
+Hirata, C., & Seljak, U. 2003, Monthly Notices of the Royal Astronomical Society, 343, 459 2
+Huff, E., & Mandelbaum, R. 2017, arXiv e-prints, arXiv:1702.02600 2
+Kaiser, N., Squires, G., & Broadhurst, T. 1995, ApJ, 449, 460 2
+Lagos, C. d. P., Tobar, R. J., Robotham, A. S. G., et al. 2018, MNRAS, 481, 3573 7
+Li, S.-S., Kuijken, K., Hoekstra, H., et al. 2023, A&A, 670, A100 7
+Liu, C., Zhang, J., Li, H., Alonso, P., & Wang, W. 2025a, ApJ, 993, 182 6, 10
+Liu, Z., Xu, K., Zhang, J., Wang, W., & Liu, C. 2025b, The Astrophysical Journal, 987, 4 2
+Liu, Z., Zhang, J., Li, H., Shen, Z., & Liu, C. 2024, Science China Physics, Mechanics, and Astronomy, 67,
+270413 2
+Liu, Z., Zhang, J., Liu, C., & Li, H. 2025c, ApJ, 979, 200 2
+MacCrann, N., Becker, M. R., McCullough, J., et al. 2022, MNRAS, 509, 3371 2
+Mandelbaum, R., Lanusse, F., Leauthaud, A., et al. 2018, MNRAS, 481, 3170 2
+Massey, R., & Refregier, A. 2005, MNRAS, 363, 197 2
+
+SWSE & FD test 17
+Miller, L., Kitching, T. D., Heymans, C., Heavens, A. F., & van Waerbeke, L. 2007, MNRAS, 382, 315 2
+Nakajima, R., & Bernstein, G. 2007, AJ, 133, 1763 2
+Pantos, I., & Perivolaropoulos, L. 2026, Physics of the Dark Universe, 52, 102286 2
+Prat, J., & Bacon, D. 2026, in Encyclopedia of Astrophysics (First Edition), first edition edn., ed. I. Mandel
+(Oxford: Elsevier), 508 2
+Pujol, A., Bobin, J., Sureau, F., Guinot, A., & Kilbinger, M. 2020, A&A, 643, A158 2
+Rhodes, J., Refregier, A., & Groth, E. J. 2000, ApJ, 536, 79 2
+Shen, Z., Zhang, J., Liu, C., et al. 2025, Journal of Cosmology and Astroparticle Physics, 2025, 068 2
+Springer, O. M., Ofek, E. O., Weiss, Y ., & Merten, J. 2020, MNRAS, 491, 5301 2
+Tewes, M., Kuntzer, T., Nakajima, R., et al. 2019, A&A, 621, A36 2
+Wang, H., Zhang, J., Li, H., & Liu, C. 2023, The Astrophysical Journal, 954, 193 2
+Wang, J., Yang, X., Zhang, J., et al. 2022, ApJ, 936, 161 2
+Yang, X., Xu, H., He, M., et al. 2021, The Astrophysical Journal, 909, 143 11
+Zhang, J. 2008, MNRAS, 383, 113 2
+Zhang, J., & Komatsu, E. 2011, MNRAS, 414, 1047 2
+Zhang, J., Liu, C., Vaquero, P. A., et al. 2022, The Astronomical Journal, 164, 128 6, 10
+Zhang, J., Luo, W., & Foucaud, S. 2015, Journal of Cosmology and Astroparticle Physics, 2015, 024 2, 3
+Zhang, J., Zhang, P., & Luo, W. 2017, ApJ, 834, 8 2, 3, 4
+Zhang, J., Dong, F., Li, H., et al. 2019, The Astrophysical Journal, 875, 48 3
+Zhang, Z., Shan, H., Li, N., et al. 2024, A&A, 683, A209 2
+Zuntz, J., Kacprzak, T., V oigt, L., et al. 2013, MNRAS, 434, 1604 2

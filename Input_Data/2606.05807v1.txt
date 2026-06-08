@@ -1,0 +1,1469 @@
+Title: Simulation of proton-induced activation for low-Earth orbit high energy astrophysics missions
+Authors: Riccardo Campana
+Published: 2026-06-04
+Categories: astro-ph.IM, astro-ph.HE
+
+Simulation of proton-induced activation for
+low-Earth orbit high energy astrophysics missions
+Riccardo Campana 1,2*
+1*INAF, OAS, Via Gobetti 101, Bologna, 40129, Italy.
+2INFN, Sezione di Bologna, Viale Berti Pichat 6/7, Bologna, 40127, Italy.
+Corresponding author(s). E-mail(s): riccardo.campana@inaf.it;
+Abstract
+Proton-induced activation represents a major source of instrumental background
+for high-energy astrophysics missions in low-Earth orbit, where trapped protons,
+particularly during transits within the South Atlantic Anomaly region, irradiate
+spacecraft materials and generate radioactive isotopes. Direct Monte Carlo sim-
+ulations of activation and of the ensuing decays are computationally inefficient,
+due to the low probability of nuclide production and the large number of decay
+events required for sufficient statistical accuracy.
+In this paper we provide a new implementation of an efficient three-step algorithm
+that decouples isotope production, radioactive-decay evolution, and background
+synthesis, enabling rapid reconstruction of activation-induced background for
+arbitrary irradiation histories. The method combines Geant4-based identification
+of all radioisotopes produced by monochromatic proton irradiations, numerical
+solutions of the Bateman equations for linearized decay chains, and simulation
+of the detector response to each isotope decay emissions. The approach greatly
+reduces the computational cost while maintaining accuracy, as demonstrated
+through validation against direct simulations, which show excellent agreement
+over many orders of magnitude in activity and time.
+This method is applied to two representative case studies: HERMES and
+eXTP/LAD and WFM, covering different detector technologies and orbital con-
+figurations. The presented framework enables fast exploration of design and
+operational scenarios (e.g., orbit selection, radiation models, or duty cycles) and
+is well suited for background budgeting and optimization of future high-energy
+space missions.
+Keywords:Space vehicles: instruments — Methods: numerical — Radiation
+mechanisms: non-thermal — X-rays: instrumentation — Gamma rays: instrumentation
+1
+arXiv:2606.05807v1  [astro-ph.IM]  4 Jun 2026
+
+1 Introduction
+The Earth atmosphere is opaque to X-rays andγ-rays; as a result, high-energy astro-
+physics observation can be conduced only from space, with instrumentation typically
+flown aboard satellites in low-altitude orbits (500–600 km Low Earth Orbits, or LEOs).
+This orbital environment induces a significant instrumental background, primarily due
+to interactions between cosmic rays and other energetic particles with the detector
+and the surrounding spacecraft structures [1].
+The overall background for a space-borne high-energy instrument can be divided
+into two main components. The first is thepromptbackground, caused by direct
+energy deposits from photons and charged particles in the detector. The second com-
+ponent arises fromactivationprocesses, where high-energy particles produce nuclear
+reactions in the spacecraft and detector materials, transmuting them into unstable
+isotopes. These isotopes subsequently decay over varying timescales, emittingα,β, or
+γradiation, which contributes to thedelayedbackground component.
+The characteristics of activation background depend strongly on the spacecraft and
+detector geometry, the materials used, and the specific irradiation profile. For missions
+in LEOs, much of this contribution arises from geomagnetically trapped protons in the
+Earth magnetosphere, such as the South Atlantic Anomaly (SAA) region. The activa-
+tion background typically comprises two components: a short-lived contribution from
+isotopes with half-lives ranging from seconds to days, which usually diminishes rapidly
+(depending on the frequency of the transits through the trapped proton regions), and
+a long-lived component from isotopes with half-lives on the scale of days to years,
+which usually accumulates over the mission duration.
+Estimating the onboard background levels for an X/γ-ray space experiment is an
+essential part of mission design and planning. Based on the anticipated environment,
+various strategies can be implemented to meet scientific requirements and reduce
+background interference, such as hardware shielding, onboard software filtering, or
+mission-wide measures like optimized pointing plans.
+A common approach involves Monte Carlo simulations using radiation-transport
+codes to model how photons and particles interact with the spacecraft and detector
+components, defined by their geometry and materials. Geant4 [2] is the standard frame-
+work for these high-energy physics simulations. It provides a set of C++ libraries to
+construct a virtual model of the instrument, simulate interactions with environmental
+particles, and extract relevant results such as energy deposits in the detector.
+The computational effort needed for simulations depends on the desired statistical
+accuracy and the level of detail in the instrument mass model. To balance precision
+and efficiency, less critical parts, such as spacecraft structures, are typically repre-
+sented with simplified geometries and approximate compositions. In contrast, critical
+components (e.g., the detector itself) are modeled with high detail, often derived from
+CAD designs.
+In general, a simulation for the activation of a satellite or detector can be performed
+by irradiating a mass model with high-energy protons and examining the delayed
+emissions over suitable timescales, e.g. ranging from 10 −3 s to 10 6 s. However, this
+directapproach is highly inefficient. Radio-activation is a comparatively rare process,
+competing with numerous other physical interaction mechanisms, resulting in a low
+2
+
+probability of generating unstable nuclei. For example, when a 1 cm thick Cu target is
+irradiated with 20 MeV monochromatic protons, on average, only one activation occurs
+for every∼370 primary protons simulated. Moreover, achieving sufficient statistical
+accuracy requires generating a large number of decay events for each desired post-
+irradiation time bin, significantly increasing the computational cost.
+To address these challenges, a three-step efficient algorithm has been proposed by
+several authors. Initially introduced in the MGGPOD software framework [3], this
+approach was subsequently implemented in MEGAlib [4] and adapted in various works
+for specific experiments [5, 6]. The core concept involves decoupling the generation of
+radioactive nuclides in a detector or spacecraft mass model from the simulation of the
+background induced by their decay products. Additionally, the activity of each radioac-
+tive species within a given time frame is determined through a numerical solution of
+the radioactive decay equations.
+In this paper, we present a variation of this approach that enables the construction
+of a database containing all relevant information required to reconstruct the expected
+activation-induced background forarbitraryirradiation profiles (both in terms of time
+and energy).
+As case studies, this approach is applied in two scenarios: theHigh Energy Modu-
+lar Ensemble of Satellites(HERMES) cubesat constellation [7], and two experiments
+onboard theenhanced X-ray Timing Polarimeter(eXTP) mission, i.e., theLarge Area
+Detector(LAD) and theWide Field Monitor(WFM) [8, 9].
+This paper is structured as follows. In Section 2 a general introduction to the
+activation of materials after a proton irradiation is provided, followed in Section 3 by an
+overview of the trapped high energy proton environment encountered in a typical low-
+Earth orbit. Section 4 discusses the activation simulation algorithm, and its validation.
+The following Sections 5, and 6 present our case studies.
+2 Activation of nuclides from proton irradiation
+Nuclear isotope activation through proton irradiation involves bombarding a stable
+target nucleus with high-energy protons, causing nuclear reactions that result in the
+formation of radionuclides. The interaction of protons with nuclei can occur through a
+variety of mechanisms, including elastic and inelastic scattering. These interactions are
+governed by their cross-sections, which vary with the energy of the incoming protons
+and the properties of the target nucleus.
+Proton irradiation induces nuclear reactions such as (p, n), (p,α), and (p,γ),
+where a proton collides with a nucleus, resulting in the ejection of one or more particles
+(e.g., neutrons orα) and the formation of a different nuclide. For instance, the irra-
+diation of a nickel target with protons can produce 64Cu through the 64Ni(p, n)64Cu
+reaction1. Another example is the activation of aluminum: proton irradiation of natu-
+rally occurring 27Al can lead to the formation of 24Na via the 27Al(p,α) 24Na reaction.
+An example of the cross-sections for the latter reaction is shown in Figure 1, and is
+typical of these processes: a minimum proton energy of a few MeVs (from 3–5 up to
+∼20 MeV, depending on the target atomic numberZ) is required to penetrate the
+1We employ here the standard notation for nuclear reactions, in whichX(a, b)YmeansX+a→Y+b.
+3
+
+0 20 40 60 80 100
+Proton energy [MeV]
+0
+2
+4
+6
+8
+10
+12Cross section [mb]
+27Al(p, α)24Na
+Fig. 1Cross section (in millibarns, 1 mb = 10 −27 cm2) for the 27Al(p,α) 24Na reaction. Data from
+the IAEA database, https://www-nds.iaea.org.
+nuclear Coulomb barrier and induce a reaction, with the cross-section rapidly rising
+with energy, peaking and then reaching a sort of plateau.
+3 The trapped proton environment in LEO
+Most of the high energy astrophysics missions are flown on Low Earth Orbits (LEOs),
+spanning altitudes from approximately 400 to 600 km above the surface. Although
+they have several advantages with respect to other types of orbits (e.g., launcher
+performance, ground communications, general radiation levels [1]), these represent
+a complex radiation environment dominated by trapped energetic particles within
+Earth’s magnetosphere. Among these particles, trapped protons, besides being of the
+most significant radiation hazards for spacecraft, astronauts, and sensitive electronic
+systems operating in this orbital environment, are the main source of activation for
+scientific instruments.
+Trapped protons in LEO originate primarily from the cosmic ray albedo neutron
+decay and solar energetic particle (SEP) events [1]. The first process occurs when
+high-energy cosmic rays interact with the atmosphere, producing neutrons that sub-
+sequently decay into protons and electrons while moving through the magnetosphere.
+These newly created protons, along with solar protons that penetrate the magneto-
+sphere during geomagnetic disturbances, become trapped by the geomagnetic field
+lines in quasi-stable orbits around the planet. The motion of the trapped particles
+creates the characteristic toroidal structure of the Van Allen radiation belts [10], with
+particles bouncing between magnetic mirror points in the conjugate hemispheres.
+The trapped proton environment exhibits significant spatial variability, strongly
+influenced by the fact that the geomagnetic dipole field is tilted and offset with respect
+to the Earth center and rotation axis. The South Atlantic Anomaly (SAA) represents
+4
+
+the most prominent feature, where the inner radiation belt dips closest to Earth sur-
+face. Within the SAA region, proton fluxes can exceed those found elsewhere in LEO
+by several orders of magnitude, with energies ranging from hundreds of keV to several
+hundred MeV. Outside the SAA, trapped proton populations in LEO are generally
+much less intense but still present significant challenges. The energy spectrum typi-
+cally follows a power law distribution, with lower energy protons (1–10 MeV) being
+more abundant than higher energy particles (>50 MeV). However, the higher energy
+protons pose greater penetration concerns for spacecraft shielding and can cause more
+severe single event effects in electronic devices. The trapped proton environment in
+LEO exhibits variability across multiple timescales, due, e.g., to geomagnetic storms
+(hours-days scale) and/or to solar cycle variations (11-year scale).
+The characterization of trapped particle environments has evolved significantly
+through decades of satellite-based measurements and modeling efforts. The founda-
+tional NASA models AP8 [11] and AE8 [12], developed from 1960s–1970s satellite data,
+established the aerospace industry standard for predicting omnidirectional proton and
+electron fluxes across energy ranges of 0.1–400 MeV and 0.04–7 MeV, respectively.
+While these models distinguish between solar minimum and maximum conditions,
+they lack dynamic geomagnetic field modeling and exhibit substantial uncertainties
+in regions with steep spatial gradients, particularly at the SAA boundaries. Subse-
+quent modeling efforts have addressed many of these limitations through enhanced
+datasets and methodological improvements. An ESA-sponsored low-altitude proton
+model utilized SAMPEX satellite measurements to provide more accurate flux pre-
+dictions below 600 km altitude for solar minimum conditions [13]. Most significantly,
+the comprehensive AE9/AP9/SPM model suite [14], developed collaboratively by the
+National Reconnaissance Office and Air Force Research Laboratory, incorporated over
+30 satellite datasets spanning 1976–2011. This advanced framework introduced higher
+spatial resolution, quantified uncertainties through Monte Carlo analysis, and pro-
+vided statistical flux thresholds at various percentile levels while incorporating space
+weather variability and instrumental uncertainties. Despite these advances, modeling
+challenges persist, particularly for low-inclination, low-altitude orbital regimes where
+observational data remains sparse.
+The Space Environment Information System (SPENVIS) platform 2 has emerged
+as a comprehensive web-based interface, enabling mission planners to access multiple
+environmental models and compute orbit-specific radiation exposures. This integrated
+approach represents the current state-of-the-art for trapped particle environment
+assessment, though continued model refinement remains essential as new satellite mis-
+sions provide additional observational constraints and as space weather understanding
+continues to advance.
+2https://www.spenvis.oma.be
+5
+
+4 The simulation framework
+4.1 The three-step algorithm
+This method leverages a set of large-scale initial simulations and involves the following
+steps:
+1.Simulation of nuclide generation: Identify the radioactive nuclides produced
+in the mass model upon irradiation by protons.
+2.Numerical calculation of decay chains and activities: Solve the radioactive
+decay equations to determine theactivityof each species over time, in every volume
+of the simulated mass model.
+3.Simulation of background contributions: Determine the background induced
+by the decay of each nuclide within a specified volume.
+This approach significantly improves computational efficiency while maintain-
+ing accuracy, making it particularly suited for activation studies in high-energy
+astrophysics and related fields.
+4.1.1 Step 1
+In the first step, the aim is to determine the number, type and location of each
+radioisotope generated by proton irradiation. The Monte Carlo simulation for each
+primary particle generated in the run proceeds until a radioisotope is generated within
+any volume, recording all the relevant information such as the nuclide atomic number
+Z, mass numberA, excitation levelE, and location (i.e., in which volume of the mass
+model the isotope has been generated). It is essential that the specific track of the
+event is then stopped after the generation of the isotope, to avoid to accumulate also
+its daughters.
+In order to separate “prompt” radiation to “delayed” decays, a suitable threshold
+on half-life can be implemented: if a given isotope has an half-life shorter than a
+characteristic time (which could be, for example, the detector dead time or linked to
+the timescales that one wants to investigate) the simulation is not stopped and the
+interaction of the decay products are treated as an instantaneous contribution to the
+instrumental background count rate.
+In Geant4, this step is specifically implemented in an instantiation of the
+G4SteppingActionclass. This is the class which allows the user to interact with the
+simulation at the “step” level 3.
+To ensure a full flexibility in the following steps, the simulation can be performed
+once by simulating several monochromatic proton energies, for example in the range
+from 4–5 up to 700 MeV (protons with lower energies are not able to induce activation,
+and the usual fluxes at higher energies are generally negligible). Any specific irradiation
+spectral profile can be then derived by a suitable weighting of each simulation results,
+as will be discussed in the following.
+3A Geant4 simulation consists, for eacheventin a givenrun, of severaltracks, corresponding to the
+primary particle tracked in its interaction and of all its generated secondary particles. Each track is then a
+collection ofsteps, each representing one physical interaction with the mass model.
+6
+
+XA XB XC XD1 XE1
+XD2 XE2
+XE3
+f
+1-f
+1-g
+g
+Branched decay chain
+Linearised decay chains
+XA XB XC XD1 XE1
+XD2 XE2
+XE3
+XA XB XC
+XD2XA XB XC
+f
+(1-f)g
+(1-f)(1-g)
+Weights
+Fig. 2Linearization of decay chains. In the upper panel, a complex, branched decay chain is shown.
+fandgare the branching ratios. Lower panel: the corresponding linearized decay chains, with their
+associated total weight.
+As a result of the first step, we obtain a list of all the generated isotopes (which
+can be conveniently normalized per unit of incident proton fluence, protons/cm 2) in
+each volume of the mass model, with their characteristics (Z, A, E).
+4.1.2 Step 2
+In order to evaluate the activity for each isotope in each volume at an arbitrary timet
+after irradiation, we need to solve the equations of the radioactive decay. This requires,
+in the general case of a complex decay chain, to numerically solve the Bateman system
+of differential equations, which is summarized in Appendix A.
+The algorithm proceeds as follows: for each independent isotope generated
+in the simulation, information on its decay modes is pulled from the Geant4
+RadioactiveDecaydatabase, and its decay chain is reconstructed. Branched decay
+chains can be simplified bypruningthem, i.e., by removing the branches with very
+low probability (e.g., removing all the decay modes with less than 0.1% probability to
+occur) and then bylinearizing, i.e., treating them as independent linear chains with a
+suitable weight, which is the product of the branching ratio for each path (Figure 2).
+Consequently, the Bateman equations are solved for each (linearized) decay chain,
+assuming a normalized concentration of 1.0 for the initial isotope and a null population
+of daughters. As a result, normalized concentrations and thus activities are determined
+for each isotope and its daughters over a suitable array ofntimest= [t 0, t1, ..., tn−1].
+Note that one isotope can be generated through different decay chains: its activity at
+a given time is thus the sum of the activities from each possible channel.
+Therefore, the algorithm determines, for each timet k ∈tand each volume, the
+type of isotopes present and their activity, normalized for the input irradiation fluence,
+and expressed in Bq/(protons/cm 2).
+7
+
+4.1.3 Step 3
+The third step is the simulation of the effects of the decay of each isotope in each
+volume on the background rate. A simulation is performed, using the same mass model,
+by looping over every volume and every isotope present (at any given time) in it,
+generating at random the isotope in the volume and making it decay. To avoid double-
+counting, the simulation is stopped before letting any unstable daughter isotope decays
+in turn. The result of this step is a library of background spectra due to the decay of
+a given isotope in a given volume, and normalized for the input activity (expressed,
+e.g., in counts/s/keV/decay).
+By putting together the results of these three steps, the expected background for
+any irradiation spectrum and time profile can be derived. In other words, the back-
+ground spectrum that is recorded at a timet k after the irradiation is the cumulated
+effect of the contributions from each isotope that is possible to generate in each vol-
+ume, weighted by the expected number of its decays (i.e., its activity) at the timet k.
+This, in turn is a function of the irradiation fluence, spectrum and time profile/history.
+For example, let’s assume that the aim is to simulate an irradiation time profile
+Firr(τ) (say, a Gaussian shape, which is a good approximation of the flux encountered
+during a passage through the SAA) with a proton source having a differential fluence
+spectrumS src(E) (e.g., a power-law shape), and we are interested in the background
+count rates and spectra for all timest∈t(which can be later than the irradiation
+time profile, or can comprise the irradiation itself).
+In this general case, the total proton fluence as a function of time is:
+Φ(t) =
+Z ∞
+0
+Z ∞
+0
+Ssrc(E)Firr(t−τ)dEdτ(1)
+To transform the problem in a way easier to compute, the first step is to assume that
+theF irr(τ) irradiation time profile can be replaced by a sum of weighted, time-shifted
+instantaneousirradiations:
+Firr(τ)− →
+X
+i
+fiδ[τ−τ i] (2)
+where, in the time binτ i, the integral proton fluence is considered constant and
+instantaneous (i.e., a Dirac delta), andf i =F irr(τi).
+Then, the input proton fluence spectrumS src(E) (in protons/cm 2/MeV) can be
+discretized over an array ofmenergiesE= [E 0, E1, ..., Em−1]:
+sj =S src(Ej) (3)
+and the total integral fluence provided by a monochromatic irradiation with protons
+of energyE j iss j∆Ej protons/cm2, where ∆E j is the width of thej-th energy bin.
+Leta j
+p,v[tk] be the normalized activity, in Bq/(protons/cm 2), of thep-th isotope
+in thev-th volume, upon an instantaneous irradiation with protons of energyE j,
+calculated over the discretized time gridt. The value of the normalized activity will
+8
+
+depend on its decay scheme, and on the total number of the specific isotope (or of its
+mothers), generated by the instantaneous irradiation.
+The total activity (in Bq) in the mass modelv-th volume, at timet k, after an
+instantaneous irradiation at timet= 0 with spectrumS src(E) is therefore:
+Ap,v[tk] =
+X
+j
+sj∆Ejaj
+p,v[tk] (4)
+The activity for a general discretized irradiation profile (Eq. 2) is therefore:
+Ap,v[tk] =
+X
+i
+X
+j
+sj∆Ejfiaj
+p,v[τi −t k] (5)
+that is, the sum of weighted, time-shifted activities calculated over a timet k with an
+instantaneous irradiation at a timeτ i.
+The total background spectrum on the detector, at a given timet k, is the sum of
+the contributions of each isotope in each volume:
+Bkg(E, t k) =
+X
+v
+X
+p
+Ap,v[tk]Fp,v(E) (6)
+whereF p,v(E) is the background spectrum, normalized for unit decay of the isotopep
+in the volumev, as a function of the recorded energy (or detector channel)E.
+The logical connections between each step and the final synthesis of the determi-
+nation of the background spectrum and count rate for a given time after an arbitrary
+irradiation profile is schematically shown in Figures 3 and 4. It is worth noticing that
+the first two blocks in the final synthesis shown in Figure 4 are computed only once for
+a given mass model: this means that the activation-induced background spectrum can
+be very quickly calculated for different scenarios (e.g., when evaluating the impact of
+an orbital inclination change, or when comparing different trapped particle models).
+4.2 Validation
+A validation of the aforementioned schema can be carried out by comparing the
+results of a straightforward direct simulation (in which all the interactions and decays
+are followed at all time scales) to the predicted activities computed with the 3-step
+algorithm.
+In Figure 5 the number of decays as a function of time is shown for two representa-
+tive simple simulations. In this case, a 1 cm thick target of Cu (left panel) or Si (right
+panel) is irradiated with 106 monochromatic protons, with an energy of 30 MeV for the
+Cu target and 70 MeV for the Si target. The black line shows the activity determined
+with the direct simulation, while the red line is the prediction of the 3-step algorithm.
+In both cases the number of primary events is the same. The 3-step algorithm pre-
+diction follows closely the direct simulation, with different “bumps” corresponding
+to different isotopes (e.g., 26Al and 27Si, or 62Zn and 62Cu). Table 1 reports, as an
+example, the various isotopes created in the 30 MeV protons on Cu target simulation.
+9
+
+Protonisotropic
+irradiationE1 Protonisotropic
+irradiationE2 Protonisotropic
+irradiationE3
+List of
+isotopes ineach volume
+for each inputproton energyE1, E2, E3, ...
+Mass model
+Geant4
+Backgroundspectra for
+each isotope ineach volume
+Batemanequation
+solver
+Mass model
+Geant4
+List ofactivities in
+each volumefor each input
+proton energyE1, E2,… and
+for each time
+step t1, t2, ….
+Time t1
+Time t2
+Time t3
+Step 1
+Step 2
+Step 3
+Fig. 3Flow chart of the three-steps algorithm for activation simulations.
+Irradiationproﬁle
+Differential
+spectrum
+Time
+distribution
+Backgroundspectra foreach isotope
+in eachvolume
+List ofactivities in
+each volumefor each input
+proton energyE1, E2,… and
+for each time
+step t1, t2, ….
+Background
+spectrumand countrates for
+each time tafterirradiation
++ +
+Fig. 4The final synthesis of the outputs of the three steps algorithm for activation simulations.
+In Geant4, the user can choose between different hadronic physics models,
+which simulate interactions involving hadrons, such as protons, over a wide energy
+range4. These models are categorized into parameterized, theoretical, and data-driven
+approaches. Parameterized models, like the Bertini cascade, are computationally effi-
+cient and suitable for low- to intermediate-energy interactions, typically below a few
+4See, e.g., the Geant4 Physics Reference Manual for more details https://geant4-userdoc.web.cern.ch/
+UsersGuides/PhysicsReferenceManual/html/index.html
+10
+
+100 102 104 106 108 1010 1012
+Time after irradiation [s]
+10−12
+10−10
+10−8
+10−6
+10−4
+10−2
+100
+102
+104
+Activity [Bq]
+30 MeV protons on Cu target
+Direct simulation
+3-step algorithm
+100 102 104 106 108 1010 1012
+Time after irradiation [s]
+10−12
+10−10
+10−8
+10−6
+10−4
+10−2
+100
+102
+104
+Activity [Bq]
+70 MeV protons on Si target
+Direct simulation
+3-step algorithm
+Fig. 5Activity after an instantaneous irradiation with a flux of 10 6 protons cm−2 on a 1 cm thick
+target of natural copper (left panel, with 30 MeV protons) and silicon (right panel, 70 MeV protons).
+The black histogram is a direct simulation, while the red curve is the numerical prediction from the
+3-step algorithm. Missing data at long times/low activity levels is due to the low statistics of the
+direct simulation.
+Isotope Efficiency Half-life Decay mode Decay scheme
+62Zn 2.39·10 −3 9.193 h β+/EC 62Zn→ 62Cu→ 62Ni (stable)
+63Zn 1.39·10 −3 38.38 min β+/EC 63Zn→ 63Cu (stable)
+62Cu 1.25·10 −3 9.672 min β+/EC 62Cu→ 62Ni (stable)
+64Cu 7.80·10 −4 12.70 h β− (38%)
+EC (62%)
+64Cu→ 64Zn (stable)
+64Cu→ 64Ni (stable)
+65Zn 4.00·10 −4 243.93 d β+/EC 65Zn→ 65Cu (stable)
+61Cu 2.46·10 −4 3.34 h β+/EC 61Cu→ 61Ni (stable)
+59Ni 1.79·10 −4 81000 y β+/EC 59Ni→ 59Co (stable)
+63Ni 5.00·10 −6 100.8 y β− 63Ni→ 63Cu (stable)
+66Cu 3.00·10 −6 5.09 min β− 66Cu→ 66Zn (stable)
+61Zn 1.00·10 −6 88.8 s β+/EC 61Zn→ 61Cu (stable)
+61Co 1.00·10 −6 1.65 h β− 61Co→ 61Ni (stable)
+T able 1Isotopes created in an irradiation of a 1 cm thick Cu target with 30 MeV
+protons. The efficiency is defined as the number of isotopes generated in the
+simulation, divided by the total number of primary protons simulated. For the half-life
+and decay scheme see also the NuDat database, https://www.nndc.bnl.gov/nudat3/.
+GeV. Theoretical models, such as the Fritiof (FTF) and Quark-Gluon String (QGS)
+models, describe high-energy interactions by considering partonic and string dynam-
+ics, and are appropriate for energies above several GeV. Data-driven models, like
+G4ParticleHP, rely on experimental cross-section data to simulate low-energy neutron
+interactions with high precision. The choice of a given model can be a compromise
+between computational time (usually, the more precise the model the larger the run
+time) and accuracy. In Table 2 simulation results with several different physics lists
+are compared.FTFP BERTis the default Geant4 hadronic physics list, and from a com-
+putational point of view gives the faster run time. TheQBBCphysics list is the one
+recommended for medical and space physics simulations, where accurate simulation
+for low-energy transport of protons and neutrons is needed. It runs only 6% slower
+thanFTFP BERT, but interestingly it generates a good 30% more different types of iso-
+topes (mostly excited and metastable states), although the total number of activated
+11
+
+Physics list Normalised run time Total no. of isotopes No. of different isotopes
+FTFP BERT 1.00 3462 102
+QGSP BERT 1.01 3432 102
+QBBC 1.06 2685 137
+Shielding 1.46 3414 100
+QGSP BIC HP 1.57 3915 136
+T able 2Comparison of the results for different Geant4 physics lists. In this case, a beam
+of 150 MeV protons is incident along the long axis of a 1×1×4 cm GAGG:Ce block. 10 6
+particles are generated in this simulation. Run time is normalized with respect to the
+FTFP BERTcase (the absolute value on an Apple Silicon M3 Pro system at 3.57 GHz and
+18 GB RAM, using 2 threads, is of 21.7 seconds). The last two columns report the total
+number of radioactive isotopes generated in the simulation, and the number of different
+species.QGSP BERTis essentially equivalent toFTFP BERTin the investigated energy range.
+The last two physics lists are recommended for deep shielding and/or accurate neutron
+transport simulations, and are significantly more computationally demanding.
+10−2 100 102 104 106 108
+Time after irradiation [s]
+10−16
+10−14
+10−12
+10−10
+10−8
+10−6
+10−4
+10−2
+Normalised Activity
+QBBC
+FTFP BERT
+Fig. 6Predicted normalized activity with the 3-step algorithm, for a simulation with 150 MeV
+protons incident along the long axis of a 1×1×4 cm GAGG:Ce block, for theQBBCandFTFP BERT
+physics lists.
+isotopes is lower. As shown in Figure 6, the former physics list produces a higher activ-
+ity for short-lived isotopes (with half-lives below 0.1 s), while for mid- and long-lived
+isotopes the activities are similar. As a baseline, in the followingQBBCwill be used.
+5 Case study I: HERMES
+5.1 Instrument overview
+TheHigh Energy Rapid Modular Ensemble of Satellites(HERMES) mission is a dis-
+tributed space observatory consisting of a constellation of 3U CubeSats. The main
+mission goal is to validates a scalable, low-cost methodology for astrophysical obser-
+vations, aiming to pioneer a low-cost, distributed approach to detecting and localizing
+high-energy astrophysical transients. The HERMES-Pathfinder project [7, 15], com-
+posed of six identical 3U CubeSats, will observe the prompt emission of high-energy
+transients such as Gamma-Ray Bursts (GRBs), providing rapid localization (through
+the triangulation technique) and complementary observations to gravitational-wave
+12
+
+detections. In particular, event-by-event time-tagging down to microsecond precision
+enables spectral-timing analysis of GRB prompt emission, probing the physics of
+relativistic jets and emission mechanisms on sub-millisecond timescales.
+Each HERMES satellite hosts a compact, modular detector system [16, 17] occu-
+pying approximately 1U of the CubeSat volume. The scientific payload integrates a
+hybrid detector assembly, composed of Silicon Drift Detectors (SDDs) optically cou-
+pled to GAGG:Ce scintillator crystals, providing a wide energy band from a few keV
+to several MeV. The detector “siswich” architecture is based on the readout of 60
+GAGG:Ce crystals (each with 6.94×12.1×15 mm 3 dimensions) by two independent
+SDD cells. The latter act both as a direct X-ray detector (“X-mode”,∼3–50 keV) and
+as photosensors for the optical scintillation light produced by the absorption of an
+higher-energyγ-ray in the crystal itself (“S-mode”,∼20–2000 keV) A custom low-noise
+readout Application-Specific Integrated Circuit (ASIC, [18]) and a dedicated Payload
+Data Handling Unit (PDHU, [19]) manage signal processing and event reconstruction.
+A chip-scale atomic clock (CSAC) ensures sub-microsecond timing accuracy across the
+constellation, which is essential for triangulation-based localization. The payload mass
+is approximately 1.5 kg with a nominal power consumption below 2 W, fully compat-
+ible with 3U CubeSat constraints. The payload design emphasizes manufacturability,
+modularity, and the use of commercial off-the-shelf (COTS) components.
+Extensive ground calibration and environmental qualification campaigns [20, 21]
+have validated detector performance, thermal stability, and radiation tolerance. The
+six satellites of the HERMES Pathfinder constellation have been launched on March
+15, 2025. A seventh, identical, payload is hosted onboard the Australian satellite
+SpIRIT, launched on December 1st, 2023 [22]. Commissioning activities are currently
+undergoing (Baroni et al., 2026, submitted; Leone et al. 2026, in press).
+5.2 Activation simulations
+Figure 7 shows an exploded view of the satellite design. The mass model is imple-
+mented in GDML format 5 and background simulations [23] of the non-activation
+sources [1] have shown that the dominant background component is expected to be
+the cosmic diffuse X-ray background (CXB) up to energies of a few hundreds of keV,
+while particle-induced background becomes important for higher energies.
+Although designed to operate in an equatorial, low Earth orbit, the constella-
+tion has been launched on a 515 km altitude Sun-synchronous orbit (SSO). For the
+HERMES mission, therefore, two possible scenarios are simulated: (a) a 600 km, 5 ◦
+inclination LEO, and (b) a 550 km SSO (97 ◦ inclination). Note that the altitude in
+the latter scenario has been conservatively chosen significantly higher than the actual
+launch altitude. For both scenarios, we consider two radiation models for the trapped
+proton population: the “classic” AP8 model evaluated at solar minimum (AP8MIN),
+and the “new” AP9 model, evaluated for a 90th percentile6 and for “mean” results. In
+5https://gdml.web.cern.ch/GDML/
+6In the AP9 trapped radiation model, percentiles represent statistical confidence levels that describe the
+variability and uncertainty in the predicted proton flux environment. The model generates flux estimates
+based on a large ensemble of simulated magnetic field and particle transport conditions. Lower percentiles
+(e.g., 5th) correspond to quieter space weather conditions with lower flux levels, indicating conservative or
+less severe radiation environments. Higher percentiles (e.g., 90th) indicate increasingly extreme radiation
+levels, useful for assessing absolute worst-case or design-limit scenarios.
+13
+
+Fig. 7The HERMES 3U CubeSat (upper left) and an exploded view of the payload (which composes
+the uppermost 1U of the satellite). Adapted from [17].
+each case a 30-days long orbit starting from January 1st, 2025, sampled at one minute
+intervals, has been simulated using SPENVIS. The effect of atmospheric drag and
+orbital decay has been neglected, while the orbital perturbations have been propagated
+using standard algorithms.
+Figure 8 shows the orbit-averaged differential proton spectra predicted by these
+models. The difference between the prediction of the two trapped proton models is
+dramatic for low orbital inclinations, less so for polar orbits. It should be emphasized
+that the AP9 90th percentile model should be considered as anabsolute worst case
+from a simulation standpoint, and has been shown to be inaccurate at low orbital
+inclinations [24].
+Figure 9 shows the output of the first step of the activation algorithm
+(Section 4.1.1). A minimum energy of about 60 MeV is necessary to reach and induce
+activation in every volume of the mass model (i.e., to reach also the innermost sec-
+tors of the detector or of the spacecraft), and the total number of isotopes which are
+generated is dramatically dependent on the energy, reaching up to the level of several
+hundreds of different isotopes.
+The left panel of Figure 10 shows, as an example, the expected count rate (evalu-
+ated after simulation steps 2 and 3, Section 4.1.2 and 4.1.3), as a function of time, for
+an instantaneous irradiation with the AP8MIN orbit-averaged proton spectrum for a
+550 km altitude SSO. Results are qualitatively similar for the other models; in particu-
+lar, it is well apparent how the dominant contribution to the overall activation-induced
+background rate is due to radioisotopes generated inside the GAGG:Ce scintillator
+crystal themselves, at least for mid- to long-half lives (t >100 s). An analysis of the
+background spectra for several times after irradiation (Figure 10, right panel) clearly
+14
+
+100 101 102 103
+Energy [MeV]
+10−5
+10−3
+10−1
+101
+103
+105
+Diff. ﬂux [protons cm−2 s−1 MeV−1] 550 km SSO (AP8MIN)
+550 km SSO (AP9 mean)
+550 km SSO (AP9 90th perc.)
+600 km 5 deg (AP8MIN)
+600 km 5 deg (AP9 mean)
+600 km 5 deg (AP9 90th perc.)
+Fig. 8Orbit-averaged proton differential spectrum for the two orbital scenarios (LEO at 600 km
+altitude, 5 ◦ inclination or 550 km altitude Sun-synchronous orbit) for the AP8MIN and AP9 mean
+and 90th percentile models.
+shows that different isotopes (with different characteristicγ-ray lines) dominate at
+different times. The 511 keV annihilation line is anyway the most prominent feature
+at all times.
+Figure 11 shows the activation-induced background count rate during the first day
+in orbit (left) and after 25–30 days (right). For a SSO, each day the satellite experiences
+two sets of irradiation events corresponding to the ascending and descending SAA
+transits, which differ in duration and intensity. The decay of short-lived isotopes causes
+a rapid drop (by one to two orders of magnitude) in the background rate, within
+minutes after each transit, while the accumulation of long-lived isotopes leads to a
+gradual increase that stabilizes after a few weeks. Figure 12 shows the long-term
+average of the “steady-state” background (i.e., the one induced by the accumulation
+of long-lived isotopes well outside SAA transits) as a function of the time for the
+four different scenarios. The resulting count rates can be compared with the expected
+non-activation background [23], which, depending on the orbital inclination, averages
+between 180 and 360 counts/s in the S-mode band (20–2000 keV). This shows that
+activation-induced background is a minor contributor to the overall background for
+HERMES in an equatorial orbit [6, 25] but becomes significant at higher inclinations
+or in polar orbits.
+The activation contribution for the X-mode band (3–50 keV), given the low inter-
+action cross section on the thin (450µm) silicon bulk of the SDDs, is on the contrary
+absolutely negligible with respect to the other background components (such as the
+diffuse X-ray emission collected in the large field of view).
+15
+
+100 101 102 103
+Energy [MeV]
+100
+101
+102
+103
+Number of isotopes
+Total
+Short-lived (t1/2 < 103 s)
+Medium-lived (103 < t1/2 < 106 s)
+Long-lived (t1/2 > 106 s)
+100
+101
+102
+103
+Number of activated volumes
+Total number of volumes
+Fig. 9Number of unstable isotopes created upon an irradiation of the HERMES mass model with
+different proton energies (left vertical axis) and number of volumes in the mass model which have at
+least one generated radioisotope (right vertical axis). The total number of different volumes in the
+GDML HERMES mass model employed is also shown.
+10−1 100 101 102 103 104 105 106
+Time after irradiation [s]
+10−10
+10−8
+10−6
+10−4
+10−2
+100
+102
+S-mode count rate [counts/s]
+AP8MIN - 550 km SSO
+4 MeV
+6 MeV
+8 MeV
+10 MeV
+15 MeV
+20 MeV
+30 MeV
+50 MeV
+60 MeV
+80 MeV
+100 MeV
+150 MeV
+200 MeV
+300 MeV
+400 MeV
+Total
+Crystals only
+102 103
+Energy [keV]
+10−8
+10−6
+10−4
+10−2
+100
+Counts/s/keV
+AP8MIN - 550 km SSO
+1e-01 s
+1e+00 s
+1e+01 s
+1e+02 s
+1e+03 s
+1e+04 s
+1e+05 s
+1e+06 s
+Fig. 10Left panel: Expected count rate in HERMES (S-mode, 20–2000 keV band) as a function of
+time, after an instantaneous irradiation with the orbit-averaged trapped proton spectrum predicted
+by the AP8MIN model for a 550 km altitude SSO. Besides the contribution of each input energy bin
+to the count rate, the plot shows the total count rate and the individual contribution of the GAGG:Ce
+scintillator crystals.Right panel: S-mode activation induced spectra spanning 0.1 s to 1 Ms after
+irradiation. Note the different lines present at different times. Spectra are not convoluted with the
+intrinsic detector spectral resolution (which is∼5% at 662 keV, see [20]).
+6 Case study II: eXTP
+6.1 LAD
+TheLarge Area Detector(LAD, [8]) is the high-throughput, spectral-timing instru-
+ment proposed for inclusion in theenhanced X-ray Timing and Polarimetry(eXTP)
+16
+
+0.0 0.2 0.4 0.6 0.8 1.0
+Time [days]
+101
+102
+103
+Activation background [counts/s]
+HERMES S-mode
+25 26 27 28 29 30
+Time [days]
+101
+102
+103
+Activation background [counts/s]
+HERMES S-mode
+Fig. 11Left panel: HERMES S-mode (20–2000 keV) activation-induced background rate as a func-
+tion of the time, for the first day in orbit.Right panel: Activation-induced background rate after 25
+to 30 days in orbit. The vertical shaded bands mark the SAA crossing periods. The curves shown are
+computed using a 550 km altitude SSO and the AP8MIN model.
+0 5 10 15 20 25 30
+Time [days]
+101
+102
+Average rate [counts/s]
+550 km SSO (AP8MIN)
+550 km SSO (AP9 90th perc.)
+600 km 5 deg (AP8MIN)
+600 km 5 deg (AP9 90th perc.)
+Fig. 12Long term steady-state averaged HERMES S-mode (20–2000 keV) activation-induced count
+rates for the two orbital scenarios (LEO at 600 km altitude, 5 ◦ inclination or 550 km altitude Sun-
+synchronous orbit) for the AP8MIN and AP9 90th percentile models.
+mission [26]. Conceived as a European contribution to the Chinese Academy of Sci-
+ences flagship astrophysics project, the LAD is designed to probe matter under extreme
+gravitational, magnetic, and density conditions. Derived from the original LOFT mis-
+sion concept [27], the LAD combines a large effective area with fine spectral resolution
+to enable unprecedented spectral-timing studies of bright X-ray sources. The LAD
+underwent a Phase B study in 2018–22, but due to strategic and programmatic deci-
+sions is not currently foreseen for inclusion in the final flight configuration of the eXTP
+mission [28].
+17
+
+Fig. 13The eXTP mass model implemented in Geant4, showing the location of the 40 LAD modules
+and of the 6 WFM cameras.
+The LAD is a collimated, modular detector array. Its nominal energy range is
+2–30 keV (extendable up to 80 keV), providing an effective area exceeding 3 m 2 at
+8 keV, the largest ever deployed in space for this energy band. The instrument achieves
+an energy resolution better than 260 eV (FWHM at 6 keV), a 1 ◦ field of view, and
+10µs timing resolution, with<1% dead time at X-ray fluxes around 1 Crab (which
+corresponds to a total rate of∼150,000 counts/s in 2–30 keV).
+The LAD structure is organized into 40 co-aligned Detector Modules (Figure 13).
+Each module hosts 16 large-area Silicon Drift Detectors (SDDs), 16 lead-glass capil-
+lary plate collimators, and corresponding optical filters. The modules interface with
+four Panel Back-End Electronics (PBEE) units, which manage data collection, format-
+ting, and transmission to the Instrument Control Unit (ICU). The ICU provides data
+handling, command, and power distribution, employing cold redundancy for reliability.
+Each Detector Module consists of aDetector Trayand aCollimator Tray. The
+Detector Tray houses the SDDs, front-end electronics, and power supply units, with
+an integrated lead shield (300µm thickness) and thermal radiator to control back-
+ground and temperature. The Collimator Tray contains lead-glass capillary plates,
+5 mm thick with 83µm round pores, ensuring a 1◦ field of view and strong X-ray atten-
+uation outside this range. Optical filters made from 1µm polyimide films coated with
+200 nm aluminum suppress UV, visible and infrared light while maintaining>90%
+transmission at 2 keV.
+During Phase B, the LAD consortium, led by INAF and supported by the
+Italian Space Agency and several European partners, developed a full-scaleDemon-
+stration Model(DM) to validate technologies and integration procedures without
+U.S.-restricted components. The DM includes representative versions of all key sub-
+systems: ICU, PBEE, Module Back-End Electronics (MBEE), Module Power Supply
+18
+
+Units (MPSU), Detector Assemblies (DA), collimators, and filters. Bench integration
+at Thales Alenia Space (Italy) validated end-to-end functionality, demonstrating a
+Technology Readiness Level up to 5–6 [8].
+The eXTP mission is designed to fly at a quasi-equatorial LEO. As a baseline,
+for the background studies a 600 km altitude, 5 ◦ inclination orbit is assumed. In this
+orbit, the overall instrumental background is dominated by the cosmic X-ray diffuse
+emission collected in the field of view, and leaking through the lead-glass collimator
+plate [29].
+The activation contribution to the overall background, as determined using the
+three-step algorithm applied to the Geant4 LAD mass model shown in Figure 13, is
+found to be a significantly small fraction of the overall background. According to the
+trapped proton model used (AP8MIN up to AP9 90th percentile), the total activation-
+induced count rate ranges (between SAA transits) between 0.02% to 2% of the overall
+expected background [29]. A significant fraction of the total activation originates from
+the lead contained in the glass collimator in front of the SDDs, and in the backshield
+on the bottom side of the module. Accumulation of long-lived isotopes is reached
+pretty quickly once in orbit, achieving an almost steady-state residual activation-
+induced background level. The spectrum of this long-term activation component can be
+computed on time-scales of months-years. The irradiation profile can be simplified as a
+sequence of instantaneous irradiations, one for each day elapsed in orbit, with a fluence
+corresponding to the daily orbit-averaged one, and allowing for a suitable “cool-down”
+period to remove the short-lived isotopes. The results are shown in Figure 14: the
+spectra are rather flat, with some features arising from low-energy X-ray (fluorescence)
+andγ-ray lines, for example the PbL α andL β lines around 10.5–12.6 keV.
+6.2 WFM
+The Wide Field Monitor (WFM) is the other European-developed instrument orig-
+inally foreseen for the eXTP mission. Designed to operate in the 2–50 keV band,
+the WFM provides wide-field X-ray imaging with arcminute-level source localization,
+thereby enabling real-time identification of transient and variable sources and deliver-
+ing rapid triggers for follow-up observations with the narrow-field instruments (SFA,
+PFA, and LAD).
+The primary scientific objectives of the WFM include the detection of new
+and recurrent X-ray transients, monitoring the long-term evolution of bright X-ray
+sources, and providing rapid and accurate localizations of gamma-ray bursts (GRBs),
+gravitational-wave electromagnetic counterparts, and other fast high-energy phenom-
+ena. The instrument is designed to achieve a point-source localization accuracy better
+than 1 arcmin, an angular resolution of approximately 5 arcmin, and sensitivities down
+to a few mCrab for exposures of the order of tens of kiloseconds. High temporal reso-
+lution (10µs for event data) and a very large instantaneous field of view (greater than
+3 sr) enable continuous monitoring of roughly one-third of the sky.
+The WFM consists of six identical coded-mask cameras arranged in three orthogo-
+nal pairs (Figure 13), allowing full two-dimensional imaging through the combination
+of perpendicular one-dimensional projections. Each camera provides a field of view
+of 90 ◦ ×90 ◦ at zero response and 30 ◦ ×30 ◦ fully coded; together, the six cameras
+19
+
+2 3 5 10 20 30 50 60
+Energy [keV]
+10−4
+10−3
+10−2
+10−1
+Counts s−1 keV−1
+eXTP LAD long-term activation spectrum
+1 month
+6 months
+2 years
+Fig. 14eXTP LAD long-term activation-induced spectrum after 1 month, 6 months and 2 years
+in orbit, computed using the AP9 90th percentile trapped proton model. In order to compute the
+accumulation of long-lived isotopes and thus the long-term component of the activation background,
+the irradiation history in this case has been simplified as a sequence of instantaneous irradiations,
+one for each day elapsed in orbit, with a fluence corresponding to the daily orbit-averaged one.
+cover 180◦ ×90 ◦ and are oriented to maximize overlap with the sky accessible to the
+narrow-field instruments.
+Each camera employs large-area Silicon Drift Detectors (SDDs) with an anode
+pitch of 169µm, providing asymmetric spatial resolution, better than 60µm along
+the anode direction and better than 8 mm along the drift direction. These properties
+are matched to a tungsten coded mask with a 250µm pitch and an effective open
+fraction of 21 %. The mask is tensioned within a mechanical frame to maintain flatness
+and is temperature-stabilized by a dedicated thermal foil. A carbon-fiber reinforced
+polymer collimator, radiation-shielded with tungsten, and coated with thin layers of
+molybdenum and copper to exploit their fluorescence lines as on-board calibrators,
+ensures mechanical stability during launch and operation.
+The front-end electronics (FEE) perform the analog readout of the SDDs, while the
+back-end electronics (BEE) handle digitization, charge-cloud fitting, noise suppression,
+event reconstruction, and time tagging. Two redundant Instrument Control Units
+(ICUs) oversee configuration, on-board time management, image accumulation, and
+burst triggering.
+Following a successful Instrument Systems Requirements Review in 2023, the WFM
+entered an advanced phase of subsystem demonstration. Full-size SDD detectors,
+coded masks, detector mechanical structures, and mock-up assemblies have been man-
+ufactured and tested, confirming the feasibility of the proposed architecture. Although
+the WFM is not part of the current Chinese-approved eXTP baseline, its design has
+reached a high level of maturity and remains under active development within the
+European consortium.
+20
+
+0 5 10 15 20 25 30
+Time [days]
+10−1
+100
+101
+102
+103
+Average rate [counts/s]
+eXTP WFM long-term average rate
+600 km 5 deg (AP8MIN)
+600 km 5 deg (AP9 mean)
+600 km 5 deg (AP9 90th perc.)
+2 3 5 10 20 30 50 60
+Energy [keV]
+10−4
+10−3
+10−2
+10−1
+Counts s−1 keV−1
+eXTP WFM long-term activation spectrum
+1 month
+6 months
+2 years
+Fig. 15Left panel: Average long-term (outside SAA transits) activation induced background count
+rate for one WFM camera, as a function of the time elapsed in orbit, and for three different trapped
+proton models. Right panel: Long-term activation spectrum for 1 month, 6 months and 2 years in
+orbit.
+Some representative simulation results are shown in Figure 15. Most of the induced
+activation in WFM is due to the tungsten in the collimators and in the coded mask,
+but the overall effect, even for the worst-case models, is significantly smaller than the
+other sources of background (most notably, the diffuse X-ray background radiation
+collected in the large WFM field of view). From a spectral standpoint, the counts are
+rather flat in the 2–30 keV nominal energy range, and the most noteworthy effect of
+the activation is to enhance the X-ray fluorescence lines of Cu (Kα andK β at 8.05 and
+8.90 keV) Mo (17.48 and 19.61 keV) and W (L α andL β lines at 8.40 and 9.67 keV).
+7 Conclusions
+In this work we have presented a new implementation of the efficient three-step
+algorithm for the simulation of proton-induced activation and the resulting delayed
+instrumental background in high-energy astrophysics missions operating in low-Earth
+orbit. By decoupling the production of radioactive isotopes, the time evolution of their
+decay chains, and the synthesis of the detector response to their decay products, the
+method overcomes the intrinsic inefficiencies of direct Monte Carlo simulations, which
+require extremely large statistics to properly sample both rare activation events and
+long-lived decay processes.
+The proposed framework combines:(i)Geant4-based simulations to build a com-
+prehensive database of radionuclide production as a function of proton energy and
+mass model individual volume;(ii)a numerical solution of the Bateman equations,
+including the treatment of branched decay chains through linearization and weight-
+ing; and(iii)dedicated simulations of the detector response to each isotope decay
+in each relevant volume. Once these elements are computed, the activation-induced
+background for arbitrary irradiation histories, proton spectra, and time profiles can
+be reconstructed. This makes the approach particularly well suited for design trade-off
+studies, background budgeting, and sensitivity analyses in the early and intermediate
+phases of mission development.
+21
+
+The validation against direct Geant4 simulations demonstrates that the three-step
+algorithm reproduces the time evolution of the activity with excellent accuracy over
+several orders of magnitude in time and activity. The agreement holds for different
+materials, proton energies, and choices of Geant4 hadronic physics lists, confirming the
+robustness of the approach. At the same time, the computational gain is substantial:
+once the databases are built, the synthesis of background spectra and count rates for
+new orbital scenarios or irradiation models becomes essentially instantaneous when
+compared to full end-to-end simulations.
+The application to realistic and complex instruments highlights the versatility
+of the method. For the HERMES CubeSat payloads, it is found that activation-
+induced background is a minor contributor in equatorial or low-inclination orbits, but
+can become significant in Sun-synchronous or polar configurations, especially when
+conservative trapped-proton models such as AP9 at high percentiles are adopted.
+The simulations clearly show the interplay between short-lived isotopes, which domi-
+nate the overall background immediately after SAA transits, and long-lived isotopes,
+which build up to a steady-state level on timescales of weeks. For the specific case of
+HERMES, activation is largely dominated by radionuclides produced directly in the
+GAGG:Ce scintillators, while the contribution in the low-energy direct SDD X-ray
+detection mode (∼2–30 keV) remains negligible.
+For the eXTP mission, both for the LAD and the WFM instruments, the results
+indicate that activation-induced background represents only a small fraction of the
+total background in the baseline quasi-equatorial orbit. In the LAD, even under worst-
+case assumptions for the trapped proton environment, activation contributes at most
+a few percent of the total background, confirming that other components, such as the
+cosmic diffuse X-ray emission leaking through the collimators, remain dominant. In
+the WFM, activation is mainly associated with heavy materials such as W, Mo, and
+Cu in the coded mask and collimators, and manifests primarily as an enhancement of
+fluorescence and nuclear lines superimposed on an otherwise flat continuum. In both
+cases, the accumulation of long-lived isotopes reaches a steady state relatively quickly,
+and the long-term activation spectrum remains stable on mission timescales.
+Beyond the specific case studies presented here, the methodology is general
+and can be readily applied to other instruments, orbital configurations, and radia-
+tion environments. Its modular structure allows straightforward updates when new
+trapped-particle models, improved cross-section databases, or refined Geant4 physics
+lists become available. In addition, the separation between physics processes and
+mission-specific irradiation histories enables fast comparisons between different design
+options, such as alternative materials, shielding strategies, or orbital choices.
+In conclusion, the three-step algorithm provides a powerful and flexible tool for
+the quantitative assessment of activation-induced background in space-borne high-
+energy detectors. It achieves a favorable compromise between physical accuracy and
+computational efficiency, making it suitable not only for detailed background studies
+of existing missions but also for rapid feasibility analyses and optimization studies of
+future X-ray andγ-ray experiments in low-Earth orbit.
+22
+
+Acknowledgements
+Partial support from the Italian Space Agency (under agreements n. 2020-3-HH.0,
+2020-3-HH.1-2021, ASI-INAF n.2017-14-H.O) and INFN (project XRO, X-ray Obser-
+vatories) is acknowledged. The author is grateful to G´ abor Galg´ oczi for several in-depth
+discussions on the topic of activation simulations, and to Yuri Evangelista and Edoardo
+Borciani for many useful suggestions.
+Appendix A The Bateman equations of
+radioactive decay
+Consider a simple decay scheme in which an isotopeX 1 decays into a stable isotope
+X2:
+X1 →X 2 (+ other products) (A1)
+If we assume that at timet= 0 we don’t have any daughter element,N 2(t= 0) = 0,
+then: dN1
+dt =−λN 1 (A2)
+whereλis thedecay constant. The solution of the simple radioactive decay equation is:
+N1(t) =N 1(0)e−λt (A3)
+The population of isotopes of typeX 1 decays exponentially with anhalf-lifet 1/2 =
+log(2)/λ. Theactivityof the isotopeX 1 (number of disintegrations per seconds, which
+in the SI is expressed in becquerels, Bq) isA 1 =λN 1.
+If we have adecay chain, in which the isotopeX 1 decays in an unstable isotope
+X2, which in turn decays into a stable isotopeX 3:
+X1 →X 2 (+ other products)→X 3 (+ other products) (A4)
+and assuming that att= 0 the population of daughters is void, i.e.N 2(0) =N 3(0) = 0,
+the previous decay equation A2 generalizes into a system of equations:
+
+
+
+dN1
+dt =−λ 1N1
+dN2
+dt =−λ 2N2 +λ 1N1
+(A5)
+The solution is:
+
+
+
+N1(t) =N 1(0)e−λt
+N2(t) = N1(0)λ1
+λ2 −λ 1
+(e−λ1t −e −λ2t)
+(A6)
+23
+
+Generalizing the previous approach to a decay chain withkelements, we arrive at
+a system of first-order differential equations, the so-called Bateman equations [30]:
+
+
+
+dN1
+dt =−λ 1N1
+dNj
+dt =−λ jNj +λ j−1Nj−1 for 1< j≤k
+(A7)
+The general solution can be found by means of a Laplace transform [31], and is:
+Nk = N1(0)
+λk
+kX
+i=1
+λicie−λit (A8)
+where:
+ci =
+kY
+j=1,i̸=j
+λj
+λj −λ i
+(A9)
+However, from a computational point of view, given the presence of theλ j −λ i
+term in the expression for the coefficientc i, this solution is numerically unstable when
+two isotopes have very close half-lives (λj ≈λ i) or when they have drastically different
+half-lives (λj ≫λ i).
+A different approach, more numerically robust, is to recast the Bateman equations
+A7 in a matrix form [32–35]:
+dN
+dt = ΛN(A10)
+whereNis the vector
+N=
+
+
+N1(t)
+N2(t)
+...
+Nk(t)
+
+ (A11)
+and Λ is a bidiagonal triangular matrix constructed from the decay constants:
+Λ =
+
+
+−λ1 0 0· · ·0
+λ1 −λ2 0· · ·0
+0λ 2 −λ3 · · ·0
+0 0λ 3 · · ·0
+... ... ... ... ...
+0 0 0· · · −λ k
+
+
+(A12)
+The solution of the matrix equation is:
+N(t) =Ce DtC −1N(0) (A13)
+whereCis the (column) matrix of the eigenvectors of Λ andDis a diagonal matrix
+whose elements are the eigenvalues of Λ. These are easily computable with numerically
+24
+
+stable libraries (e.g., using thelinalgPython package), or by the recurrence expres-
+sions found by Amaku et al. [34]. This matricial approach can be easily extended to
+consider also isotope activation production rates (e.g., from proton or neutron continu-
+ous irradiation) and/or branched decay chains, by means of an opportune redefinition
+of the Λ matrix.
+References
+[1] Campana, R.: In: Bambi, C., Santangelo, A. (eds.) In-Orbit Background for
+X-Ray Detectors, p. 39. Springer Nature, Singapore (2022). https://doi.org/10.
+1007/978-981-16-4544-0 28-1
+[2] Agostinelli, S., Allison, J., Amako, K., Apostolakis, J., Araujo, H., Arce, P., Asai,
+M., Axen, D., Banerjee, S., Barrand, G., Behner, F., Bellagamba, L., Boudreau,
+J., Broglia, L., Brunengo, A., Burkhardt, H., Chauvie, S., Chuma, J., Chytracek,
+R., Cooperman, G., Cosmo, G., Degtyarenko, P., Dell’Acqua, A., Depaola, G.,
+Dietrich, D., Enami, R., Feliciello, A., Ferguson, C., Fesefeldt, H., Folger, G., Fop-
+piano, F., Forti, A., Garelli, S., Giani, S., Giannitrapani, R., Gibin, D., G´ omez
+Cadenas, J.J., Gonz´ alez, I., Gracia Abril, G., Greeniaus, G., Greiner, W., Gri-
+chine, V., Grossheim, A., Guatelli, S., Gumplinger, P., Hamatsu, R., Hashimoto,
+K., Hasui, H., Heikkinen, A., Howard, A., Ivanchenko, V., Johnson, A., Jones,
+F.W., Kallenbach, J., Kanaya, N., Kawabata, M., Kawabata, Y., Kawaguti,
+M., Kelner, S., Kent, P., Kimura, A., Kodama, T., Kokoulin, R., Kossov, M.,
+Kurashige, H., Lamanna, E., Lamp´ en, T., Lara, V., Lefebure, V., Lei, F., Liendl,
+M., Lockman, W., Longo, F., Magni, S., Maire, M., Medernach, E., Minamimoto,
+K., Mora de Freitas, P., Morita, Y., Murakami, K., Nagamatu, M., Nartallo, R.,
+Nieminen, P., Nishimura, T., Ohtsubo, K., Okamura, M., O’Neale, S., Oohata,
+Y., Paech, K., Perl, J., Pfeiffer, A., Pia, M.G., Ranjard, F., Rybin, A., Sadilov,
+S., Di Salvo, E., Santin, G., Sasaki, T., Savvas, N., Sawada, Y., Scherer, S., Sei,
+S., Sirotenko, V., Smith, D., Starkov, N., Stoecker, H., Sulkimo, J., Takahata,
+M., Tanaka, S., Tcherniaev, E., Safai Tehrani, E., Tropeano, M., Truscott, P.,
+Uno, H., Urban, L., Urban, P., Verderi, M., Walkden, A., Wander, W., Weber,
+H., Wellisch, J.P., Wenaus, T., Williams, D.C., Wright, D., Yamada, T., Yoshida,
+H., Zschiesche, D., GEANT4 Collaboration: GEANT4—a simulation toolkit.
+Nuclear Instruments and Methods in Physics Research A506(3), 250–303 (2003)
+https://doi.org/10.1016/S0168-9002(03)01368-8
+[3] Weidenspointner, G., Harris, M.J., Sturner, S., Teegarden, B.J., Ferguson,
+C.: MGGPOD: a Monte Carlo Suite for Modeling Instrumental Line and
+Continuum Backgrounds in Gamma-Ray Astronomy. The Astrophysical Jour-
+nal Supplement Series156(1), 69–91 (2005) https://doi.org/10.1086/425577
+arXiv:astro-ph/0408399 [astro-ph]
+[4] Zoglauer, A., Andritschke, R., Schopper, F.: MEGAlib The Medium Energy
+Gamma-ray Astronomy Library. New Astronomy Review50(7-8), 629–632 (2006)
+https://doi.org/10.1016/j.newar.2006.06.049
+25
+
+[5] Odaka, H., Asai, M., Hagino, K., Koi, T., Madejski, G., Mizuno, T., Ohno, M.,
+Saito, S., Sato, T., Wright, D.H., Enoto, T., Fukazawa, Y., Hayashi, K., Kataoka,
+J., Katsuta, J., Kawaharada, M., Kobayashi, S.B., Kokubun, M., Laurent, P.,
+Lebrun, F., Limousin, O., Maier, D., Makishima, K., Mimura, T., Miyake, K.,
+Mori, K., Murakami, H., Nakamori, T., Nakano, T., Nakazawa, K., Noda, H.,
+Ohta, M., Ozaki, M., Sato, G., Sato, R., Tajima, H., Takahashi, H., Takahashi,
+T., Takeda, S., Tanaka, T., Tanaka, Y., Terada, Y., Uchiyama, H., Uchiyama,
+Y., Watanabe, S., Yamaoka, K., Yasuda, T., Yatsu, Y., Yuasa, T., Zoglauer, A.:
+Modeling of proton-induced radioactivation background in hard X-ray telescopes:
+Geant4-based simulation and its demonstration by Hitomi’s measurement in a low
+Earth orbit. Nuclear Instruments and Methods in Physics Research A891, 92–
+105 (2018) https://doi.org/10.1016/j.nima.2018.02.071 arXiv:1804.00827 [astro-
+ph.IM]
+[6] Galgoczi, G., Ripa, J., Dilillo, P., Ohno, M., Campana, R., Werner, N.: A software
+toolkit to simulate activation background for high energy detectors onboard satel-
+lites. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K. (eds.) Space Telescopes
+and Instrumentation 2020: Ultraviolet to Gamma Ray. Society of Photo-Optical
+Instrumentation Engineers (SPIE) Conference Series, vol. 11444, p. 1144492
+(2020). https://doi.org/10.1117/12.2560829
+[7] Fiore, F., Burderi, L., Lavagna, M., Bertacin, R., Evangelista, Y., Campana,
+R., Fuschino, F., Lunghi, P., Monge, A., Negri, B., Pirrotta, S., Puccetti, S.,
+Sanna, A., Amarilli, F., Ambrosino, F., Amelino-Camelia, G., Anitra, A., Auric-
+chio, N., Barbera, M., Bechini, M., Bellutti, P., Bertuccio, G., Cao, J., Ceraudo,
+F., Chen, T., Cinelli, M., Citossi, M., Clerici, A., Colagrossi, A., Curzel, S.,
+Della Casa, G., Demenev, E., Del Santo, M., Dilillo, G., Di Salvo, T., Efre-
+mov, P., Feroci, M., Feruglio, C., Ferrandi, F., Fiorini, M., Fiorito, M., Frontera,
+F., Gacnik, D., Galgoczi, G., Gao, N., Gambino, A.F., Gandola, M., Ghirlanda,
+G., Gomboc, A., Grassi, M., Guzman, A., Karlica, M., Kostic, U., Labanti, C.,
+La Rosa, G., Lo Cicero, U., Lopez-Fernandez, B., Malcovati, P., Maselli, A.,
+Manca, A., Mele, F., Milankovich, D., Morgante, G., Nava, L., Nogara, P., Ohno,
+M., Ottolina, D., Pasquale, A., Pal, A., Perri, M., Piazzolla, R., Piccinin, M.,
+Pliego-Caballero, S., Prinetto, J., Pucacco, G., Rashevsky, A., Rashevskaya, I.,
+Riggio, A., Ripa, J., Russo, F., Papitto, A., Piranomonte, S., Santangelo, A.,
+Scala, F., Sciarrone, G., Selcan, D., Silvestrini, S., Sottile, G., Rotovnik, T.,
+Tenzer, C., Troisi, I., Vacchi, A., Virgilli, E., Werner, N., Wang, L., Xu, Y.,
+Zampa, G., Zampa, N., Zanotti, G.: The HERMES-technologic and scientific
+pathfinder. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K. (eds.) Society of
+Photo-Optical Instrumentation Engineers (SPIE) Conference Series. Society of
+Photo-Optical Instrumentation Engineers (SPIE) Conference Series, vol. 11444,
+p. 114441 (2021). https://doi.org/10.1117/12.2560680
+[8] Feroci, M., Ambrosi, G., Antonelli, M., Argan, A., Babinec, V., Barbera, M., Bas-
+tia, P., Bayer, J., Bellutti, P., Bertucci, B., Bertuccio, G., Bonfitto, F., Bonvicini,
+V., Bozzo, E., Baudin, D., Bouyjou, F., Brienza, D., Cadoux, F., Campana, R.,
+26
+
+Candia, R., Cao, J., Cavazzuti, E., Ceraudo, F., Chen, T., Chen, W., Coimbra,
+A., Colucci, A., Cong, X., Cirrincione, D., De Angelis, N., De Rosa, A., Della
+Casa, G., Del Monte, E., Di Cicca, G., Di Cosimo, S., Dilillo, G., Dohnal, R., Don-
+narumma, I., Evangelista, Y., Fan, P., Fan, Q., Favre, Y., Fiandrini, E., Ficorella,
+F., Gao, N., Gevin, O., Grassi, M., Guedel, M., Guzman Cabrera, A., Han, D., He,
+H., Hedderman, P., den Herder, J.-W., Hynek, R., Reynaard Kole, M., Karas, V.,
+Komarek, M., Labanti, C., La Marra, D., Lesci, G., Li, G., Li, L., Li, T., Limousin,
+O., Liu, H., Liu, R., Liu, Y., Liu, X., Lo Cicero, U., Loehring, J., Lombardi, G.,
+Lu, F.-J., Luo, T., Malcovati, P., Marinucci, A., Mele, F., Mendes, V., Merkl, M.,
+Meuris, A., Michalska, M., Morbidini, A., Morgante, G., Muleri, F., Munini, R.,
+Mussolin, L., Negri, B., Nov´ ak, P., Nowosielski, W., Nuti, A., Orleanski, P., Otten-
+samer, R., Pacciani, L., Paltani, S., Pan, T., Pepponi, G., Perinati, E., Piazzolla,
+R., Picciotto, A., Pliego, S., Putz, A., Rachevski, A., Rashevskaia, I., Samusenko,
+A., Santangelo, A., Schanne, S., Serafinelli, R., Skup, K., Sveda, L., Svoboda, J.,
+Tenzer, C., Todaro, M., Torok, G., Trois, A., Vacchi, A., Varisco, S., Villa, F., Vir-
+gilli, E., Xiang, H., Xiong, H., Wang, J., Wang, X., Winter, B., Wu, Z., Wu, X.,
+Xu, Y., Zampa, G., Zampa, N., Zdziarski, A.A., Zhang, L., Zhang, S., Zhang, S.-
+N., Zhang, Y., Zhang, W., Zhao, Q., Zhu, C., Zhu, X., Zorzi, N.: The Large Area
+Detector for the eXTP mission. In: den Herder, J.-W.A., Nikzad, S., Nakazawa,
+K. (eds.) Space Telescopes and Instrumentation 2024: Ultraviolet to Gamma Ray.
+Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series,
+vol. 13093, p. 130931 (2024). https://doi.org/10.1117/12.3019868
+[9] Hernanz, M., Feroci, M., Evangelista, Y., Meuris, A., Schanne, S., Zampa, G.,
+Tenzer, C., Bayer, J., Nowosielski, W., Michalska, M., Kalemci, E., Sungur, M.,
+Brandt, S., Kuvvetli, I., Alvarez Franco, D., Carmona, A., G´ alvez, J.-L., Patruno,
+A., In’t Zand, J., Zwart, F., Santangelo, A., Bozzo, E., Zhang, S.-N., Lu, F., Xu,
+Y., Campana, R., Del Monte, E., Ceraudo, F., Nuti, A., Della Casa, G., Argan, A.,
+Minervini, G., Antonelli, M., Bonvicini, V., Boezio, M., Cirrincione, D., Munini,
+R., Rachevski, A., Vacchi, A., Zampa, N., Rashevskaya, I., Ficorella, F., Picciotto,
+A., Zorzi, N., Baudin, D., Bouyjou, F., Gevin, O., Limousin, O., Hedderman, P.,
+Pliego, S., Xiong, H., de la Rie, R., Laubert, P., Aitink-Kroes, G., Kuiper, L.,
+Orleanski, P., Skup, K., Tcherniak, D., Turhan, O., Bozkurt, A., Onat, A.: The
+Wide Field Monitor (WFM) of the China-Europe eXTP (enhanced X-ray Timing
+and Polarimetry) mission. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K.
+(eds.) Space Telescopes and Instrumentation 2024: Ultraviolet to Gamma Ray.
+Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series,
+vol. 13093, p. 130931 (2024). https://doi.org/10.1117/12.3020020
+[10] Van Allen, J.A., Ludwig, G.H., Ray, E.C., McIlwain, C.E.: Observation of high
+intensity radiation by satellites 1958 alpha and gamma. Journal of Jet Propulsion
+28(9), 588–592 (1958) https://doi.org/10.2514/8.7396
+[11] Sawyer, D.M., Vette, J.I.: AP-8 trapped proton model environment for solar max-
+imum and minimum. Technical Report NSSDC/WDC-A-R&S 76-06, Natl. Space
+Sci. Data Cent (1976)
+27
+
+[12] Vette, J.I.: The AE-8 trapped electron model environment. Technical Report
+NSSDC/WDC-A-R&S 91-24, NASA Goddard Space Flight Center (1991)
+[13] Heynderickx, D., Kruglanski, M., Pierrard, V., Lemaire, J., Looper, M.D., Blake,
+J.B.: A low altitude trapped proton model for solar minimum conditions based on
+SAMPEX/PET data. IEEE Transactions on Nuclear Science46(6), 1475–1480
+(1999) https://doi.org/10.1109/23.819110
+[14] Ginet, G.P., O’Brien, T.P., Huston, S.L., Johnston, W.R., Guild, T.B., Friedel, R.,
+Lindstrom, C.D., Roth, C.J., Whelan, P., Quinn, R.A., Madden, D., Morley, S.,
+Su, Y.-J.: AE9, AP9 and SPM: New Models for Specifying the Trapped Energetic
+Particle and Space Plasma Environment. Space Science Review179(1-4), 579–615
+(2013) https://doi.org/10.1007/s11214-013-9964-y
+[15] Fiore, F., Guzman, A., Campana, R., Evangelista, Y.: HERMES-Pathfinder.
+In: Bambi, C., Sangangelo, A. (eds.) Handbook of X-ray and Gamma-ray
+Astrophysics, p. 38 (2022). https://doi.org/10.1007/978-981-16-4544-0 35-1
+[16] Evangelista, Y., Fiore, F., Campana, R., Ceraudo, F., Della Casa, G., Demenev,
+E., Dilillo, G., Fiorini, M., Grassi, M., Guzman, A., Hedderman, P., Marchesini,
+E.J., Morgante, G., Mele, F., Nogara, P., Nuti, A., Piazzolla, R., Pliego Caballero,
+S., Rashevskaya, I., Russo, F., Sottile, G., Labanti, C., Baroni, G., Bellutti, P.,
+Bertuccio, G., Cao, J., Chen, T., Dedolli, I., Feroci, M., Fuschino, F., Gandola, M.,
+Gao, N., Ficorella, F., Malcovati, P., Picciotto, A., Rachevski, A., Santangelo, A.,
+Tenzer, C., Vacchi, A., Wang, L., Xu, Y., Zampa, G., Zampa, N., Zorzi, N.: Design,
+integration, and test of the scientific payloads on-board the HERMES constella-
+tion and the SpIRIT mission. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K.
+(eds.) Space Telescopes and Instrumentation 2022: Ultraviolet to Gamma Ray.
+Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series,
+vol. 12181, p. 121811 (2022). https://doi.org/10.1117/12.2628978
+[17] Evangelista, Y., Fiore, F., Campana, R., Baroni, G., Ceraudo, F., Della Casa,
+G., Demenev, E., Dilillo, G., Fiorini, M., Ghirlanda, G., Grassi, M., Guzm´ an, A.,
+Hedderman, P., Marchesini, E.J., Morgante, G., Mele, F., Nava, L., Nogara, P.,
+Nuti, A., Pliego Caballero, S., Rashevskaya, I., Russo, F., Sottile, G., Lavagna,
+M., Colagrossi, A., Silvestrini, S., Quirino, M., Bechini, M., Brandonisio, A., De
+Cecio, F., Dottori, A., Troisi, I., Bertacin, R., Bellutti, P., Bertuccio, G., Burderi,
+L., Chen, T., Citossi, M., Di Salvo, T., Feroci, M., Ficorella, F., Gao, N., Grappa-
+sonni, C., Labanti, C., La Rosa, G., Leone, W., Malcovati, P., Negri, B., Pepponi,
+G., Perri, M., Piazzolla, R., Picciotto, A., Pirrotta, S., Puccetti, S., Rashevsky, A.,
+Riggio, A., Rinaldi, M., Sanna, A., Santangelo, A., Tenzer, C., Tiberia, A., Trenti,
+M., Trevisan, S., Vacchi, A., Xiong, S., Zampa, G., Zampa, N., Zhang, S., Zorzi,
+N., Ripa, J., Werner, N.: The HERMES (High Energy Rapid Modular Ensemble
+of Satellites) Pathfinder mission. In: den Herder, J.-W.A., Nikzad, S., Nakazawa,
+K. (eds.) Space Telescopes and Instrumentation 2024: Ultraviolet to Gamma Ray.
+Society of Photo-Optical Instrumentation Engineers (SPIE) Conference Series,
+28
+
+vol. 13093, p. 130931 (2024). https://doi.org/10.1117/12.3018259
+[18] Gandola, M., Grassi, M., Mele, F., Malcovati, P., Bertuccio, G.: LYRA: A Multi-
+Chip ASIC Designed for HERMES X and Gamma Ray Detector. In: 2019 IEEE
+Nuclear Science Symposium and Medical Imaging Conference (NSS/MIC), pp.
+1–3 (2019). https://doi.org/10.1109/NSS/MIC42101.2019.9059616
+[19] Guzman, A., Pliego, S., Bayer, J., Evangelista, Y., La Rosa, G., Sottile, G.,
+Curzel, S., Campana, R., Fiore, F., Fuschino, F., Colagrossi, A., Fiorito, M., Nog-
+ara, P., Piazzolla, R., Russo, F., Santangelo, A., Tenzer, C.: The Payload Data
+Handling Unit (PDHU) on-board the HERMES-TP and HERMES-SP CubeSat
+Missions. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K. (eds.) Society of
+Photo-Optical Instrumentation Engineers (SPIE) Conference Series. Society of
+Photo-Optical Instrumentation Engineers (SPIE) Conference Series, vol. 11444,
+p. 1144450 (2021). https://doi.org/10.1117/12.2562325
+[20] Dilillo, G., Marchesini, E.J., Baroni, G., Della Casa, G., Campana, R., Evan-
+gelista, Y., Guzm´ an, A., Hedderman, P., Bellutti, P., Bertuccio, G., Ceraudo,
+F., Citossi, M., Cirrincione, D., Dedolli, I., Demenev, E., Feroci, M., Ficorella,
+F., Fiorini, M., Gandola, M., Grassi, M., Rosa, G.L., Lombardi, G., Malco-
+vati, P., Mele, F., Nogara, P., Nuti, A., Perri, M., Pliego-Caballero, S., Pirrotta,
+S., Puccetti, S., Rashevskaya, I., Russo, F., Sottile, G., Tenzer, C., Trenti, M.,
+Trevisan, S., Vacchi, A., Zampa, G., Zampa, N., Fiore, F.: The ground calibra-
+tion of the HERMES-Pathfinder payload flight models. Experimental Astronomy
+58(3), 14 (2024) https://doi.org/10.1007/s10686-024-09958-4 arXiv:2410.06056
+[astro-ph.IM]
+[21] Campana, R., Evangelista, Y., Fiore, F., Guzm´ an, A., Baroni, G., Della Casa,
+G., Dilillo, G., Hedderman, P., Marchesini, E.J., Bertuccio, G., Ceraudo, F.,
+Demenev, E., Fiorini, M., Grassi, M., Malcovati, P., Mele, F., Nogara, P., Nuti,
+A., Perri, M., Pirrotta, S., Pliego-Caballero, S., Puccetti, S., Sottile, G., Russo,
+F., Trevisan, S.: Design and development of the HERMES Pathfinder payloads.
+In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K. (eds.) Space Telescopes
+and Instrumentation 2024: Ultraviolet to Gamma Ray. Society of Photo-Optical
+Instrumentation Engineers (SPIE) Conference Series, vol. 13093, p. 130936
+(2024). https://doi.org/10.1117/12.3018007
+[22] Trenti, M., Ortiz del Castillo, M., Mearns, R., McRobbie, J., Therakam, C.,
+Chapman, A., Woods, A., Morgan, J., Barraclough, S., Rodriguez Mallo, I.,
+Baroni, G., Fiore, F., Evangelista, Y., Campana, R., Guzman, A., Hedder-
+man, P.: SpIRIT Mission: In-Orbit Results and Technology Demonstrations.
+arXiv e-prints, 2407–14034 (2024) https://doi.org/10.48550/arXiv.2407.14034
+arXiv:2407.14034 [astro-ph.IM]
+[23] Campana, R., Fuschino, F., Evangelista, Y., Dilillo, G., Fiore, F.: The HERMES-
+TP/SP background and response simulations. In: den Herder, J.-W.A., Nikzad,
+29
+
+S., Nakazawa, K. (eds.) Society of Photo-Optical Instrumentation Engineers
+(SPIE) Conference Series. Society of Photo-Optical Instrumentation Engineers
+(SPIE) Conference Series, vol. 11444, p. 114444 (2021). https://doi.org/10.1117/
+12.2560365
+[24] ˇR´ ıpa, J., Dilillo, G., Campana, R., Galg´ oczi, G.: A comparison of trapped particle
+models in low Earth orbit. In: den Herder, J.-W.A., Nikzad, S., Nakazawa, K.
+(eds.) Society of Photo-Optical Instrumentation Engineers (SPIE) Conference
+Series. Society of Photo-Optical Instrumentation Engineers (SPIE) Conference
+Series, vol. 11444, p. 114443 (2021). https://doi.org/10.1117/12.2561011
+[25] Della Casa, G., Zampa, N., Cirrincione, D., Monzani, S., Baruzzo, M., Cam-
+pana, R., Cauz, D., Citossi, M., Crupi, R., Dilillo, G., Pauletta, G., Fiore, F.,
+Vacchi, A.: New detailed characterization of the residual luminescence emit-
+ted by the GAGG:Ce scintillator crystals for the HERMES Pathfinder mission.
+Nuclear Instruments and Methods in Physics Research Section A: Accelera-
+tors, Spectrometers, Detectors and Associated Equipment1058, 168825 (2024)
+https://doi.org/10.1016/j.nima.2023.168825
+[26] Zhang, S., Santangelo, A., Feroci, M., Xu, Y., Lu, F., Chen, Y., Feng, H., Zhang,
+S., Brandt, S., Hernanz, M., Baldini, L., Bozzo, E., Campana, R., De Rosa, A.,
+Dong, Y., Evangelista, Y., Karas, V., Meidinger, N., Meuris, A., Nandra, K.,
+Pan, T., Pareschi, G., Orleanski, P., Huang, Q., Schanne, S., Sironi, G., Spiga,
+D., Svoboda, J., Tagliaferri, G., Tenzer, C., Vacchi, A., Zane, S., Walton, D.,
+Wang, Z., Winter, B., Wu, X., in’t Zand, J.J.M., Ahangarianabhari, M., Ambrosi,
+G., Ambrosino, F., Barbera, M., Basso, S., Bayer, J., Bellazzini, R., Bellutti,
+P., Bertucci, B., Bertuccio, G., Borghi, G., Cao, X., Cadoux, F., Campana, R.,
+Ceraudo, F., Chen, T., Chen, Y., Chevenez, J., Civitani, M., Cui, W., Cui, W.,
+Dauser, T., Del Monte, E., Di Cosimo, S., Diebold, S., Doroshenko, V., Dovciak,
+M., Du, Y., Ducci, L., Fan, Q., Favre, Y., Fuschino, F., G´ alvez, J.L., Gao, M.,
+Ge, M., Gevin, O., Grassi, M., Gu, Q., Gu, Y., Han, D., Hong, B., Hu, W., Ji,
+L., Jia, S., Jiang, W., Kennedy, T., Kreykenbohm, I., Kuvvetli, I., Labanti, C.,
+Latronico, L., Li, G., Li, M., Li, X., Li, W., Li, Z., Limousin, O., Liu, H., Liu, X.,
+Lu, B., Luo, T., Macera, D., Malcovati, P., Martindale, A., Michalska, M., Meng,
+B., Minuti, M., Morbidini, A., Muleri, F., Paltani, S., Perinati, E., Picciotto, A.,
+Piemonte, C., Qu, J., Rachevski, A., Rashevskaya, I., Rodriguez, J., Schanz, T.,
+Shen, Z., Sheng, L., Song, J., Song, L., Sgro, C., Sun, L., Tan, Y., Uttley, P.,
+Wang, B., Wang, D., Wang, G., Wang, J., Wang, L., Wang, Y., Watts, A.L., Wen,
+X., Wilms, J., Xiong, S., Yang, J., Yang, S., Yang, Y., Yu, N., Zhang, W., Zampa,
+G., Zampa, N., Zdziarski, A.A., Zhang, A., Zhang, C., Zhang, F., Zhang, L.,
+Zhang, T., Zhang, Y., Zhang, X., Zhang, Z., Zhao, B., Zheng, S., Zhou, Y., Zorzi,
+N., Zwart, J.F.: The enhanced X-ray Timing and Polarimetry mission—eXTP.
+Science China Physics, Mechanics, and Astronomy62(2), 29502 (2019) https:
+//doi.org/10.1007/s11433-018-9309-2 arXiv:1812.04020 [astro-ph.IM]
+[27] Feroci, M., Stella, L., van der Klis, M., Courvoisier, T.J.-L., Hernanz, M., Hudec,
+30
+
+R., Santangelo, A., Walton, D., Zdziarski, A., Barret, D., Belloni, T., Braga,
+J., Brandt, S., Budtz-Jørgensen, C., Campana, S., den Herder, J.-W., Huovelin,
+J., Israel, G.L., Pohl, M., Ray, P., Vacchi, A., Zane, S., Argan, A., Attin` a, P.,
+Bertuccio, G., Bozzo, E., Campana, R., Chakrabarty, D., Costa, E., De Rosa,
+A., Del Monte, E., Di Cosimo, S., Donnarumma, I., Evangelista, Y., Haas, D.,
+Jonker, P., Korpela, S., Labanti, C., Malcovati, P., Mignani, R., Muleri, F., Rapis-
+arda, M., Rashevsky, A., Rea, N., Rubini, A., Tenzer, C., Wilson-Hodge, C.,
+Winter, B., Wood, K., Zampa, G., Zampa, N., Abramowicz, M.A., Alpar, M.A.,
+Altamirano, D., Alvarez, J.M., Amati, L., Amoros, C., Antonelli, L.A., Artigue,
+R., Azzarello, P., Bachetti, M., Baldazzi, G., Barbera, M., Barbieri, C., Basa,
+S., Baykal, A., Belmont, R., Boirin, L., Bonvicini, V., Burderi, L., Bursa, M.,
+Cabanac, C., Cackett, E., Caliandro, G.A., Casella, P., Chaty, S., Chenevez, J.,
+Coe, M.J., Collura, A., Corongiu, A., Covino, S., Cusumano, G., D’Amico, F.,
+Dall’Osso, S., De Martino, D., De Paris, G., Di Persio, G., Di Salvo, T., Done, C.,
+Dovˇ ciak, M., Drago, A., Ertan, U., Fabiani, S., Falanga, M., Fender, R., Ferrando,
+P., Della Monica Ferreira, D., Fraser, G., Frontera, F., Fuschino, F., Galvez, J.L.,
+Gandhi, P., Giommi, P., Godet, O., G¨ oˇ g¨ u¸ s, E., Goldwurm, A., G¨ otz, D., Grassi,
+M., Guttridge, P., Hakala, P., Henri, G., Hermsen, W., Horak, J., Hornstrup,
+A., in’t Zand, J.J.M., Isern, J., Kalemci, E., Kanbach, G., Karas, V., Kataria,
+D., Kennedy, T., Klochkov, D., Klu´ zniak, W., Kokkotas, K., Kreykenbohm, I.,
+Krolik, J., Kuiper, L., Kuvvetli, I., Kylafis, N., Lattimer, J.M., Lazzarotto, F.,
+Leahy, D., Lebrun, F., Lin, D., Lund, N., Maccarone, T., Malzac, J., Marisaldi,
+M., Martindale, A., Mastropietro, M., McClintock, J., McHardy, I., Mendez, M.,
+Mereghetti, S., Miller, M.C., Mineo, T., Morelli, E., Morsink, S., Motch, C.,
+Motta, S., Mu˜ noz-Darias, T., Naletto, G., Neustroev, V., Nevalainen, J., Olive,
+J.F., Orio, M., Orlandini, M., Orleanski, P., Ozel, F., Pacciani, L., Paltani, S.,
+Papadakis, I., Papitto, A., Patruno, A., Pellizzoni, A., Petr´ aˇ cek, V., Petri, J.,
+Petrucci, P.O., Phlips, B., Picolli, L., Possenti, A., Psaltis, D., Rambaud, D., Reig,
+P., Remillard, R., Rodriguez, J., Romano, P., Romanova, M., Schanz, T., Schmid,
+C., Segreto, A., Shearer, A., Smith, A., Smith, P.J., Soffitta, P., Stergioulas, N.,
+Stolarski, M., Stuchlik, Z., Tiengo, A., Torres, D., T¨ or¨ ok, G., Turolla, R., Uttley,
+P., Vaughan, S., Vercellone, S., Waters, R., Watts, A., Wawrzaszek, R., Webb,
+N., Wilms, J.: The Large Observatory for X-ray Timing (LOFT). Experimen-
+tal Astronomy34(2), 415–444 (2012) https://doi.org/10.1007/s10686-011-9237-2
+arXiv:1107.0436 [astro-ph.IM]
+[28] Zhang, S.-N., Santangelo, A., Xu, Y., Feng, H., Lu, F., Chen, Y., Ge, M., Nandra,
+K., Wu, X., Feroci, M., Hernanz, M., Liu, C., He, H., Wang, Y., Jiang, W., Cui,
+W., Yang, Y., Wang, J., Li, W., Li, H., Du, Y., Liu, X., Meng, B., Wen, X., Zhang,
+A., Ma, J., Li, M., Li, G., Qi, L., Sun, J., Luo, T., Liu, H., Liu, X., Zhang, F., Luo,
+L., Zhu, Y., Zhao, Z., Sun, L., Yang, X., Wu, Q., Jiang, J., Shi, H., Liu, J., Xu,
+Y., Yang, S., Zhang, L., Han, D., Gao, N., Huo, J., Zhang, Z., Wang, H., Zhao,
+X., Wang, S., Li, Z., Bao, Z., Liu, Y., Wang, K., Wang, N., Wang, B., Wang,
+L., Wang, D., Ding, F., Sheng, L., Qiang, P., Yan, Y., Liu, Y., Wu, Z., Liu, Y.,
+Chen, H., Zhang, Y., Liu, H., Altmann, A., Bechteler, T., Burwitz, V., Fiorini, C.,
+Friedrich, P., Meidinger, N., Strecker, R., Baldini, L., Bellazzini, R., Bonino, R.,
+31
+
+Frass` a, A., Latronico, L., Maldera, S., Manfreda, A., Minuti, M., Pesce-Rollins,
+M., Sgr` o, C., Tugliani, S., Pareschi, G., Basso, S., Sironi, G., Spiga, D., Tagliaferri,
+G., Tykhonov, A., Paltani, S., Bozzo, E., Tenzer, C., Bayer, J., Tuo, Y., Liu, H.,
+Zhang, Y., Cai, Z., Liu, H., Chen, W., Wang, C., He, T., Chen, Y., Qiu, C., Zhang,
+Y., Feng, J., Zhu, X., Zhou, H., Zheng, S., Song, L., Wang, J., Jia, S., Jiang, Z., Li,
+X., Zhao, H., Guan, J., Zhang, J., Li, C., Huang, Y., Liao, J., You, Y., Zhang, H.,
+Wang, W., Wang, S., Ou, G., Hu, H., Shi, J., Cui, T., Jiang, X., Cheng, Y., Li, H.,
+Xu, Y., Zane, S., Bambi, C., Bu, Q., Dall’Osso, S., Rosa, A.D., Gou, L., Guillot,
+S., Ji, L., Li, A., Mao, J., Patruno, A., Stratta, G., Taverna, R., Tsygankov, S.,
+Uttley, P., Watts, A.L., Wu, X., Xu, R., Yi, S., Zhang, G., Zhang, L., Zhao, W.,
+Zhou, P.: The enhanced X-ray Timing and Polarimetry mission—eXTP for launch
+in 2030. Science China Physics, Mechanics, and Astronomy68(11), 119502 (2025)
+https://doi.org/10.1007/s11433-025-2786-6 arXiv:2506.08101 [astro-ph.HE]
+[29] Campana, R., Feroci, M., Del Monte, E., Mineo, T., Lund, N., Fraser, G.W.:
+Background simulations for the Large Area Detector onboard LOFT. Experimen-
+tal Astronomy36(3), 451–477 (2013) https://doi.org/10.1007/s10686-013-9341-6
+arXiv:1305.3789 [astro-ph.IM]
+[30] Bateman, H.: The solution of a system of differential equations occurring
+in the theory of radioactive transformations. Proceedings of the Cambridge
+Philosophical Society15(pt V), 423–427 (1910)
+[31] Pressyanov, D.S.: Short solution of the radioactive decay chain equations. Ameri-
+can Journal of Physics70(4), 444–445 (2002) https://doi.org/10.1119/1.1427084
+[32] Onega, R.J.: Radioactivity Calculations. American Journal of Physics37(10),
+1019–1022 (1969) https://doi.org/10.1119/1.1975187
+[33] Moral, L., Pacheco, A.F.: Algebraic approach to the radioactive decay equations.
+American Journal of Physics71(7), 684–686 (2003) https://doi.org/10.1119/1.
+1571834
+[34] Amaku, M., Pascholati, P.R., Vanin, V.R.: Decay chain differential equations:
+Solution through matrix algebra. Computer Physics Communications181(1),
+21–23 (2010) https://doi.org/10.1016/j.cpc.2009.08.011
+[35] Hauf, S., Kuster, M., Batiˇ c, M., Bell, Z.W., Hoffmann, D.H.H., Lang, P.M., Neff,
+S., Pia, M.G., Weidenspointner, G., Zoglauer, A.: Radioactive Decays in Geant4.
+IEEE Transactions on Nuclear Science60(4), 2966–2983 (2013) https://doi.org/
+10.1109/TNS.2013.2270894 arXiv:1307.0996 [physics.comp-ph]
+32

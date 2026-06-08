@@ -1,0 +1,1877 @@
+Title: Fewer simulations, sharper covariances: Reducing mock covariance noise with Zeldovich approximation control variates
+Authors: Boryana Hadzhiyska, Martin White
+Published: 2026-05-27
+Categories: astro-ph.CO
+
+Fewer simulations, sharper covariances: Reducing mock covariance noise
+with Zeldovich approximation control variates
+Boryana Hadzhiyska 1, 2 and Martin White 3, 4
+1Institute of Astronomy, Madingley Road, Cambridge, CB3 0HA, UK
+2Kavli Institute for Cosmology Cambridge, Madingley Road, Cambridge, CB3 0HA, UK
+3Physics Division, Lawrence Berkeley National Laboratory, Berkeley, CA 94720, USA
+4Berkeley Center for Cosmological Physics, Department of Physics,
+University of California, Berkeley, CA 94720, USA
+(Dated: May 28, 2026)
+We present a control-variate method for reducing the variance of power spectrum covariance ma-
+trix estimates from simulations of large-scale structure. The key idea is to pair each mock simulation
+with a cheap Zeldovich-approximation realization sharing the same initial conditions, and to use the
+known statistical properties of the Zeldovich field to remove correlated sample variance from the
+covariance estimator. Under a Gaussian disconnected approximation, we derive fully analytic expres-
+sions for both the optimal control-variate coefficient,β(k, ℓ;k ′, ℓ′), and the corresponding correlation,
+ρ(k, ℓ;k ′, ℓ′), in terms of the auto- and cross-power spectra of the target and control fields. In the
+monopole case, the correlation takes the particularly simple formρ(k, k ′) =r 2(k), r2(k′), wherer(k)
+is the standard cross-correlation coefficient between the target and Zeldovich fields, implying that
+covariance estimation remains highly efficient whenever the two fields are strongly correlated. For
+masked redshift-space lognormal mocks, resembling Luminous Red Galaxies from the Dark Energy
+Spectroscopic Instrument (DESI), we find that the control-variate estimator reduces the variance of
+the covariance matrix by approximately an order of magnitude on large scales,k≲0.05hMpc −1,
+precisely where accurate covariance estimation is most challenging. The gains are smaller for higher
+kbut typically accelerate convergence by a factor of 2-3, substantially lowering the computational
+cost of covariance estimation for current and upcoming large-scale structure surveys. Due to its
+simplicity, this method is readily implementable in current imaging and spectroscopic surveys (e.g.,
+DESI,Euclid, LSST, PFS,SPHEREx).
+I. INTRODUCTION
+Accurate covariance matrices of summary statistics
+such as the galaxy power spectrum are essential ingre-
+dients in the cosmological inference pipeline. The covari-
+ance matrix enters the likelihood function and directly
+affects the precision and accuracy of derived cosmological
+parameters [1–5]. For current Stage-IV surveys such as
+DESI [6], Euclid [7],SPHEREx[8], Subaru PFS [9], and
+the Rubin Observatory LSST [10], the statistical power
+of the data demands covariance estimates with percent-
+level precision, which in turn requires thousands or even
+tens of thousands of mock realizations if estimated from
+simulations.
+There are broadly three approaches to covariance esti-
+mation.Analytic methodscompute the Gaussian and, in
+some cases, non-Gaussian contributions to the covariance
+from perturbation theory [11–15] or halo model calcula-
+tions [16, 17]. These are fast but rely on approximations
+whose accuracy must be validated, and they struggle to
+capture the effects of realistic survey geometry or com-
+plex procedures such as fiber assignment to targets.Sam-
+ple covariance from simulationsis the most straightfor-
+ward approach: one runs an ensemble ofN sim mock cat-
+alogs with independent initial conditions, measures the
+statistic of interest in each, and computes the sample co-
+variance [18–20]. Provided that the model of the mock
+catalogs has been tuned properly, this method naturally
+includes all physical effects (nonlinearity, bias, redshift-
+space distortions, survey geometry) but converges slowly:
+the fractional error on each element of the covariance
+scales as∼
+p
+2/Nsim, and achieving few-percent preci-
+sion on the full matrix requiresN sim ≳O(10 3–104).In-
+ternal estimatorssuch as jackknife or bootstrap methods
+[21, 22] avoid the need for external mocks but can be bi-
+ased and are limited by the survey volume.
+A number of techniques for reducing the noise of an es-
+timated covariance matrix have been proposed in the lit-
+erature [23–28]. Thecontrol variatetechnique, borrowed
+from Monte Carlo methods in statistics [29], offers a way
+to accelerate the convergence of the sample-covariance
+approach by exploiting correlations between the target
+quantity and a related quantity whose expectation value
+is known. It has potential to yield large improvements at
+little cost, with full theoretical control. The basic idea is
+simple: ifXis the estimator of interest andCis a cor-
+related “control” estimator with known meanµ C =⟨C⟩,
+then the modified estimator
+Y=X−β(C−µ C) (1)
+has the same expectation value asXbut reduced vari-
+ance, providedβis chosen appropriately andXandC
+are sufficiently correlated. Intuitively, if we know thatC
+fluctuated above its mean,µ C, then it is likely thatX
+fluctuated ‘high’ as well, and so it should be corrected
+down.
+This approach was introduced in the cosmological con-
+text by Chartier et al. [30–32], who used correlated lower-
+arXiv:2605.28817v1  [astro-ph.CO]  27 May 2026
+
+2
+cost realizations sharing the same initial conditions as
+control variates forN-body simulations. The analytical
+version of this method has since been applied to vari-
+ous statistics including the power spectrum multipoles
+[33, 34], bispectrum [35], post-reconstruction power spec-
+trum [36], and in the context of hybrid theory emula-
+tion [37]. In all cases, the central challenge is finding a
+tractable control variate that is highly correlated with
+the quantity of interest. Determining the control-variate
+coefficientβconstitutes an additional challenge. Finally,
+estimating the mean of the control variate,µ C, can itself
+be computationally expensive. Analytical control vari-
+ate methods can therefore be particularly valuable, since,
+when available, they provide an effectively noise-free es-
+timate of the expectation value ofC.
+In this work, we develop and test a control-variate
+framework for reducing the computational cost of es-
+timating large-scale structure covariance matrices from
+simulations. Our approach uses Zeldovich realizations
+sharing the same initial conditions as the target mock
+catalogs in order to remove correlated sample variance
+from the covariance estimator. We derive analytic ex-
+pressions for the optimal control-variate coefficient,β,
+and the resulting variance reduction factor under a Gaus-
+sian disconnected approximation, showing that the per-
+formance of the method is governed primarily by the
+cross-correlation coefficient between the target and con-
+trol fields (as expected). We validate these predictions
+against brute-force estimates from large ensembles of
+simulations and apply the method to a realistic configura-
+tion consisting of redshift-space LRG-like lognormal cata-
+logs with a DESI-like survey mask. The resulting target–
+control cross-correlation closely resembles that measured
+in realistic DESI LRG mocks, leading to substantial vari-
+ance reduction on large scales. In particular, we find that
+the control-variate method reduces the variance of the
+covariance matrix by approximately an order of magni-
+tude, implying that∼10 3 paired simulations achieve the
+statistical precision of∼10 4 standard realizations.
+The structure of this paper is as follows. Section II de-
+scribes our simulation methodology, the control-variate
+formalism, and the derivation of the analyticβ. In Sec-
+tion III, we numerically validate our analytical approx-
+imations for the CV method. Section IV presents our
+main results in the realistic configuration (redshift space
+with mask). In Section V, we study in detail the perfor-
+mance of our CV-reduced covariance matrix and compare
+it with the standard, non-CV-reduced version. We con-
+clude in Section VI.
+II. METHODS
+A central goal of this paper is to validate a control-
+variate (CV) approach for reducing the finite-sample
+noise of covariance matrices in realistic redshift-space
+analyses. This validation requires running very large en-
+sembles of paired simulations, since the statistical uncer-
+tainty in covariance estimates decreases only slowly with
+the number of realizations. We therefore use lognormal
+mocks as a computationally efficient way to generate the
+high-volume suites needed to test the methodology in a
+controlled setting.
+Although lognormal mocks are an idealization of late-
+time structure formation, they reproduce the key ingre-
+dient for CV performance: the (de)correlation between
+the control field and the target field. In other words,
+the level and scale dependence of the decorrelation ob-
+served in the lognormal simulations turn out to be quite
+adequate for our purposes. In fact, in terms of the corre-
+lation coefficientr(k), the lognormal mocks have a very
+similar behavior to what is found for realistic DESI LRG
+galaxies [36], supporting the use of lognormal realizations
+as a faithful testbed for covariance-noise reduction.
+A. Simulations
+1. Initial conditions
+In this paper, we generate cheap simulations to test
+our control variates method on lognormal mocks. Our
+simulations, both the target lognormal mocks and the
+control Zeldovich realizations, share common Gaussian
+initial conditions. For each realizations= 1, . . . , N sim,
+we generate a Gaussian random fieldδ (s)
+L (k) on a cubic
+grid of side lengthL box = 2000 Mpc/hwithN 3
+mesh grid
+points, drawn from the linear matter power spectrum
+PL(k) at a specified redshiftz. The phases and ampli-
+tudes of each Fourier mode are drawn independently as
+δL(k) =
+p
+PL(k)/V η(k),(2)
+whereη(k) is a complex Gaussian random variable with
+⟨|η|2⟩= 1 andV=L 3
+box is the box volume. The linear
+power spectrumP L(k) is computed using the Boltzmann
+solverCLASS[38], with cosmological parameters matching
+theAbacusSummitsimulations.
+We generate a Gaussian random fieldδ(x) in Fourier
+space by drawing complex amplitudes with power spec-
+trumP L(k), enforcing Hermitian symmetry so that the
+real-space field is real, and transforming back via an in-
+verse FFT. From the same Fourier-space realisation we
+simultaneously compute the three components of the Zel-
+dovich displacement field (see below) so that the lognor-
+mal density field and the Zeldovich field share identical
+initial conditions. The Zeldovich displacement field is
+used when creating both the lognormal mocks, which act
+as our tracer, as well as the Zeldovich approximation pre-
+dictions for the covariance of the power spectrum of our
+tracer.
+2. Zeldovich approximation
+The control field is computed from the Zeldovich ap-
+proximation [39], which provides the leading-order La-
+
+3
+grangian perturbation theory prediction for the evolved
+density field. In the Zeldovich approximation, particles
+initially at Lagrangian positionqare displaced to Eule-
+rian position
+x(q) =q+Ψ(q),(3)
+where the displacement fieldΨ(q) is given by
+Ψ(k) = ik
+k2 δL(k).(4)
+The Zeldovich density field is obtained by distributing a
+uniform grid of particles according to Eq. (3) and paint-
+ing them to a mesh using a mass-assignment scheme (we
+use triangular-shape cloud, TSC).
+For the biased Zeldovich field, we follow the stan-
+dard Lagrangian advection prescription. We begin from
+two Lagrangian source fields defined on the initial (La-
+grangian) coordinatesq,
+•the 1cb (cdm+baryons) Lagrangian source corre-
+sponding to a unit-weight field consisting of ones
+everywhere, and
+•the total-matter initial overdensity field,δ IC(q),
+and we advect them to Eulerian positions via the Zel-
+dovich displacement at some final redshift,z. Note that
+the advected 1cb field corresponds to the Zeldovich pre-
+dicted cdm+baryons field at redshiftz.
+The key properties of the Zeldovich field are that it
+correctly describes the large-scale advection that dom-
+inates displacements in CDM-like models and, because
+Eq. (4) is a deterministic linear functional of the initial
+conditions, the Zeldovich realization is perfectly deter-
+mined by the initial Gaussian modes — the same modes
+that seed the lognormal mock. This ensures strong cor-
+relation between the target and control fields, which is
+the foundation of the control-variate method.
+When working in redshift space, we apply the plane-
+parallel approximation with the line of sight along the
+z-axis. For the Zeldovich field, this is straightforward:
+the redshift-space position is
+s(q) =q+Ψ(q) + f
+aH Ψz(q) ˆz ,(5)
+wherefis the logarithmic growth rate,ais the scale
+factor,His the Hubble parameter, and Ψ z is thez-
+component of the displacement. In practice, since we
+work at the field level, this amounts to an additional dis-
+placement along ˆzproportional to the velocity field.
+Power spectrum multipoles are estimated using the Ya-
+mamoto estimator [40], which we implement using the
+power spectrum code ofabacusutils 1. We measure the
+monopole (ℓ= 0) and quadrupole (ℓ= 2), which are
+concatenated into a single data vector of length 2×N k,
+whereN k is the number ofk-bins.
+1 https://github.com/abacusorg/abacusutils
+3. Lognormal mocks
+The target simulations are lognormal mock cata-
+logs [41], which provide a fast way to generate non-
+Gaussian density fields with approximately correct one-
+point statistics and two-point clustering. Our procedure
+follows the implementation ofnbodykit 2 and proceeds as
+follows. Our chosen redshift,z= 0.5, and bias,b= 2.2
+for the lognormal resembles the population of Luminous
+Red Galaxies (LRGs) in DESI [42, 43].
+•Lognormal density field.The lognormal overdensity
+field is obtained from the Gaussian fieldδ(x) via
+1 +δ LN(x) = exp
+
+bL δ(x)
+
+⟨exp
+
+bL δ(x)
+
+⟩ ,(6)
+whereb L =b−1 is the Lagrangian bias param-
+eter andbis the Eulerian linear bias. The nor-
+malisation by the spatial mean ensures⟨δ LN⟩= 0
+exactly. This form of the lognormal transforma-
+tion, with the Lagrangian bias applied to the expo-
+nent before normalisation, follows the convention
+ofnbodykit’sLogNormalCatalog. We useb= 2.2
+throughout.
+•Galaxy positions.Discrete galaxy positions
+are obtained by Poisson-sampling the lognormal
+density field with mean number density ¯n=
+10−3 (h−1Mpc)−3, and then displacing each galaxy
+from its grid position by the Zeldovich displacement
+field.
+•To incorporate redshift-space distortions, we fur-
+ther displace each galaxy along the line-of-sight (z)
+direction by the line-of-sight component of the Zel-
+dovich displacement field,
+sz =x z +fΨ z ,
+wherefis the linear growth rate and Ψ z is the
+z-component of the displacement field defined in
+Eq. 4.
+•To simulate the effect of non-linear structure evo-
+lution and Finger-of-God effects, we add a random
+displacement along the line-of-sight to each galaxy,
+drawn from a Gaussian distribution centered at
+300 km s−1/(aH).
+•The displaced positions are assigned back to a mesh
+using triangular-shaped cloud (TSC) mass assign-
+ment with window compensation to correct for the
+smoothing effect of the assignment scheme [44],
+WTSC(k) =
+3Y
+i=1
+sinc3
+ ki ∆x
+2
+
+,(7)
+2 https://nbodykit.readthedocs.io/en/latest/
+
+4
+FIG. 1. DESI South Galactic Cap (SGC) survey mask applied
+to the LRG-like lognormal mocks of this study. In addition
+to the irregular boundary there are numerous ‘holes’ in the
+survey, the largest of which can be seen as black dots within
+the footprint.
+where sinc(x) = sin(x)/xand ∆xis the mesh spac-
+ing, yielding the final lognormal overdensity field
+δLN(x).
+•Power spectra.From each realisation we mea-
+sure three power spectra in 255 bins spaced lin-
+early inkfrom 0 to the Nyquist frequency,k≈
+0.8hMpc −1. The lognormal auto-power spectrum
+P aa(k)≡P LN(k) is measured fromδ LN, and plays
+the role ofP aa below. The cross-power spectrum
+between the lognormal field and the (linearly bi-
+ased) Gaussian field,
+P ab(k) =P LN×1cb(k) +bL PLN×δ(k),(8)
+is measured from the Zeldovich approximation pre-
+dicted field andδ LN(x), and serves asP ab. The
+biased Zeldovich auto-power spectrum is then
+P bb(k) =P 1cb,1cb(k) + 2bL P1cb,δ(k)
++b 2
+L Pδ,δ(k),(9)
+with the Zeldovich operators described in
+Sec. II A 2.
+4. Survey mask
+To test the method in a realistic setting, we apply
+a survey window function modeled on the DESI South
+Galactic Cap (SGC) geometry at redshiftz= 0.5. The
+mask is a binary angular selection function applied to
+the simulation box; regions outside the observed region
+in thexycross-section are zeroed, and we additionally
+cut off 200h −1Mpc from each each side of the box in the
+zdirection. This breaks the periodicity of the box and
+introduces off-diagonal elements in the covariance matrix
+(mode coupling), which is one of the key complications
+the control-variate method must handle.
+When the mask is applied, the power spectrum esti-
+mator uses the FKP weighting scheme [45], and the nor-
+malization accounts for the effective survey volume. We
+denote masked measurements with the subscript “mask”
+where disambiguation is needed. We show the mask in
+Fig. 1.
+B. Control variate formalism
+1. Setup and notation
+Let ˆP (s)
+ℓ (k) denote the power spectrum multipole mea-
+sured from thes-th lognormal realization, and let ˆQ(s)
+ℓ (k)
+denote the corresponding measurement from the paired
+Zeldovich realization (same initial conditions). We orga-
+nize these into data vectorsd (s) andc (s) by concatenat-
+ing all (k, ℓ) bins:
+d(s)
+i = ˆP (s)
+ℓi
+(ki), c (s)
+i = ˆQ(s)
+ℓi
+(ki),(10)
+where the indexiruns over allk-bins and multipoles.
+The sample covariance matrices of the target and con-
+trol fields are
+Xij = 1
+Nsim −1
+NsimX
+s=1
+
+d(s)
+i − ¯di
+
+d(s)
+j − ¯dj
+
+,(11)
+and similarlyC ij for the control field. The true covari-
+ance of the control field,
+µij ≡Cov
+h
+ˆQℓi(ki), ˆQℓj(kj)
+i
+,(12)
+can be estimated to high precision from a large ensemble
+of Zeldovich-only simulations, since these are computa-
+tionally inexpensive. In our fiducial analysis we estimate
+µfromN theo = 10,000 Zeldovich realizations that are
+passed through the same survey mask as the data, be-
+cause the mask breaks translational invariance and in-
+duces non-trivial mode coupling inµthat is generally
+cumbersome to evaluate analytically.
+Becauseµ ij is estimated from a finite number,N th, of
+Zeldovich realizations, there is an additional contribution
+to the variance ofC ij −ˆµij. For control simulations sta-
+tistically independent of the paired realizations used to
+computeX ij,
+Var(Cij −ˆµij) = Var(Cij) + Var(ˆµij),(13)
+with Var(ˆµij) scaling asO
+ 
+(Nth −1) −1
+. Therefore, for
+Nth ≫N sim these corrections are subdominant, and the
+expressions forβ ij andρ ij remain good smooth approx-
+imations.
+
+5
+2. Control variate estimator
+In our notation,β ij andρ ij are defined element-by-
+element in the (k, ℓ) space of the covariance matrix. They
+arenotmatrices acting on the data vector, but rather
+scalar coefficients for each element of the covariance ma-
+trix. We could thus denote the elements by a single index,
+e.g.,α≡ij, but we opt to use the standard double-index
+notation for covariance matrices. In principle, one could
+also consider a matrix-valued control variate acting on
+the data vector level, but the element-wise approach is
+simpler and, as we show, already highly effective.
+The control-variate-corrected covariance estimator is
+Yij =X ij −β ij (Cij −µ ij),(14)
+whereβ ij is a coefficient matrix. Since⟨C ij⟩=µ ij, we
+have⟨Y ij⟩=⟨X ij⟩, so the estimator is unbiased regard-
+less ofβ, assuming our estimate ofµis accurate and
+low-noise.
+The variance ofY ij is
+Var[Yij] = Var[Xij]−2β ijCov[Xij, Cij] +β 2
+ijVar[Cij].
+(15)
+Minimizing with respect toβ ij gives the optimal coeffi-
+cient
+βopt
+ij = Cov[Xij, Cij]
+Var[Cij] ,(16)
+and the resulting minimum variance is
+Var[Yij]min = Var[Xij]
+ 
+1−ρ 2
+ij
+
+,(17)
+where
+ρij = Cov[Xij, Cij]p
+Var[Xij] Var[Cij]
+(18)
+is the correlation coefficient between the target and con-
+trol covariance estimators. The effective number of sim-
+ulations saved is 1/(1−ρ 2): a correlation ofρ= 0.95
+corresponds to a factor of∼10 reduction, meaning 1,000
+paired simulations are equivalent to∼10,000 unpaired
+ones.
+C. Analytic approximations
+The brute-force estimation ofβ ij from simulations re-
+quires estimating Cov[Xij, Cij] and Var[Cij] from a large
+ensemble of realizations, which is computationally expen-
+sive and itself subject to sampling noise. Here we instead
+derive closed-form expressions forβandρunder the
+Gaussian (disconnected) approximation, assuming the
+Fourier-space density fieldδ(k) is Gaussian distributed.
+In the limit of a large number of modes per bin the power
+spectrum estimates are also approximately Gaussian dis-
+tributed (by the central limit theorem). Below we be-
+gin by considering the covariance of the monopole of the
+power spectrum. For ease of notation, we denote the
+monopole of the power spectrum byP(k)≡P ℓ=0(k), and
+we refer to the auto-power spectrum asP a(k)≡P aa(k).
+In the subsections below, we introduce a sequence of
+simplifying approximations to make the control-variate
+construction analytically and computationally tractable.
+Below we also validate these approximations directly
+against brute-force simulations, demonstrating that they
+do not introduce an appreciable bias in the resulting co-
+variance (or precision) estimates. Accordingly, the role of
+these approximations is mainly to enable a practical im-
+plementation; any residual impact is therefore expected
+to be limited to a (possibly modest) reduction in the
+CV optimality rather than a qualitative change in the
+inferred statistics.
+1. Setup
+The target and control quantities entering the control-
+variate estimator are elements of sample covariance ma-
+trices estimated fromN sim paired simulations.
+Xij = ˆΣaa
+ij , C ij = ˆΣbb
+ij ,(19)
+where notationais used to refer to the lognormal mocks,
+bto the Zeldovich approximation mocks. The covariance
+is estimated via
+ˆΣab
+ij = 1
+Nsim −1
+NsimX
+s=1
+∆ ˆP a,(s)
+i ∆ ˆP b,(s)
+j ,(20)
+where
+∆ ˆP a,(s)
+i ≡ ˆP a,(s)(ki)− ¯P a(ki).(21)
+and ¯P a(ki) =N −1
+sim
+P
+s ˆP a,(s)(ki) is the simulation mean.
+The quantitiesX ij andC ij are therefore sample covari-
+ance matrix elements, which are quadratic in the fields,
+and their covariance over many realizations is a fourth-
+order quantity in the fields.
+2. Covariance of the sample covariance matrix
+Under the Gaussian approximation, the fields are fully
+characterised by their two-point functions, and the co-
+variance of two-point estimators follows from the Isserlis–
+Wick theorem. For Gaussian fields, the binned power
+spectrum estimator satisfies
+Cov
+ ˆP a(ki), ˆP b(kj)
+
+≃ 2 [Pab(ki)]2
+Nk,i
+δij ,(22)
+whereN k,i is the number of independent Fourier modes in
+biniand the Kronecker delta reflects the fact that differ-
+entk-shells are uncorrelated for Gaussian fields. In prac-
+tice, this diagonal form is only approximate, since sur-
+vey masks and window functions couple different Fourier
+
+6
+modes and induce off-diagonal covariance betweenk-bins.
+Throughout this work, however, we adopt the diagonal
+Gaussian approximation above, and later demonstrate
+that it provides an adequate description for the purposes
+of our control variate calculations.
+The sample covariance estimator ˆΣab
+ij is an unbiased
+estimator of Σ ab
+ij ≡Cov[ ˆP a(ki), ˆP b(kj)]. For Gaussian
+fields, ˆP, the distribution of ˆΣ follows a Wishart dis-
+tribution, and the covariance of two sample covariance
+elements is (assuming Σ is dominated by its diagonal
+components)
+Cov
+ˆΣaa
+ij , ˆΣbb
+ij
+
+= 1
+Nsim −1
+
+Σab
+ii Σab
+jj + (Σab
+ij )2
+,(23)
+where the multiplication is executed element-wise. Since
+Σab
+ij = Cov[ ˆP a
+i , ˆP b
+j ] = 2[P ab(ki)]2δij/Nk,i is diagonal in
+k, the second term vanishes fori̸=jand both terms
+contribute equally fori=j.
+For Gaussian fields, the Wishart covariance implies an
+extra factor (1 +δ ij) for the diagonal sample-covariance
+elements. Under the assumption that Σ ab
+ij is diagonal in
+k(and hence Σ ab
+ij ∝δ ij), one may write
+Cov
+h
+ˆΣaa
+ij , ˆΣbb
+ij
+i
+= 1 +δ ij
+Nsim −1 Σab
+ii Σab
+jj ,(24)
+Var
+h
+ˆΣbb
+ij
+i
+= 1 +δ ij
+Nsim −1 Σbb
+ii Σbb
+jj ,(25)
+Var
+h
+ˆΣaa
+ij
+i
+= 1 +δ ij
+Nsim −1 Σaa
+ii Σaa
+jj .(26)
+These (1 +δ ij) factors cancel in the ratios definingβ ij
+andρ ij.
+In both cases, substituting Eq. (22) gives
+Cov
+
+Xij, C ij
+
+= (1 +δ ij)4 [Pab(ki)]2 [P ab(kj)]2
+(Nsim −1)N k,i Nk,j
+,(27)
+and similarly
+Var
+
+Cij
+
+= (1 +δ ij)4 [Pbb(ki)]2 [P bb(kj)]2
+(Nsim −1)N k,i Nk,j
+,(28)
+Var
+
+Xij
+
+= (1 +δ ij)4 [Paa(ki)]2 [P aa(kj)]2
+(Nsim −1)N k,i Nk,j
+.(29)
+3. Analytic expressions forβandρ
+Taking the ratio of Eqs. (27) and (28), the (N sim −1)
+andN k factors cancel exactly, giving the main result:
+βij = Cov[Xij, C ij]
+Var[Cij] = [P ab(ki)]2 [P ab(kj)]2
+[P bb(ki)]2 [P bb(kj)]2 .(30)
+Defining
+α(k)≡ [P ab(k)]2
+[P bb(k)]2 ,(31)
+we write this as
+βij ≡α(k i)α(k j) (32)
+The correlation coefficient betweenX ij andC ij follows
+from Eqs. (27)–(29):
+ρij = Cov[Xij, C ij]p
+Var[Xij] Var[Cij]
+= [P ab(ki)]2 [P ab(kj)]2
+P aa(ki)P bb(ki)P aa(kj)P bb(kj) .(33)
+Defining
+r(k)≡ P ab(k)p
+P aa(k)P bb(k)
+(34)
+as the standard field-level cross-correlation coefficient, we
+write this as
+ρij =r 2(ki)r 2(kj) .(35)
+In the above expressions forβ ij =α iαj andρ ij =r 2
+i r2
+j ,
+we assume that the disconnected covariance matrix of
+the bandpower estimators is diagonal in the bin index,
+Σab
+ij ∝δ ij. Any mode coupling induced by the survey
+window, bin overlap, or non-Gaussian connected terms
+would introduce off-diagonal contributions and in general
+spoil this factorization. Ignoring the coupling, bothβ ij
+andρ ij factorise into a product of per-bin quantities, a
+direct consequence of the diagonal structure of Σ ab
+ij ink-
+space under the Gaussian approximation. Importantly,
+both are independent of the number of simulationsN sim
+and the number of modesN k,i: these cancel in the ratio
+andβandρdepend only on ratios of mean power spectra.
+4. Extension to multipoles
+The disconnected derivation above for the monopole
+relies only on the Gaussian covariance of the underlying
+bandpower estimators and on the fact that, in theµ-
+binning used there, differentµ-bins can be treated as ap-
+proximately independent. For redshift-space multipoles
+one can proceed analogously, but the crucial difference
+is that while theµ-bins remain (approximately) inde-
+pendent at the level of the anisotropic powerP(k, µ),
+the multipole projection mixesµand induces strong cor-
+relations between different multipoles. As a result, the
+corresponding Gaussian covariance in the (k, ℓ) basis is
+generally not diagonal inℓ, and the factorized expressions
+obtained in the monopole case do not directly carry over.
+Concretely, writing the Legendre multipole estimator
+as
+ˆP a
+ℓ (k) = 2ℓ+ 1
+2
+Z 1
+−1
+dµL ℓ(µ) ˆP a(k, µ),(36)
+
+7
+FIG. 2. Comparison of the CV weight matrixβ(k, ℓ;k ′, ℓ′) in redshift space with a DESI-like survey mask.Left:analyticβ.
+Right:brute-forceβestimated from 10,000 simulations split into 100 batches of 100. Each map is visualized in the 2×2 block
+form corresponding to multipole pairs (ℓ, ℓ ′) = (0,0),(0,2),(2,0),(2,2). The dominant large-scale structure agrees well; the
+brute-force realization shows additional small-scale noise, most visibly in the upper-right corner of the right panel.
+the Gaussian covariance between multipoles at fixedk
+has the schematic form
+Cov
+ ˆP a
+ℓ (k), ˆP b
+ℓ′(k′)
+
+≃δ kk′
+(2ℓ+ 1)(2ℓ ′ + 1)
+4N k
+Kab
+ℓℓ′(k),
+(37)
+with the kernel
+Kab
+ℓℓ′(k)≡
+Z 1
+−1
+dµL ℓ(µ)L ℓ′(µ)
+
+Pab(k, µ)
+2
+.(38)
+If oneassumedK ab
+ℓℓ′(k)≈0 forℓ̸=ℓ ′, then the CV-weight
+construction would again factorize in a manner analogous
+to the monopole. However, in practice multipole blocks
+are highly correlated, so a fully non-factorized evaluation
+ofβ (k,ℓ),(k′,ℓ′) (and the correspondingρ) requires the off-
+diagonal kernelsK ℓℓ′. Carrying out this semi-analytic
+program is therefore considerably more cumbersome than
+in the monopole case.
+Fortunately, guided by numerical experiments, we find
+that the smooth analytic CV prediction obtained from
+the monopole block provides an excellent proxy for the
+mixed and higher multipole blocks relevant for our re-
+alistic analysis. Specifically, the monopole-derived an-
+alyticβandρtrack theℓ, ℓ ′ = 0,2 and 2,2 blocks
+closely enough that using the monopole-based approx-
+imation everywhere yields a stable and effectively un-
+biased CV-corrected covariance. A plausible reason is
+that the covariance in the Gaussian projection is domi-
+nated by the largest underlying spectrum (typically the
+monopole, since it carries most of the signal-to-noise),
+so theℓ–ℓ ′ covariance structure is largely inherited from
+the monopole even when exact diagonal-in-ℓfactorization
+fails. More generally, the accuracy of the monopole-based
+approximation should depend on how the effective mul-
+tipole weights scale with the tracer bias; for sufficiently
+low-biased tracers, the quadrupole and higher-ℓspectra
+can become more prominent, which may slightly alter the
+relative importance of the neglected blocks.
+III. VALIDATION
+In this Section, we study how well our analytic predic-
+tion for the CV weight and the corresponding correlation
+coefficient agrees with brute-force estimates using numer-
+ical simulations.
+A. Setup
+In this paper, we consider the following realistic config-
+uration: power spectrum multipoles (ℓ= 0,2) measured
+in redshift space through a DESI SGC-like survey mask.
+We have chosen an SGC-like mask because it is quite
+complex, arising from combining of several observational
+probes. This case is of practical relevance to current and
+future spectroscopic surveys and a valuable test for the
+control-variate (CV) method, as the mask induces sub-
+stantial mode coupling and generates a non-diagonal co-
+variance in (k, ℓ) space.
+With multipolesℓ∈ {0,2}, the covariance forms a 2×2
+block matrix in (k, ℓ) space. Because the covariance is
+
+8
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+Main diag: = 0 × = 0
+Analytic
+Brute-force
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+1st off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+2nd off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+Main diag: = 0 × = 2
+Analytic
+Brute-force
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+1st off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+2nd off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+Main diag: = 2 × = 2
+Analytic
+Brute-force
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+1st off-diag: = 2 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+1
+0
+1
+2
+2nd off-diag: = 2 × = 2
+FIG. 3. Diagonal comparison of the CV weightβbetween analytic and brute-force constructions in redshift space with mask.
+The figure shows three block pairs: (ℓ, ℓ ′) = (0,0) (left), (0,2) (middle), and (2,2) (right). Within each block pair, the
+top/center/bottom subpanels correspond to the main diagonal, the first off-diagonal, and the second off-diagonal (in (k i, kj)).
+Analyticβ(smooth) and brute-forceβ(noisier at highk) agree well on large scales, motivating the use of the analyticβ
+throughout.
+symmetric,C ℓℓ′(ki, kj) =C ℓ′ℓ(kj, ki), and the same sym-
+metry holds for the CV-related matrices, so the resulting
+CV-corrected covarianceYis symmetric as well. In the
+figures we display a 2×2 subset of block pairs, ordered
+as (0,0),(0,2),(2,0),(2,2).
+Throughout this section, we denote byXthe (sample)
+covariance matrix estimated fromN sim = 1000 paired
+simulations, and byYthe corresponding CV-corrected
+covariance,
+Y=X−β
+ 
+C−µ
+
+,(39)
+whereCis the covariance of the control field (Zeldovich
+approximation) evaluated on the same survey geometry,
+µis its mean estimated from a large ensemble of Zel-
+dovich realizations (10,000), andβis the CV weight ma-
+trix. By construction, ifµ=E[C] is correct, thenY
+remains unbiased even whenβis only approximately op-
+timal (the CV then becomes suboptimal but should not
+introduce a bias inE[Y]).
+B. Analytic versus brute-forceβ
+Fig. 2 compares the analyticβprediction with a brute-
+force estimate.
+The analyticβis obtained from the boxed expression
+forβderived earlier in the paper. However, due to the
+difficulty of computing the corresponding moments for
+ℓ̸= 0 in the redshift-space setting (see Section II C 4), we
+adopt the approximation
+β0,2 ≈β 0,0 , β 2,2 ≈β 0,0 ,(40)
+(i.e. we “copy” the (0,0) analytic block to populate the
+(0,2) and (2,2) blocks). This is not expected to be per-
+fectly optimal, but should yield the correct order of mag-
+nitude and, crucially, should not bias the CV result.
+The brute-forceβis computed from the estimates of
+Cov(X, C) and Var(C) where we split the 10,000 simu-
+lation realizations into 100 batches of 100. We compute
+the batch-wise estimates of Cov(X, C)/Var(C), and as-
+semble the fullβmatrix from these batch statistics.
+Overall agreement between analytic and brute-forceβ
+is very good. While the brute-force map exhibits visible
+noise on small scales (notably in the upper-right corner of
+the brute-force panels), the large-scale structure matches
+closely and is sufficiently accurate for our purposes: even
+if the weight is not perfectly optimal, the CV procedure
+does not biasYas long asµis correct.
+To further validate the analytic approximation (includ-
+ing the reuse of the (0,0) block), Fig. 3 compares analytic
+
+9
+FIG. 4. Comparison of the CV correlation coefficientρ(k, ℓ;k ′, ℓ′) in redshift space with survey mask.Left:analyticρ
+(computed from the boxed analytic expression; (0,2) and (2,2) populated by copying the (0,0) block).Right:brute-forceρ
+measured using 10,000 realizations split into 100 batches of 100. Each panel shows the same (2×2) block ordering (ℓ, ℓ ′) =
+(0,0),(0,2),(2,0),(2,2). The large-scale agreement is nearly exact; the correlation falls rapidly aroundk≃0.2hMpc −1, which
+directly governs the transition from strong variance reduction to negligible improvement.
+and brute-forceβon the diagonals.
+Each figure shows three diagonal bands: the main di-
+agonal, the first off-diagonal, and the second off-diagonal
+in (ki, kj). Within each band, we plot analytic and brute-
+forceβcurves. The three groups of panels correspond to
+(ℓ, ℓ′) = (0,0), (0,2), and (2,2), displayed side by side.
+On large scales the analytic and brute-force estimates
+match well. On smaller scales the brute-force curves be-
+come noisier, while the analytic curves remain smooth.
+Notably, the (0,2) and (2,2) diagonal blocks appear
+slightly less noisy than (0,0) in the brute-force compari-
+son, even though we do not compute them independently
+analytically; we do not claim a definitive physical reason,
+but the empirical behavior supports the approximation.
+Even ifβwere somewhat imperfect, the CV-corrected
+covarianceYwould remain unbiased providedµis cor-
+rect. However, in practice, using a noisy brute-forceβ
+can degrade the estimator variance more than using a
+smooth approximateβ. Since the analyticβis visually
+and quantitatively very similar to the brute-force result
+on the relevant (large-scale) modes, we use the analytic
+βas the CV weight in the remainder of the analysis.
+C. Analytic versus brute-forceρ
+Since the effective variance reduction is controlled by
+the CV correlation coefficientρ, we next compareρbe-
+tween analytic and brute-force constructions, shown in
+Fig. 4.
+As in theβcase, the analyticρis computed from the
+boxed expression and the (0,2) and (2,2) blocks are pop-
+ulated by reusing the (0,0) analytic result. The brute-
+forceρis obtained from the same batch construction used
+forβ.
+The agreement between analytic and brute-forceρis
+very good across all multipole combinations. Most im-
+portantly,ρis extremely close to 1 on large scales and
+then drops sharply aroundk≃0.2hMpc −1, becoming
+close to 0 beyond this scale. This is the key reason why
+the CV improvement saturates at higherk: the predicted
+variance reduction factor,
+ 
+1−ρ 2−1
+, becomes large only
+whileρ 2 remains close to 1.
+We note that our analyticalρdepends only on the
+cross-correlation coefficient,r(k), between our control
+variate and sample of interest, the covariance matrix of
+which we are aiming to determine. Thus, as long asr(k)
+is close to one on large scales, which is guaranteed for cos-
+mological tracers, we should find very good performance.
+The theoretical variance reduction we can achieve (pro-
+vided our approximation forρis sufficiently accurate) is
+given by
+Var[X]
+Var[Y] = 1
+1−ρ 2 ,(41)
+which we study in the next Section.
+
+10
+FIG. 5. Effect of control variates on redshift-space covariance estimates for the realistic (masked) survey. Left: cor-
+relation matrix of the original covarianceXestimated from 1000 simulations. Right: correlation matrix of the CV-
+corrected covarianceY(same number of simulations). Each big panel contains the 2×2 block structure corresponding to
+(ℓ, ℓ′) = (0,0),(0,2),(2,0),(2,2). The CV preserves the qualitative correlation structure while visibly reducing the noise (i.e.,
+the map on the right appears smoother and with fewer sharp features).
+IV. RESULTS
+In this section, we study the key performance of our
+CV method. We first visualize the resulting CV-reduced
+covariance matrix (to highlight noise and off-diagonal
+structure) and make comparisons with its non-reduced
+version via diagonal slices (to directly demonstrate vari-
+ance suppression and lack of bias). We then show how
+the variance reduction translates into an effective gain in
+simulation number.
+We largely confine our attention tok≥0.01hMpc −1.
+Atk <0.01hMpc −1 analytic approximations to the co-
+variance matrix become very accurate, obviating the need
+for a numerical approach. At the same time, the assump-
+tion of a Gaussian likelihood forP ℓ(k) becomes more
+questionable.
+A. Covariance matrices:XversusY
+We assess the CV impact on the covariance estimates
+by comparing correlation matrices. This comparison is
+closely related to our broader discussion of testing the
+accuracy and convergence of our CV-reduced covariance
+matrices in Section V.
+Fig. 5 presents: (1) the correlation matrix of the orig-
+inal covarianceXestimated from 1000 simulations; (2)
+the correlation matrix of the CV-corrected covarianceY
+estimated from 1000 simulations. It aims to visually show
+the improvement of the CV-reduced covariance.
+On large scales, correlations are comparatively weak:
+the correlation matrices are close to diagonal, with only
+modest mode coupling visible. At smaller scales, the co-
+variance becomes strongly correlated ink-bins, with cor-
+relations showing non-trivial signs across different multi-
+pole blocks (e.g. anti-correlations for (0,2)-type blocks,
+and positive correlations for (0,0) and (2,2)). Most im-
+portantly,XandYappear qualitatively similar (con-
+sistent with the unbiasedness of the method), butYis
+visibly cleaner: the off-diagonal bands are smoother and
+exhibit reduced noise. The improvement is most visible
+where the correlation/noise is largest, i.e. on large scales
+whereρis close to 1.
+Correlation matrices can be visually compelling but
+they normalize by the diagonal elements, making it diffi-
+cult to interpret variance reduction directly. Fig. 6 there-
+fore shows diagonal slices ofXandYin a more direct
+way.
+For each multipole block pair (ℓ, ℓ ′) = (0,0), (0,2),
+and (2,2), we plot: the main diagonal, the first off-
+diagonal, and the second off-diagonal. In each subpanel,
+we show two curves: the original covarianceXand the
+CV-corrected covarianceY.
+The reduced covarianceYis noticeably more stable
+and less noisy thanX, with reduced oscillatory behavior
+at highk. Crucially,Yremains consistent withXin
+the relevant large-scale regime, supporting the conclusion
+that the method is not introducing a bias but is primarily
+
+11
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+103
+105
+107
+109
+Cov(P(k), P(k ))
+Main diag: = 0 × = 0
+Reduced (Y)
+Original (X)
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+103
+105
+107
+1st off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+103
+105
+107
+2nd off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+103
+105
+107
+109
+Cov(P(k), P(k ))
+Main diag: = 0 × = 2
+Reduced (Y)
+Original (X)
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+103
+105
+107
+1st off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+104
+106
+108
+2nd off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+105
+108
+1011
+Cov(P(k), P(k ))
+Main diag: = 2 × = 2
+Reduced (Y)
+Original (X)
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+104
+106
+108
+1st off-diag: = 2 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+104
+106
+108
+2nd off-diag: = 2 × = 2
+FIG. 6. Diagonal comparison between the original covariance estimateXand the CV-corrected covariance estimateYin
+redshift space with mask. The three rows correspond to (ℓ, ℓ ′) = (0,0) (top), (0,2) (middle), and (2,2) (bottom). Within
+each row, the left/center/right subpanels correspond to the main diagonal, first off-diagonal, and second off-diagonal in (ki, kj).
+Each subpanel showsX(original) andY(CV-reduced). The CV reduces noise and oscillations while preserving the diagonal
+values (no evident bias), demonstrating that the control variates indeed act as intended.
+suppressing noise.
+B. Effective simulation gain
+The correlation coefficientρcan be converted into an
+effective simulation gain. In the CV framework, the vari-
+ance reduction factor is approximately Var[Y]/Var[X]≃
+(1−ρ 2), whose inverse we can interpret as an effective
+gain in the number of paired simulations.
+Fig. 7 shows two maps side by side: (i) the analytic pre-
+diction for the effective simulation gain using
+ 
+1−ρ 2−1
+;
+(ii) the brute-force gain measured directly from the batch
+estimates of Var[X]/Var[Y].
+Both maps are displayed with the same 2×2 block
+ordering (ℓ, ℓ′) = (0,0),(0,2),(2,0),(2,2).
+On large scales, the gain is close to maximal and is
+of order∼8 in this realistic masked redshift-space setup.
+The gain decreases toward smaller scales, consistent with
+the sharp drop ofρobserved aroundk≃0.2hMpc −1.
+This behavior is expected: onceρapproaches 0, the fac-
+tor
+ 
+1−ρ 2−1
+saturates to unity, and no further variance
+reduction should be expected.
+A gain factor of∼8 means that, at fixed estimator
+variance, the CV-corrected covariance from∼100 paired
+simulations achieves the statistical quality that would
+otherwise require∼800 unpaired simulations.
+Becauseρentering the covariance CV is effectively
+linked to the (roughly squared) correlation structure
+of the underlying power-spectrum control field, the
+covariance-level CV performance tracks the power-
+spectrum-level performance but with somewhat smaller
+gains. Empirically, this means the covariance CV is typ-
+ically only about a factor of∼2 worse than what is
+achievable for the power spectrum itself, which is consis-
+tent with large improvements in the covariance even in
+this highly challenging, realistic masked/redshift-space
+configuration.
+To quantify where the variance reduction is con-
+centrated, Fig. 8 shows the diagonal variance ratio
+Var[X]/Var[Y] as a function ofkfor the three block pairs.
+Each block includes the main diagonal, first off-diagonal,
+and second off-diagonal. We compare: (i) the brute-
+force measured variance ratio; (ii) the analytic prediction
+
+12
+FIG. 7. Effective simulation gain (variance reduction) in redshift space with survey mask. Left: analytic prediction using the
+CV relation Var[X]/Var[Y]≃(1−ρ 2)−1 (with multipole blocks populated by reusing the (0,0) block). Right: brute-force
+measurement of the corresponding variance reduction factor from 100×100 batch statistics. Each panel shows the 2×2 block
+structure (ℓ, ℓ′) = (0,0),(0,2),(2,0),(2,2). The agreement between analytic and brute-force is very good; gains are strongest
+on large scales (typically∼8), and decline toward unity at higherkwhereρbecomes small.
+(1−ρ 2)−1 using the batches (iii) the analytic prediction
+(1−ρ 2)−1 using our analytical approximation.
+Across diagonal bands, the analytic prediction from
+the batches matches the brute-force measurement very
+well. The variance ratio is largest on large scales: it
+is about a factor of∼8 up tok≃0.03hMpc −1,
+then decreases to∼5 untilk≃0.1hMpc −1. After
+k≃0.2hMpc −1, the ratio becomes consistent with unity,
+reflecting the loss of correlation (ρ→0) at those scales.
+The discrepancy between the measured gain and the
+analytic prediction using our approximation forρcan be
+attributed to the approximations we make in estimating
+ρ. Indeed, in our diagonal blocks we find that the mea-
+sured gain agrees with the optimal relation 1/(1−ρ 2)
+whenρis computed directly from the 100×100 batches,
+for both analytic and brute-force estimates ofβ. This
+indicates that the underlying optimalβ–ρconnection re-
+mains valid. We expect that on large scales the variance
+reduction should be even larger as the Zeldovich approxi-
+mation approaches the truth. We attribute the slight dip
+seen ask→0 to small numerical artifact due to mask
+edge effects. The sensitivity is amplified whenρ≃1,
+where the gain scales as
+1
+1−ρ 2 = 1
+(1−ρ)(1 +ρ) ≈ 1
+2(1−ρ) ,
+so small differences inρtranslate into relatively large
+changes in the inferred gain.
+An additional feature is that the brute-force compar-
+ison suggests slightly better improvement for the (2,0)
+and (2,2) blocks than for (0,0) on smaller scales (at the
+level of∼10%), even though the analytic construction
+reuses the (0,0) block.
+Summary of findings
+Across the suite of diagnostics (analytic vs brute-force
+βandρ, correlation-matrix comparisons, diagonal stabil-
+ity checks, and effective simulation gain), the CV method
+behaves consistently with its theoretical design: (i)βand
+ρagree well with brute-force measurements on the scales
+that matter most; (ii)Yclosely matches the structure of
+Xwhile reducing estimator noise; (iii) the predicted and
+measured reduction in variance agree, with large gains
+on large scales and diminishing returns once correlations
+vanish aroundk≃0.2hMpc −1.
+V. OTHER METRICS
+In this section, we supplement the primary results with
+accuracy and consistency checks designed to validate that
+the control variate (CV) does not introduce biases in the
+recovered covariance. In particular, we study the behav-
+ior of the CV-corrected observables in several comple-
+mentary comparisons to confirm agreement with the ref-
+erence predictions within the expected finite-realization
+
+13
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10Variance reduction factor
+Main diag: = 0 × = 0
+Var(X)/Var(Y)
+1/(1 2), 
+1/(1 2), 
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+1st off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+2nd off-diag: = 0 × = 0
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10Variance reduction factor
+Main diag: = 0 × = 2
+Var(X)/Var(Y)
+1/(1 2), 
+1/(1 2), 
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+1st off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+2nd off-diag: = 0 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10Variance reduction factor
+Main diag: = 2 × = 2
+Var(X)/Var(Y)
+1/(1 2), 
+1/(1 2), 
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+1st off-diag: = 2 × = 2
+10 2
+ 10 1
+ 100
+k [h/Mpc]
+0
+2
+4
+6
+8
+10
+2nd off-diag: = 2 × = 2
+FIG. 8. Variance ratio Var[X]/Var[Y] on diagonal slices for the realistic redshift-space, masked survey. The three rows
+correspond to (ℓ, ℓ ′) = (0,0) (top), (0,2) (middle), and (2,2) (bottom). Within each row, the main diagonal, first off-diagonal,
+and second off-diagonal are shown. Three curves are overplotted: the measured variance reduction from brute-force batching
+(green curve), the analytic prediction (1−ρ 2)−1 using the estimated ˆρfrom the batches (blue), and the analytic prediction
+(1−ρ 2)−1 using the analyticρ(black). The analytic prediction from the batches matches the measured variance reduction
+very well, whereas the analyticρslightly underestimates the improvement. The variance ratio∼7 up tok≃0.03hMpc −1,
+decreases to∼5 untilk≃0.1hMpc −1, and approaches unity fork≳0.2hMpc −1. On smaller scales, brute-force indicates a
+modestly stronger improvement for (2,0) and (2,2) than for (0,0) (by about∼10%).
+scatter. We then assess convergence by varying the num-
+ber of mock realizations used to estimate the covariance
+(and related quantities). These tests address how quickly
+the covariance estimate approaches a reference value and
+whether the CV method improves the required num-
+ber of mocks, especially in the precision-matrix–sensitive
+regime.
+We confine the range of analyzed modes to
+0.01hMpc −1 < k <0.2hMpc −1. This choice is moti-
+vated by two considerations. First, it targets precisely
+the scales most relevant for large-scale structure infer-
+ence, where perturbative and analytically controlled ap-
+proaches, such as EFT-based methods, remain well sup-
+ported, and where upcoming surveys including DESI
+(and likely Euclid, PFS,SPHEREx, and LSST) are ex-
+pected to carry substantial constraining power. Second,
+extending the analysis to smaller scales introduces sig-
+nificant finite-sample noise that manifests as numerical
+instabilities in covariance-matrix operations, including
+poor conditioning for matrix inversions and the appear-
+ance of nonphysical behavior (e.g. negative eigenvalues).
+With the above cut, the covariance matrix is correspond-
+ingly more stable and better aligned with the modes ac-
+tually used for cosmological inference. Applying this re-
+striction leaves a total ofN data = 120 data points, corre-
+sponding to 60k-bins and two multipoles,ℓ= 0,2.
+A. Accuracy tests
+Here, we probe whether the control-variate covari-
+ance matrix exhibits only per-element noise reduction,
+
+14
+or whether it also features an improvement in its matrix
+properties. Overall we show that the CV-reduced esti-
+mate converges faster and reproduces the covariance ge-
+ometry (and the corresponding precision-matrix behavior
+entering likelihoods) more accurately than the original
+covariance estimate.
+Throughout this subsection we define the “true” co-
+variance as
+T≡ ˆCtrue,(42)
+obtained from 10,000 independent realizations. The co-
+variance estimated fromN sim realizations is denoted by
+X≡ ˆCoriginal(Nsim), Y≡ ˆCCV(Nsim),(43)
+and we keepN sim = 200 for the main visual comparison
+in Fig. 9. Qualitatively, we have checked that the behav-
+ior is unchanged for a larger number of simulations.
+Fig. 9 shows a comparison betweenYandXrel-
+ative toTin terms of two metrics: relative devia-
+tions (Xij −T ij)/Tij (upper triangle) and (Y ij −T ij)/Tij
+(lower triangle) and an inverse-covariance geometry test
+O≡I−T −1/2 X T −1/2 (upper triangle) andO≡
+I−T −1/2 Y T −1/2. We find that the CV-reduced co-
+varianceYis systematically closer toTthan the original
+covarianceX, with the difference concentrated on large
+scales,k≲0.1h/Mpc, where the covariance is most ex-
+pensive to estimate numerically.
+On large scales (corresponding tok≲0.1h/Mpc in
+the plotted diagonal index), the diagonal deviations of
+XfromTare substantially noisier than those ofY. On
+small scales the two estimates are indistinguishable at
+the level of their mutual agreement.
+Although not shown in the figure we note that while
+XandYagree closely with each other on small scales,
+both can still disagree withTat the∼20% level for the
+top-panel diagnostic. This is not a CV-induced bias as it
+features in the comparison of bothXandYwith T. It is a
+convergence ‘artifact’ of the reference covariance used for
+Tin that particular diagnostic setting. Concretely, when
+we increase the number of mocks used in the estimated
+covariance from 200 to 5,000, the apparent small-scale
+bias is reduced to the∼1% level, while leaving the large-
+scale (noise-driven) behavior unchanged. The large-scale
+deviations are not biased in this sense; rather, they are
+dominated by finite-sample noise, which CV substantially
+reduces.
+The bottom-panel diagnostics are particularly reassur-
+ing for likelihood applications. In theO-matrix test we
+do not see a corresponding bias in the inverse-covariance
+geometry on either large or small scales. Instead, what
+stands out is that the magnitude of any large-scale de-
+viation is larger forXthan forY: the upper triangle
+(originalX) exhibits stronger departure from the refer-
+ence geometry, while the lower triangle (CV-reducedY)
+stays closer to zero deviation. The 1D panel for the di-
+agonal ofOshows the same qualitative story as the top
+panel:Ymatches the reference more closely on large
+scales, while both are similar on small scales.
+FIG. 9. Accuracy comparison between the original covari-
+ance estimateXand the control–variate (CV) covariance es-
+timateY, both forN sim = 200, relative to the reference
+“true” covarianceTconstructed from 10,000 realizations. Top
+panel: relative deviations (X ij −T ij)/Tij (upper triangle)
+and (Y ij −T ij)/Tij (lower triangle). Bottom panel: inverse-
+covariance geometry testO≡I−T −1/2 X T −1/2 (upper tri-
+angle) andO≡I−T −1/2 Y T −1/2 (lower triangle). The re-
+maining 1D panels show the diagonal elements: the blue curve
+corresponds toXand the red curve corresponds toY. The
+shaded bands indicate the indicated fractional levels around
+zero (as shown in the figure). We see that the CV-reduced
+covariance is less noisy and closer to the truth on large scales,
+and recovers the same behavior as the original on small scales.
+We also performed a closure test of the finite-sample
+effect: starting from a high-accuracy reference covariance
+Tfrom a large set of mocks (10,000 realizations), we re-
+peated the covariance estimation with more mocks (1,000
+realizations) for both the original estimatorXand the
+CV estimatorY, and compared the resulting deviations
+relative to the sameTreference. As expected, using
+
+15
+1,000 mocks decreases realization-to-realization bias in
+general. Deviations obtained withYare systematically
+smaller than those obtained withX, indicating that CV
+reduces finite-realization fluctuations without producing
+a detectable systematic bias in the recovered covariance.
+Finally, we tested an eigenvalue-ordering diagnostic
+(which we ultimately did not include as a figure). By
+ordering the eigenvalues of bothXandYand compar-
+ing them to the corresponding reference eigenvalues from
+T, we found that the CV estimator does not bias the re-
+covered eigenvalue spectrum and isless noisythan the
+originalXestimator. This provides further support that
+Ypreserves the matrix behavior relevant for inference
+while improving stability.
+B. Convergence tests
+We now quantify how covariance- and precision-
+sensitive metrics improve as the number of mocks used
+to estimate the covariance increases. We show that the
+CV-reduced covarianceYconverges both faster and more
+accurately toward the correct matrix behavior than the
+original covarianceX.
+The top panel of Fig. 10 demonstrates a substantial
+improvement in the covariance estimate itself. Across
+the range ofN sim explored, the CV-reduced estimateY
+achieves a Frobenius distance toTsmaller than that of
+Xby roughly a factor of 2–3 (approximately constant
+withN sim). This is also shown in Table I alongside other
+matrix comparison metrics.
+The bottom panel focuses on a likelihood-relevant di-
+agnostic based on inverse covariance,
+⟨χ2⟩ ∝Tr(T C −1),(44)
+withC=XorC=Y. We note thatX −1 is not
+well-defined forN sim < N data (the estimated covariance
+is singular or ill-conditioned), so the⟨χ 2⟩curve forX
+takes large values atN sim ∼N data. By contrast, the
+curve forYyields stable values even whenN sim =N data,
+though those values tend to be noisy. This behavior is
+the central evidence behind our shrinkage interpretation:
+CV effectively regularizes the covariance estimate so that
+its inverse has meaningful, convergent behavior earlier in
+Nsim.
+We note that throughout this work we evaluate the ex-
+pected chi-square statistic directly using the Monte-Carlo
+ensemble and the corresponding precision matrices, with-
+out applying a theoretical Wishart–Hartlap correction.
+The Hartlap factor is derived under assumptions that the
+estimated covariance is Wishart-distributed (and hence
+that the corresponding finite-sample inverse bias has a
+simple multiplicative form); these assumptions are not
+strictly satisfied in our masked, control-variate–modified
+covariance estimators. We therefore treat⟨χ 2⟩as an em-
+pirical diagnostic of the finite-realization “projection ef-
+fects” relevant for likelihood inference.
+102 103
+Nsim
+10 1
+X T F/ T F
+Original (X)
+Reduced (Y)
+Nsim = Ndata
+100
+102
+104
+2 Ndata
+Original
+Reduced
+0.5  floor
+Nsim = Ndata
+102 103
+Nsim
+1
+2
+3
+Ratio
+FIG. 10. Convergence of covariance and precision-
+matrix–sensitive diagnostics as a function of the number of
+mock realizationsN sim used to construct the covariance es-
+timate. Top panel: the Frobenius distance between the esti-
+mated covariance (originalXor CV-reducedY) and the ref-
+erence covarianceT(constructed from 10,000 realizations).
+Bottom panel: the averageχ 2 computed from the estimated
+precision matrices, showing⟨χ 2⟩= Tr(T X −1) for the original
+estimator and Tr(T Y −1) for the CV estimator, alongside a
+fractional-difference subpanel comparing the two. The dotted
+horizontal line shows⟨χ 2⟩ −N data <0.5σ(χ 2), which we find
+is achieved atN sim ∼900 with the CV-reduced matrix and at
+Nsim ∼1800 with the non-CV matrix. The original estima-
+torXcannot be reliably inverted for smallN sim (specifically
+whenN sim ∼N data), so it appears noisy in that regime. By
+contrast,Yremains invertible and produces a stable, sensible
+estimate already atN sim =N data, indicating that CV effec-
+tively behaves like a shrinkage estimator.
+In cosmological inference, it is standard to demand
+that parameter-projection effects or biases remain below
+0.5σ(e.g. as adopted in recent DESI inference analy-
+ses). For illustration we adopt an analogous criterion for
+the expectedχ 2 excess:⟨χ 2⟩ −N data <
+p
+Ndata/2. For
+Ndata = 120, we obtain this target atN sim ∼900 with
+the CV-reduced precision, compared toN sim ∼1800 for
+the non-CV estimator, i.e. a factor of∼2 fewer.
+
+16
+Metric 125 250 500 1000 2000
+X Y X Y X Y X Y X Y
+log10||C−T||F 9.12±0.056 8.71±0.0558.97±0.064 8.54±0.0828.81±0.054 8.39±0.0738.64±0.066 8.24±0.0578.48±0.057 8.06±0.059
+log10||C−T||2 8.93±0.11 8.51±0.118.8±0.11 8.36±0.12 8.63±0.1 8.23±0.15 8.49±0.14 8.07±0.1 8.31±0.097 7.87±0.11
+log10||C−1−T−1||F −1.91±0.23−2.99±0.39−3.77±0.034−4.03±0.041−4.22±0.021−4.42±0.024−4.52±0.019−4.67±0.026−4.77±0.02−4.9±0.021
+log10||C−1−T−1||2 −1.99±0.25−3.09±0.46−4.04±0.048−4.28±0.07−4.52±0.043−4.7±0.047−4.82±0.045−4.97±0.071−5.08±0.048−5.22±0.057
+KL divergence×101 5.36±0.13 1.92±0.111.74±0.038 0.771±0.0190.763±0.012 0.342±0.00660.344±0.0049 0.157±0.00250.151±0.0021 0.0696±0.0013
+log-Euclidean×101 1.89±0.058 1.16±0.0690.747±0.013 0.468±0.00960.443±0.006 0.289±0.00370.282±0.0033 0.191±0.00210.182±0.0022 0.125±0.0017
+Bures–Wasserstein×104 1.99±0.12 0.844±0.0551.38±0.086 0.581±0.0410.971±0.047 0.405±0.0250.666±0.041 0.281±0.0150.447±0.024 0.186±0.0098
+TABLE I. Comparison of the original covariance estimateXand the control–variate covariance estimateYacrossN sim. The
+reference “true” covariance isT, constructed from 10,000 independent realizations. In the rows labeled with||C−T||,Cdenotes
+the estimated covariance (eitherXorY). All quantities are computed by comparing each estimator toT, using metrics sensitive
+to both covariance and matrix-geometry structure. In all cases, we find that the CV-reduced covariance matrix is substantially
+closer to the ‘truth’ compared with its non-CV-reduced counterpart.
+ForN sim ≳1000, the CV improvement in⟨χ 2⟩is on the
+order of a factor of 2–3, and the CV-reduced curve tracks
+the more correct behavior more closely at smallN sim ∼
+Ndata. OnceN sim ≫N data, theYestimator outdoesX
+by a factor of 2. This is a substantial improvement that
+leads to more accurate likelihood evaluations when the
+CV method is applied in cosmological inference.
+Table I provides a compact summary of multiple dis-
+tance/divergence metrics [46, 47] comparing both covari-
+ance estimators to the referenceTat differentN sim val-
+ues. HereCin the norms denotes the estimated co-
+variance (eitherXorY), and all comparisons are made
+againstTcomputed from 10,000 realizations. Across the
+listed metrics:
+•∥C−T∥ F : Frobenius distance; overall covariance
+error magnitude.
+•∥C−T∥ 2: Operator norm or ‘spectral error’; worst-
+direction covariance mismatch.
+•∥C −1 −T −1∥F : Frobenius error of precision matri-
+ces.
+•∥C −1 −T −1∥2: Spectral error of precision matrices.
+•KL divergence: Information loss; covari-
+ance/precision discrepancy in KL.
+•log-Euclidean distance; mismatch on the manifold
+of Symmetric Positive Definite (SPD) matrices.
+•Bures–Wasserstein: Optimal transport distance be-
+tween Gaussians.
+Yis noticeably better thanXin all cases. In many
+cases we observe an improvement by about a factor
+of 3 or so and particularly better performance when
+Nsim ∼N data. This overall pattern confirms that CV
+improves covariance-matrix accuracy in a way that is sta-
+ble under a range of matrix distances and information-
+geometric divergences, i.e. it targets exactly the aspects
+of the covariance that influence inference.
+VI. CONCLUSIONS
+We have presented a control-variate method for ac-
+celerating the estimation of power spectrum covariance
+matrices from simulations. By pairing each target
+mock (lognormal in this work) with a cheap Zeldovich-
+approximation realization sharing the same initial condi-
+tions, we exploit the strong correlation between the two
+fields to subtract correlated sample variance from the co-
+variance estimator. A key practical advantage is that
+the Zeldovich field is fast to generate while capturing
+precisely the correlations that dominate the covariance
+uncertainty on the most challenging, large scales.
+The central technical contribution of this work is a
+fully analytic expression for the optimal control-variate
+coefficientβ(k, ℓ;k ′, ℓ′), derived under the disconnected
+Gaussian approximation [Eq. (30)]. The resultingβde-
+pends only on the mean auto- and cross-power spectra
+of the target and control fields and the number of modes
+perk-bin, and is therefore inexpensive and numerically
+stable to evaluate. We validate the analyticβagainst
+brute-force estimates from simulation ensembles and find
+excellent agreement, confirming that the expression cap-
+tures the correct dependence on the underlying two-point
+statistics in a noise-free way.
+In addition, we derive an analytic expression for the
+corresponding covariance-variance reduction correlation
+ρ(k, ℓ;k ′, ℓ′). For the monopole case,ρtakes the par-
+ticularly simple formρ(k, k ′) =r 2(k)r 2(k′), wherer(k)
+is the standard cross-correlation coefficient between the
+target field and the Zeldovich control field. This result
+is important because it implies that the expected perfor-
+mance of the control-variate covariance estimator can be
+anticipated directly fromr(k) measured from the cross
+correlation, without requiring additional covariance-level
+sampling. We validate this prediction against brute-force
+computation and find that the analytic expression repro-
+duces the trend well (with a small systematic underpre-
+diction at the level shown in Fig. 8).
+Becauseρ ij =r 2(ki)r 2(kj) factorizes in this way, we
+can compare directly to the analogous control-variate
+performance in the power spectrum itself, where the rel-
+evant factor isr 2. Consequently, the covariance perfor-
+
+17
+mance is only about a factor of two “worse” than the
+na¨ ıve power-spectrum expectation, rather than deteri-
+orating dramatically at the covariance level, explaining
+why the covariance inherits the strong large-scale corre-
+lation efficiently.
+Using lognormal mocks withr(k) closely matching that
+of realistic DESI LRG-like samples, we find that the
+control-variate estimator reduces the variance of the co-
+variance matrix by approximately an order of magnitude
+on the most challenging large scales (k≲0.05hMpc −1),
+precisely where accurate covariance estimation is most
+difficult. In practical terms, this corresponds to an ef-
+fective simulation-number gain of∼10 for the same co-
+variance quality, and can be confirmed visually by the
+substantially reduced covariance noise in the CV-reduced
+estimate.
+Finally, we compared a comprehensive set of ad-
+ditional matrix-distance and likelihood-sensitivity met-
+rics between the CV-reduced covariance and the high-
+accuracy “truth” covariance, as well as between the CV-
+reduced and non-reduced estimators. Across these met-
+rics we consistently find that the CV-reduced covariance
+is closer toTthan the original estimate by about a fac-
+tor of∼3 in accuracy, while also converging faster as
+Nsim increases. Notably, in the regime whereN sim ap-
+proaches the number of data points, the CV-reduced ma-
+trices remain well-conditioned and invertible, i.e. they ef-
+fectively behave like a shrinkage estimator, yielding sta-
+ble precision-matrix behavior where the original estima-
+tor becomes ill-conditioned.
+Our main results can be summarized as follows:
+1. The Zeldovich approximation provides an ex-
+tremely effective control variate: it is cheap to gen-
+erate and highly accurate on the same large scales
+where covariance estimation is most numerically
+challenging.
+2. We derive an analytic expression for the opti-
+mal control-variate coefficientβ(k, ℓ;k ′, ℓ′), which
+is smooth and inexpensive; brute-force validation
+shows excellent agreement with the analytic pre-
+diction.
+3. We derive an analytic expression forρ(k, ℓ;k ′, ℓ′),
+which depends only on the cross-correlation be-
+tween the target field and the Zeldovich control
+field; in the monopole caseρ(k, k ′) =r 2(k)r2(k′).
+We validate this dependence against brute-force
+computations (with a small systematic underpre-
+diction visible in one figure).
+4. Despite the covariance involving products of
+fields, the performance penalty relative to power-
+spectrum control variates is modest: becauseρfac-
+torizes asr 2(ki)r2(kj), the resulting covariance per-
+formance is only about a factor of two worse than
+the naiver 2 expectation.
+5. For DESI-like masked redshift-space lognormal
+mocks, the CV-reduced covariance achieves an
+O(10) variance-reduction gain on the largest scales,
+corresponding to an effective∼10 increase in the
+number of simulations needed for comparable co-
+variance accuracy.
+6. Across a suite of covariance and precision-matrix-
+sensitive metrics, the CV-reduced estimate is con-
+sistently closer to the reference “truth” (by about
+a factor of∼3) and converges faster; whenN sim is
+close toN data, CV behaves like a shrinkage estima-
+tor and prevents the onset of ill-conditioning.
+Looking ahead, several extensions are natural. First,
+the method should be applied to maximally realistic
+mocks of the large-scale structure (e.g., DESI,Euclid,
+PFS, LSST,SPHEREx) paired with appropriate mask-
+ing to construct a variance-reduced covariance matrix for
+a given galaxy sample. Second, one could imagine find-
+ing a more strongly correlated control variate (e.g. us-
+ing 2LPT instead of the Zeldovich approximation), which
+could yield an even larger numerical gain. Third, extend-
+ing the framework to the covariance matrix of marked
+power spectra, the galaxy bispectrum, or other summary
+statistics could be especially valuable, though deriving an
+analyticβwould require higher-point functions. While
+our focus has been on 3D galaxy surveys, there is no
+reason why it cannot be applied to line intensity map-
+ping surveys, imaging surveys or cosmic shear surveys
+with minimal changes. Finally, since the control variate
+could in principle be applied at the field level rather than
+only at the summary-statistic level, combining CV with
+field-level estimators may offer further gains. In addition,
+combining the control-variate approach with shrinkage
+estimators or analytic templates [23–28] could yield im-
+provements in regimes where none of these methods alone
+is sufficient.
+ACKNOWLEDGMENTS
+We thank Stephen Chen, Joe DeRose, Jiamin Hou,
+and Nikhil Padmanabhan for useful discussions. MW
+was supported by the DOE and NASA. This research
+was supported in part by grant NSF PHY-2309135 to the
+Kavli Institute for Theoretical Physics (KITP). The ideas
+leading to this work were initiated at the Aspen Center
+for Physics, which is supported by National Science Foun-
+dation grant PHY-2210452. This research used resources
+of the National Energy Research Scientific Computing
+Center (NERSC), a Department of Energy User Facility.
+[1] S. Dodelson and M. D. Schneider, Phys. Rev. D88,
+063537 (2013), 1304.2593.
+[2] J. Hartlap, P. Simon, and P. Schneider, A&A464, 399
+
+18
+(2007), astro-ph/0608064.
+[3] A. Taylor, B. Joachimi, and T. Kitching, MNRAS432,
+1928 (2013), 1212.4359.
+[4] W. J. Percival, A. J. Ross, A. G. S´ anchez, L. Samushia,
+A. Burden, R. Crittenden, A. J. Cuesta, M. V. Magana,
+M. Manera, F. Beutler, et al., MNRAS439, 2531 (2014),
+1312.4841.
+[5] E. Sellentin and A. F. Heavens, MNRAS456, L132
+(2016), 1511.05969.
+[6] DESI Collaboration, A. Aghamousa, J. Aguilar,
+S. Ahlen, S. Alam, L. E. Allen, C. Allende Prieto,
+J. Annis, S. Bailey, C. Balland, et al., arXiv e-prints
+arXiv:1611.00036 (2016), 1611.00036.
+[7] Euclid Collaboration, Y. Mellier, Abdurro’uf, J. A.
+Acevedo Barroso, A. Ach´ ucarro, J. Adamek, R. Adam,
+G. E. Addison, N. Aghanim, M. Aguena, et al., A&A
+697, A1 (2025), 2405.13491.
+[8] O. Dor´ e, J. Bock, M. Ashby, P. Capak, A. Cooray, R. de
+Putter, T. Eifler, N. Flagey, Y. Gong, S. Habib, et al.,
+arXiv e-prints arXiv:1412.4872 (2014), 1412.4872.
+[9] M. Takada, R. S. Ellis, M. Chiba, J. E. Greene, H. Ai-
+hara, N. Arimoto, K. Bundy, J. Cohen, O. Dor´ e,
+G. Graves, et al., PASJ66, R1 (2014), 1206.0737.
+[10] LSST Science Collaboration, P. A. Abell, J. Allison, S. F.
+Anderson, J. R. Andrew, J. R. P. Angel, L. Armus, D. Ar-
+nett, S. J. Asztalos, T. S. Axelrod, et al., arXiv e-prints
+arXiv:0912.0201 (2009), 0912.0201.
+[11] R. Scoccimarro, M. Zaldarriaga, and L. Hui, ApJ527, 1
+(1999), astro-ph/9901099.
+[12] A. Meiksin and M. White, MNRAS308, 1179 (1999),
+astro-ph/9812129.
+[13] A. Barreira and F. Schmidt, J. Cosmology Astropart.
+Phys.2017, 051 (2017), 1705.01092.
+[14] D. Wadekar and R. Scoccimarro, Phys. Rev. D102,
+123517 (2020), 1910.02914.
+[15] A. Taruya, T. Nishimichi, and D. Jeong, Phys. Rev. D
+103, 023501 (2021), 2007.05504.
+[16] A. Cooray and R. Sheth, Phys. Rep.372, 1 (2002), astro-
+ph/0206508.
+[17] F. Lacasa, A&A615, A1 (2018), 1711.07372.
+[18] R. Takahashi, N. Yoshida, M. Takada, T. Matsubara,
+N. Sugiyama, I. Kayo, A. J. Nishizawa, T. Nishimichi,
+S. Saito, and A. Taruya, ApJ700, 479 (2009), 0902.0371.
+[19] L. Blot, M. Crocce, E. Sefusatti, M. Lippich, A. G.
+S´ anchez, M. Colavincenzo, P. Monaco, M. A. Alvarez,
+A. Agrawal, S. Avila, et al., MNRAS485, 2806 (2019),
+1806.09497.
+[20] M. Lippich, A. G. S´ anchez, M. Colavincenzo, E. Se-
+fusatti, P. Monaco, L. Blot, M. Crocce, M. A. Alvarez,
+A. Agrawal, S. Avila, et al., MNRAS482, 1786 (2019),
+1806.09477.
+[21] P. Norberg, C. M. Baugh, E. Gazta˜ naga, and D. J. Cro-
+ton, MNRAS396, 19 (2009), 0810.1885.
+[22] F. G. Mohammad and W. J. Percival, MNRAS514, 1289
+(2022), 2109.07071.
+[23] A. C. Pope and I. Szapudi, MNRAS389, 766 (2008),
+0711.2509.
+[24] D. J. Paz and A. G. S´ anchez, MNRAS454, 4326 (2015),
+1508.03162.
+[25] N. Padmanabhan, M. White, H. H. Zhou, and
+R. O’Connell, MNRAS460, 1567 (2016), 1512.01241.
+[26] B. Joachimi, MNRAS466, L83 (2017), 1612.00752.
+[27] O. Friedrich and T. Eifler, MNRAS473, 4150 (2018),
+1703.07786.
+[28] D. Wadekar, M. M. Ivanov, and R. Scoccimarro,
+Phys. Rev. D102, 123521 (2020), 2009.00622.
+[29] S. M. Ross,Simulation(Academic Press, Inc., USA,
+2002), 3rd ed., ISBN 0125980531.
+[30] N. Chartier, B. Wandelt, Y. Akrami, and F. Villaescusa-
+Navarro, MNRAS503, 1897 (2021), 2009.08970.
+[31] N. Chartier and B. D. Wandelt, MNRAS509, 2220
+(2022), 2106.11718.
+[32] N. Chartier and B. D. Wandelt, MNRAS515, 1296
+(2022), 2204.03070.
+[33] N. Kokron, S.-F. Chen, M. White, J. DeRose, and
+M. Maus, J. Cosmology Astropart. Phys.2022, 059
+(2022), 2205.15327.
+[34] J. DeRose, S.-F. Chen, N. Kokron, and M. White, J. Cos-
+mology Astropart. Phys.2023, 008 (2023), 2210.14239.
+[35] N. Kokron and S.-F. Chen, arXiv e-prints
+arXiv:2510.07375 (2025), 2510.07375.
+[36] B. Hadzhiyska, M. J. White, X. Chen, L. H. Garri-
+son, J. DeRose, N. Padmanabhan, C. Garcia-Quintero,
+J. Mena-Fern´ andez, S.-F. Chen, H.-J. Seo, et al., The
+Open Journal of Astrophysics6, 38 (2023), 2308.12343.
+[37] A. Bartlett, J. DeRose, and M. White, J. Cosmology As-
+tropart. Phys.2026, 078 (2026), 2510.13962.
+[38] D. Blas, J. Lesgourgues, and T. Tram, J. Cosmology As-
+tropart. Phys.2011, 034 (2011), 1104.2933.
+[39] Y. B. Zel’dovich, A&A5, 84 (1970).
+[40] K. Yamamoto, ApJ595, 577 (2003), astro-ph/0208139.
+[41] P. Coles and B. Jones, MNRAS248, 1 (1991).
+[42] R. Zhou, B. Dey, J. A. Newman, D. J. Eisenstein,
+K. Dawson, S. Bailey, A. Berti, J. Guy, T.-W. Lan,
+H. Zou, et al., AJ165, 58 (2023), 2208.08515.
+[43] R. Zhou, S. Ferraro, M. White, J. DeRose, N. Sailer,
+J. Aguilar, S. Ahlen, S. Bailey, D. Brooks, T. Claybaugh,
+et al., J. Cosmology Astropart. Phys.2023, 097 (2023),
+2309.06443.
+[44] R. W. Hockney and J. W. Eastwood,Computer Simula-
+tion Using Particles(1981).
+[45] H. A. Feldman, N. Kaiser, and J. A. Peacock, ApJ426,
+23 (1994), astro-ph/9304022.
+[46] R. Bhatia,Positive Definite Matrices, Princeton Series
+in Applied Mathematics (Princeton University Press,
+2009), ISBN 9781400827787, URLhttps://books.
+google.com/books?id=-KIFglY18nYC.
+[47] R. A. Horn and C. R. Johnson,Matrix Analysis(Cam-
+bridge University Press, Cambridge, UK, 2012), 2nd ed.,
+ISBN 9780521839402.

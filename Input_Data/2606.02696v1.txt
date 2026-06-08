@@ -1,0 +1,952 @@
+Title: HERMES: HiERarchical Modelling for Exoplanet Science
+Authors: Wasi M. F. Naqvi, Nicolas B. Cowan
+Published: 2026-06-01
+Categories: astro-ph.EP, astro-ph.IM
+
+RASTI000, 1–??(2026) Preprint 3 June 2026 Compiled using rasti L ATEX style file v3.0
+HERMES: HiERarchical Modelling for Exoplanet Science
+Wasi M. F. Naqvi 1 and Nicolas B. Cowan 1,2
+1Department of Physics, McGill University, 3600 rue University, Montr´ eal QC H3A 2T8, Canada
+2Department of Earth & Planetary Sciences, McGill University, 3450 rue University, Montr´ eal, QC H3A 0E8, Canada
+3 June 2026
+ABSTRACT
+ESA’s Ariel Space Mission will characterise the atmospheres of∼1000 exoplanets to quantify population-level trends.
+We present HERMES (HiERarchical Modelling for Exoplanet Science), a multidimensional Bayesian framework that
+probes population-level correlations across multiple axes of diversity. The specific use case we present is the multidi-
+mensional relation between stellar metallicity, planetary mass, and atmospheric metallicity. Starting from the Ariel
+Mission Candidate Sample (Edwards & Tinetti 2022), we select confirmed planets with available masses and stellar
+metallicity, inject plausible multidimensional trends and demonstrate successful parameter recovery. Simulated sur-
+veys are generated with a variety of leverage and sample size, in the presence of intrinsic astrophysical scatter and
+measurement noise. By fitting independent Bayesian models to each survey, we confirm that survey leverage remains a
+reliable predictor of trend precision even in multiple dimensions and in the presence of intrinsic astrophysical scatter.
+For an Ariel Tier 2 transit survey of at least 400 planets, HERMES robustly recovers the correlation between stellar
+and planetary metallicity despite intrinsic scatter in planetary abundances as large as 1.2 dex. These results establish
+HERMES as a practical tool for survey design and science yield forecasting in preparation for Ariel and other surveys
+probing population-level trends.
+Key words:Data methods – Exoplanetary atmospheres – Ariel Space Mission – Mission target selection
+1 INTRODUCTION
+Exoplanet science has entered an era of large-scale com-
+parative atmospheric characterisation. Where early studies
+demonstrated that individual planetary atmospheres could
+be chemically probed through transmission and emission
+spectroscopy (Charbonneau et al. 2002, 2005), the frontier
+is shifting to understanding these atmospheresstatistically,
+seeking the population-level trends that encode how plan-
+ets form and evolve. This shift builds on earlier population-
+level atmospheric work, from the statistical interpretation of
+Spitzer thermal phase variations by Cowan & Agol (2011) to
+the comparative Hubble transmission-spectral survey of hot
+Jupiters by Sing et al. (2016).
+ESA’s Ariel mission will be the first space-based facility
+purpose-built for this goal: over a four-year primary mission
+it will deliver 0.55–7.8µm transmission and emission spectra
+for approximately 1000 exoplanets (Tinetti et al. 2018, 2021).
+This will provide an ensemble for rigorous empirical tests of
+physical trends across the exoplanet population. Among the
+most fundamental of these trends is the relationship between
+atmospheric metallicity and planetary mass. In the solar sys-
+tem, the four giant planets follow a clear inverse pattern:
+more massive planets are less enriched in heavy elements
+relative to hydrogen, with metallicities ranging from∼3–6
+times solar for Jupiter to∼70–100 times solar for Uranus and
+Neptune (Guillot 2005). This is broadly understood within
+the core-accretion paradigm, in which more massive plan-
+ets accrete proportionally more hydrogen and helium dur-
+ing runaway gas accretion. A central open question in plane-
+tary science is whether this inverse trend persists across the
+diverse exoplanet population, spanning hot Jupiters, warm
+Neptunes, and sub-Neptunes in a wide range of orbits.
+Progress on this question has come primarily from trans-
+mission spectroscopy of close-in exoplanets, whose high tem-
+peratures keep water in the gas phase and accessible to re-
+mote sensing (e.g. Madhusudhan et al. 2011; Kreidberg et al.
+2014). Kreidberg et al. (2014) provided one of the first pre-
+cise water abundance measurements for an exoplanet, find-
+ing the 2M J hot Jupiter WASP-43b has a water content of
+0.4–3.5 times solar at 1σconfidence, a metallicity consistent
+with an extrapolation of the solar system’s inverse trend to
+higher mass. Building on such individual benchmarks, Wel-
+banks et al. (2019) used the Hubble and Spitzer Space Tele-
+scopes for a homogeneous population-level retrieval study,
+measuring H2O, Na, and K abundances for 19 transiting ex-
+oplanets spanning cool mini-Neptunes to hot Jupiters.
+Whether the mass–metallicity relation reflects true bulk
+metallicity or is heavily influenced by high carbon-to-oxygen
+ratios, clouds, or formation history remains actively debated
+(Ikoma & Kobayashi 2025), and more recent reanalyses with
+updated stellar abundance measurements have found the sta-
+tistical evidence for a mass slope to be weaker than origi-
+nally reported (Sun et al. 2024), highlighting the sensitivity
+of current inferences to sample size and data homogeneity. A
+©2026 The Authors
+arXiv:2606.02696v1  [astro-ph.EP]  1 Jun 2026
+
+2W. M. F. Naqvi & N. B. Cowan
+complementary dimension is the role of host-star metallicity:
+because protoplanetary disk composition broadly tracks stel-
+lar composition, one expects the reservoir of heavy elements
+available for planetary accretion to scale with [Fe/H] ⋆, leav-
+ing a potentially detectable imprint in planetary atmospheric
+abundances.
+Even at fixed planetary mass and stellar abundance, atmo-
+spheric metallicities are not necessarily deterministic: planets
+may differ in accretion history, migration pathway, envelope
+loss, cloud opacity, atmospheric mixing, and elemental abun-
+dance ratios. This intrinsic astrophysical scatter can broaden
+the observed mass–metallicity relation beyond measurement
+uncertainty alone (Swain et al. 2024). Disentangling a stellar
+metallicity signal from the planetary mass trend and from in-
+trinsic astrophysical scatter demands both the large samples
+that Ariel will provide and statistical tools capable of han-
+dling them along multiple axes of diversity simultaneously.
+Hierarchical Bayesian frameworks are the natural tool for
+population-level inference: jointly inferring individual plan-
+etary properties and the hyperparameters that describe the
+underlying trend while propagating all sources of uncertainty
+(Keating & Cowan 2022; Lustig-Yaeger et al. 2022). Applied
+to Ariel-scale samples, such models can separate intrinsic
+scatter from measurement noise and deliver calibrated poste-
+rior distributions for the slopes and intercepts of population-
+level relations.
+In this paper we present HiERarchical Modelling for Exo-
+planet Science (HERMES), a multidimensional Bayesian hi-
+erarchical framework that extends the standard 2D mass–
+metallicity model to three dimensions, simultaneously infer-
+ring how atmospheric metallicity scales with both planetary
+mass and host-star metallicity. Starting from the Ariel MCS,
+we inject physically motivated trends, construct mock sur-
+veys across a range of sample sizes and mass-leverage values,
+and demonstrate robust parameter recovery. We then quan-
+tify how increasing intrinsic astrophysical scatter limits the
+ability of the 3D model to detect the stellar–planetary metal-
+licity correlation and identify the survey designs for which
+this distinction remains possible.
+The paper is structured as follows. Section 2 describes the
+data, mock survey construction, leverage metrics, and the
+hierarchical model. Section 3.1 presents posterior reconstruc-
+tions and z-score calibration. Sections 3.2 and 4 quantify the
+leverage dependence of parameter precision and the recovery
+of the stellar–planetary metallicity correlation, respectively.
+Section 5 summarizes our results and discusses implications
+for Ariel target selection and future surveys.
+2 METHODS
+2.1 Data and Survey Design
+The Ariel Mission Candidate Sample (MCS) (Edwards &
+Tinetti 2022) is a curated target list of planets suitable for
+Ariel observations, selected using signal-to-noise estimates
+from ArielRad (Mugnai et al. 2020). We use the MCS re-
+lease dated 11 May 2026 (private communication from B.
+Edwards; Ariel Mission Consortium 2025). Although the full
+catalogue contains 977 confirmed planets, we restrict the
+analysis to systems with available host-star metallicity mea-
+surements, [Fe/H]⋆, and physically valid planetary-mass un-
+certainty bounds, yielding a final sample of 858 planets. For
+each planet, we use three quantities: the logarithmic plane-
+tary mass, log(M/MJ); the host-star metallicity, [Fe/H]⋆, re-
+ported with asymmetric uncertainties; and the atmospheric
+water abundance (used here as a proxy for planetary atmo-
+spheric metallicity), logX H2O, which is treated as the re-
+sponse variable. We assign a fixed symmetric uncertainty
+of 0.2 dex to logX H2O as an idealized high-quality space-
+based retrieval precision. This value is motivated by Tier 2
+retrieval forecasts for suitable giant-planet targets (D’Aoust
+et al. 2025), and is consistent with recent Ariel information-
+content studies (Radica et al. 2026).
+We inject a physically motivated mass–metallicity trend,
+following Welbanks et al. (2019), with an additional host-star
+metallicity contribution and intrinsic astrophysical scatter:
+logX H2O =−1.09 log(M/M J)−0.95 + [Fe/H]⋆ +N(0,0.53).
+(1)
+Recovering this injected relation tests whether the hierarchi-
+cal framework can infer the underlying dependence of atmo-
+spheric metallicity on planetary mass and host-star metallic-
+ity.
+2.2 Mock Survey Generation: Defining Nested Mass
+Classes
+To investigate how survey design affects the recovery of the
+underlying mass–metallicity relation, we generated mock sur-
+veys using a nested mass-class scheme based on quartiles of
+log(M/MJ) (Figure 1 and Table 1). Here,M25,M 50, andM 75
+denote the 25th, 50th, and 75th percentiles of the mass distri-
+bution in the filtered MCS. The four nested mass classes, S1
+through S4, are constructed by progressively removing plan-
+ets from the parent sample. This construction progressively
+removes the lower-mass portion of the sample while retaining
+the higher-mass tail, providing nested subsamples.
+Table 1: Definition of the nested mass classes used to generate
+mock surveys. Quartiles are computed from the full filtered
+catalogue in log(M/M J).
+Class Selection criterion Total Number of planets
+S1 Full catalogue 858
+S2 log(M/M J)⩾M 25 644
+S3 log(M/M J)⩾M 50 429
+S4 log(M/M J)⩾M 75 215
+For each mass range, mock surveys were drawn at sample
+sizes
+N∈ {50,80,150,200,250,350,400,500,600},
+with five independent realizations generated for every class–
+size combination. All surveys were sampled without replace-
+ment from their respective parent class, yielding a total of
+4×9×5 = 180 mock surveys.
+2.3 Survey Leverage
+Survey leverage along a single axis of diversity,x, is defined
+by Cowan & Coull-Neveu (2025) as the quadrature sum of
+RASTI000, 1–??(2026)
+
+HERMES3
+Figure 1.Nested mass-class scheme S1–S4. Each successive class
+removes the lowest-mass quartile, reducing mass leverage while
+preserving the high-mass tail. Surveys are drawn from each class
+independently.
+Figure 2.Survey design space: the standard deviation in plane-
+tary mass,σ M, versus sample size,N. Each point represents one
+survey, with colours indicating mass class (S1–S4). Contours show
+curves of constant mass leverage,L mass ∝
+√
+N σ M. As expected,
+S1 surveys span the widest mass range and achieve the highest
+leverage at everyN.
+deviations around the sample mean, ¯x:
+L=
+vuut
+NX
+i=1
+(xi −¯x)2.(2)
+Since we consider an axis of diversity with significant uncer-
+tainty, stellar metallicity, we introducenormalizedleverage:
+Lp =
+vuut
+NX
+i=1
+(mi −¯m)2
+σ2
+m,i
+, L s =
+vuut
+NX
+i=1
+(si −¯s)2
+σ2
+s,i
+,(3)
+whereσ m,i andσ s,i are the uncertainties in planetary mass
+and stellar metallicity in each planet respectively.
+Figure 2 shows the resultingN–σ M design space, illustrat-
+ing how survey class and sample size jointly determine the
+available leverage. Moving from S1 to S4 progressively re-
+moves the low-mass end of the population and therefore de-
+creases the mass leverage available to constrain the planetary
+mass–metallicity trend.
+2.4 The Hierarchical Model
+After generating mock Ariel Tier 2 transit surveys, we re-
+trieve population trends with a hierarchical model. We model
+the planetary atmospheric metallicity in log space,y i =
+logX H2O,i, as a linear function of centered planetary mass
+mi and centered host-star metallicitys i:
+yi =α p +β p mc,i +β s sc,i +ϵ int,i,(4)
+where
+mc,i = log Mi
+MJ
+− log Mi
+MJ
+, s c,i =s true,i − sobs.
+The prior on the interceptα p is centered on the mean atmo-
+spheric metallicity of the survey, with uncertainty decreasing
+with sample size:α p ∼ N(¯y, σy/
+√
+N
+
+.The prior on the plan-
+etary mass–atmospheric metallicity slope,β p , is centered on
+zero, reflecting no preference for either a positive or nega-
+tive mass–metallicity trend:β p ∼ N(0,∆y/∆m
+
+.The prior
+on the stellar-metallicity slopeβ s is centered on unity, as-
+suming a one-to-one scaling between stellar and planetary
+metallicity:β s ∼ N(1,∆y/∆s
+
+.This reflects the expecta-
+tion that planets forming in metal-rich disks have access to a
+larger reservoir of heavy elements, which may increase their
+atmospheric enrichment, while allowing data to determine
+the strength of the stellar-metallicity dependence (Guillot
+et al. 2006; Thorngren et al. 2016). The intrinsic-scatter scale
+εfollows a Half-normal prior,ε∼HalfNormal(σ y),which
+controls the amplitude of the planet-level intrinsic scatter
+in atmospheric metallicity:ϵ int,i ∼ N(0, ε).Here, ¯yandσ y
+are the mean and standard deviation ofywithin a sur-
+vey, while ∆y, ∆m, and ∆sare the corresponding spans
+(max minus min). Host-star metallicity has sizeable mea-
+surement uncertainty, so treating the observed values obs,i
+as exact would introduce errors-in-variables bias. We fol-
+low the standard Bayesian treatment for uncertain covari-
+ates (Kelly 2007; Hogg et al. 2010): the measured stellar
+metallicity is treated as a noisy observation of an under-
+lying latent value, rather than as the predictor itself. This
+matters because ignoring measurement error biases slope es-
+timates toward zero. The response uncertainty and intrin-
+sic astrophysical scatter are handled separately in the like-
+lihood, so the model distinguishes measurement noise from
+population-level planet-to-planet diversity. We introduce a
+planet-by-planet latent variable,s true,i, representing the un-
+observed true stellar metallicity:s true,i ∼ N
+ 
+sobs,i, σs,meas,i
+
+.
+The MCS reports asymmetric upper and lower uncertain-
+ties, which we approximate with a symmetric Gaussian error
+scale,σ s,meas,i = 1
+2 (|elo,i|+|e hi,i|).The centered stellar pre-
+dictor is thens c,i =s true,i − sobs,where sobs = 1
+N
+P
+i sobs,i.
+Thus, the model propagates stellar-metallicity measurement
+uncertainty through the posterior while keeping the intercept
+anchored to the observed survey centroid.
+The likelihood for the observed atmospheric metallicity is
+yi ∼ N
+ 
+µi, σobs,i
+
+, µ i =α p +β p mc,i +β s sc,i.(5)
+The total scatter entering the likelihood is the quadrature
+sum of measurement noise and intrinsic astrophysical scatter:
+σobs,i =
+q
+σ2
+y,meas,i +ε 2.(6)
+Asε→0, the likelihood is dominated by measurement uncer-
+RASTI000, 1–??(2026)
+
+4W. M. F. Naqvi & N. B. Cowan
+tainty alone; asε≫σ y,meas,i, intrinsic astrophysical scatter
+dominates.
+In the baseline implementation, planetary mass enters the
+model through logM i, without explicitly propagating mass
+uncertainties. This pragmatic simplification is appropriate
+for the confirmed planets considered here, where typical un-
+certainties in planetary mass are much smaller than the
+population-level variance in planetary mass.
+2.5 Model Comparison and Inference
+We compare two model variants. The baseline3D Modelis
+denoted by Equation 4 while the reduced2D Modelis
+y=α p +β pmc +ϵ int.(7)
+In the 2D Model, the dependence of atmospheric metallicity
+on stellar metallicity is not modelled explicitly and there-
+fore contributes to the astrophysical variance, inflating the
+inferred intrinsic scatter scaleεrelative to the 3D Model. In
+other words, when a real stellar trend is present, the omit-
+ted termβ ssc is absorbed into the residual scatter. In this
+framework,εabsorbs both genuine planet-to-planet diversity
+at fixed mass and stellar metallicity, and any unmodelled de-
+pendence on other axes of diversity, such as equilibrium tem-
+perature, irradiation history, orbital separation, age, cloud
+properties, C/O ratio, or formation location. Thus, a large
+inferredεmay indicate either true astrophysical randomness
+or an incomplete population model that needs to factor in an
+extra axis of diversity. In this sense, intrinsic scatter is also
+a diagnostic: if adding a new physical predictor reducesε,
+that predictor explains part of the population-level diversity.
+Thus, comparing the 2D and 3D Models tests whether the
+framework can distinguish a genuine stellar–planetary metal-
+licity correlation from intrinsic astrophysical scatter.
+We sample the posterior using the No-U-Turn Sampler
+(NUTS) as implemented in NumPyro/JAX (Hoffman & Gel-
+man 2011). For each fit, we run four Markov chain Monte
+Carlo (MCMC) simulations, each with 800 warmup steps and
+800 posterior draws adoptingtarget accept= 0.9. Each of
+the 180 mock surveys is fit under both model variants and
+repeated across three independent MCMC seeds (321, 42,
+7), yielding a total of 1080 MCMC fits. Posterior summaries
+are reported as the mean, standard deviation, and 16th/84th
+percentile credible intervals for the intercept, slopes, and in-
+trinsic scatter scale:{α p, βp, βs, ε}.
+3 RESULTS
+3.1 Hierarchical Model Survey Fits
+We generate mock surveys as defined in Section 2.2 and run
+the 3D HERMES model on each survey. Figure 3 shows pos-
+terior reconstructions for an example survey in the S4 mass
+class. As expected, S1 class surveys have the highest lever-
+age and the tightest credible bands, while S4 have the lowest
+leverage and the widest bands. All surveys successfully re-
+cover the injected trends, showing that HERMES performs
+well across the full range of survey geometries.
+3.1.1 Z-Score Calibration
+To assess posterior calibration, we define azscore for each
+parameterθ∈ {α p, βp, βs, ε}and surveykas
+z(k)
+θ =
+ˆθ(k) −θ (k)
+true
+σ(k)
+θ
+,(8)
+where ˆθ(k) is the posterior mean,σ (k)
+θ is the posterior stan-
+dard deviation, andθ (k)
+true is the “true” value per surveyk,
+taken from the population-level fit obtained on the full MCS.
+For the slope and scatter parameters, this reference is the
+same for every survey. The interceptα p requires a survey-
+specific reference because it represents the average atmo-
+spheric metallicity at the mean planetary mass and mean
+stellar metallicity of a given survey; since the S2–S4 classes
+progressively remove the low-mass planets, their covariate
+means differ substantially from the full catalogue, and the in-
+tercept is expected to shift between mass classes rather than
+being recovered around a single value. We therefore project
+the population-level fit onto the covariate means of each sur-
+vey to obtainα (k)
+p,true, so that the same calibration applies
+across all mass classes. If the posteriors are well calibrated,
+all resulting z-scores should approximately follow a Gaus-
+sian distribution, with|z|<1 for roughly 68% of surveys
+and|z|<2 for roughly 95% of surveys. Table 2 summarizes
+the per-parameter model performance, including thez-score
+statistics, across all surveys. The slope parameters,β p and
+βs, the intrinsic-scatter scale,ε, and the intercept,α p, are
+all well calibrated: theirz-score standard deviation, SD(z),
+is close to unity, and their coverage fractions are near the
+expected Gaussian values.
+3.2 Posterior Uncertainty versus Leverage and
+Survey size
+For ideal linear regression, the uncertainty on a slope pa-
+rameter is expected to scale inversely with the survey lever-
+age along the that specific dimension of diversity (Cowan &
+Coull-Neveu 2025),
+σβ ∝ 1
+L .
+In practice, this idealized scaling is modified by intrinsic as-
+trophysical scatter and measurement uncertainty. To quan-
+tify the empirical scaling in the simulations, we fit power-law
+relations of the form
+σθ =a L γ
+x,
+and report the fitted exponentγand its uncertainty for each
+axis of diversity,x. This allows us to test whether leverage re-
+mains the dominant control on slope precision once the prob-
+lem is extended from a single predictor to a multidimensional
+hierarchical model.
+Figure 4 showsσ βp as a function of bothL p andL s for
+surveys withN= 80 andN= 250 planets. As expected,
+Lp is the more reliable predictor of the mass-slope preci-
+sion: surveys with larger mass leverage yield smaller poste-
+rior uncertainty onβ p. This confirms that the precision of
+the planetary mass–metallicity slope is governed primarily
+by the lever arm in planetary mass. The scaling relation is
+consistent across sample sizes: increasingNlowers the overall
+uncertainty floor, but preserves the leverage dependence.
+RASTI000, 1–??(2026)
+
+HERMES5
+T able 2.Per-parameter summary statistics forz θ across all surveys.
+Parameter Description mean(z) SD(z) median(z) max|z| |z|<1|z|<2
+αp Average atmospheric metallicity across the
+population of planets.
+−0.003 1.093−0.034 2.59 65.5% 91.0%
+βp Slope of atmospheric metallicity with plan-
+etary mass, log(M/M J).
+−0.607 1.013−0.786 2.63 55.2% 93.1%
+βs Slope of atmospheric metallicity with host-
+star metallicity.
+−0.011 0.853 0.059 2.48 74.5% 98.6%
+εIntrinsic astrophysical scatter in atmo-
+spheric metallicity.
+0.021 0.919 0.035 3.45 73.8% 96.6%
+Note.F or each parameterθ,z θ is computed separately for every mock survey using Equation 8. The slope and scatter parameters use the common
+full-MCS reference. The mean, standard deviation, and median of the z-scores, as well as the largest absolute z-score, max|z|, across the survey ensemble
+are shown. The columns|z|<1 and|z|<2 report the percentage of surveys whose z-scores fall within one and two posterior standard deviations of
+the reference value, respectively .
+Figure 3.The left panel shows planetary atmospheric abundance logX H2O versus centered log( M
+MJ
+), and the right panel gives logX H2O
+versus centered stellar metallicity [Fe/H]⋆. In both cases, the posterior median trend and its 68% credible band are shown. The error bars
+correspond to 0.2 dex for logX H2O and true measurement uncertainty on stellar metallicity from the MCS.
+At fixed sample size,σ ε andα p show little dependence on
+either leverage axis: the posterior constraints on these pa-
+rameters improve simply as
+√
+N, as shown in Figure A1. The
+slope parameters respond most strongly along their relevant
+axes of diversity: the planetary mass–atmospheric metallicity
+slope,β p, is close to the inverse leverage expectation, while
+the stellar–atmospheric metallicity slope,β s, also improves
+with stellar-metallicity information, although more weakly.
+This weaker scaling likely reflects the limited spread inL s,
+as shown in Figure 4. This is driven by the narrower range
+of [Fe/H] ⋆ and its significant measurement uncertainty. In
+contrast, the intercept,α p, and intrinsic scatter,ε, improve
+mainly because larger surveys reduce the overall posterior un-
+certainty (see Figure A1). Thus, a survey with more planets
+improves constraints on all parameters along multiple axes of
+diversity, while leverage along the relevant physical axis most
+efficiently constrains the corresponding slope.
+4 RECOVERING THE STELLAR–PLANETARY
+METALLICITY CORRELATION
+As discussed in Section 2.5, the 3D Model explicitly includes
+the stellar metallicity slopeβ s, whereas the 2D Model omits it
+entirely, absorbing any correlation between stellar and plan-
+etary metallicity into the intrinsic scatterε. Here, we con-
+sider how large the intrinsic astrophysical scatter can be-
+come before the stellar–planetary metallicity correlation can
+no longer be distinguished from unexplained planet-to-planet
+diversity, and whether the added stellar-metallicity term im-
+proves predictive accuracy enough to justify the additional
+model complexity. To quantify the fraction of surveys for
+which the 3D model outperforms the 2D Model, we perform
+a model comparison using the Watanabe–Akaike Information
+Criterion (WAIC).
+4.1 The Watanabe–Akaike Information Criterion
+To determine whether including the stellar metallicity term
+provides a meaningful improvement in predictive accuracy,
+we compare the 3D and 2D Models (Section 2.5) using the
+Watanabe–Akaike Information Criterion (Watanabe 2010).
+This serves an analogous role to the Akaike and Bayesian
+Information Criteria (AIC/BIC) but is better suited to hier-
+archical models, where the effective number of parameters is
+not fixed but emerges from the posterior and the data (Gel-
+man et al. 2014). WAIC estimates the expected log pointwise
+predictive density (elpd), a measure of predictive accuracy.
+For each survey we compute:
+∆elpdW AIC= elpd3D Model −elpd 2D Model .(9)
+RASTI000, 1–??(2026)
+
+6W. M. F. Naqvi & N. B. Cowan
+100 150 200 250 300 350
+Leverage on Planetary Mass
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+0.35p
+p L 1.03 +0.19
+0.19
+ class
+S1
+S2
+S3
+S4
+17.5 20.0 22.5 25.0 27.5 30.0 32.5 35.0
+Leverage on Stellar Metallicity
+p
+p L 1.66 +0.48
+0.48
+N = 80
+250 300 350 400 450 500
+Leverage on Planetary Mass
+0.04
+0.06
+0.08
+0.10
+0.12
+0.14p
+p L 1.49 +0.19
+0.19
+ class
+S1
+S2
+S3
+40 45 50 55 60 65
+Leverage on Stellar Metallicity
+p
+p L 1.43 +0.65
+0.65
+N = 250
+Figure 4.Posterior uncertainty in the mass–metallicity slope as a function of planetary-mass leverage (left panels) and host-star-
+metallicity leverage (right panels), shown for surveys with 80 and 250 planets. Each point represents one mock survey. Dashed curves
+show power-law fits, with the shaded regions indicating the corresponding prediction bands. As sample size increases, the fit approaches
+the inverse-leverage expectation and the overall uncertainty decreases, while the qualitative dependence on survey leverage remains the
+same. Since the leverage values are normalized by their measurement uncertainties (Equation 3), the planetary-mass leverage is generally
+larger than the host-star-metallicity leverage. Moreover, Leverage increases as
+√
+N, between the top and bottom panels, roughly a factor
+of two.
+A positive ∆elpd W AIC indicates that the 3D mass–stellar–
+atmospheric metallicity model outperforms the 2D mass–
+atmospheric metallicity model, and thus that the framework
+has successfully recovered the stellar signal as distinct from
+intrinsic scatter.
+4.2 Recovering the Stellar–Planetary Metallicity
+Correlation
+For two planets of similar mass, orbiting the same type of
+star, we may not observe the same planetary metallicity due
+to intrinsic astrophysical scatter (Turrini 2023). As we en-
+ter the era of comparative exoplanetary climatology, factor-
+ing intrinsic astrophysical scatter in survey design becomes
+an important factor, especially for Ariel. The central ques-
+tion becomes:given increasing intrinsic astrophysical scatter,
+for what fraction of surveys can we recover the correlation
+between stellar and planetary metallicity using hierarchical
+modelling?We probe this by systematically increasing the
+injected intrinsic scatter across surveys of different sample
+sizes. For each survey, we record whether the 3D Model is
+favoured over the 2D Model according to the WAIC compar-
+ison defined in Section 4.1.
+Figure 5 shows the fraction of mock surveys for which
+WAIC favours the 3D Model over the 2D Model as a function
+of intrinsic scatter and sample size. This result sets a clear
+detection threshold for the stellar–planetary metallicity cor-
+relation. At low intrinsic scatter, representing deterministic
+planet formation and evolution, the correlation is recovered
+for nearly all surveys. Asεincreases, recovery first fails for
+the smallest samples while larger surveys retain sensitivity
+to the star-planet metallicity term over a wider range of in-
+trinsic scatter. Surveys withN⩽150 show a clear drop in
+sensitivity onceε≳0.8–1.0 dex, whereas Ariel-scale surveys
+remain robust to substantially larger scatter. In particular,
+theN= 600 surveys favour the 3D Model in 100% of cases
+across the full scatter range tested. The median ∆elpd W AIC
+follows the same trend, declining approximately asε −2.
+5 SUMMARY AND DISCUSSION
+We extended the survey leverage framework of Cowan &
+Coull-Neveu (2025) by propagating measurement uncertainty
+RASTI000, 1–??(2026)
+
+HERMES7
+0.1 0.2 0.3 0.4 0.8 1.0 1.2 1.5 1.8 2.0
+Intrinsic scatter in planetary metallicity  (dex)
+600
+400
+250
+150
+80
+Number of Planets in Survey
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+Star-Planet Metallicity Correlation Sensitivity
+Figure 5.The heatmap shows the practical recovery threshold for the stellar–planetary metallicity correlation: small and moderate
+surveys lose sensitivity once intrinsic scatter becomes large, whereas Ariel-scale samples maintain high recovery fractions across the tested
+scatter range.
+for [Fe/H]⋆ into the posterior and avoiding the attenuation
+bias that would arise from treating observed stellar metal-
+licities as exact (Section 2.4). We also explicitly modelled
+intrinsic astrophysical scatter as a free parameterε, quanti-
+fying the stochastic nature of planetary formation, evolution
+and any other unmodelled axes of diversity. Thez-score cal-
+ibration (Table 2) confirmed that the resulting posteriors for
+βp andβ s are well-calibrated (SD(z)≈1), validating that the
+framework is neither overconfident nor overly conservative.
+Section 4.2 demonstrated that the ability to distinguish
+the stellar–planetary metallicity correlation from intrinsic as-
+trophysical scatter depends jointly onNandε, with sur-
+vey size becoming the decisive factor once scatter exceeds
+∼0.8 dex (Figure 5). Below this threshold, even moderate
+surveys (N⩽250) achieved near-complete recovery; above
+it, only Ariel-scale samples (N⩾400) maintained high de-
+tection fractions.
+5.1 Implications for Ariel Target Selection
+The story is not as simple as “maximize leverage”, but to
+optimize both leverage and survey size, for example through
+simulated annealing (Panek et al. 2026), while also improv-
+ing constraints on [Fe/H] ⋆, stellar age, and other harder-to-
+measure axes of diversity. Different parameters respond to
+different design axes. A survey optimized purely for mass
+leverage could sacrifice stellar-metallicity diversity and leave
+βs poorly constrained. Ariel’s target selection must therefore
+balance leverage across multiple axes of diversity if the goal
+is to constrain the full multidimensional mass–metallicity re-
+lation.
+Sample sizeNplays an important but distinct role to sur-
+vey leverage. IncreasingNlowers the overall uncertainty for
+all parameters (Figure A1), but therelativeimportance of
+leverage versusNdiffers by parameter. Forβ p, increasingL p
+at fixedNis more efficient than increasingNat fixed mass
+range. For the interceptα p and intrinsic scatterε, which are
+largely insensitive to leverage at fixedN, sample size is the
+primary control parameter.
+This interplay between sample size and astrophysical scat-
+ter has direct implications for Ariel’s tiered observing strat-
+egy. Radica et al. (2026) showed that Tier 1 observations
+(the lowest-precision tier in the Ariel survey design) already
+yield≲1.5 dex constraints on H 2O and CO 2 for giant plan-
+ets, irrespective of cloud conditions. Our results show that
+the∼1000-planet Tier 1 sample can compensate through
+sheer statistical power: Figure 5 confirms thatN= 600 sur-
+veys recover the stellar correlation at 100% even for scatter
+as large as 2.0 dex. Larger observational uncertainties impact
+the problem equivalently to larger astrophysical variance. In
+other words, the breadth of the Tier 1 survey may be more
+valuable for population-level trend recovery than the depth
+of a smaller Tier 2 survey, precisely because the additional
+planets contribute leverage on multiple axes simultaneously.
+A large, lower-precision Tier 1 survey can still outperform a
+smaller high-precision survey for detecting population trends
+if the trend is broad and the survey size spans enough diver-
+sity. This conclusion extends the single-axis leverage frame-
+work of Cowan & Coull-Neveu (2025) into a genuinely re-
+alistic multidimensional setting. In one dimension, a survey
+designer faces a clean trade-off: a small, high-leverage sample
+can match the slope precision of a larger but less diverse one.
+In multiple dimensions, however, the survey must achieve
+adequate leverage oneveryaxis of diversity simultaneously.
+Optimizing for one does not guarantee the other. As Panek
+et al. (2026) demonstrated, automated target selection strate-
+gies that balance leverage across multiple axes of diver-
+sity tend to converge toward large, broadly representative
+samples—close to the maximal survey size. The practical im-
+plication is that Ariel target selection should not treat survey
+tier, leverage, and sample size as independent choices. HER-
+MES therefore builds on the leverage framework of Cowan
+RASTI000, 1–??(2026)
+
+8W. M. F. Naqvi & N. B. Cowan
+& Coull-Neveu (2025), and on the optimization strategy of
+Panek et al. (2026), by showing that multidimensional popu-
+lation inference naturally pushes survey design toward large,
+diverse samples that remain close to maximalNwhile pre-
+serving leverage across the relevant physical axes. This result
+is encouraging for Ariel: even if the true astrophysical scatter
+exceeds current estimates, Ariel’s planned sample size should
+provide enough statistical power to distinguish the stellar-
+metallicity signal from intrinsic astrophysical scatter. Con-
+versely, smaller precursor surveys may struggle to distinguish
+the two unless they target populations with intrinsically low
+scatter or achieve unusually high leverage in stellar metal-
+licity. These results further emphasize Ariel’s need for pre-
+cise, homogeneous stellar characterization. Reducing uncer-
+tainties in [Fe/H]⋆ would increase stellar-metallicity leverage
+and make it easier to separate a genuine stellar contribution
+from intrinsic planet-to-planet scatter.
+5.2 Outlook for Population-Level Inference
+Although we have focused on the planetary-mass–stellar–
+atmospheric metallicity relation, the framework is not specific
+to this use case. The same hierarchical model can be applied
+to any population-level trend in which a response variable
+is measured with uncertainty and is expected to depend on
+multiple axes of planetary or stellar diversity. Examples in-
+clude phase-curve observables such as dayside temperature,
+nightside temperature, hotspot offset, or heat-redistribution
+efficiency as functions of irradiation, rotation, gravity, and
+atmospheric composition (e.g. Keating & Cowan 2022; Dang
+et al. 2025). More generally, HERMES can be used eithera
+priori, to forecast which survey designs will constrain a pro-
+posed multidimensional trend, ora posteriori, to determine
+which physical axes explain the scatter in an observed popu-
+lation.
+ACKNOWLEDGEMENTS
+NBC acknowledges support from a Canada Research Chair
+and NSERC Discovery Grant. WMFN acknowledges support
+from the Carl Reinhardt and Kharusi Family Science Fellow-
+ships. The authors are also grateful to members of the Ariel
+Science Team and Ariel Consortium, who helped sharpen
+these ideas. The authors thank the Trottier Space Institute
+and l’Institut de recherche sur les exoplan` etes for their finan-
+cial support and dynamic intellectual environment. WMFN
+would also like to thank the McGill Exoplanet Characteri-
+zation Alliance for their support; Jennifer Glover for helpful
+insight and discussion on data visualization; Jayden Ryga,
+Stephanie Merkl, and Dr. Nayyer Raza for their encourage-
+ment, support, and advice.
+This paper has been typeset from a T EX/LATEX file prepared by
+the author.
+DATA AVAILABILITY
+The data underlying this article will be shared on reasonable re-
+quest to the corresponding author.
+CONFLICT OF INTEREST
+Authors declare no conflict of interest.
+REFERENCES
+Ariel Mission Consortium, 2025. Mission Candidate Sam-
+ple,https://github.com/arielmission-space/Mission_
+Candidate_Sample, GitHub repository for the Ariel Mission
+Candidate Sample (MCS); using the 2025-08-18 release/version
+referenced in the manuscript.
+Charbonneau, D., Brown, T. M., Noyes, R. W., & Gilliland, R. L.,
+2002. Detection of an extrasolar planet atmosphere,ApJ,
+568(1), 377–384.
+Charbonneau, D., Allen, L. E., Megeath, S. T., Torres, G., Alonso,
+R., Brown, T. M., Gilliland, R. L., Latham, D. W., Mandu-
+shev, G., O’Donovan, F. T., & Sozzetti, A., 2005. Detection of
+thermal emission from an extrasolar planet,The Astrophysical
+Journal,626(1), 523–529.
+Cowan, N. B. & Agol, E., 2011. The statistics of albedo and heat
+recirculation on hot exoplanets,The Astrophysical Journal,
+729(1), 54.
+Cowan, N. B. & Coull-Neveu, B., 2025. Maximizing ariel’s survey
+leverage for population-level studies of exoplanets,The Open
+Journal of Astrophysics,8.
+Dang, L., Bell, T. J., Ying, Shu, Cowan, N. B., Bean, J. L., Dem-
+ing, D., Kempton, E. M. R., Mansfield, M. W., Rauscher, E.,
+Parmentier, V., Stevenson, K. B., Swain, M., Kreidberg, L.,
+Kataria, T., D´ esert, J.-M., Zellem, R., Fortney, J. J., Lewis,
+N. K., Line, M., Morley, C., & Showman, A., 2025. A compre-
+hensive analysis spitzer 4.5µm phase curve of hot jupiters.
+D’Aoust, L., Coull-Neveu, B., Lee, E. J., & Cowan, N. B., 2025.
+Testing the origin of hot jupiters with atmospheric surveys,
+arXiv e-prints, p. arXiv:2507.13446.
+Edwards, B. & Tinetti, G., 2022. The ariel target list: The impact
+of tess and the potential for characterising multiple planets
+within a system,AJ,164(1), 15.
+Gelman, A., Hwang, J., & Vehtari, A., 2014. Understanding pre-
+dictive information criteria for bayesian models,Statistics and
+Computing,24(6), 997–1016.
+Guillot, T., 2005. The interiors of giant planets: Models and out-
+standing questions,Annual Review of Earth and Planetary Sci-
+ences,33, 493–530.
+Guillot, T., Santos, N. C., Pont, F., Iro, N., Melo, C., & Ribas,
+I., 2006. A correlation between the heavy element content of
+transiting extrasolar planets and the metallicity of their parent
+stars,Astronomy & Astrophysics,453(2), L21–L24.
+Hoffman, M. D. & Gelman, A., 2011. The no-u-turn sampler:
+Adaptively setting path lengths in hamiltonian monte carlo.
+Hogg, D. W., Bovy, J., & Lang, D., 2010. Data analysis recipes:
+Fitting a model to data.
+Ikoma, M. & Kobayashi, H., 2025. Formation of giant planets,
+Annual Review of Earth and Planetary Sciences,63, in press,
+Review article; arXiv preprint version.
+Keating, D. & Cowan, N. B., 2022. Atmospheric characterization
+of hot jupiters using hierarchical models of spitzer observations,
+MNRAS,509(1), 289–299.
+Kelly, B. C., 2007. Some aspects of measurement error in lin-
+ear regression of astronomical data,The Astrophysical Journal,
+665(2), 1489–1506.
+Kreidberg, L., Bean, J. L., D´ esert, J.-M., Line, M. R., Fortney,
+J. J., Madhusudhan, N., Stevenson, K. B., Showman, A. P.,
+Charbonneau, D., McCullough, P. R., Seager, S., Burrows,
+A. S., Henry, G. W., Williamson, M., Kataria, T., & Home-
+ier, D., 2014. A precise water abundance measurement for the
+hot jupiter wasp-43b,ApJL,793(2), L27.
+Lustig-Yaeger, J., Sotzen, K. S., Stevenson, K. B., Luger, R., May,
+RASTI000, 1–??(2026)
+
+HERMES9
+E. M., Mayorga, L. C., Mandt, K., & Izenberg, N. R., 2022.
+Hierarchical bayesian atmospheric retrieval modeling for pop-
+ulation studies of exoplanet atmospheres: A case study on the
+habitable zone,The Astronomical Journal,163(3), 140.
+Madhusudhan, N., Harrington, J., Stevenson, K. B., Nymeyer, S.,
+Campo, C. J., Wheatley, P. J., Deming, D., Blecic, J., Hardy,
+R. A., Lust, N. B., Anderson, D. R., Collier-Cameron, A., Britt,
+C. B. T., Bowman, W. C., Hebb, L., Hellier, C., Maxted, P.
+F. L., Pollacco, D., & West, R. G., 2011. A high c/o ratio and
+weak thermal inversion in the atmosphere of exoplanet wasp-
+12b,Nature,469, 64–67.
+Mugnai, L. V., Pascale, E., Edwards, B., Papageorgiou, A., Sarkar,
+S., et al., 2020. Arielrad: the ariel radiometric model,Experi-
+mental Astronomy,50, 303–328.
+Panek, E., Roman, A., Matcheva, K., Matchev, K. T., & Cowan,
+N. B., 2026. Balancing variety and sample size: Optimal pa-
+rameter sampling for ariel target selection.
+Radica, M., Cowan, N. B., Cloutier, R., & Wang, L. Y., 2026. On
+the information content of ariel transmission spectra: Reassess-
+ing the tier system,arXiv e-prints, p. arXiv:2604.07598.
+Sing, D. K., Fortney, J. J., Nikolov, N., Wakeford, H. R., Kataria,
+T., Evans, T. M., Aigrain, S., Ballester, G. E., Burrows, A. S.,
+Deming, D., D´ esert, J.-M., Gibson, N. P., Henry, G. W., Huit-
+son, C. M., Knutson, H. A., Etangs, A. L. d., Pont, F., Show-
+man, A. P., Vidal-Madjar, A., Williamson, M. H., & Wil-
+son, P. A., 2016. A continuum from clear to cloudy hot-
+jupiter exoplanets without primordial water depletion,Nature,
+529(7584), 59–62.
+Sun, Q., Wang, S. X., Welbanks, L., Teske, J., & Buchner, J., 2024.
+A revisit of the mass-metallicity trends in transiting exoplanets,
+AJ,167(4), 167.
+Swain, M. R., Hasegawa, Y., Thorngren, D. P., & Roudier, G. M.,
+2024. Planet mass and metallicity: The exoplanets and solar
+system connection,Space Science Reviews,220(6).
+Thorngren, D. P., Fortney, J. J., Murray-Clay, R. A., & Lopez,
+E. D., 2016. The mass–metallicity relation for giant planets,
+The Astrophysical Journal,831(1), 64.
+Tinetti, G., Drossart, P., Eccleston, P., Hartogh, P., Heske, A.,
+Leconte, J., Micela, G., Ollivier, M., Pilbratt, G., Puig, L.,
+Turrini, D., Vandenbussche, B., Wolkenberg, P., et al., 2018.
+A chemical survey of exoplanets with ARIEL,Experimental
+Astronomy,46, 135–209.
+Tinetti, G., Eccleston, P., Haswell, C., Lagage, P.-O., Leconte,
+J., L¨ uftinger, T., Micela, G., Min, M., Pilbratt, G., Puig, L.,
+Swain, M., Testi, L., Turrini, D., Vandenbussche, B., Zapa-
+tero Osorio, M. R., Aret, A., Beaulieu, J.-P., Buchhave, L.,
+Ferus, M., Griffin, M., Guedel, M., Hartogh, P., Machado, P.,
+Malaguti, G., Pall´ e, E., Rataj, M., Ray, T., Ribas, I., Szab´ o,
+R., Tan, J., Werner, S., Ratti, F., Scharmberg, C., Salvignol, J.-
+C., Boudin, N., Halain, J.-P., Haag, M., Crouzet, P.-E., Kohley,
+R., Symonds, K., Renk, F., Caldwell, A., Abreu, M., Alonso,
+G., Amiaux, J., Berth´ e, M., Bishop, G., Bowles, N., Carmona,
+M., Coffey, D., Colom´ e, J., Crook, M., D´ esjonqueres, L., D´ ıaz,
+J. J., Drummond, R., Focardi, M., G´ omez, J. M., Holmes, W.,
+Krijger, M., Kovacs, Z., Hunt, T., Machado, R., Morgante,
+G., Ollivier, M., Ottensamer, R., Pace, E., Pagano, T., Pas-
+cale, E., Pearson, C., Pedersen, S. M., Pniel, M., Roose, S.,
+Savini, G., Stamper, R., Szirovicza, P., Szoke, J., Tosh, I., Vi-
+lardell, F., Barstow, J., Borsato, L., Casewell, S., Changeat,
+Q., Charnay, B., Civiˇ s, S., Coud´ e du Foresto, V., Coustenis,
+A., Cowan, N., Danielski, C., Demangeon, O., Drossart, P.,
+Edwards, B. N., Gilli, G., Encrenaz, T., Kiss, C., Kokori, A.,
+Ikoma, M., Morales, J. C., Mendon¸ ca, J., Moneti, A., Mugnai,
+L., Mu˜ noz, A. G., Helled, R., Kama, M., Miguel, Y., Nikolaou,
+N., Pagano, I., Panic, O., Rengel, M., Rickman, H., Rocchetto,
+M., Sarkar, S., Selsis, F., Tennyson, J., Tsiaras, A., Venot, O.,
+Vida, K., Waldmann, I. P., Yurchenko, S., Szab´ o, G., Zellem,
+R., et al., 2021. Ariel: Enabling planetary science across light-
+years.
+Turrini, D., 2023.The Compositional Dimension of Planet For-
+mation, p. 1–47, WORLD SCIENTIFIC (EUROPE).
+Watanabe, S., 2010. Asymptotic equivalence of bayes cross vali-
+dation and widely applicable information criterion in singular
+learning theory,Journal of Machine Learning Research,11,
+3571–3594.
+Welbanks, L., Madhusudhan, N., Allard, N. F., Hubeny, I., Spiegel-
+man, F., & Leininger, T., 2019. Mass-metallicity trends in tran-
+siting exoplanets from atmospheric abundances of h2o, na, and
+k,ApJL,887(1), L20.
+APPENDIX A: ADDITIONAL TABLES AND
+FIGURES
+RASTI000, 1–??(2026)
+
+10W. M. F. Naqvi & N. B. Cowan
+200 400 600
+N
+0.02
+0.03
+0.04
+0.05
+0.06
+0.07
+N 0.48 +0.01
+0.01
+class
+S1
+S2
+S3
+S4
+200 400 600
+N
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30p
+p N 0.70 +0.05
+0.05
+200 400 600
+N
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6s
+s N 0.55 +0.01
+0.01
+200 400 600
+N
+0.02
+0.03
+0.04
+0.05
+0.06
+N 0.53 +0.01
+0.01
+Figure A1.Posterior uncertainty vs.Nfor all four parameters. Points = individual surveys colored by class; dashed = power-law fit; grey
+band = prediction interval. Annotation = scaling exponent with 1-σbounds. The planetary mass–metallicity slope shows more scatter
+because it mostly scales asL −1
+RASTI000, 1–??(2026)

@@ -1,0 +1,4261 @@
+Title: TransitionListener v2.0 -- Robust gravitational wave predictions for cosmological phase transitions
+Authors: Jonas Matuszak, Carlo Tasillo
+Published: 2026-05-14
+Categories: hep-ph, astro-ph.CO
+
+P3H-26-036, TTP26-016
+TransitionListener v2.0– Robust gravitational wave
+predictions for cosmological phase transitions
+Jonas Matuszak 1∗, Carlo Tasillo 2,3†
+1Institute for Theoretical Particle Physics (TTP), Karlsruhe Institute of Technology (KIT),
+76128 Karlsruhe, Germany
+2Department of Physics and Astronomy, Uppsala University,
+Box 516, SE-751 20 Uppsala, Sweden
+3Instituto de F´ ısica Corpuscular (IFIC), Universitat de Val´ encia-CSIC, Parc Cient´ ıfic UV,
+C/ Catedr´ atico Jos´ e Beltr´ an 2, E-46980 Paterna, Spain
+Abstract
+Gravitational wave backgrounds from strong first-order cosmological phase transitions are
+key observational targets predicted by many SM extensions and might be observed by current
+and future observatories like LISA, the Einstein Telescope or pulsar timing arrays (PTAs).
+Still, their precise forecast given a specific model remains a challenge. In this article, we
+presentTransitionListener v2.0, a Python framework for precision studies of cosmologi-
+cal phase transitions and their associated gravitational wave (GW) signals. The code provides
+an end-to-end pipeline from a user-defined scalar potential to GW spectra and signal-to-noise
+ratios, enabling both benchmark studies and large-scale parameter scans. Version 2 intro-
+duces a self-consistent treatment of the transition dynamics, including the evolution of the
+true-vacuum fraction and its backreaction on the Hubble expansion, as well as a consistent
+description of reheating during percolation. A direct computation of the mean bubble sepa-
+ration allows to faithfully map to the GW spectral templates from bubble collisions, sound
+waves, and turbulence stemming from state-of-the-art simulations.TransitionListenerin-
+cludes built-in sensitivity curves for space- and ground-based detectors and PTAs, interfaces
+to PTA likelihoods, and wrappers for Bayesian model inference and high-dimensional pa-
+rameter scans. Compared to existing public tools,TransitionListener v2.0improves the
+physical consistency and numerical stability of GW predictions across a wide range of models,
+with particular emphasis on the strongly supercooled and ultraslow transition regime where
+conventional approximations break down and the most promising GW signals are expected.
+∗E-mail:jonas.matuszak@kit.edu
+†E-mail:carlo.tasillo@ific.uv.es
+1
+arXiv:2605.15259v1  [hep-ph]  14 May 2026
+
+PROGRAM SUMMARY/NEW VERSION PROGRAM SUMMARY
+Program Title:TransitionListener v2.0
+CPC Library link to program files:(to be added by Technical Editor)
+Developer’s repository link:github.com/tasicarl/TransitionListener
+Code Ocean capsule:(to be added by Technical Editor)
+Licensing provisions:GPLv3
+Programming language:python 3
+Journal reference of previous version:10.1088/1475-7516
+Does the new version supersede the previous version?:Yes
+Reasons for the new version:Improve the physical consistency and reproducibility of GW predictions
+from first-order phase transitions, especially for strong supercooling and multi-field models, and extend
+the framework from single-point studies to large scans and inference.
+Summary of revisions:Iterative percolation with true-vacuum fraction backreaction onH(T); mean
+bubble separation as default GW length scale; LTE wall velocity; thermodynamics from the full effective
+potential including field-independent radiation terms; updated GW spectra; built-in detector/PTA sen-
+sitivities with optional PTArcade likelihoods; expanded scan and parameter inference interfaces.
+Nature of problem:Starting from a user-defined scalar potential and mass spectrum of the theory, de-
+termine whether and when a first-order transition nucleates, percolates, and succeeds, then compute
+consistent hydrodynamic quantities, GW spectra and observability with controlled numerical uncertain-
+ties.
+Solution method:Modular Python pipeline: phase tracing, bounce-action/tunnelling solvers, iterative
+Picard-sweeps for percolation, formulated as an ODE system, thermodynamic and wall-dynamics mod-
+ules, GW spectrum prediction for multiple sources, and detector likelihood/SNR evaluation with config-
+urable accuracy controls and standardised outputs.
+Additional comments including restrictions and unusual features:Public GPLv3 code with CLI and
+Python API; optional dependencies activate PTA likelihoods and nested-sampling scans; a detailed error-
+code system reports non-physical or numerically unresolved transitions (e.g. non-percolation).
+
+Contents
+1 Introduction 4
+2 Phase transitions and gravitational waves 6
+2.1 The perturbative description of vacuum decay . . . . . . . . . . . . . . . . . . . . 6
+2.2 The thermodynamics of two phases in an expanding universe . . . . . . . . . . . 8
+2.3 The fate of the false vacuum . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+2.4 On the strength and speed of the transition . . . . . . . . . . . . . . . . . . . . . 12
+2.5 Hydrodynamics and wall velocity . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+2.6 Gravitational wave spectrum . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+2.7 Observability of cosmological GW backgrounds . . . . . . . . . . . . . . . . . . . 18
+2.8 Benchmark points and implemented models . . . . . . . . . . . . . . . . . . . . . 20
+3 Program description and implementation 21
+3.1 Installation instructions and structure of the repository . . . . . . . . . . . . . . 21
+3.2 Model definition . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 24
+3.3 Phase tracing . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 27
+3.4 Computation of the bubble nucleation rate . . . . . . . . . . . . . . . . . . . . . 28
+3.5 Computation of the true-vacuum fraction . . . . . . . . . . . . . . . . . . . . . . 29
+3.6 Thermodynamics, GW spectra and observability . . . . . . . . . . . . . . . . . . 32
+3.7 Error handling . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 33
+4 Scans and plotting methods 33
+4.1 Command line interface . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34
+4.2 Single point . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 34
+4.3 Line scan . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 36
+4.4 Grid scan . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 38
+4.5 Random scan and nested sampling . . . . . . . . . . . . . . . . . . . . . . . . . . 39
+5 Comparison with existing codes (BSMPT) 41
+6 Summary 44
+A Models 46
+A.1 Dark Abelian Higgs model . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 46
+A.2 Conformal darkU(1) ′ model . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 47
+A.3 Dark flipflop model . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 47
+A.4 Two-Higgs Doublet model (2HDM) . . . . . . . . . . . . . . . . . . . . . . . . . . 48
+B Energy density and effective degrees of freedom 50
+C Analytical relation between transition speed and bubble size 52
+D Using TransitionListener in a Python script 53
+E Tables of error codes, structure of the output and accuracy settings 54
+3
+
+ℒ=12(∂μϕ)†(∂μϕ)−V(ϕ)Quantum & ﬁnite-temperature corrections
+ϕ
+Veﬀ(ϕ)High T
+Low T
+⟨ϕ⟩T
+T
+Phase tracing and ﬁnding possible transitions
+T
+Γ/H4 NucleationBubble nucleation vs. Hubble rate 
+Evolution of the false vacuum
+Percolation
+T
+Pt f
+ΩGW
+Mapping to GW templates from hydrodynamic simulations via α,β/H,Treh,vw,...
+Evaluation of observability
+Figure 1: Workflow of theTransitionListenerpipeline. Given a user-defined tree-level po-
+tential and mass spectrum of a theory, the 1-loop effective potential is constructed, the phase
+structure is traced and possible first-order transitions are identified. For each possible transition,
+the nucleation history and the evolution of the true-vacuum fraction is computed. Using this,
+the percolation and reheating temperatures are found and the thermodynamic quantities needed
+for the GW templates are calculated. Lastly the GW spectrum is evaluated and compared to
+existing and future GW observatories’ sensitivities.
+1 Introduction
+Much of the early universe’s thermal history remains hidden from direct observation. The
+primordial plasma was opaque to electromagnetic radiation until recombination, roughly 380,000
+years after the end of inflation, when the universe finally became transparent and photons could
+free-stream to form the cosmic microwave background we observe today [1]. Gravitational
+waves (GWs), by contrast, propagate essentially unimpeded once produced, offering a unique
+probe of the universe’s earliest moments and the fundamental physics governing them [2]. With
+LISA [3] and the Einstein Telescope [4] planned for the coming decades, and pulsar timing
+arrays (PTAs) [5–10] already reporting evidence for a stochastic GW background, the challenge
+of connecting BSM model building to quantitative GW predictions has become both timely and
+urgent.
+As the universe cooled after reheating, decreasing temperatures triggered symmetry breaking
+and qualitative changes in the vacuum structure [11–14]. The Standard Model (SM) predicts
+that both the electroweak and QCD phase transitions proceeded as smooth crossovers, producing
+4
+
+no observable GW signals [15, 16]. Yet the SM leaves fundamental questions unanswered:
+the origin of the baryon asymmetry [17], the identity of dark matter [18, 19], the hierarchy
+problem [20, 21], and the mechanism behind neutrino masses [22, 23] all point toward physics
+beyond the Standard Model. Many proposed solutions – whether through additional scalar
+sectors [24], new gauge groups [25], supersymmetry [26], grand unification [27], or dark sector
+dynamics [28, 29] – predict a richer phase structure in which some transitions are or become
+first-order. Such transitions are compelling for multiple reasons: they can provide the out-of-
+equilibrium conditions necessary for baryogenesis [30–33], and produce the observed dark matter
+abundance [34–37], while simultaneously sourcing a stochastic GW background through the
+violent dynamics of bubble nucleation, expansion, and collision [38, 39], thus possibly explaining
+the reported PTA signal [40]. Further, GW backgrounds at high frequencies allow tests of physics
+far above the energy scales accessible at colliders [2, 41], thereby providing a potentially unique
+window into early-universe physics.
+Translating these theoretical possibilities into testable predictions requires solving a multi-
+scale problem that spans many orders of magnitude in both energy and length [42]. Starting
+from the microscopic physics encoded in an effective potential, one must trace the temperature-
+dependent vacuum structure, determine when and how bubbles of the new phase nucleate [43,
+44], and track their expansion and the true-vacuum fraction throughout percolation [45, 46]. One
+has to compute the hydrodynamic response of the surrounding plasma [47–49], relate the bubble
+size distributions with GW templates obtained from numerical simulations [50–60], and finally
+propagate the resulting GW spectrum forward through cosmic history to predict what observato-
+ries might detect today. The computational workflow, sketched in Fig. 1, must maintain physical
+consistency at each step while remaining efficient enough to explore the high-dimensional pa-
+rameter spaces of realistic BSM theories in order to connect with observations. This challenge
+is particularly acute for strong first-order transitions with significant supercooling, precisely the
+regime where GW signals are strongest and most likely to be observable [61–63].
+Existing numerical tools address different parts of this pipeline.BSMPT[64–66] specialises
+in extended Higgs sectors and the electroweak phase transition,PhaseTracer[67, 68] provides
+robust multi-field phase tracing,ELENA[69] offers efficient single-field evolution with PTA like-
+lihood interfaces, andPT2GWFinder[70] delivers a Mathematica-based workflow. The original
+TransitionListenercode integrated these steps for specific dark sector models, established
+the complementarity between dark matter searches and GW observations, and motivated the
+search for specific dark matter candidates [71, 72, 63]. Numerous specialised codes handle in-
+dividual aspects such as the construction of effective potentials [73], bounce solutions [74, 75],
+bubble nucleation rates [76], wall velocities [49], or spectral templates [77]. Despite the progress
+on all fronts of this challenge, significant gaps remain, particularly in the consistent treatment
+of thermodynamics during strong supercooling, the handling of multi-field potentials, and the
+seamless integration of physical calculations with observational likelihood machinery [78, 79].
+TransitionListener v2.0addresses these limitations through a comprehensivepython
+framework that advances the state of the art in several key areas. The code implements a
+self-consistent treatment of the true-vacuum fraction evolution, including backreaction on the
+Hubble rate and accounting of reheating in the broken phase during percolation by considering
+local energy conservation at the bubble wall. It handles multi-field effective potentials with au-
+tomated one-loop corrections, computes bubble wall velocities in the local thermal equilibrium
+approximation [80, 81], and evaluates GW spectra using the latest simulation-calibrated tem-
+plates. The framework incorporates built-in sensitivity curves for current and planned detectors
+across twelve orders of magnitude in frequency, provides direct interfaces toPTArcade[82] for
+pulsar timing likelihoods, and enables Bayesian parameter inference through integration with
+5
+
+UltraNest[83]. A comparison withBSMPTv3through a benchmark scan in sec. 5 shows excel-
+lent agreement for intermediately strong phase transitions, whereas for strong transitionsO(1)
+deviations in the expected LISA signal-to-noise ratios are obtained. We show that these differ-
+ences can be understood from a more precise treatment of thermodynamics and cosmological
+consistency during the transition, as well as different conventions for the computation of GW
+spectra and signal-to-noise ratios.
+This paper is organised as follows. Section 2 describes the underlying physics of FOPTs that
+went into the development of the algorithms described in section 3. Section 4 then describes the
+various scan modes for parameter space exploration and documents the many different visualisa-
+tion capabilities. In section 5 we compare our code with existing implementations and validate
+our results through detailed comparison withBSMPTv3. We conclude in section 6. A set of appen-
+dices provides technical details and discusses the models implemented inTransitionListener
+v2.0, including three dark sector models with distinct phenomenological properties, as well as
+the (real) Two-Higgs Doublet Model (2HDM).
+2 Phase transitions and gravitational waves
+In this section we review the physics behind strong first-order phase transitions, which went
+into the algorithms implemented inTransitionListener v2.0. Most of the physics presented
+here has already been reviewed in detail, see for instance ref. [42] for a neat compendium
+of references and more detailed derivations of many of the computations presented here. As
+opposed to previous works and going beyond these in certain aspects, we put our focus on the
+self-consistent treatment of the time-dependent thermodynamics of the two phases during the
+transition, the time-temperature relation, and the relevant length scales at which the dynamics
+of bubbles takes place. In particular, we will show that previously made assumptions on the
+size of bubbles and the temperature of the broken-symmetric phase are violated strongly in the
+most interesting cases of strong and slow FOPTs, having a large influence on the forecasted GW
+backgrounds.
+This section is organised as follows: In sec. 2.1 we describe the effective potential at finite
+temperature and its role in determining the phase structure of a given theory; examples are given
+in Appendix A, where we expand on dark sector models and the 2HDM, which are released as
+model files together with the code. Sec. 2.2 then defines thermodynamic quantities and their
+evaluation during the phase transition. The following sec. 2.3 delineates the computation of the
+true-vacuum fraction during the phase transition and defines different milestone temperatures.
+Sections 2.4 and 2.5 discuss the specific set of strength and speed parameters we recommend
+for performing phase transition computations as well as the energy budgets available for GW
+emission. The GW spectral templates used in this work as well as the general description of
+how we evaluate a given GW signal’s observability are described in sections 2.6 and 2.7.
+2.1 The perturbative description of vacuum decay
+The dynamics of a phase transition is encoded in the free energy of a thermodynamical system
+in dependence on the temperature and the order parameter. In the case of weakly coupled
+quantum field theories with scalar fields, like the electroweak theory, the transition dynamics
+are governed by the evolution of the effective potentialV eff. This potential is a function of the
+scalar fieldsϕ= (ϕ 1, ϕ2, . . .) and temperature, and it determines the stability of the vacuum
+6
+
+states. Given a general Lagrangian of scalar fields
+L ⊃ 1
+2 (∂µϕ) (∂µϕ)−V tree(ϕ),(2.1)
+with a tree-level potentialV tree(ϕ), the classical vacuum expectation value⟨ϕ⟩ tree is given by
+the global minimum of the potential. Quantum and thermal corrections can shift or completely
+alter the vacuum structure of the theory. The aim of the construction of an effective potential
+is to include these corrections in a systematic way, allowing us to trace the different potential
+minima throughout the thermal evolution of the cosmos. In the following we will make use of
+the background field method, meaning that the fieldϕis split into a classical background field
+and quantum fluctuations1. In order to not obscure our notation and as we are only interested
+in the dynamics of the classical, spatially homogeneous background field, we do not distinguish
+between these components.
+At one-loop order in the MS scheme and at zero-temperature the corrections to the tree-level
+potential are given by the Coleman-Weinberg potential [89]
+VCW(ϕ) =
+X
+i
+± ni
+64π2 m4
+i (ϕ)
+
+ln
+ m2
+i (ϕ)
+¯µ2
+
+−C i
+
+,(2.2)
+which is understood to be added toV tree(ϕ). Here, the sum runs over all fields coupled to the
+scalarϕ; the + (−) sign applies to bosons (fermions),n i are the degrees of freedom, ¯µis the
+renormalisation scale and the renormalisation constants readC i = 3/2 for scalars and fermions
+and 5/6 for gauge bosons. At finite temperature, the one-loop corrections receive an additional
+term, given here in terms of the thermal functionsJ b/f for bosons (b) and fermions (f),
+VT(ϕ, T) =
+X
+i
+± niT 4
+2π2 Jb/f
+ m2
+i (ϕ)
+T 2
+
+, J b/f(z2) =
+Z ∞
+0
+dx x2 ln
+
+1∓e −
+√
+x2+z2
+
+.(2.3)
+The introduction of counterterms to cancel the UV divergence of the Coleman-Weinberg poten-
+tial adds another contributionV ct(ϕ) to the potential. Additionally, corrections arising from the
+resummation of the longitudinal, bosonic Matsubara zero-modes cure the IR divergences inV T
+in the Arnold-Espinosa scheme and give rise to the daisy correction term 2 [90]
+Vdaisy(ϕ, T) =− T
+12π
+X
+i∈BL
+ni
+h 
+m2
+i (ϕ) + Πi(T)
+3/2
+−m 3
+i (ϕ)
+i
+.(2.4)
+Alternatively the Parwani resummation scheme [91] replacesm 2
+i →m 2
+i + Πi inV T. In summary,
+the one-loop, daisy-corrected finite-temperature effective potential reads
+V(ϕ, T) =V tree(ϕ) +V CW(ϕ) +V ct(ϕ) +V T(ϕ, T) +V daisy(ϕ, T) +V rad(T)−V T=0 (v).(2.5)
+The field-independent termsV rad(T)−V T=0 (v) have been added for the sake of consistency of
+the following sections; they do not play a role in the dynamics of the field theory, but rather
+become relevant when computing thermodynamic quantities and relating them to the Hubble
+1In the case of strongly coupled quantum field theories, the perturbative approach of constructing an effective
+potential breaks down and different techniques have to be employed to obtain a thermodynamic description of
+the plasma [84–88]. Here, we focus only on weakly coupled cases in which a perturbative expansion is justified.
+2Special care needs to be taken when dealing with states coupled toϕwhich mix, like the electroweak
+gauge bosons in the SM. In that case, the correction has to be understood as a sum over the eigenvalues of
+the temperature-corrected mass matrix of the longitudinal, bosonic modes.
+7
+
+rate through the Friedmann equations: The first term accounts for additional degrees of freedom
+which are not coupled toϕ, but still contribute to the energy density and pressure of the plasma.
+Further, we make sure that a constant term−V T=0 (v) withv≡ ⟨ϕ⟩ T=0 is included, such that
+atT= 0, the potential, and hence also the pressure, vanishes 3.
+In case of two competing vacua, i.e. solutions of∇ ϕV(ϕ, T) = 0 with positive potential
+curvature, we speak about the coexistence of two phases. The moment that a previously global
+vacuum turns unstable by the other vacuum state moving to smaller potential values (cf. fig. 1),
+the false vacuumϕ f can decay to the true one if thermal fluctuations are sufficiently large and
+supercritical bubbles form. In the absence of seeds which could trigger the decay [92], bubbles
+are spherical and expand satisfying Klein-Gordon equations of motion,
+d2ϕi
+dr2 + 2
+r
+dϕi
+dr = ∂V(ϕ, T)
+∂ϕi
+(2.6)
+with boundary conditions dϕ i/dr|r=0 = 0 andϕ i(r→ ∞) =ϕ i,f. The Euclidean action of these
+O(3)-symmetric bounce solutions can be computed from the instanton solution of eq. (2.6) (the
+bubble profile)ϕ(r) following
+S3(T) = 4π
+Z ∞
+0
+dr r2
+"
+1
+2
+X
+i
+dϕi
+dr
+2
++V(ϕ, T)−V(ϕ f, T)
+#
+.(2.7)
+The decay rate of the false vacuum to the true vacuum (i.e., the bubble nucleation rate) can
+then be computed as [89, 44]
+Γ(T) =T 4
+ S3(T)
+2πT
+3/2
+exp
+
+− S3(T)
+T
+
+.(2.8)
+We note that while the construction of the effective potential and the computation of the
+bubble nucleation rate as demonstrated here are a standard approach found across the litera-
+ture, higher-order perturbative improvements and dimensionally reduced effective field theory
+approaches can significantly improve the validity and convergence of the perturbative expan-
+sion [93]. In our code, we treat the renormalisation scale as an open parameter and employ the
+Landau gauge. Further work will be required to also increase the accuracy of phase transition
+computations by the automated use of dimensionally reduced effective field theories, impacting
+both the effective potential as well as the precise description of how to compute the nucleation
+rate, cf. [94, 73, 95].
+2.2 The thermodynamics of two phases in an expanding universe
+Each of the phases defined by the effective potential has distinct thermodynamic properties. For
+the study of cosmological phase transitions, the most important ones are the pressure, entropy,
+and energy density, which can all be obtained from the effective potential, within a given phase
+ϕmin(T),
+p=−V(ϕ min, T), s= ∂p
+∂T =− ∂V(ϕ min, T)
+∂T , ρ=T s−p=V(ϕ min, T)−T ∂V(ϕ min, T)
+∂T .
+(2.9)
+3It is possible to include a parametrically small term here to further account for the relevance of a cosmological
+constant in our universe, which however does not play any role in the dynamics of finite-temperature phase
+transitions in the early universe.
+8
+
+Out of these, the energy density of a given phase will be of the biggest importance for the
+computation of GW signals and the self-consistency when solving the Friedmann equations, so
+it makes sense to study its relationship with the effective potential in more detail: To do so, let
+us split the effective potential in a temperature-independent part (VCW andV ct), a temperature-
+dependent part (V T,V daisy andV rad), as well as a normalisation constant (−V T=0 (v)),
+V(ϕ, T) =V T=0 (ϕ) +V T̸=0 (ϕ, T)−V T=0 (v).(2.10)
+Using this, the energy density within a portion of space in a given phase splits into the compo-
+nents
+ρ(ϕ, T) =V T=0 (ϕ)−V T=0 (v)| {z }
+ρvac
++V T −T ∂ T VT| {z }
+ρrad
++V rad −T ∂ T Vrad| {z }
+ρrad,ext
++V daisy −T ∂ T Vdaisy| {z }
+ρint
+(2.11)
+≃ρ vac + π2
+30 geff(T)T 4 + π2
+30 gext
+eff (T)T 4 (2.12)
+In the second step, we rewrote the thermal one-loop contribution in terms of the effective degrees
+of freedomg eff(T) and neglected the contribution from the daisy term. In Apprendix B we
+provide more details on the relationship between the thermal functionsJ b/f and the effective
+degrees of freedomg eff andg ext
+eff (relevant for the description of non-interacting species in a
+plasma), and discuss the relevance of the daisy contributions for modelling the energy density
+in a plasma of interacting fields.
+During a first-order phase transition, two distinct phases coexist and fill up regions of space
+with different thermodynamic properties: Assuming the instant thermalisation of the fluid within
+a given bubble (see ref. [36] for a discussion of the validity of this assumption), the temperature
+inside the bubble will be higher due to the release of vacuum energyρ vac (hence the name
+reheating); the pressure will be higher, as bubbles otherwise would not be able to expand; and
+the energy density will be only slightly lower than outside the bubbles. The latter is due to
+the energy density stored in the bubble walls and emitted in the form of gravitational waves
+being negligible compared to the energy densities themselves [48]. The volume-averaged total
+energy density and the volume-averaged pressure are then given by the weighted sum of the
+energy densities and pressures of the two phases, each multiplied with the respective true and
+false-vacuum fractions,P t andP f = 1−P t,
+¯ρ=Ptρt + (1−P t)ρf and ¯p=P tpt + (1−P t)pf .(2.13)
+Assuming statistical homogeneity, i.e. taking local overdensities to be sufficiently small, the
+Friedmann equations can be written as
+H2 = ¯ρ
+3m2
+Pl
+and ˙¯ρ=−3H(¯ρ+ ¯p).(2.14)
+Assuming further that the expansion of bubbles succeeds sufficiently quickly, which is the case for
+strong transitions in the detonation regime, there is no net heat transfer from the true vacuum
+to the false vacuum in front of the bubble walls, and hence
+˙ρf =−3H(ρ f +p f) (2.15)
+holds4 also for the energy density of the false vacuum. Let us point out that ¯ρwill in general
+not follow the time-evolution known from radiation domination: For strongly supercooled phase
+4Note that the same relation doesnothold for the true vacuum. A FOPT generates entropy and heat, such
+that ˙ρt + 3H(ρt +p t)>0. A derivation of the heating rate is provided in eq. (2.17).
+9
+
+transitions,P t can remain small for a significant period of time, while the equation-of-state
+parameter goes from 1/3 (in radiation) to−1 (for vacuum domination). Note further that even
+in the instantaneous reheating assumption, it is no longer possible to unambiguously define a
+temperature playing the role of a time variable, as the temperature in the true vacuum in general
+does not coincide with the temperature in the false vacuum. It is hence necessary to specify the
+temperature of each phase separately at a given time. For a given transition, we choose the false
+vacuum temperatureT f(t) as a viable time variable and express the true-vacuum temperature
+Tt as a function of it.
+By using the chain rule on eq. (2.15), the time-temperature relation in false-vacuum phase
+during the phase transition can then be derived to read
+dTf
+dt =−3H ρf +p f
+∂ρf/∂Tf
+=−3HT f c2
+s,f ,wherec 2
+s,f = ∂T Vf
+Tf∂2
+T Vf
+.(2.16)
+It is easy to see that in the limit of a bag equation of state, the time-temperature relation
+simplifies to the usual ˙Tf =−HT f relation known from radiation domination, corresponding to
+c2
+s,f = 1/3, whereH, however, still includes an implicit dependence on the true-vacuum fraction
+through ¯ρ. Without simplifying assumptions, the above time-temperature relation does not have
+a simple analytic form and needs to be solved self-consistently. In practice, we often find that
+O(10%) deviations fromc 2
+s = 1/3 occur in either phase and in either direction, see also ref. [96],
+thus affecting all other quantities relevant for the computation of the GW spectrum. This further
+motivates detailed numerical computations in the case of strongly supercooled phase transitions.
+To determine the temperatureT t within the true vacuum as a function of time (or equiva-
+lently as a function of the false-vacuum temperatureT f), we can expand ˙¯ρ= d
+dt(Ptρt +(1−P t)ρf)
+using the chain rule and plug in the expression for ˙ρ f from eq. (2.15) in order to obtain
+˙ρt =−3H(ρ t +p t) +
+˙Pt
+Pt
+(ρf −ρ t).(2.17)
+The first term just describes the usual energy density redshift of a perfect fluid; the second term
+instead describes the contribution from the released energy due to the changing true-vacuum
+fraction in a given volume. Using energy conservation and starting at some initial time when
+the bubble nucleation rate Γ≪H 4 is still negligible, i.e.ρ t(tinit) =ρ f(tinit), we can compute
+the energy density in the true vacuum at an arbitrary time by integrating eq. (2.17). Using
+eq. (2.11), we can then also infer the temperature within the true vacuum at a given time, by
+solvingρ t(Tt) forT t.
+In fig. 2 we show the evolution of the energy densities ¯ρ,ρt andρ f for a moderately supercooled
+phase transition in the conformalU(1) ′ model, defined in appendix A. During the transition,
+the energy fraction in the true vacuumP tρt continuously increases, until virtually all of the
+vacuum energy has been released and the redshift ofρ t starts to dominate the evolution of the
+true vacuum. Before and after the transition, the universe is radiation dominated; during the
+transition, vacuum energy dominates, indicating that conventional approximations assuming a
+specific and constant time-temperature-relation become invalid.
+2.3 The fate of the false vacuum
+Given two distinct phases coexisting in the universe, the evolution of the true-vacuum fraction
+can be tracked as a function of time. Assuming spherical bubbles, nucleated homogeneously
+10
+
+15 16 17 18 19
+Tf [MeV]
+105
+106
+Energy density [MeV 4] TnucTperc
+¯ρ
+Pfρf
+Pfρvac,f
+Pfρrad,f
+Ptρt
+Figure 2: Evolution of the energy densities in the false and true vacuum around the phase
+transition in the conformalU(1) ′ model (g= 0.925,v= 140 MeV,y= 0.01). The percolation
+(nucleation) temperature is indicated by a dash-dotted (dashed) vertical line.
+throughout the universe, and expanding with a steady-state velocityv w, the true-vacuum frac-
+tionP t can be shown to follow [42]
+1−P t(t) = e−I(t) = exp
+ 
+−4πv3
+w
+3
+Z t
+tinit
+dt′ Γ(t′) a3(t′)
+a3(t)
+Z t
+t′
+dt′′ a(t)
+a(t′′)
+3!
+.(2.18)
+Here,t init indicates the earliest time at which tunnelling is possible, which usually coincides with
+the critical temperature,T c, at which the potential minima degenerate and at which bubble
+nucleation becomes possible. Long before the transition, att→t init, the argumentI(t)→1,
+such that the true-vacuum fraction vanishes. Long after a successful transition, att→ ∞, the
+argumentI(t)→ ∞, such that the true-vacuum fraction approaches its maximum value 5, which
+is typically 1.
+For our purposes, it is more convenient to compute the percolation integralI(t) in terms
+of the false-vacuum temperatureT f instead of time: Using the time-temperature relation found
+above, we can substitute dt=−3H(T f)Tf c2
+s,f dTf and obtain (neglecting the subscript “false” in
+the following equations for brevity)
+I(T) = 4π
+3 v3
+w
+Z Tinit
+T
+dT ′
+H(T ′)T ′
+Γ(T ′)
+3c2s(T ′)
+a3(T ′)
+a3(T)
+"Z T ′
+T
+dT ′′
+H(T ′′)T ′′
+1
+3c2s(T ′′)
+a(T)
+a(T ′′)
+#3
+.(2.19)
+Percolation is defined as the point in time when a connected cluster of bubbles spans through
+a Hubble patch. The threshold relevant for cosmological phase transitions is found to be
+Pt(Tperc)≡f perc ≃0.28957 [99, 42]. SinceP t(T)→1 only asymptotically, the definition of
+completion is somewhat arbitrary and chosen to beP t(Tf)≡f final = 1−εwithε≪1. In
+5In fine-tuned cases of ultraslow transitions, the bubble nucleation rate can decrease during the phase transition,
+leading to the saturation of the true-vacuum fraction at values below 1. In these cases, the bubble nucleation
+rate cannot compete with the Hubble expansion and it is not guaranteed that we would find ourselves in the true
+vacuum state today. Special care needs to be taken in these cases, sometimes referred to as vaccum trapping
+or used phenomenologically within the eternal inflation framework, see e.g. ref. [97, 98]. We are not interested
+in such pathological scenarios, as the GW signal from bubble collisions and bulk fluid motion will be absent or
+strongly suppressed in these cases.
+11
+
+practice we setf final = 0.99. We further define the reheating temperature as the true vacuum
+temperature at the moment of percolationT reh ≡T t(tperc).
+Another often described milestone temperature is the nucleation temperature,T nuc, which
+is defined as the temperature at which the average number of bubbles per Hubble patch reaches
+one,
+N(T nuc) = 4π
+3
+Z tnuc
+tinit
+dt Γ(t)(1−P t(t))
+H3(t) = 1.(2.20)
+Typically, nucleation happens long before percolation, such that the above expression can be
+simplified usingP t(t < t nuc)≈0. For the case of an exponentially growing bubble nucleation
+rate, the integrand is dominated by the temperatures near the nucleation temperature and
+N(T nuc)≈Γ(T nuc)/H(Tnuc)4 != 1 becomes a good approximation. Further approximations of
+this nucleation criterion exist for the case of radiation domination, whenH∝T 2/Mpl, such
+thatS 3/T≃ O(10 2) at nucleation. Note that these approximations break down for the case of
+the strongest supercooled phase transitions, expected to emit the largest possible GW signals.
+Note further that the nucleation temperature isnotdirectly related to the GW signal, as no
+GWs are emitted during the nucleation process itself. In ref. [100] it has further been argued
+that there can even be pathological cases in whichT nuc < Tperc or in whichN <1 for all times,
+even though the transition succeeds.
+2.4 On the strength and speed of the transition
+The most important characteristics of a phase transition, in order to predict its gravitational
+wave signature, are its strength and the size of bubbles during the transition. The first is typically
+quantified by the energy release during the transition, while the second can be characterised in
+two ways: either through the speed with which the nucleation rate is growing, or through the
+mean bubble separation at percolation.
+For weak FOPTs, the bubble nucleation rate is typically a quickly increasing function of
+time, such that around percolation one can define the speed of the transition as
+˙Γ
+Γ
+
+perc
+= d
+dt
+"
+ln Γperc + d ln Γ
+dt
+
+perc
+(t−t perc) +O(t 2)
+#
+perc
+≃ − d
+dt
+ S3
+T
+
+perc
+.(2.21)
+To arrive at this expression, we have Taylor-expanded ln Γ around percolation, used that the
+bubble nucleation rate is exponentially growing in time (such thatO(t2) terms could be ignored),
+and that the exponent of Γ reads−S 3/T, see eq. (2.8). For a bag equation of state, i.e.c 2
+s,f = 1/3
+in eq. (2.16), the time derivative can be replaced by a temperature derivative and ( ˙Γ/Γ)|perc ≃
+T H d
+dT (S3/T)| perc, motivating the definition [101]
+ β
+H
+
+S3
+≡T d
+dT
+ S3
+T
+
+perc
+,(2.22)
+which is a good measure of the transition speed if the above assumptions are met. This is
+typically the case whenβ/H≥ O(10 3), i.e. when the transition willnotbe observable by any
+planned GW observatories. Stronger transitions, however, typically feature a slower growth of
+the bubble nucleation rate, which can even decrease after having reached a peak at a given time.
+This leads to a lesser amount of bubbles, percolating at a later stage where they could already
+grow larger, thus emitting stronger GW signals. In particular, for cases in which Γ(T) peaks
+12
+
+just before percolation, (β/H) S3 can even obtain negative values. We therefore refrain from
+treating (β/H) S3 as a good indicator of the speed of an arbitrarily strong FOPT.
+We instead compute the characteristic length scale directly from the nucleation history using
+the average bubble number density in a Hubble patch
+n(T) =
+Z t
+tinit
+dt′ Γ(t′)(1−P t(t′))
+ a(t′)
+a(t)
+3
+.(2.23)
+From this the mean separation of bubbles can be obtained by evaluating
+Rsep(T) = 1
+n(T) 1/3 =
+"Z Tmax
+T
+dT ′ Γ(T ′)
+H(T ′)T ′
+1−P t(T ′)
+3c2s(T ′)
+ a(T ′)
+a(T)
+3#−1/3
+,(2.24)
+where in the last step we again plugged in the time-temperature relationship in the false vacuum,
+see eq. (2.16). At the percolation temperatureT p, one can show that for exponentially growing
+bubble nucleation rates andc 2
+s,f = 1/3 [102]
+RH≡R sep(Tperc)H(Tperc)≃
+ 8π
+fperc
+1/3 max (vw, cs)
+(β/H) S3
+(2.25)
+holds, relating the two measures. In appendix C we present a derivation of this relation. The
+factor max(vw, cs) instead ofv w is included to account for the possibility that the sound speed
+in the false vacuum is larger than the wall velocity, meaning that there can be shock waves
+expanding as subsonic deflagrations in front of the bubble wall, see ref. [77] for details. Note
+however, that for sufficiently slow transitions, the above relation will break down because of the
+exponential-in-time approximation no longer being valid. Note further that the prefactor 1/f 1/3
+perc
+is often missing in the literature, even in standard references and reviews [77, 42, 60]. Based on
+the above relation, we define
+ β
+H
+
+RH
+≡
+ 8π
+fperc
+1/3 max (vw, cs)
+RH (2.26)
+in order to compare with the existing literature and conventions in the field.
+In the left panel of fig. 3 we compare the transition speed obtained from eq. (2.22) (blue)
+with the transition speed obtained from eq. (2.26), once with (magenta) and once without (or-
+ange) the factorf perc. For the comparison we show a slice of the Abelian dark Higgs model
+parameter space (g= 1,v= 100 MeV), cf. appendix A for the model definition. The smaller the
+self-couplingλ, the more supercooled and slower the FOPT becomes. For very smallλ <0.0181,
+corresponding to ultraslow and supercooled transitions, (β/H) S3 becomes negative because the
+bubble nucleation rate decreases at percolation, whereas (β/H) RH remains positive, since the
+mean bubble separation is always positive. For relatively fast transitions withβ/H≫100 (cor-
+responding toλ≳0.02 in this model), (β/H) S3 = (β/H) RH and eq. (2.25) correctly translates
+between the mean bubble separation and the transition speed parameter (β/H) S3. The remain-
+ing sub-percent-level discrepancies between (β/H) S3 and (β/H) RH forλ >0.02, depicted in
+the right panel, are due to numerical limitations. If one omits the factor 1/f 1/3
+perc, the inferred
+transition speed (8π) 1/3/RHis too small by about 30%, leading to an over-estimate of the GW
+signal by a factorO(10). For other cases in which (β/H) S3 →0 is used to infer the strength
+of a GW signal, an artificial, arbitrarily large increase of the GW signal can be achieved. We
+therefore use and recommend the use ofRHas defined above.
+13
+
+0.02 0.04 0.06
+λ
+101
+102
+103
+104
+Transition speed β/H
+(β/H )S3 ≡ T d
+dT
+( S3
+T
+)⏐⏐⏐⏐
+perc
+(β/H )′
+RH ≡ (8π)1/3
+RH
+(β/H )RH ≡ (8π/fperc)1/3
+RH
+0.0181 0.0182 0.0183
+λ
+100
+10
+1
+-1
+-10
+-100Transition speed β/H
+0.02 0.04 0.06
+λ
+10□4
+10□3
+10□2
+10□1
+100
+101
+102
+Relative deviation
+(β/H)′
+RH vs. (β/H)S3
+(β/H)RH vs. (β/H)S3
+Figure 3: Numerical validation of thef 1/3
+perc correction relatingRHwithβ/H, based on a line
+scan over the quartic couplingλin the dark Abelian Higgs model (g= 1,v= 100 MeV),
+defined in appendix A.Left:Three different definitions ofβ/H. The factorf 1/3
+perc is needed to
+achieve consistency, see also appendix C for a derivation.Middle:For ultraslow transitions, the
+conventional definition of (β/H) S3, based on the logarithmic temperature derivative ofS 3/T,
+becomes physically meaningless, while (β/H) RH remains reliable.Right:Relative deviations
+between the different quantities. The residual sub-percent-level inaccuracies between (β/H) S3
+and (β/H) RH atλ >0.02 are due to numerical limitations. In this plot, we explicitly setv w = 1
+to isolate the effect of different definitions of the transition speed on the GW signal.
+For the transition strength we follow the prescription developed in refs. [103, 96] using the
+pseudo-trace of the energy-momentum tensor of the fluid described by the effective potential
+¯θi(T) =
+ 
+ρi(T)− pi(T)
+c2
+s,i(T)
+!
+,(2.27)
+wherei= (t, f) labels either vacuum andc s,i(T) is the speed of sound in the respective phase,
+see eq. (2.16). With this, the strength of the phase transition can be defined as the difference
+in the pseudo-trace in both phases at the percolation temperature
+α=
+¯θf(Tperc)− ¯θt(Tperc)
+3(ρf(Tperc) +p f(Tperc)) .(2.28)
+Note that previously also other definitions ofαhave been used in the literature, based on ∆ρor
+∆pinstead of ∆ ¯θ. In refs. [103, 96] these alternative definitions ofαhave been shown to over- or
+underestimate the GW signal, which is why we refrain from using them. In the limit ofc2
+s,i →1/3,
+the pseudo-trace reduces to the trace of the energy-momentum tensor,θ=g µνT µν =ρ−3p,
+and the definition ofαbecomes equivalent toα= (∆V− 1
+4 T ∂T ∆V)/ρ rad
+f .
+Using the transition strengthα, an often found approximation for the reheating temperature
+readsT approx
+reh =T perc(1 +α)1/4, see for instance refs. [66, 69], which base their GW computation
+on this approximation. The left panel of fig. 4 compares the reheating temperature approxima-
+tion with our full computation based on eq. (2.17) as a function of the gauge couplinggin the
+conformalU(1) ′ model defined in appendix A. In general we find anO(10%) discrepancy due to
+this approximation, which translates directly to the predicted GW signal through the amount of
+expected redshift. In the right panel we further show the impact of solving the percolation inte-
+gralP t(T) = 1−exp{−I[H[P t]](T)}self-consistently instead of neglecting the influence of the
+true vacuum bubbles on the Hubble expansion for an ultraslow transition featured in the dark
+14
+
+0.55 0.60 0.65 0.70
+g
+11
+12
+13
+14Treh [MeV]
+Treh
+T approx
+reh
+101
+Tf [MeV]
+0.0
+0.5
+1.0
+Pt(T )
+fﬁnal
+fpercSelf-consistent
+Assuming ¯ρ = ρf
+Figure 4:Left:Reheating temperature and its approximationT approx
+perc =T perc (1 +α) 1/4 as a
+function of the gauge couplinggin the conformalU(1) ′ model (y= 0.01,v= 140 MeV).Right:
+Comparison of the self-consistent and approximate (¯ρ=ρ f) solution of the percolation integral
+Pt(T) = 1−exp{−I[H[P t]](T)}for an ultraslow transition with (β/H) RH = 3.5 featured in the
+dark Abelian Higgs model (λ= 0.018,g= 1,v= 100 MeV).
+Abelian Higgs model. The influence on the percolation temperature is comparably small, but
+the final temperature is clearly affected. ComputingP t using the approximation ¯ρ≈ρ f hence
+bears the risk of treating viable, extremely slow phase transitions as ruled out, even though
+a final temperature could indeed be found when treating the effect ofP t on the Hubble rate
+self-consistently.
+2.5 Hydrodynamics and wall velocity
+The GW signal can be sourced by several mechanisms, most importantly by the bulk motion
+of fluid during the phase transition (i.e., sound waves and turbulence), but also by bubble
+wall collisions. In order to estimate the contribution of each mechanism to the total signal,
+we compute their individual energy budgets. The most important quantity going into their
+computation is the bubble wall velocityv w, which appeared already earlier, when we introduced
+the percolation integral in eq. (2.19). Computing the bubble wall velocity is itself a notoriously
+difficult problem which we only try to address partially in this work. Even though numerical
+tools likeWallGo[49] allow the computation of the wall velocity in general models, the numerical
+cost of this is still prohibitive for large-scale parameter scans. Most importantly, however, it is
+also not strictly necessary to accurately computev w in the strongly supercooled cases we are
+most interested in: For a sufficiently large amount of supercooling, sayα >O(1), the bubble wall
+velocity is expected to approach the speed of light,v w →1. In order to verify this, we employ
+the local thermal equilibrium (LTE) approximation, which can be shown to be an upper bound
+on the wall velocity,v w ≲v LTE
+w [81]. More important for the precise computation of the energy
+budget in strongly supercooled cases is the question whether the bubble walls reach a terminal
+velocity before they collide, or whether they accelerate up to very large Lorentz boost factors
+(between the wall and the surrounding fluid) up until the point when they collide. Typically the
+latter case requires very specific model building, i.e., negligible next-to-leading-order friction,
+for instance due to extreme supercoolingα >O(10 10). For these cases, we follow refs. [48, 62]
+and compute the energy stored in bubble walls based on the profile of a single bubble. In this
+case the efficiency factor, defined as the fraction of the energy in the bubble walls compared to
+15
+
+the released vacuum energyE V = 4π∆V R3
+∗/3, reads
+κcol = Ewall
+EV
+=
+
+
+
+1− α∞
+α ifγ ∗ < γeq (runaway walls)
+γeq
+γ∗
+
+1− α∞
+α
+
+γeq
+γ∗
+2
+ifγ eq ≤γ ∗ (walls with large terminalv w)
+0 else (non-relativistic walls),
+(2.29)
+whereγ ⋆ = 2Rsep/(3R0) is the maximally possible bubble wall boost factor at the time of colli-
+sion. Here,R ∗ ≃R sep (R0) are the bubble radii at the time of the bubble collisions (nucleation).
+We evaluateR 0 as the radial coordinate of the bubble profile whereϕ(R 0) = (ϕ0 −ϕ f)/2, where
+ϕ0 denotes the release point, i.e. the field value at the centre of the critical bubble. The derived
+quantity
+γeq = α−α ∞
+αeq
+withα ∞ = T 2
+24ρ false
+rad
+X
+i
+ni ∆m2
+i andα eq = T 3
+ρfalse
+rad
+X
+gauge
+ni g2
+i ∆mi (2.30)
+is the Lorentz factor reached by a bubble wall with terminal velocity, which has passed the
+B¨ odeker-Moore leading-order friction [104] (α∞) and is then stopped due to the next-to-leading-
+order friction from gauge boson splitting radiation (α eq). The sums run over all particles (gauge
+bosons)iwhich gather a positive mass square difference ∆m 2
+i during the transition, carrying an
+intrinsic number of degrees of freedomn i and a gauge couplingg i.
+In most cases of phenomenological interest (strongly supercooled transitions involving gauge
+bosons),γ eq ≪γ ∗ andα≫α ∞, meaning thatκ col →0, even though the bubble walls might be
+relativistic at the time of their collision. For these cases, this a-posteriori validates our initial
+assumption that the energy density in bubble walls can be neglected in eq. (2.13). The rest of the
+released vacuum energy goes into the bulk motion of the plasma and dissipated heat. The first
+of these acts as the source for sound waves after the bubble wall collisions. The efficiency factor
+of the energy transfer to sound waves is defined as the fraction of energy in the bulk motionE fl
+compared to the vacuum energy releasedE V and can be computed from the enthalpyw(ξ) and
+velocity profilev(ξ) of the bubble:
+κsw = Efl
+EV
+= 3
+v3w
+Z
+dξ ξ2 v2w
+1−v 2 .(2.31)
+In order to evaluate this integral, we use the fitting functions listed in the appendix of ref. [48].
+Importantly, in the limit of strong FOPTs withv w →1 andα≫1, the efficiency factor
+approachesκ sw →1.
+The decaying sound waves leave behind turbulence in the plasma, which can also act as an
+efficient GW source, which is however still subject to sizeable uncertainties due to the practical
+difficulties of simulating turbulence [57]. We take the standard heuristic approach of approx-
+imating the efficiency factor for turbulence as some fractionϵ turb of the sound wave efficiency
+factor [60]
+κturb =ϵ turbκsw .(2.32)
+In practice, we set the turbulence efficiency factor toϵ turb = 0.1.
+16
+
+2.6 Gravitational wave spectrum
+Simulating the nucleation of bubbles, their expansion and the backreaction of the plasma in
+response to their growth and collision has become a mature field of research by now. Still,
+simulating this process remains computationally demanding and is unfeasible for scans over
+model parameter spaces. Luckily, there now exists a wealth of different analytical and semi-
+analytical approximations for each of the three aforementioned contributions to the total GW
+spectrum. An overview of these approximations can be found in refs. [47, 105, 106, 52, 107, 53,
+108, 109, 55, 110, 111, 77, 57, 56, 112–114]. This long list of viable approximations is constantly
+growing due to the advances of numerical schemes being developed for more specialised cases,
+see for instance refs. [58, 115, 59, 116] for the most recent developments. In this work we follow
+the LISA working group and consider the GW spectra recommended in ref. [60] for each of the
+contributions, which in our notation read
+h2ΩGW(f) =Rh 2 ×
+
+
+
+AcolK2
+col(RH)2Scol(f) for bubble wall collisions,
+AswK2
+sw (RH)Y swSsw(f) for sound waves, and
+Aturb K2
+turb (RH)3Sturb(f) for turbulence.
+(2.33)
+Each contribution includes a prefactor
+Rh2 =
+ areh
+a0
+2 Hreh
+H0
+2
+h2 = Ωγh2
+D4/3
+ h0
+hreh
+eff
+4/3 greh
+eff
+g0
+,(2.34)
+describing the amplitude redshift, whereH 0 = 100hkm/(s Mpc) is the Hubble constant, Ω γh2 =
+2.473×10 −5 is the energy density in radiation, andg γ = 2,h 0 = 3.91 are the numbers of
+relativistic degrees of freedom, each evaluated today [1]. The energy and entropy degrees of
+freedom in the broken phase at the time of reheating (i.e., the time of percolation) are denoted
+byg reh
+eff andh reh
+eff , respectively. We further allow for an additional dilution of the GW signal at
+later times due to a phase of entropy injection through the dilution factorD=S 0
+SM/Sinit
+tot with
+S0
+SM being the SM comoving entropy density today andS init
+tot being the total comoving entropy
+density just before the transition, cf. ref. [71]. We ignore other effects from modified redshift
+histories, like potential modulations of the infrared slope of the GW spectrum due to a phase of
+early matter domination [117, 118], as these only have an impact on frequencies far away from
+the peak of the GW signal. For a standard ΛCDM redshift history following the transition, all
+frequencies obtain the same amount of redshift. A helpful quantity is the inverse horizon size
+at the time of the transition, redshifted to today, i.e.
+H∗,0 = a∗
+a0
+H∗ = 11.2 nHz
+D1/3
+ Treh
+100 MeV
+ greh
+eff
+10
+1/2 10
+hreh
+eff
+1/3
+,(2.35)
+which allows a direct comparison with the relevant length scaleLof the transition, fulfilling
+L≲H −1
+∗ due to causality.
+The normalisation constants in eq. (2.33) read 6 Acol ≈0.98,A sw = 0.11 andA turb = 0.255.
+The corresponding kinetic energy fractions can be computed from the transition strengthαand
+the efficiency factors,
+Kcol =κ col
+α
+1 +α , K sw = 0.6κ sw
+α
+1 +α ,andK turb = 0.6κ turb
+α
+1 +α ,(2.36)
+6In ref. [60], the bubble wall collision spectra are expressed in terms ofβ/H. As we prefer to useRHfor
+the aforementioned reasons and for consistent notation, we set the prefactor toA col = 0.05×(βR sep)2, where
+βRsep = (8π/fperc)1/3 max(vw, cs), see eq. (2.26). We further absorbed an explicit factor 3 appearing in ref. [60]
+intoA turb.
+17
+
+where the numerical factor 0.6 accounts for the reduced bulk kinetic energy found in recent
+simulations compared to single bubble expansion, cf. refs. [53, 56]. The spectral shapes are
+given by broken powerlaws following
+Scol(f) =
+ f
+fcol
+2.4"
+1
+2 + 1
+2
+ f
+fcol
+1.2#−4
+withf col = 0.49 H∗,0
+RH (2.37)
+for the collision signal,
+Ssw(f) =N
+ f
+fsw,1
+3"
+1 +
+ f
+fsw,1
+2#−1"
+1 +
+ f
+fsw,2
+4#−1
+(2.38)
+withf sw,1 = 0.2 H∗,0
+RH , f sw,2 = 0.5
+∆w
+H∗,0
+RH ,and ∆ w = |vw −c s|
+max(vw, cs)
+for the sound wave signal, and
+Sturb(f) =
+ f
+fturb,1
+3"
+1 +
+ f
+fturb,2
+2.15#−7.9
+
+
+
+ln2
+
+1 + H∗,0
+2πfturb,3
+
+forf≤f turb,3
+ln2
+
+1 + H∗,0
+2πf
+
+forf > f turb,3
+(2.39)
+withf turb,1 =H ∗,0 , f turb,2 = 2.2 H∗,0
+RH ,andf turb,3 =
+√3Kturb
+4
+H∗,0
+RH
+for the turbulence signal. The normalisation and the lifetime factor for the soundwave source
+are given by
+N= 4
+π
+fsw,1
+ 
+f 4
+sw,1 +f 4
+sw,2
+
+f 3
+sw,2
+ √
+2f 2
+sw,1 −2f sw,1fsw,2 +
+√
+2f 2
+sw,2
+ andY sw = min
+
+1, 2RH√3Ksw
+
+.(2.40)
+2.7 Observability of cosmological GW backgrounds
+A given GW background from a FOPT could potentially be observed in the near future with
+upcoming GW observatories. Excitingly, it could be that PTAs have already found signals
+from a cosmological phase transition [5–10]. As of now, however, the only relevant 7 constraints
+on cosmological GW backgrounds stem from pulsar timing arrays (PTAs), ∆N eff constraints
+from BBN and the CMB observations, and, to a lesser extent, from LIGO-Virgo-KAGRA non-
+observations. In order to access the observability of a GW background and its feasibility given
+cosmological constraints, we hence implement the following three measures:
+Signal-to-noise ratios.For a given GW background, the signal-to-noise ratio (SNR) is a key
+metric for assessing its detectability. The SNR is defined as the ratio of the signal power to
+the noise power, integrated over the detector’s frequency band and weighted by the observation
+time,
+SNR2 = 2t obs
+Z
+df
+ h2ΩGW(f)
+h2Ωnoise(f)
+2
+,(2.41)
+7Also the non-observations of CMBB-mode polarisations provide additional constraints, which we however do
+not take into account here, as the corresponding signals would need to be emitted at very late times, when other
+constraints become more relevant. We further do not takeµ-distortion constraints [119], curvature perturbation
+constraints [120] or BBN homogenisation constraints [121] into account, as these typically do not dominate or
+still demand further investigation.
+18
+
+The factor 2 accounts for cases where a cross-correlation can be performed when a multi-detector
+network is used; in single-detector scenarios, the prefactor is 1 instead [122]. If the SNR exceeds
+a certain threshold SNR thr, the signal is considered detectable. In our work, we consider the
+spectral noise curves for the following list ofcurrentandplanned/proposedGW observatories,
+based strongly on ref. [122],
+•SKA(5, 10, and 20 years of detection data) [123, 124], SNR thr = 4,t obs = 5,10,20 yr,
+•EPTA (18 years)[125, 126], SNR thr = 1.19,t obs = 18 yr,
+•NANOGrav (11 and 15 years)[127], SNR thr = 0.697,t obs = 11,15 yr,
+•µAres[128], SNR thr = 10,t obs = 7 yr,
+•LISA[3], SNR thr = 10,t obs = 4 yr,
+•B-DECIGO, DECIGO[129, 130], SNR thr = 8,10,t obs = 4,4 yr,
+•BBO[131], SNR thr = 10,t obs = 4 yr,
+•ET[132], SNR thr = 5,t obs = 5 yr, and
+•HLV (O2),HLVK (design)[133–135], SNR thr = 1,t obs = 1 yr.
+The evaluation of these measures thus allows us to assess whether a given GW background is
+detectable by some observatory or should have already been found by now, in case of the already
+existing observatories.
+PTA likelihoods.To further address the compatibility of a given GW signal in the nHz
+range with the observed PTA signal, we compute likelihoods with thePTArcadetool [82], using
+theCeffylrefitting techniques presented in ref. [136]. In practice, we further smooth out this
+likelihood beyond its original range of validity, towards a wider range of GW amplitudes and
+frequencies, such that it can also be used efficiently within a sampler, cf. ref. [63]. The currently
+publicly available PTA likelihoods are based on the NANOGrav 12.5 yr [137] and 15 yr [6] data
+sets, as well as the second IPTA data release [5].
+Cosmological constraints.Finally, we compute the GW contribution to the effective number
+of relativistic species,
+∆N GW
+eff = 8
+7
+11
+4
+4/3 1
+Ωγh2
+Z fmax
+fmin
+h2ΩGW(f) d logf ,(2.42)
+usingf min = 1.5×10 −11 Hz andf max = 1010 Hz, see ref. [138]. This allows for a quick comparison
+with the bounds obtained from BBN and CMB observations. For a typical power-law spectrum
+for instance, this bound constraints the GW amplitude belowh 2ΩGW(fpeak)≲10 −6, depending
+on the specific spectral shape and choice of cosmological parameters.
+19
+
+SKA 5 yr
+SKA 10 yr
+SKA 20 yr
+NANOGrav 15 yr
+LISA
+BBO
+ET
+θAres
+LIGO-VIRGO O2
+NG15 (violins)
+NeÆ
+BP1
+BP2
+BP3
+BP4
+nHz µHz mHz Hz kHz
+f/ Hz
+10°17
+10°15
+10°13
+10°11
+10°9
+10°7
+h2≠GW(f)
+Figure 5: Gravitational wave spectra for the four benchmark points listed in table 1. The dashed
+sensitivity curves are expected powerlaw-integrated sensitivities, whereas the NANOGrav 15 yr
+and LIGO-VIRGO O2 ones are based on observations. The thin violins in the nHz region stem
+from the NANOGrav 15 yr data release. The grey shaded bar indicates the excluded region due
+to ∆N GW
+eff constraints from BBN and CMB [1, 139].
+BP Model Config file Model parameters α(β/H) RH Treh[GeV]
+1 Conformal darkU(1)′ bp pta.yamlg= 0.7,y= 0.01,v= 140 MeV. 620 59 1.4×10 −2
+2 Dark flipflopbp muares.yamlλ0 = 0.0051,λ1 = 0.0021,λ12= 0.0031,
+v= 3.7 GeV,y= 0.97,γ= 0.75.
+0.18 1400 5.9×10 −1
+3 2HDM (Type-I)bp lisa.yamlλ 1 = 0.29,λ2 = 0.26,λ3 = 5.81,
+λ4 =−2.2,λ5 =−2.2, tanβ= 21,
+m212= 1.6×103GeV2,v= 246 GeV.
+0.60 91 4.4×10 1
+4 DarkU(1) ′ bp et.yaml˜g= 2.65,λ= 1.5·10 −3,v= 1·10 7GeV. 1.4 810 5.6×10 5
+Table 1: Benchmark points used in fig. 5. Unrounded values for the input parameters can be
+found in the listed.yamlfiles.
+2.8 Benchmark points and implemented models
+In appendix A we define several models that are implemented inTransitionListener v2.0.
+Here, we want to introduce benchmark points from these models, spanning vastly different energy
+scales. In table 1 we list the benchmark points and their corresponding model parameters.
+The resulting GW spectra for these benchmark points are shown in fig. 5 together with
+the aforementioned ∆N GW
+eff bounds, the PTA data (visualised as violins) and the powerlaw-
+integrated sensitivity curves for a selection of representative GW observatories. Let us briefly
+discuss each of the GW spectra here. Benchmark point 1, stemming from a conformal dark sector
+model was studied in detail in ref. [37]: If a huge amount of vacuum energy density (α= 620) is
+released during the phase transition and the universe reheats to a temperature ofTreh = 14 MeV,
+a good fit to the PTA data can be obtained. In ref. [37] it was shown that the same model, in a
+20
+
+part of its parameter space can further explain the observed DM abundance. Benchmark point
+2, on the other hand, is based on a dark flipflop model, first discussed in ref. [63], and represents
+a different approach to generating GWs: Here, no new gauge group is introduced, but instead
+two SM singlets are considered. When one of the two singlets acquires a vacuum expectation
+value through a second-order transition, it generates a potential barrier for the other singlet
+field, which eventually will tunnel to its true vacuum afterwards. The shown benchmark point
+corresponds to a comparatively weak phase transition (α= 0.18) happening below the GeV scale
+and could be tested by the proposedµAres space-based interferometer. Similarly, benchmark
+point 3 from the 2HDM showcases another possible scenario for GW production: In this case the
+SM is extended by another Higgs doublet, generating a potential barrier during the electroweak
+symmetry breaking. The benchmark transition is strongly first-order (α= 0.60), with bubble
+sizes at the few-percent level of the horizon size at that time (RH= 0.049). The proposed
+point would result in a GW signal in the LISA frequency band. Its observation would provide a
+unique test of the underlying electroweak theory. Lastly, benchmark point 4, stemming from an
+Abelian dark Higgs extension of the SM predicts a strong GW signal in the ET band, testable
+by the next generation of ground-based interferometers. The identification of a FOPT signal at
+these frequencies would correspond to the presence of strong dynamics at the 10 6 GeV scale,
+which is out of reach for conventional collider searches for new physics, see also ref. [71] for a
+detailed study of the dark Abelian Higgs model parameter space.
+Each of these benchmark points is available as a.yamlfile, allowing to be reproduced easily,
+see sec. 4 for a tutorial. We cordially invite the reader to reproduce these GW spectra on their
+own, using a one-line call of our code, as presented in the following section.
+3 Program description and implementation
+In this section we summarise the internal structure and functionality ofTransitionListener
+v2.0(abbreviatedTL). We give a compact overview of the numerical pipeline and the design
+choices that enable robust, end-to-end calculations: from phase tracing and multi-field tunnelling
+to the computation of the true-vacuum fraction with its backreaction on the Hubble rate and the
+self-consistent treatment of reheating. For each module we discuss the implemented algorithms
+and the key accuracy controls.
+This section is structured as follows: In the first subsection, we give a brief guide on the
+installation of the code, followed by a first look on its overall module structure. We then continue
+with a discussion of these modules. Starting from the implementation of a new model in sec. 3.2,
+we go through the chain of individual modules which have to be called in order to produce the
+final observability results. Sec. 3.3 then discusses the underlying algorithm behind the phase
+tracing in a given temperature-dependent effective potential. The following sec. 3.4 describes
+the evaluation of the transition rates between phases found in the previous step. The algorithm
+to compute the nucleation history and percolation temperature is discussed in sec. 3.5. Finally,
+in sec. 3.6 we discuss the computation of thermodynamical quantities, the GW signal and its
+observability. We conclude this section with a brief note on error handling, which we expand on
+in more detail in Appendix E.
+3.1 Installation instructions and structure of the repository
+In this subsection we first want to briefly describe the different installation options forTL, before
+we then come to the description of the different modules the program consists of.
+21
+
+Installation.TLcan be obtained from the GitHub repository
+https://github.com/tasicarl/TransitionListener
+and can be installed in a virtualcondaenvironment as follows 8
+1conda create -n TL -c conda - forge python =3.10 ptarcade ul tr an es t tqdm mpi4py
+sympy
+2conda activate TL
+3git clone https :// github . com / tasicarl / T r a n s i t i o n L i s t e n e r . git
+4cd T r a n s i t i o n L i s t e n e r
+5pip install -e .
+The editable (-e) install keeps the package in sync with local changes, for instance when mod-
+ifying model files or adding a new feature like an updated GW spectral template. The public
+documentation at https://tasillo.de/TransitionListener provides a quick-start guide, examples
+and the API references generated from the source tree. We further want to encourage users of
+our code to report bugs and ask physics questions using the issue tracker ongithub, where we
+plan to release future versions of our code.
+Structure of the code.Version 2.0 ofTLbuilds onto the original release from 2021 [71], which
+itself was heavily influenced by the phase-tracing, path-deformation and tunnelling foundations
+ofCosmoTransitions[140]. In fig. 6 a visual guide for the new structure ofTLcan be found,
+with arrows indicating the typical module dependencies.
+Overall, the different modules can be structured into several groups, indicated by different
+colours and blocks in fig. 6: The modules visualised in light blue serve as a central interface
+to all other modules: A command line interface, relevant for thetlcommand is introduced in
+interface/cli.py. A usual call ofTLconsists of calling a.yamlconfiguration file (depicted as
+a red block in fig. 6) that contains the modelname and parameter specifications, e.g.
+1tl -- config config . yaml
+This will then trigger theconfig loader.pyto read the requested operations on the de-
+fined model, be it computations on a single point in parameter space (single point.py) or
+larger scans (scans.py), potentially involving Monte Carlo methods available through the
+samplers.pymodule. If a GW signal prediction for a single point of a given parameter space is
+wanted, several available plots can be produced, each one stemming from a different part of the
+full end-to-end computation, see sec. 4 for examples. Eventually, all the output generated by
+TL, including log files and plots, is handled through thelogging utils.pymodule. By default,
+these are saved into a/scans/subdirectory, relative to the installation point of the code.
+The main physics engine ofTLis visualised in dark blue in fig. 6: The pipeline orchestrator,
+found ininterface/pipeline.pycalls the individual modules necessary to answer a physics
+question. Methods for the automated computation of effective potentials and derived quantities
+like their gradients or the energy density are implemented ingeneric potential.py. User-
+defined modules located in the folder/models/inherit methods fromgeneric potential.py
+and can also overload them, if a given model does not fit the default implementation. An
+example is the conformalU(1) ′ model described in Appendix A, which requires a non-standard
+renormalisation procedure. Each model file defines the field content, the counterterms and a
+MassSpectrumobject, which defines the field-dependent masses of all physical states present in
+the theory. In case of SM particles being present in the theory, as for instance in the 2HDM,
+the model file also allows the user to exclude these from the computation of the background
+8Theptarcadepackage on MacOS with Apple silicon processors requires the option--platform osx-64.
+22
+
+User input
+Scan output
+Visualization & Plots External tools
+Interface
+Physics modules
+Numerical physics
+Config YAML
+examples/example_point.yaml
+Model file
+models/model.py
+CLI entry point
+interface/cli.py
+Config loader
+interface/config_loader.py
+Single-point helpers
+interface/single_point.py
+Shared state
+interface/state.py
+Scan manager
+interface/scans.py
+Samplers
+interface/samplers.py
+Pipeline orchestrator
+interface/pipeline.py
+Logging & export
+interface/logging_utils.py
+Effective potential
+generic_potential.py
+Phase tracing
+phases.py
+Transition finder
+transitions.py
+Transition observables
+transitionObservables.py
+GW spectrum
+gwfopt.py
+Observability
+observability.py
+Shared numerics
+helper_functions.py
+Physics constants
+constants.py
+Thermal integrals
+finiteT.py
+Degrees of freedom
+thermodynamics.py
+Particle bookkeeping
+particles.py
+Nucleation temperature
+nucleation.py
+Bubble dynamics
+bubbledynamics.py
+Path deformation
+pathDeformation.py
+Bounce solver
+tunneling1D.py
+Error taxonomy
+errors.py
+Color schemes
+colors.py
+Plot orchestrator
+plots.py
+Plot settings
+plot_settings.py
+Grid plots
+gridplots.py
+Line plots
+lineplots.py
+Ultranest sampler
+ultranest
+PTArcade likelihoods
+ptarcade
+MPI backend
+mpi4py
+Plots and data
+scans/*.pdf, *.txt, *.csv
+Figure 6: Module dependencies insideTransitionListener.
+evolution described by the effective degrees of freedomg ext
+eff andh ext
+eff , cf. eq. (2.11). Helper
+functions (visualised in green in fig. 6) for the bookkeeping of different types of particles are
+implemented inparticles.py, degrees of freedom are computed via the methods implemented
+inthermodynamics.py, theJ b andJ f integrals are found infiniteT.py, and general physical
+constants, like SM particle masses or the Planck mass are centrally managed inconstants.py.
+Having defined an effective potential, the phase tracing is performed inphases.py, which
+will hand back aPhasesobject to the pipeline orchestrator. This object is then handed over
+to thetransition.pymodule which evaluates the possibility of all the different transitions
+between the found phases. In particular, this requires thebubbledynamics.pyhelper mod-
+23
+
+ule, which performs the computation of the true-vacuum fraction, based on bounce action
+computations performed intunneling1D.py, after a viable tunnelling path has been found in
+pathDeformation.py. If a first-order phase transition has been found, macroscopic thermody-
+namic quantities likeα,RH,T perc andT reh are then computed intransitionObservables.py,
+which itself returns aTransitionObservablesobject. Within the pipeline orchestrator, this
+object is then handed to thegwfopt.pymodules which computes the GW spectrum following
+eq. (2.33). If several transitions are present in a given model, the strongest FOPT is used to infer
+the GW signal. TheFOPTspectrumobject created by this is then used to infer the observability
+and possible cosmological viability of a given signal within theobservability.pymodule.
+In the case of discrete scans over parts of a given model parameter space, the plot orches-
+tratorplots.pydelegates tasks to the appropriate plotting modules, includinggridplots.py
+andlineplots.py. These use colour schemes and plotting defaults defined incolors.pyand
+plot settings.py(all visualised in orange in fig. 6). External tools likeMPI, allowing the easy
+parallelisation of large model parameter space scans, theultranestsampler, or thePTArcade
+likelihood are optional dependencies of the code, broadening the general functionality ofTL. If at
+any point of the computation an error occurs, it is logged and handled by thelogging utils.py
+module. Theerrors.pyfile contains a list of possible numerical and physical errors which can
+occur when runningTL. These include for instance the possibility of the eternal inflation sce-
+nario, when a transition does not succed, or the case of insufficient numerical accuracies to
+make precise statements about the emitted GW signal. A list of all error cases can be found in
+Appendix E.
+3.2 Model definition
+TLallows for the semi-automatic computation of effective potentials, including quantum and
+thermal corrections, once a theory and its mass spectrum are specified. A selection of prede-
+fined models is available in themodelsdirectory. These include several single- and multi-field
+dark sector models as well as the 2HDM, which can be used out-of-the-box, or extended to
+more general cases. A discussion of these models can be found in Appendix A. Here we intro-
+duce the definition of a generic model file on a technical level. To do so, we will describe the
+templatePotential.pytemplate and explain how to implement new models.
+A generic model file starts with the definition of model parameters in the form of apython
+dictionary, including a name of the parameter (including a L ATEXversion for display in plots),
+a default value and bounds, see code snippet 1.TLwill automatically return an error if the
+parameters are out of bounds or if they are not initialised properly. Further, the number of field
+dimensionsNdimof the potential must be specified.
+1class T e m p l a t e P o t e n t i a l ( g e n e r i c _ p o t e n t i a l ) :
+2m o d e l _ p a r a m e t e r s = {
+3" p a r a m e t e r 1 " : {
+4" default " : 1.0 ,
+5" plotname " : r "$\ lambda$" ,
+6" min " : 0 ,
+7" max " : np . inf } ,
+8# ...
+9}
+10
+11def init ( self , inp , verbose = True ) :
+12self . Ndim = 1 # Specify the number of field d i m e n s i o n s
+13self . mp = self . s e t _ m o d e l p a r a m s ( inp )
+14self . p a r a m e t e r 1 = self . mp [ " p a r a m e t e r 1 " ][ " value " ]
+24
+
+15# ...
+Code snippet 1: Any model file inTLbegins with the definition of its parameters in a dictionary.
+Next, the tree-level potentialV0and the counterterm potentialVcthave to be implemented
+as shown in code snippet 2. For demonstrational purposes, we show the implementation of a
+dummy tree-level and counterterm potential of the form
+Vtree(ϕ1) =− µ2
+1
+2 ϕ2
+1 + λ1
+4 ϕ4
+1 , V ct(ϕ1) =− δµ2
+1
+2 ϕ2
+1 + δλ1
+4 ϕ4
+1 .(3.1)
+Currently, there is no automated way to generate the counterterms for a generic model imple-
+mented inTLand counterterms have to be implemented manually for each new model. The
+model files delivered in this code release however include implementations for several common
+models, including single- and multi-field models, which can be easily adapted. In the case of
+the 2HDM, we implemented the counterterm solver in the same way asBSMPTv3, to allow for a
+direct comparison between the two codes, cf. sec. 4.
+1def V0 ( self , X : np . ndarray ) -> np . ndarray :
+2" " " This method defines the tree - level po te nt ia l . " " "
+3X = np . a s a n y a r r a y ( X )
+4
+5phi1 = X [... , 0]
+6# For Ndims > 1 , the other field d i r e c t i o n s are e x c t r a c t e d as
+7# phi2 = X [... , 1]
+8# phi3 = X [... , 2]
+9
+10# Compute the c o n t r i b u t i o n s to the tree - level po te nt ia l with the
+11# model p a r a m e t e r s
+12V = - self . mu2_1 *( phi1 **2.) /2. + self . l_1 *( phi1 **4.) /4.
+13
+14# P o t e n t i a l l y other field d i r e c t i o n s contribute , e . g .:
+15# V += - self . mu2_2 * phi2 **2/2 + self . l_2 * phi2 **4/4.
+16
+17return V
+18
+19def Vct ( self , X : np . ndarray ) -> np . ndarray :
+20" " " The c o u n t e r t e r m l a g r a n g i a n is the same as the tree - level L a g r a n g i a n but
+21with masses and co up li ng s replaced by c o u n t e r t e r m values ( i . e . here
+22mu2 -> dmu2 and l -> dl ) .
+23" " "
+24X = np . array ( X )
+25phi1 = X [... , 0]
+26
+27# Compute the c o n t r i b u t i o n from the c o u n t e r t e r m s
+28V = - self . dmu2_1 *( phi1 **2.) /2. + self . dl_1 *( phi1 **4.) /4.
+29# P o t e n t i a l l y other field d i r e c t i o n s contribute , e . g .:
+30# V += - self . dmu2_2 * phi2 **2/2 + self . dl_2 * phi2 **4/4.
+31
+32return V
+Code snippet 2: Example of a tree-level and counterterm potential implementation.
+Lastly the field-dependent mass spectrum of the theory has to be implemented, from which the
+quantum and thermal corrections in the effective potential can be are computed. This is done
+by specifying the (physical)Scalars, theGoldstonebosons, theGaugeBosonsandFermions
+of the theory (see code snippet 3). Here it is convenient to split the gauge bosons into their
+transverse and longitudinal part, since only the latter receive a thermal mass. Additionally, a
+25
+
+mass function has to be implemented for the bosons and fermions, which returns the masses in
+the same order in which the particles are listed.
+1def b u i l d _ m a s s _ s p e c t r u m ( self ) -> M a s s S p e c t r u m :
+2s c a l a r _ p a r t i c l e s = [
+3Scalar ( name = " m_ sc al ar 1 " , l a t e x _ n a m e = r "$m_ {\ phi_1 }$" ,
+4dof =1 , is_SM = False ) ,
+5Go ld st on e ( name = " m _ g o l d s t o n e 1 " , l a t e x _ n a m e = r "$m_ {\ varphi_1 }$" ,
+6dof =1 , is_SM = False ) ]
+7g a u g e _ p a r t i c l e s = [
+8G a u g e B o s o n ( name = " m_gb_T " , l a t e x _ n a m e = r "$m_ { GB , T }$" ,
+9dof =2 , g a u g e _ c o u p l i n g = self .g , is_SM = False ) ,
+10G a u g e B o s o n ( name = " m_gb_L " , l a t e x _ n a m e = r "$m_ { GB , L }$" ,
+11dof =1 , g a u g e _ c o u p l i n g = self .g , is_SM = False ) ]
+12f e r m i o n _ p a r t i c l e s = [
+13Fermion ( name = " m_ fe rm io n " , l a t e x _ n a m e = r "$m_ \ chi$" ,
+14dof =4 , is_SM = False ) ]
+15
+16def b o s o n _ m a s s _ f u n c t i o n (X , T ) :
+17# return bosonic mass squares in the same order
+18# as s c a l a r _ p a r t i c l e s / g a u g e _ p a r t i c l e s sp ec if ie d above
+19...
+20
+21def f e r m i o n _ m a s s _ f u n c t i o n ( X ) :
+22# return fe rm io ni c mass squares in the same order
+23# as f e r m i o n _ p a r t i c l e s sp ec if ie d above
+24...
+25
+26return M a s s S p e c t r u m (
+27scalars = scalar_particles ,
+28g a u g e B o s o n s = gauge_particles ,
+29fermions = fermion_particles ,
+30b o s o n _ m a s s S q _ f n = b o s o n _ m a s s _ f u n c t i o n ,
+31f e r m i o n _ m a s s S q _ f n = f e r m i o n _ m a s s _ f u n c t i o n ,
+32)
+Code snippet 3: Construction of the mass spectrum for fermions and bosons.
+Furthermore, the model file has to set the renormalisation scale used in the computation of
+the effective potential. Optionally, the user can also override the default accuracy settings in
+the functionsetConfigParametersfor all the different algorithms, described in detail in the
+following of this section and listed in appendix E.
+To allow for a consistent and numerically stable computation, the potential and field values
+are by default rescaled by a conversion factor
+conversionFactor≡C= vGeV
+internal scale ,(3.2)
+which is used to convert between physical quantities and internal units. The reason for this
+is the difficulty in maintaining numerical stability across a wide range of energy scales, which
+often enough appear in powers of four, as in the effective potential. Exponentials, as in the
+bubble nucleation rate in eq. (2.8), further amplify this potential hazard to numerical stability.
+The user-definedinternal scale(in internal units) sets the scale at which the dynamics of the
+phase transition should be resolved.
+Normalising a dimensionful quantity used in the model definition, for instance a vacuum
+expectation valuev GeV in GeV, tointernal scale=1000will internally normalise the effective
+potential such that the endpoint of tunnelling will be at around 1000 internal units, regardless
+26
+
+ifv GeV = 1 MeV orv GeV = 1010 GeV. As a result, quantities can be converted from one to the
+other unit system by using
+QGeV =Q C d GeVd ,(3.3)
+wheredis the mass dimension ofQ. For example,T=T GeV/C,m=m GeV/Candρ=ρ GeV/C4.
+In the following of this section, all quantities are understood to be in internal units unless they
+are explicitly labelled in GeV (or frequencies in Hz). The default settings are optimised and
+tested to work well with an internal reference scaleinternal scale=1000.
+3.3 Phase tracing
+The starting point for studying phase transitions, once an effective potential is defined, is to
+identify the different phases of the system and the temperature interval in which they exist. To
+do so, we introduced thePhasesclass, defined withinphases.py, which wraps and extends the
+originalCosmoTransitionstracing algorithms [140]. We will review it here for completeness.
+Starting from a minimum temperature, which we by default set to the CMB temperature
+Tmin =T 0 = 238µeV, the minima of the user-defined effective potentialVare specified by a list
+X0, which has to be defined in the model file. Any minimum satisfies∂V(ϕ min)/∂ϕi = 0 which,
+using the chain rule, can be differentiated with respect to temperature to yield an evolution
+equation of the position of the minima in the individual field dimensions,
+∂2V
+∂ϕi∂ϕj
+dϕmin,j
+dT + ∂2V
+∂ϕi∂T = 0⇒ dϕmin,i
+dT =−H −1
+ij ∂T ∂ϕj V .(3.4)
+Here,H −1
+ij is the inverse of the Hessian matrix of the effective potential. The phase tracing
+starts by solving these evolution equations, starting from a minimum atT min and tracing it up
+in temperature, until the maximal temperatureT max is reached, which by default is defined as
+Tmax factor=2.5times theinternal scale. Eq. (3.4) is used to obtain a guess for the location
+of the minimum after a temperature step ∆T. The precise minimum is then determined by a
+gradient-free minimiser and the difference between the linear prediction and the resulting point
+is used to adapt the step size of the following point. The end of a phase is indicated by a (near-)
+singular HessianH ij. When this happens, the routine searches for neighbouring minima and
+appends them to the list of minima to trace. To ensure the full phase structure is found, all
+found phases are eventually also traced down in temperature. After this, redundant minima
+are merged by comparing overlaps in field space and second-order transitions are identified for
+phases that terminate in saddle points. A summary of the different accuracy parameters going
+into the phase tracing routines, together with their default values and a description of their
+function in the code, can be found in table 5 in Appendix E.
+As of now,TLdoes not allow for the detailed treatment of models with several discrete
+symmetries in multiple field dimensions, which would require a more sophisticated approach for
+treating the tunnelling between mirror phases [68]. Currently, the user can manually specify
+the symmetry structure of the theory, by excluding phase tracing in specific regions of field
+space, for instance regions withϕ <−5 (in internal units) for the case ofZ 2 symmetries. That
+way, the found phases are limited to the specified regions. If more than one discrete symmetry
+is present, the code may erroneously classify phase transitions as impossible, because it only
+considers transitions within a given fraction of the total field space 9.
+9Intriguingly, this kind of studies are needed for assessing the production of domain walls, which themselves
+can complicate the details of Hubble expansion through their contribution to the total energy density and their
+decay, potentially also contributing to the total GW signal of a given phase transitions. It will therefore be an
+obvious future goal to extendTLsuch that it can also reliably deal with these cases.
+27
+
+After the phase tracing, a tree of the possible transition histories leading to theT min phase(s)
+is constructed. To do so, first the deepest high-temperature minimumϕ high is identified as the
+global minimum at the maximal temperature. A transition to another phaseϕ low becomes
+possible if the two phases coexists across a temperature interval and the low-temperature phase
+becomes energetically favoured, i.e. when ∆V(T) =V tot(ϕhigh, T)−V tot(ϕlow, T)>0. A link
+between each low-temperature phase fulfilling that criterion is added to the tree. Then, for each
+child-phase, this procedure repeats until theT min phase(s) are reached. This tree of possible
+transitions will then allow the study of possible first-order transitions in the following step.
+3.4 Computation of the bubble nucleation rate
+Starting with the highest-temperature phase link, the code iterates over phase pairs and evaluates
+the transition rates between them in a range of temperatures using a combination of path
+deformation and shooting algorithms. The algorithm used in our work was first presented and
+discussed in ref. [140], after a qualitatively similar algorithm was proposed in ref. [141]. Here we
+want to briefly describe the method for a given phase pair and for a given effective potentialV.
+In order to obtain Γ(T) following eq. (2.8), the bounce action needs to be computed, which
+itself requires the tunnelling path in field space, along which the transition will take place. This
+tunnelling path starts at the false vacuum and stops at a release point, which is often close to
+the true vacuum; the bounce itself describes the equations of motion of the scalar fields between
+the false vacuum and the release point, from where on the fields roll down to reach the true
+vacuum state. For a given temperature at which we want to compute the bounce action, we
+thus iterate over different paths in order to find the one which minimises the bounce action.
+We start by parameterising the tunnelling pathϕ(x) as a path through field space, where
+xis a parameter indicating the position along the path. For simplicity, we requirexto be
+normalised such that|dϕ/dx|= 1, i.e. that one unit ofxcorresponds to one unit of path length
+in field space. This reparameterisation allows us to split the bounce eq. (2.6) into a part parallel
+and a part perpendicular to the tunnelling path,
+d2x
+dr2 + 2
+r
+dx
+dr = ∂
+∂x V(ϕ(x), T) and d2ϕ
+dx2
+dx
+dr
+2
+=∇ ⊥V(ϕ, T),(3.5)
+see for instance ref. [42] for a derivation. Starting with an initial guess for the path (a straight
+line), the bounce equation is solved using a shooting algorithm along this path, yieldingϕ(x(r)).
+The algorithm then computes the normal force
+N= d2ϕ
+dx2
+dx
+dr
+2
+−∇ ⊥V(ϕ, T) (3.6)
+and deforms the pathϕ(x) until the normal force vanishes,N= 0. This path is then again
+fed into the shooting algorithm to infer the functionx(r), describing how the path evolves with
+respect to the radial coordinate. These two steps are iterated until the path converges. The
+solver then returns the bubble profileϕ(r) =ϕ(x(r)) as well as the bounce actionS 3 computed
+following eq. (2.7).
+The accuracy of the shooting part of the algorithm is governed by two parameters:xtol
+controls the tolerance on the field release pointϕ 0 from which the bounce is shot, whilephitol
+bounds the integration error when solving the parallel component of the bounce eq. (3.5). The
+path deformation has its own pair of parameters. Its convergence is decided byfRatioConv:
+the algorithm terminates once the largest normal force along the path, divided by the largest
+28
+
+potential gradient, has fallen below this threshold. The size of the deformation applied at each
+iteration is set bystartstep; if it is chosen too large, the deformation overshoots and amplifies
+deviations from the correct path rather than damping them. The full settings that determine
+the accuracy of the bounce solver and path-deformation algorithm can be found in table 6 in
+Appendix E.
+Given the bounce actionS 3 at a given temperature, we can evaluate the bubble nucleation
+rate between the false and true vacuum using eq. (2.8), which describes the probability of
+nucleating a bubble in a given volume within a certain time interval. The relevant volume and
+time scales for cosmological phase transitions are given by the Hubble parameter, which itself
+depends on the presence of the true vacuum. An algorithmic solution to this problem is the
+topic of the following subsection.
+3.5 Computation of the true-vacuum fraction
+We now come to one of the core parts of our improvements with respect to existing codes and
+the originalCosmoTransitionsmodule [140]: Eq. (2.18) identifies the false-vacuum fraction
+Pf(t) = exp[−I(t)] with the exponential of minus the percolation integralI(t), so that the true-
+vacuum fraction readsP t(T) = 1−exp{−I[H[P t]](T)}. This implicit equation is notoriously
+difficult to solve numerically:Iis a double integral over the cosmic expansion history, which
+itself depends on the transition history viaP t. The situation is further complicated by the time-
+temperature relation depending on the equation of state in the false vacuum and by the large
+numerical cost of evaluating the bubble nucleation rate: A single multi-field bounce evaluation
+through the expensive shooting and path-deformation algorithms described above can take up to
+1 min on a modern CPU, such that computing Γ(T) on a fine grid is computationally prohibitive.
+An efficient approach which minimises the number of bounce evaluations is hence needed in order
+to compute the percolation integral with sufficient accuracy and in order to perform large-scale
+scans over model parameter spaces. Since the percolation temperature is not known a priori, the
+upper boundary of the integration domain is not fixed, adding further to the described difficulty.
+In practice, we solve the integral using a mixture of numerical ODE solvers (instead of
+performing a double integral) and Picard sweeps (in order to iteratively solve the self-consistency
+equation onP t) once an approximate solution to the problem has been found. Fig. 7 illustrates
+the steps involved in this approach. The remainder of this subsection will describe each of the
+illustrated steps.
+Phase tracing and pre-processing.Before starting the percolation algorithm, we perform
+phase tracing and pre-select relevant transitions: often one is only interested in phase transitions
+that emit phenomenologically relevant GW signals. Phase transitions that occur only over a very
+short timescale and release little energy are identified and discarded if the potential difference
+∆V(T)/T 4 <weak thresholdin the temperature range of coexistence between the two phases.
+By default this value is set toweak threshold= 10 −4, other values can be set by the user.
+Internally these transitions are then treated as smooth second-order transitions happening at
+the critical temperature.
+Step 1: Saddlepoint approximatedT perc.The first step of the percolation algorithm uses
+the saddlepoint approximation of the percolation integralI(T) to find an initial estimate for
+Tperc. We expand ln Γ(T) up to the linear term, cf. eq. (2.21), approximateH(T) =H(T perc)
+as constant, setc 2
+s = 1/3, and push the upper limit of the percolation integral fromT max to
+29
+
+Phase tracing & Pre-processing:
+Find phase overlap, remove crossovers
+& very weak FOPTs with
+∆V(T)/T4 <weak threshold
+Step 1: Saddlepoint approximation.
+Linearise log Γ(T), constantH(T),c2s = 13.
+Root-finding onCperc= 0⇒Tapproxperc
+Step 2: Solve percolation integral.
+SolvePt(T) = 1−exp{−I[H[Pt]](T)}
+withPt = 0 inH(T)
+Step 3: Solve full percolation integral.
+Solve broken phase temperature evolution
+andPt(T) = 1−exp{−I[H[Pt]](T)}
+Jitter in
+Γ(T)?
+Targeted
+refinements
+ReturnTperc,Tf,Treh,RH,Pt(T), Γ(T),H(T)
+Yes
+No
+Correct the
+flawed bounce
+actions
+Pt(T) converged?
+Figure 7: Flowchart showing the structure of the percolation algorithm.
+infinity. This allows an analytic evaluation of the percolation integral,
+I(T)≃ 4πv3
+w
+3
+Γ(T)
+H4(T)
+Z ∞
+0
+du u3e−u b(T) = 8πv3
+w
+b4(T)
+Γ(T)
+H4(T) .(3.7)
+Each evaluation ofI(T) therefore only requires a single evaluation of the nucleation rate at
+Tand one more at a neighbouring temperature to estimate the logarithmic slopeb(T) =
+−T∆ log Γ/∆T. In the limit of ∆T→0 and atT=T perc one recoversb(T perc) =β/H,
+cf. eq. (2.21). Equating eq. (3.7) withI(T perc) !=−ln{1−f perc} ≃0.342 then yields the simple
+criterion
+Cperc(T) = 1
+b(T)
+ Γ(T)
+H4(T)
+1/48πv3
+w
+Iperc
+1/4
+−1,(3.8)
+which vanishes atT=T approx
+perc . We use this to infer a first guess for the percolation temperature,
+noting that it becomes increasingly inaccurate for the most interesting cases of slowly varying
+Γ(T), i.e. wheneverβ/H(and henceb(T)) is small or even negative. All bounce action evalua-
+tions performed in this and the following steps are cached in memory and reused in subsequent
+stages.
+Step 2: ODE solutions to the simplified percolation integral.The second step solves
+the percolation integral with the approximationP t = 0 in the Hubble rate, i.e. by approximating
+30
+
+¯ρ≈ρf. Currently two methods are implemented to solve the percolation integral in eq. (2.19).
+The first one (algorithm mode=fixed step size) starts by searching for an approximation
+T approx
+nuc of the nucleation temperature using a criterionC nuc(T) = log Γ/H 4, similar toC perc.
+UsingT approx
+nuc as a starting point, it simply evaluates the nucleation rate on a grid with fixed
+step size ∆T, determined by the distance betweenT approx
+nuc andT approx
+perc . At each stepT i, the
+percolation integral is solved untilI(T) is sufficiently large, such thatP t = 0.99 is reached,
+meaning the final temperatureT f has been found. This method is very robust. As it, however,
+relies on a fixed step size ∆Tit can become computationally expensive for transitions with large
+temperature hierarchies or if the nucleation temperature cannot be inferred.
+The second method (adaptive step size) reformulates the percolation integral into a sys-
+tem of coupled ordinary differential equations and integrates them with a variable temperature
+step, depending on the size of the integrand. Eq. (2.19) can be expressed asI(T) = 4π
+3 v3
+wJ3(T),
+where
+Jn(T)≡
+Z Tmax
+T
+dT ′ γ(T ′)R(T, T ′)n ,with (3.9)
+γ(T)≡ a3(T)Γ(T)
+3c2s(T)H(T)T , R(T, T ′)≡
+Z T ′
+T
+d ˜T ν( ˜T),andν(T)≡ 1
+3c2s(T)H(T)T a(T) .
+(3.10)
+Using the Leibniz integral rule and observing that∂ T R(T, T ′) =−ν(T), the derivative ofJ n
+reads
+∂Jn(T)
+∂T =
+(
+−γ(T) ifn= 0,
+−n ν(T)J n−1(T) ifn≥1. (3.11)
+The functionJ 3(T) and henceI(T) can then be obtained numerically by integrating the above
+system of ODEs with the initial conditionsJ n(Tmax) = 0, corresponding to a vanishing bubble
+nucleation rate atT max, using an adaptive step size solver. This method is faster on average,
+but more prone to numerical instabilities if the bounce action is noisy.
+Step 3: Solution of the full percolation integral.In the previous steps, we setP t = 0
+inside the Hubble rate. In this last step we also compute the evolution of the true-vacuum
+energy densityρ t following eq. (2.17), based on the true-vacuum fraction from the previ-
+ous step. By iterating over this step (called a Picard sweep), a self-consistent solution to
+Pt = 1−exp{−I[H[P t]](T)}is found. We stop the iteration when the relative changes of
+the percolation temperature, the final temperature and the mean bubble separation meet the
+user-defined accuracy goals:δT perc <acc tperc,δT f <acc tfinalandδRH <acc rh. In
+practice we use percent-level accuracies, such that the solution of the full percolation integral,
+including the previous steps typically requires less than 100 bounce action evaluations.
+Bounce action accuracy control.In rare cases the default path-deformation or tunnelling
+accuracies are not sufficient to produce a smooth bounce action profile, leading to jumps inS3(T).
+The algorithm therefore runs a smoothness test on Γ(T)/H 4(T) after step 3. It fits a quadratic
+polynomial through the evaluations of log 10(Γ/H4) and checks if the deviation of any point
+exceeds the thresholdjitter GH4 threshold, by default set to one order of magnitude. If so,
+the solution is flagged as potentially unreliable and, ifjitter rescueis enabled, it recomputes
+the bounce action with higher accuracies. Eventually, the obtained percolation temperature
+Tperc, the reheating temperatureT reh and the final temperatureT final, as well as the nucleation
+31
+
+temperatureT nuc (based on the full expression in eq. (2.20)) and the mean bubble separation
+RHare returned.
+3.6 Thermodynamics, GW spectra and observability
+Once the functioncalcPercAndEvolvehas returned the converged set of milestone tempera-
+tures listed above, four steps of the computation of observables and their detectability remain,
+following the description from sec. 2. These steps only depend on a small number of optional
+user input collected in the settingsGWConf; most of them are switches to base the computation
+of the GW signal on one or the other convention.
+Thermo- and hydrodynamic quantities.The moduletransitionObservables.pycom-
+putes the thermo- and hydrodynamic quantities that enter the GW templates at the percola-
+tion temperature. The transition strengthαis obtained from the pseudo-trace of the energy-
+momentum tensor using the symmetric- and broken-phase sound speeds returned by the hy-
+drodynamics module, cf. eq. (2.28). The mean bubble separationRHfollows straight from
+the stored splines, solving the integral in eq. (2.24). The inverse durationβ/His evaluated in
+two independent ways, following eq. (2.22) and eq. (2.26). We refer to them asbetaH S3and
+betaH RHinside the code, respectively. As a sanity check, we cross-check the two quantities
+internally, as they should be equivalent in the limit of fast transitions, see also appendix C
+and fig. 3. The default value of the switchGWConf.use mean bubble separation=Truesets the
+GW signal computation to useRHinstead of (β/H) S3. By default,sound speed="compute"is
+active, such that the speed of sound in both phases is computed numerically. Alternatively, the
+user can set an arbitrary value, with 0< c s ≤1 in both phases.
+The reheating temperatureT reh follows from local energy conservation across the transition,
+see the discussion below eq. (2.17), where the field-independent energy contributions in both
+phases are fixed through the effective degrees of freedom 10 geff andh eff.
+The efficiency coefficientsκ col,κ sw, andκ turb are evaluated withinhydrodynamics.pyfrom
+αandv w based on the computations described in sec. 2.5. Alternatively the user can control
+vw through changingwall velocity="LTE"to any number between 0 and 1. By default, we
+deactivate contributions from bubble wall collisions throughbw collisions="off". The bubble
+wall collision switch instead can take the values"full"(meaningκ ϕ = 1) or"NLO", in which
+case eq. (2.29) is used to infer the bubble wall contributions to the GW signal. The relative
+efficiencyϵ turb of turbulence, introduced in eq. (2.32), is controlled byepsilon turbulence.
+GW spectra and the observability module.Withingwfopt.py, the thermodynamic ob-
+servables and the hydrodynamic variables are used to assemble the total GW spectrum following
+eq. (2.33),
+h2ΩGW(f) =
+X
+i∈{col,sw,turb}
+h2ΩGW,i(f).(3.12)
+The result is stored as aFOPTspectrumobject. Withinobservability.py, theFOPTspectrum
+is then finally evaluated against the three observability measures introduced in sec. 2.7: For
+10In practice, we use splines based on tabulated data for the degrees of freedom in the SM [142, 143]. If the
+phase transition also gives mass to SM particles, we only use the splines for temperatures up to half the lowest,
+nonzero SM particle mass from the model file. In the 2HDM model file for instance, theτlepton is the lightest
+particle present in the model file. For temperatures belowm τ /2 = 0.9 GeV, we hence use the SM spline for
+describing the degrees of freedom in the plasma. For temperatures abovem τ /2, also additional contributions
+from the SM and BSM particles described in the model file are taken into account.
+32
+
+every detector listed there the SNR and the corresponding booleandetectable by <detector>
+flag (triggered when SNR>SNR thr) are computed. Further, PTA log-likelihoods are returned
+for the NANOGrav 12.5 yr, and NANOGrav 15 yr data sets, as well as the second IPTA data
+release11, as well as the contribution of the GW background to ∆NGW
+eff . Additionally we save the
+spectral peak amplitude and frequency, as well as other follow-up diagnostics when performing
+parameter scans.
+Output scheme and diagnostic flags.All derived quantities, i.e. percolation-stage observ-
+ables, hydrodynamic outputs, peak spectral amplitudes and frequencies, SNRs, PTA likelihoods
+and ∆NGW
+eff , are written to a single standardisedtxttable, which is also printed to terminal when
+using the command line interface. Further, a series of diagnostic flags is printed. Among these,
+betaH smallandbetaH very smallwarn when (β/H) RH drops below 10 and 3, respectively, in-
+dicating that the spectral templates are being extrapolated (far) outside their tested regime. The
+flagbetaH mismatchrecords a disagreement between (β/H) S3 and (β/H) RH if they are more
+than one order of magnitude apart.betaH nonfinitesignals that the logarithmic derivative of
+S3/Tcould not be evaluated atT perc. The flagnucleationRate nonexponentialis raised when
+(β/H) S3 <0 is detected. The warningsspline tnuc unavailable/ not reached/ failed
+track any odd behaviour found in the computation ofT nuc from the percolation splines via
+N(T nuc) = 1. If solving this criterion using Brent’s method returned no value, returned an out-
+of-range value, or failed outright, respectively, a warning is raised. Finally,not T0 global min
+is raised when the global minimum does not coincide with the found potential minimum at
+Tmin, i.e. if the tracked potential is metastable until today. This check is relevant for instance in
+computations involving the electroweak phase transition, which certainly has to have happened
+until today.
+3.7 Error handling
+Any large-scale scan over model parameter spaces has to deal with the fact that the computation
+described in section 3.5 can fail for physical as well as numerical reasons, and that distinguishing
+between the two is essential: a genuinely trapped or eternally inflating vacuum must not be
+confused with a merely poorly sampled bounce, and vice versa.TransitionListenertherefore
+raises a dedicated exception for each characteristic error and propagates it to the output files.
+Table 3 in appendix E lists the implemented error codes.
+4 Scans and plotting methods
+TransitionListenercomes with several scan methods to explore the parameter space of a
+model. In this section we discuss how to set up and run a scan using a configuration file and
+illustrate each scan method with one example of the implemented models (see appendix A). An
+example of how to use the code instead in apythonscript can be found in appendix D.
+11We return three separate log-likelihoods for each observatory. As described in ref. [63], theceffyllikelihoods
+used withinPTArcadeare not reliable for signals far from the PTA signal region. In order to help sampling
+algorithms, we smoothly extend the likelihood to a larger range of frequencies and amplitudes, thus allowing
+samplers to be guided towards relevant regions of parameter space. The three likelihoods are referred to as
+PTArcade lnL,smoothened lnLandmock lnL, the latter being the lightweight surrogate introduced in ref. [63].
+33
+
+4.1 Command line interface
+The code provides a command line interface that automatises the computation steps described
+in sec. 3. It requires to set up a configuration file in the.yamlformat, in which the user specifies
+a model file which defines the potential and the particle content of a theory, the scan method and
+the parameter values or ranges. Additionally the output format and path as well as descriptions
+for the plots can to be specified. In code snippet 4 we show a basic example for how to compute
+the phase transition signal of a single benchmark point in the dark flipflop model.
+1# Scan settings = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+2M od el fi le :
+3models / T L _ d a r k _ f l i p f l o p . py
+4
+5P ot en ti al :
+6D a r k F l i p F l o p
+7
+8Scan :
+9S i n g l e P o i n t
+10
+11P a r a m e t e r s :
+12lambda0 : 0.005098
+13lambda1 : 0.002144
+14lambda12 : 0.003078
+15v_GeV : 3 . 7 2 8 3 3 0 7 4 1 6 0 1 0 8 8
+16y : 0.972319
+17gamma : 0.7532
+18
+19# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+20# output c o n f i g u r a t i o n
+21# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+22timeout : 300 # Timeout in seconds for the i n d i v i d u a l TL run , -1 for no timeout
+23format : txt # either " txt " or " hdf5 "
+24o u t p u t _ p a t h : scans / e x a m p l e S c a n
+25d e s c r i p t i o n : Example
+26p l o t _ d e s c r i p t i o n : Flipflop be nc hm ar k point
+27
+28a d d i t i o n a l _ p l o t s :
+29# Create a d d i t i o n a l plots
+Code snippet 4: Anatomy of a configuration file. Here, we fix the input parameters for the dark
+flipflop model to benchmark point 2 from table 1.
+The scan can be run from the command line as shown below. The option-c "config.yaml"
+sets the location of the scan configuration file and the option-j Nthe number of cores to use
+in multi-point scans.
+1$tl -c " example . yaml " -j N
+4.2 Single point
+The first scan method is theSinglePointmode, which computes the phase transition GW
+signal for a fixed set of input parameters, as shown in the example configuration file in code
+snippet 4 above. Additionally, it provides the possibility to directly plot several intermediate
+results of the computation. We describe them below in code snippet 5. In the following we
+showcase these different plotting routines. Figures 8–10 use the dark flipflop benchmark point
+2 from table 1, while fig. 11 uses the conformal benchmark point 1.
+34
+
+1a d d i t i o n a l _ p l o t s :
+2p ot en ti al :
+3plot ?: True
+4T_GeV : 5.7467 e -01
+5p h i _ r a n g e s _ G e V : [0 , 5 , 0 , 6]
+6n : 100
+7profileV :
+8plot ?: True
+9f i e l d _ i n d e x _ 1 : 0
+10f i e l d _ i n d e x _ 2 : 1
+11phases :
+12plot ?: True
+13i n c l u d e _ t r a n s i t i o n s ?: True
+14action :
+15plot ?: True
+16Tmin_GeV : 0.5
+17Tmax_GeV : 1.5
+18p h a s e _ i n d i c e s : [ P1 , P3 ]
+19n : 100
+20profile :
+21plot ?: True
+22p e r c o l a t i o n :
+23plot ?: True
+24g w _ s p e c t r u m :
+25plot ?: True
+Code snippet 5: Configuration for creating additional plots in the single-point dark flipflop
+benchmark example used in figs. 8–10.
+Phases and potential.The first optionpotentialallows the user to plot the effective po-
+tential along chosen field directions at a fixed temperature. The code evaluatesV tot(ϕ, T) on the
+user-specified grid. Similarly the optionprofileVplots the effective potential at the nucleation
+temperature, including the tunnelling path as shown in the right panel of fig. 8 for the exam-
+ple of the dark flipflop benchmark point 2 (see table 1). The green triangle indicates the false
+(meta-stable) vacuum from where the field starts to tunnel along the pink path to the release
+point (end of the path), from where it then rolls to the stable true vacuum indicated by a cross.
+The left panels show the output of thephasesplotting option. The upper left panel visualises
+the temperature-dependent field values of all traced minima and optionally indicates the critical,
+percolation and reheating temperature through vertical lines. In the lower left panel, the value
+of the effective potential (relative toV(0, T)) for each phase is shown. The dotted black line
+indicates the phase that the universe is in at a given temperature. Phase 2, present in a tiny
+temperature interval, stems from the finite step sizes used in phase tracing. Since the energy
+released in the transition from phase 2 to phase 1 is virtually 0 (see lower left panel), it is treated
+as a crossover transition in the code.
+Action and nucleation rate.The result of theactionplot option is shown in fig. 9. It
+evaluates the actionS 3(T) atnpoints between the specified minimal and maximal temperature
+as shown in the upper panel. Additionally it computes the nucleation rate in units ofH 4 (in the
+Pt = 0 approximation) and plots it in the lower panel. A horizontal dashed line indicates the
+approximate nucleation criterion Γ =H 4. Here we again use the dark flipflop benchmark point
+2 from table 1. The two relevant vacua become degenerate atT c ≃1.45 GeV, where the bounce
+action diverges and the nucleation rate vanishes. AtT nuc ≃0.57 GeV the nucleation rate crosses
+the threshold, marking the onset of the transition.
+35
+
+Phase 1
+Phase 2
+Phase 3
+φhist(T )
+0
+2
+4φi /GeV
+Tperc
+Treh
+Tcrit
+0 2 4 6 8
+T /GeV
+−0.50
+−0.25
+0.00
+∆V (T )/GeV4
+Start
+End
+0 2 4
+φ0 /GeV
+0
+1
+2
+3
+4
+5φ1 /GeV
+−0.462
+−0.234
+−0.005
+0.224
+0.452
+0.681
+0.909
+1.138
+1.366
+1.595
+V /GeV4
+Figure 8: Compilation of the output plots using thephasesandprofileVplotting options
+for the dark flipflop benchmark point 2 from table 1.Left panels:Phase evolutionϕ(T) and
+∆V(T) =V(ϕ min(T), T)−V(0, T) across the relevant transition history. In the upper panel the
+ϕ0 (ϕ1) component is visualised by a solid (dashed) line.Right panel:Potential slice atT=T nuc
+with the tunnelling path overlaid. From the end of the pink line the field rolls to its end point
+(cross).
+Bubble Profile.Whenever the tunnelling solver succeeds,TLstores the bounce profileϕ(r)
+sampled along the radial coordinate. The bubble profile plotprofiledisplays the profiles of
+the individual field components along the radial coordinate at the nucleation temperature as
+shown in fig. 10. This bubble profile corresponds to the tunnelling path in field space shown
+in the right panel of fig. 8. Forr→0, the fields approach their release pointϕ 0, indicated by
+the end of the pink line in fig. 8; forr→ ∞(outside the bubble), the field values approach the
+false-vacuum values, which are indicated by a green triangle in fig. 8.
+Evolution of the true-vacuum fraction.The evolution of the true-vacuum fraction can be
+visualised with thepercolationoption. The resulting plot showsP t(T) between the nucleation
+temperature and the completion temperature. In contrast to figs. 8–10, fig. 11 uses the conformal
+darkU(1) ′ benchmark point 1 from table 1, withg= 0.7,v= 0.14 GeV andy= 0.01. The grey
+dashed line indicates the percolation temperature, whenP t(T) =f perc.
+GW spectrum.Thegw spectrumoption evaluates the total GW spectrum and its individual
+source components and overlays them with the detector sensitivity curves described in sec. 2.7.
+Fig. 5 shows the results for the benchmark points listed in table 1.
+4.3 Line scan
+A line scan provides the possibility to study the dependence of the model predictions in depen-
+dence of a single parameter. It allows varying a single model parameter while keeping the others
+fixed. The user has to specify the parameter to scan over, its range [min,max], the number of
+support pointsNfor the scan, whether the sampling is linear or logarithmic, as well as the
+values of the fixed parameters. An example for this is shown in code snippet 6 for the conformal
+darkU(1) ′ model.
+36
+
+105
+107
+S3/T
+0.6 0.8 1.0 1.2 1.4
+T /GeV
+10□167
+10□94
+10□21
+1052
+Γ/H4
+Tnuc
+Γ = H 4
+Figure 9: Output of theactionplot option for the dark flipflop benchmark point 2 from table 1.
+Upper panel:Bounce actionS 3/Tin dependence of temperature.Lower panel:Corresponding
+bubble nucleation rate Γ in units ofH 4.
+100 101 102
+Bubble radius / GeV □1
+0
+2
+4φi /GeV
+φ0
+φ1
+Figure 10: Bubble profile at nucleation for the dark flipflop benchmark point 2 from table 1,
+generated using theprofileplot option. Inside the bubble, atr= 0, the fields approach their
+release point. Atr→ ∞(outside the bubble), the field values approach their false-vacuum
+values.
+1P a r a m e t e r s :
+2l i n e _ p a r a m :
+3g :
+4scale : lin
+5range : [0.5 , 1]
+6o t h e r _ p a r a m s :
+7y : 0.01
+8v_GeV : 0.14
+9N : 30
+Code snippet 6: Parameter configuration of a line scan for the conformalU(1) ′ model. This
+computes the GW signal for 30 points, withg∈[0.5,1] on a linear grid and fixed values of
+y= 0.01 andv= 0.14 GeV.
+37
+
+2.8 2.9 3.0 3.1 3.2 3.3 3.4 3.5
+T /MeV
+0.00
+0.25
+0.50
+0.75
+1.00
+True-vacuum fraction
+Pt(T )
+Tperc
+Figure 11: True-vacuum fraction evolution of the conformal darkU(1) ′ benchmark point 1 from
+table 1 (g= 0.7,v= 0.14 GeV andy= 0.01), generated using thepercolationplot option.
+A line scan produces a large set of output files, including the thermodynamic and hydro-
+dynamic quantities and other intermediate results, plotted against the scanned parameter. In
+addition, an overview plot is created, which showsα,β/H,T reh and an expected SNR in de-
+pendence of the scanned parameter in a single plot. Fig. 12 shows the produced overview plot
+for the benchmark point 1 from table 1, when varying the dark gauge couplingg. Towards
+smallerg, the transition becomes more supercooled, up to the point where the universe is even-
+tually trapped in the false vacuum forg≲0.55. As the supercooling increases, the transition
+strengthαrises, the transition happens later at slightly smallerT reh and (β/H) RH drops to
+values below 100. Correspondingly, the SNR curve (here taken to be for SKA after 5 years of
+data taking) grows far into the testable region, indicating that this model parameter slice can
+be tested up tog≲0.9. For reproducibility, the configuration file to create this plot can be
+found inexamples/example line.yaml.
+4.4 Grid scan
+Grid scans vary two parameters simultaneously while keeping the other parameters fixed. Analo-
+gously to the line scan, the user has to specify the two varying parameters, their range [min,max],
+the number of stepsNand whether the sampling is linear or logarithmic. This constructs the
+Cartesian product of the two parameters, resulting inN 2 total points. The values of the fixed
+parameters are specified as before. An example for this is shown in code snippet 7 for the dark
+Abelian Higgs model.
+1Scan :
+2GridScan
+3
+4P a r a m e t e r s :
+5g r i d _ p a r a m s :
+6x :
+7name : l
+8scale : log
+9range : [ -4 , -2]
+10y :
+11name : v_GeV
+12scale : log
+13range : [6 , 10]
+14o t h e r _ p a r a m s :
+38
+
+101
+103
+105
+107
+α
+102
+(β/H)RH
+0.5 0.6 0.7 0.8 0.9 1.0
+g
+0.015
+0.020
+0.025
+Treh / GeV
+0.5 0.6 0.7 0.8 0.9 1.0
+g
+10−1
+100
+101
+102
+103
+104
+105
+SNR (SKA 5 yrs)
+Figure 12: Overview plot of the example line scan based on the conformal model near the
+benchmark point from table 1, scanninggat fixedy= 0.01 andv= 140 MeV. The fourth panel
+shows the expected SNR after 5 years of data taking at SKA. The red dashed line indicates the
+detection threshold.
+15g_tilde : 2.69
+16N : 30
+Code snippet 7: Example of a grid scan configuration.
+Figure 13 shows the resultingoverview plot.pdfof an example grid scan over the dark
+Higgs self couplingλ∈[10 −4,10 −2] and the vevv∈[10 6,10 10] GeV with the gauge coupling
+fixed via the conditiong·λ −1/4 = 2.69, see ref. [63] for the reasoning behind that scaling. This
+overview plot as well as figures for all other computed observables in dependence of the grid
+parameters can be reproduced using the configuration fileexamples/example grid.yaml.
+4.5 Random scan and nested sampling
+The random scan method draws parameter points from uniform or logarithmic priors specified
+by the user. For Bayesian inference on the PTA likelihoods,TLinterfaces withUltraNest’s
+ReactiveNestedSampler[83]. In both cases, the.yamlfile lists the scanned parameters and
+their priors. An example configuration file for the conformalU(1) ′ model is shown in code
+snippet 8. This randomly drawsN=10000points from the priorsg∈[0.5,1],y∈[10 −3,1] and
+v∈[10 −2,10] GeV, where the latter two are specified in logarithmic scale.
+1Scan :
+2R a n d o m S c a n # Or : U l t r a n e s t S c a n
+3
+4P a r a m e t e r s :
+5s c a n _ p a r a m s :
+6g :
+7scale : lin
+8range : [0.5 , 1]
+39
+
+10−4 10−3 10−2
+λ
+106
+107
+108
+109
+1010
+v/GeV
+α
+10−4 10−3 10−2
+λ
+106
+107
+108
+109
+1010
+v/GeV
+(β/H)RH
+10−4 10−3 10−2
+λ
+106
+107
+108
+109
+1010
+v/GeV
+Treh / GeV
+10−4 10−3 10−2
+λ
+106
+107
+108
+109
+1010
+v/GeV
+SNR for ET
+101
+102
+102
+103
+105
+106
+107
+108
+101
+102
+103
+104
+Figure 13: Overview plot of the example grid scan for the Abelian dark Higgs model from
+appendix A scanning overλ∈[10 −4,10 −2] andv∈[10 6,10 10] GeV at fixedg·λ −1/4 = 2.69. The
+fourth panel shows predicted SNR at the Einstein Telescope.
+9y :
+10scale : log
+11range : [1 e -3 , 1 e0 ]
+12v_GeV :
+13scale : log
+14range : [1 e -2 , 1 e1 ]
+15o t h e r _ p a r a m s :
+16# no other params
+17N : 10000 # Only used for R a n d o m S c a n
+Code snippet 8: Example of a random scan for the conformal darkU(1) ′ model. The
+UltranestScanfollows the same structure, but does not use theNparameter as it samples
+until convergence of the Bayesian posterior distribution is reached.
+For both the random scan and the nested sampling methods, the scan output is continuously
+written to the fileoutput table.csv.MPIenvironments are supported by tagging every.csv
+file with the local rank of each worker process to avoid concurrent writes. In appendix E we list
+all the parameters available as derived observables which are saved as default output.
+In fig. 14 we compare the conformal darkU(1) ′ model, the dark flipflop model as well as the
+dark Abelian Higgs model (see Appendix A) in their capability of explaining the observed PTA
+signal. To do so, we compare the resulting transition strength and speed distributions of points
+generated using a random scan (left panel) and using nested sampling (right panel) based on
+40
+
+10 3
+ 100 103 106 109
+Transition strength 
+101
+102
+103
+104
+105
+106
+Transition speed /H
+Flip-Flop
+T wo-step transition
+Conformal U(1)
+Loop-induced barrier
+Abelian dark Higgs
+Thermally induced barrier
+PTA data
+Random
+scan
+100 103 106
+Transition strength 
+101
+102
+PTA fit
+Figure 14: Posterior distributions in theα–(β/H) RH plane for the three dark sector models
+described in appendix A.Left:Generic model predictions generated based on flat and log priors
+usingTransitionListener’s random scan method.Right:Parameter regions favoured by the
+individual models when requiring a fit to the NANOGrav 15 yr data set, produced using the
+UltraNestbackend inTransitionListener. This figure was presented first in a separate study;
+we refer to ref. [63] for further details.
+the NANOGrav 15 yr data set [6]. The used methodology as well as the underlying parameter
+ranges have been described by us in a separate publication [63].
+5 Comparison with existing codes (BSMPT)
+The ecosystem of phase-transition tools is split between specialist packages that target a single
+subtask (e.g. vacuum stability, dimensional reduction, bounce solvers or GW templates) and all-
+rounder codes that provide end-to-end pipelines. Specialist tools includevevaciousandDRalgo
+for effective potentials [144, 73],AnyBubble,BubbleProfiler,FindBounce,SimpleBounce,
+OptiBounceandBubbleDetfor tunnelling [145, 146, 74, 75, 147, 76],PTPlotandPTTools
+for GW spectra [77, 101], andWallGofor bubble wall velocities [49]. Below we focus on the end-
+to-end tools most closely related toTransitionListener. Table 2 summarises the capabilities
+of these tools and compares them with each other. It includes the codeCosmoTransitions[140]
+on whichTransitionListeneris built and which first implemented the path-deformation al-
+gorithm, the toolBSMPT[64–66] which focuses on the electroweak phase transition and ex-
+tended Higgs sectors,PhaseTracer2[68], the Mathematica toolPT2GWFinder[148], and finally
+ELENA[69] that implements the tunnelling potential to efficiently compute the bounce action for
+1D potentials. We note thatTransitionListeneris currently the only code available which is
+capable of performing computations which self-consistently solveP t = 1−exp{−I[H[P t]](T)}.
+Other strengths are the capability of performing computations in more than one field dimen-
+sion, for transitions happening not necessarily at the electroweak scale, with a generic time-
+temperature relation, including theT reh computation using energy conservation instead of a
+proxy scaling, and using the LTE bubble wall velocity. On the usability side,TransitionListener
+additionally offers a user-friendly interface and seamless integration with samplers and scanning
+41
+
+Features Observables
+Software Lang MF TTR Meth Reh Scans Self-cons. T∗ Treh Tf vw α(β/H) S3 RH
+TransitionListener v2Py✓gen P+S✓ ✓ ✓ Tperc ✓ ✓LTE ¯θf−¯θt
+3wf(Tperc) ✓ ✓
+CosmoTransitionsPy✓– P+S✗ ✗ ✗ – – – – – – –
+BSMPT v3C++✓bag P+S (✓)✓ ✗ Tperc ✓ ✓LTE θf−θt
+4ρrad(Tperc) ✓ ✓
+PhaseTracer2C++✓– P+S✗(✓)✗ Tnuc ✗ ✗input θf−θt
+ρrad(Tnuc) ✓ ✗
+PT2GWFinderMa✗bag poly✗(✓)✗ Tperc ✗ ✗input θf−θt
+4ρrad(Tperc) ✓ ✗
+ELENAPy✗gen tun (✓) (✓)✗ Tperc ✓ ✓1 ¯θf−¯θt
+3wf(Tperc) ✓ ✓
+Table 2: Comparison of software tools for phase transitions. Abbreviations: Lang = language
+(Py = Python, Ma = Mathematica); MF = multi-field; TTR = time–temperature relation (gen
+= general, bag = bag model); Meth = method (P+S = path deformation + shooting, poly
+= polygonal bounces, tun = tunnelling potential); Reh = reheating; Scans = parameter-scan
+support; Self-cons. = self-consistent treatment of the Hubble rate andP t. Bracketed checkmarks
+indicate support under additional assumptions or in a restricted sense; for Reh, this means an
+instantaneous reheating approximation. We further point out that BSMPT does not require
+vw =v LTE
+w andT ∗ =T perc, but also allows other choices.
+tools.
+To benchmarkTransitionListeneragainst an established end-to-end tool, we compareTL
+v2.0.0toBSMPT v3.1.8for the same 2HDM benchmark point already used in fig. 5 and listed
+in table 1, however scanning overλ 3 from 5.5 to 6.0. For better comparability we adopted the
+same treatment of effective degrees of freedom in theTLmodel implementation asBSMPTv3(see
+appendix of [66]) instead of computing them directly from the effective potential. Further, we
+fixv w = 1.0 inBSMPTinstead ofv w = 0.95 employed there by default. Additionally, we use
+a minimally modified version ofBSMPT, which also returnsRHinstead of only (β/H) S3 in the
+output.tsvfiles, allowing us to reconstruct (β/H) RH for a fair comparison of the two codes.
+The main scan uses the defaultTLprecision and is complemented by an increased-precision edge
+scan near the strongly supercooled region, withconverge 0=1andfRatioConv=5e-3. For each
+point we storeT crit,T nuc,T perc,T reh,α, (β/H) RH (inferred fromRHusing eq. (2.25)), the
+expected SNR at LISA, and runtime, and then compare point-by-point. In theλ 3 scan shown
+below we deliberately donotenforce the light Higgs state to have a 125 GeV mass at every point
+(which is however in place atλ 3 = 5.81, where the largest SNR is obtained), in order to isolate
+and illustrate numerical stability when varying only one model parameter.
+The comparison in Figs. 15 and 16 is overall encouraging: both codes show comparable
+behaviour over most of the scan range, and the GW signal strengthens monotonically with
+increasingλ 3, up untilλ 3 = 5.81. Beyond that, (β/H) RH drops so low that the signal leaves
+the LISA frequency band (see SNR panel). At values ofλ 3 >5.82,TLreports vacuum trapping,
+whereasBSMPThas no directly analogous warning flag. The steps visible atλ 3 = 5.55 and 5.69
+inαandβ/Hare due toV daisy obtaining imaginary parts. We note thatTLdoes not storeT crit
+for transitions that do not complete successfully.
+The critical temperatureT crit agrees at the per-mille level between both codes. The residual
+differences are consistent with limited significant digits in the counterterm inputs. This serves as
+a consistency check to probe whether the effective potentials which the two codes use are actually
+equivalent. Quantitatively,T perc typically agrees at about the 0.5% level and degrades to around
+5% for the most supercooled points, i.e. the points which LISA will be able to probe best. The
+reheating temperatureT reh shows larger differences:TLuses local energy conservation, while
+42
+
+95
+100
+105
+110Tcrit [GeV]
+TL excluded: No percolation
+20
+40
+60
+80
+100Tnuc [GeV]
+20
+40
+60
+80
+100Tperc [GeV]
+20
+40
+60
+80
+100Treh [GeV]
+5.5 5.7 5.9
+λ3
+10□2
+10□1
+100
+α
+5.5 5.7 5.9
+λ3
+101
+102
+103
+(β/H )RH
+5.5 5.7 5.9
+λ3
+10□2
+10□1
+100
+101
+SNRLISA
+5.5 5.7 5.9
+λ3
+10□1
+100
+101
+102
+truntime [min]
+5.78 5.80 5.8296
+98
+100
+5.78 5.80 5.8240
+45
+50
+5.78 5.80 5.8220
+30
+40
+50
+5.78 5.80 5.8230
+40
+50
+5.78 5.80 5.820
+1
+2
+5.78 5.80 5.82
+101
+102
+5.78 5.80 5.82
+20
+40
+60
+Comparison BSMPT vs. TransitionListener, 2HDM benchmark
+BSMPT v3.1.8 TL v2.0.0 (default precision) TL v2.0.0 (increased precision)
+Figure 15: Comparison of a 2HDM benchmark scan betweenTransitionListener v2.0.0and
+BSMPT v3.1.8. The shaded region marks theTLexclusion boundary where vacuum trapping
+occurs. Requiring a higher tunnelling precision inTL(shown in insets) leads to visually vanishing
+noise levels. The discrepancies between both codes are discussed in the main text.
+the widely used approximationT reh ≈T perc(1 +α) 1/4 inBSMPTcan induce shifts up to∼20%,
+which map directly into the predicted GW peak frequency. For transitions withα≫1, this
+approximation becomes increasingly inaccurate, resulting in correspondingly large uncertainties
+in the GW peak frequency. The strength parameterαis typically larger inBSMPTby up to 20%,
+depending on the specific point in the parameter space: We identified two effects that contribute
+to this. The first one is the definition ofα, whereTLgoes beyond the bag equation of state used
+inBSMPT. The second one 12 comes from a bug inBSMPTin the temperature derivative of the daisy
+potential, which was missing a term. We find that this alone contributes anO(10%) difference in
+α. The most difficult to compute quantity is (β/H) RH: With default settings, it is numerically
+noisy in both codes. Forλ 3 ≪5.8, i.e. for sufficiently weak transitions, the two codes agree,
+whereas for stronger supercooling we observe a growing discrepancy of up to 40%. In these
+cases (β/H≲100),TLin standard precision becomes numerically less reliable, but still returns
+points in regions whereBSMPTfails to converge. With increasedTLprecision (converge 0=1,
+fRatioConv=5e-3), the fine-tuned region can still be resolved down toβ/H=O(5). The LISA
+SNR predictions are overall comparable, with discrepancies up to roughly a factor of two near
+the edge. The underlying reasons for that are the aforementioned shift in the peak frequency
+(due to generally largerT reh predicted byTL), slightly different LISA noise budgets, as well as
+different assumptions on the LISA observation period and the soundwave lifetime factorY sw in
+eq. (2.40) (compare with eq. (3.77) in ref. [66]). Specifically, inBSMPTnoise curves from ref. [149]
+are used, with an assumed observation period of 3 years, while we follow the SNR computations
+presented in [122] with a 4 year observation period.
+The scan shows several points with numerical instabilities in the results fromBSMPT, visible
+12We informed theBSMPTauthors about these mismatches. They confirmed the underlying errors, created
+a corresponding GitHub issue, and fixed them in version 3.2.1. Future versions of this work will incorporate
+comparisons with an updated version ofBSMPT.
+43
+
+−0.28
+−0.27
+−0.26
+−0.25
+−0.24
+−0.23
+δTcrit [%]
+0
+1
+2δTnuc [%]
+−5
+−4
+−3
+−2
+−1
+δTperc [%]
+5.6 5.7 5.8
+λ3
+−20
+−15
+−10
+−5
+δTreh [%]
+5.6 5.7 5.8
+λ3
+0
+10
+20δα [%]
+5.6 5.7 5.8
+λ3
+−40
+−20
+0
+δ(β/H )RH [%]
+5.6 5.7 5.8
+λ3
+−150
+−100
+−50
+0
+δSNRLISA [%]
+TL standard precision
+TL increased precision
+BSMPT errors
+Comparison BSMPT vs. TransitionListener, 2HDM benchmark, relative deviations
+Figure 16: Relative differences between theBSMPTandTLcurves shown in fig. 15. Dotted vertical
+lines indicate points which we manually identified as unflaggedBSMPTerrors, which we excluded
+from this comparison. Note thatBSMPTdoes not automatically flag these points as invalid or
+numerically questionable.
+asT perc =−1 GeV, negativeT reh andα∼10 7. Further, forλ 3 at the borders of the scanned
+region, BSMPT fails to construct an effective potential. Runtime is nevertheless broadly com-
+parable between the two codes up to moderate supercooling, withBSMPTstaying constant in
+runtime (roughly 12 min per point), regardless of the phase transition’s properties, whereasTL
+shows a more significant increase in runtime from around 9 min to about three hours for large
+supercooling. The latter is due toTLperforming more percolation loops until a specific accuracy
+target is met.
+In summary, we conclude that while runtime still poses severe limitations for parameter
+space studies, the comparison withBSMPTv3validates our calculations at low supercooling,
+where common approximations valid for weak and sufficiently fast transitions hold. In the
+strong supercooling regime, however, where a more careful treatment of the reheating dynamics
+is required, we observe relevant discrepancies between the two codes, also regarding numerical
+stability. Having two alternative implementations provides a valuable cross-check, which will be
+especially relevant in coming studies of the strong supercooling regime, which will be probed
+first by upcoming GW observatories.
+6 Summary
+We have presentedTransitionListener v2.0, a comprehensive Python framework that ad-
+vances the state of the art in automated calculations for cosmological first-order phase tran-
+sitions and their gravitational wave signatures. With pulsar timing arrays (PTAs) reporting
+evidence for stochastic GW backgrounds and LISA on the horizon, translating BSM models into
+quantitative, testable predictions has become both urgent and technically demanding.
+Version 2 represents a substantial evolution beyond the original code, driven by the recog-
+nition that conventional approximations – radiation domination, the usual ˙T=−HTtime-
+temperature relationship,ρ≃∆Vthermodynamics, reheating scaling likeT reh ∝(1 +α) 1/4,
+44
+
+and fixed nucleation criteria likeS 3/T≃140 – break down where GW signals are strongest and
+best testable. The framework now implements a self-consistent treatment of the true-vacuum
+fraction evolution, iteratively solving forP t(T) while accounting for backreaction on the Hubble
+rate, depending itself on the spatially averaged energy density including vacuum contributions.
+Reheating is handled using local energy conservation during the transition; the mean bubble
+separationR sep is computed directly from the nucleation history, enabling faithful mapping to
+simulation-calibrated GW spectral templates where estimates based on (β/H) S3 break down.
+Bubble wall velocities are bounded using local thermal equilibrium matching conditions, and all
+thermodynamic quantities are derived from the full effective potential with proper accounting
+of field-independent radiation terms.
+In a comparison with the established codeBSMPTv3we show that these improvements prove
+critical in the regime of strong supercooling. We find excellent agreement of the predicted phase
+transition parametersαand (β/H) RH for intermediate transition strengths of the electroweak
+phase transition in the real 2HDM. In the strongly supercooled regime (α≫1,β/H≲100),
+which upcoming GW detectors will be able to probe first, the necessity to go beyond the simpli-
+fying assumptions mentioned above becomes apparent, cf. fig. 15. In the presented comparison
+we find that these approximations introduceO(1) uncertainties in the predicted SNRs, thus
+affecting directly the expected observability of strong electroweak transitions with LISA.
+Beyond single-point precision, the code enables systematic parameter space exploration
+through multiple scan modes (line, grid, random, and nested sampling viaUltraNest[83]),
+with uniform.csvoutput and direct integration of PTA likelihoods throughPTArcade[82] and
+Ceffyl[136]. Built-in detector sensitivities span twelve orders of magnitude in frequency. The
+modular architecture will facilitate the future evolution of the code, accommodating new hydro-
+dynamic prescriptions, refined GW templates, faster bounce action evaluations, or dimensionally
+reduced effective potentials. We have implemented benchmark models spanning dark sector ex-
+tensions, extended Higgs sectors, and conformal scenarios, validated in previous works [63, 37,
+36]. All numerical tolerances are exposed and documented, allowing users to balance precision
+against computational cost. The result is a tool suitable both for precision phenomenological
+studies and for large-scale inference that coming GW data releases will increasingly demand.
+With gravitational wave astronomy now transitioning from discovery to precision measure-
+ment,TransitionListener v2.0provides the community with a robust, validated pipeline for
+connecting fundamental theory to observable signals. Whether probing TeV-scale electroweak
+physics, sub-GeV dark sectors, or exotic multi-step transitions, the framework delivers the nu-
+merical accuracy and physical consistency needed to extract genuine physics from the gravita-
+tional wave backgrounds we are now beginning to observe.
+Acknowledgments
+We thank Felix Kahlhoefer and Fatih Ertas for their assistance during and since the develop-
+ment of the first version ofTransitionListener. We are grateful to our collaborators Torsten
+Bringmann, Frederik Depta, Thomas Konstandin, and Kai Schmidt-Hoberg for their feedback
+on preliminary results, which significantly improved the code. We further thank Safa Helal
+forβ-testing an early version and for developing an SMEFT model file, to be presented in a
+future publication. We also thank Andr´ e Pousette for valuable input on the use of BSMPT
+in the 2HDM, as well as finding benchmark point 3 from table 1. We acknowledge helpful
+discussions with Lisa Biermann, Francesco Costa, Andreas Ekstedt, Rikard Enberg, Maciek
+Kierkla, William Lamb, Michele Lucente, Henda Mansour, Andrea Mitridate, and Jorinde van
+de Vis. Computations for this work were performed on the local SOM clusters at the Instituto
+45
+
+de F´ ısica Corpuscular (IFIC), includingGraviton. JM acknowledges funding by the Deutsche
+Forschungsgemeinschaft (DFG) through Grant No. 396021762 – TRR 257. CT acknowledges
+support from a Feodor Lynen Fellowship of the Alexander von Humboldt Foundation, as well as
+a EuCAPT travel grant that contributed to the development of this work. CT is supported by
+the Spanish National Grant PID2022-137268NA-C55 and Generalitat Valenciana through the
+grant CIPROM/22/69.
+A Models
+TransitionListenercomes with several implemented models that cover single-field, multi-field
+and conformal scenarios. Each model is located inmodels/and inherits the methods from the
+base classgeneric potential. In this section we define the tree-level potentials as well as the
+mass spectra of the implemented models. These include a dark photon model, a conformal
+dark sector, a model with two dark singlets and the CP-conserving Two-Higgs Doublet model
+(2HDM).
+A.1 Dark Abelian Higgs model
+A simple dark photon model is implemented inmodels/TL dark U1.py. It contains a complex
+scalar field Φ with self-couplingλand the gauge couplinggto the dark photonA ′
+µ, for more
+details see ref. [71]. The Lagrangian before symmetry breaking reads
+L=|D µΦ|2 − 1
+4 A′
+µνA′µν −V tree(Φ),(A.1)
+with the covariant derivativeD µ =∂ µ + igA′
+µ and the field strength tensor of the dark photon
+A′
+µν =∂ µA′
+ν −∂ νA′
+µ. Upon the breaking of the darkU(1) ′ symmetry, the scalar obtains a vev,
+such that Φ = (ϕ+v+ iφ)/
+√
+2 and the tree-level potential is given by
+V0(ϕ) =− µ2
+2 ϕ2 + λ
+4 ϕ4 withµ 2 =λv 2 .(A.2)
+The spectrum in the broken phase consists of a dark Higgsϕ, a Goldstone bosonφ, and a dark
+photon with transverseA ′
+T and longitudinalA ′
+L polarisations. The field-dependent masses are
+m2
+ϕ =−µ 2 + 3λϕ2 + Πϕ, m 2
+A′
+T
+=g 2ϕ2,
+m2
+φ =−µ 2 +λϕ 2 + Πϕ, m 2
+A′
+L
+=m 2
+A′ + ΠA′
+L
+,(A.3)
+with the hard thermal masses
+Πϕ =
+ λ
+3 + g2
+4
+
+T 2,Π A′
+L
+= g2
+3 T 2 .(A.4)
+The 1-loop corrections require to specify counterterms which are of the same form as the tree-
+level potential in eq. (A.2),
+Vct =− δµ2
+2 ϕ2 + δλ
+4 ϕ4 .(A.5)
+The values of the counterterms are fixed by the renormalisation conditions, which we imple-
+mented to fix the mass of the scalar and the vev to the tree-level values
+δµ2 =
+ 3
+2ϕ
+dVcw
+dϕ − 1
+2
+d2Vcw
+dϕ2
+
+ϕ=v
+andδλ=
+ 1
+2ϕ3
+dVcw
+dϕ − 1
+2ϕ2
+d2Vcw
+dϕ2
+
+ϕ=v
+.(A.6)
+46
+
+A.2 Conformal darkU(1) ′ model
+The conformal modelmodels/TL conformal dark u1.pyrealises a radiatively broken symmetry
+of a dark Higgs. Furthermore it contains a dark photon and two left-handed fermions, described
+by the Lagrangian
+L=|D µΦ|2 − 1
+4 F ′
+µνF ′µν + ¯χ1i /Dχ1 + ¯χ2i /Dχ2 − y
+2 (Φ¯χc
+1χ1 + Φ∗ ¯χc
+2χ2 + h.c.)−V tree(Φ) (A.7)
+The covariant derivatives readD µ =∂ µ + igQiA′
+µ, whereU(1) ′ chargesQ i are assigned such
+that the Lagrangian is gauge-invariant:Q Φ = 1,Q y1 =−1/2 andQ y2 = 1/2. The tree-level
+potential exhibits a classical conformal symmetry
+Vtree(ϕ) = λ
+4 ϕ4 ,(A.8)
+which is broken by the radiative Coleman-Weinberg term at the 1-loop level. We employ renor-
+malisation conditions ensuring thatm ϕ(ϕ= 0) = 0 and define the renormalised self-coupling
+λat the renormalisation scale, chosen to be the vev. This fixes the self-coupling of the Higgs
+through the other couplings by dimensional transmutation [37]
+λ= 11
+48π2
+ 
+10λ2 + 3g4 −y 4
+.(A.9)
+Therefore all model parameters can be expressed in terms of the gauge couplingg, the Yukawa
+couplingyand the vevv. For this model it is convenient to combine the counterterms and
+1-loop corrections into one expression. In the model implementation the usual 1-loop termV1
+is hence overwritten by a custom function which implements
+V1-loop(ϕ) =
+X
+a
+± na
+64π2
+m4
+a(v)
+v4 ϕ4
+
+log
+ ϕ2
+v2
+
+− 1
+2
+
+.(A.10)
+Here the sign is positive (negative) for bosons (fermions) andn a are the respective internal
+degrees of freedom. The sum runs over the particle spectrum, which includes a dark Higgs, a
+Goldstone boson, transverse and longitudinal dark photon polarisations, and the Dirac fermion.
+The field-dependent masses are
+m2
+ϕ = 3λϕ2 + Πϕ , m 2
+φ =λϕ 2 + Πϕ , m 2
+A′
+T
+=g 2ϕ2 , m 2
+A′
+L
+=m 2
+A′ + ΠA′
+L
+, m 2
+ψ1,2 = 1
+2 y2ϕ2,
+(A.11)
+with the thermal masses
+Πϕ =
+ λ
+3 + g2
+4 + y2
+12
+
+T 2,Π A′
+L
+=
+1
+3 + 1
+12
+
+g2T 2.(A.12)
+A.3 Dark flipflop model
+The dark flipflop model (models/TL dark flipflop.py) provides a potential which can realise
+a two-step phase transition, see ref. [63]. The potential depends on two real scalar fieldsϕ 1 and
+ϕ2 and contains a Majorana fermionψ=ψ c which only couples toϕ 1:
+L= 1
+2 (∂µϕ1) (∂µϕ1) + 1
+2 (∂µϕ2) (∂µϕ2) + 1
+2i ¯ψ /∂ψ− y
+2 ϕ1 ¯ψψ−V tree(ϕ1, ϕ2).(A.13)
+47
+
+The tree-level potential is parameterised in the suggestive form
+Vtree = λ0
+4 (ϕ2
+1 +γ 2ϕ2
+2 −v 2)2 − λ1
+2 v2ϕ2
+1 + λ12
+2 ϕ2
+1ϕ2
+2 ,(A.14)
+with minima along the field axes (ϕ 1, ϕ2) = (±v 1,0) = (±
+p
+1 +λ 1/λ0 v,0) and (ϕ 1, ϕ2) =
+(0,±v/γ). The entries of the scalar mass matrix read
+M11 = 2λ0ϕ2
+1 +λ 0(ϕ2
+1 +γ 2ϕ2
+2 −v 2)−λ 1v2 +λ 12ϕ2
+2 + Π1,
+M22 = 2γ4λ0ϕ2
+2 +λ 0γ2(ϕ2
+1 +γ 2ϕ2
+2 −v 2) +λ 12ϕ2
+1 + Π2,and
+M12 = 2γ2λ0ϕ1ϕ2 + 2λ12ϕ1ϕ2,(A.15)
+whereas the fermion has the field-dependent massm ψ =yϕ 1/2. The thermal masses of the
+scalar fields read
+Π1 = y2 + 2
+ 
+(3 +γ 2)λ0 +λ 12
+
+24 T 2 ,and Π 2 = γ2λ0 + 3γ4λ0 +λ 12
+12 T 2 .(A.16)
+The imposed renormalisation conditions keep the global vev and the masses of the two scalars
+fixed after including the 1-loop corrections. This gives rise to the counterterm potential
+Vct =− δµ2
+1
+2 ϕ2
+1 − δµ2
+2
+2 ϕ2
+2 + δλ1
+4 ϕ4
+1 .(A.17)
+The counterterms are fixed by the renormalisation conditions
+δλ1 = 1
+2v3
+1
+∂VCW
+∂ϕ1
+
+(v1,0)
+− 1
+2v2
+1
+∂2VCW
+∂ϕ2
+2
+
+(v1,0)
+,(A.18)
+δµ2
+1 = 3
+2v1
+∂VCW
+∂ϕ2
+
+(v1,0)
+− 1
+2
+∂2VCW
+∂ϕ2
+2
+
+(v1,0)
+,and (A.19)
+δµ2
+2 = ∂2VCW
+∂ϕ2
+2
+
+(v1,0)
+.(A.20)
+A.4 Two-Higgs Doublet model (2HDM)
+The CP-conserving 2HDM [24, 150] is implemented inmodels/TL 2HDM.pyvia theR2HDMclass.
+The model encompasses two Higgs doublets Φ a = (ϕ+
+a , ϕ0
+a)T witha= 1,2, transforming under
+SU(2) L ×U(1) Y . Assuming a softly brokenZ 2 symmetry (Φ1,Φ 2)→(−Φ 1,Φ 2), the tree-level
+potential of the model is given by
+V0(Φ1,Φ 2) =m 2
+11|Φ1|2 +m 2
+22|Φ2|2 −
+
+m2
+12Φ†
+1Φ2 + h.c.
+
++ λ1
+2 |Φ1|4 + λ2
+2 |Φ2|4
++λ 3|Φ1|2|Φ2|2 +λ 4(Φ†
+1Φ2)(Φ†
+2Φ1) + λ5
+2
+
+(Φ†
+1Φ2)2 + h.c.
+
+.
+(A.21)
+The CP-even components of the two Higgs doubletsϕ 0
+a can be decomposed as
+Φa =
+ϕ+
+a
+ϕ0
+a
+
+=
+ 
+ϕ+
+a
+1√
+2 (ϕa +φ a + iψa)
+!
+,(A.22)
+whereϕ a are static background fields that together give the electroweak vacuum⟨ϕ 1⟩2 +⟨ϕ 2⟩2 =
+v2
+1 +v 2
+2 =v 2
+EW at zero temperature. The implementation is restricted to CP-even neutral
+48
+
+background fields and sets possible intermediate charge- and CP-breaking minima to zero⟨ϕ+
+a ⟩=
+⟨ψa⟩= 0. This yields the tree-level potential of the background fields
+V0(ϕ1, ϕ2) = 1
+2 m2
+11ϕ2
+1 + 1
+2 m2
+22ϕ2
+2 −m 2
+12ϕ1ϕ2 + λ1
+8 ϕ4
+1 + λ2
+8 ϕ4
+2 + λ345
+4 ϕ2
+1ϕ2
+2 ,(A.23)
+withλ 345 =λ 3 +λ 4 +λ 5. The mass matrices of the CP-even (φ a), CP-odd (ψ a) and charged
+scalar (ϕ+
+a ) read
+M2
+even =
+m2
+11 + 3
+2 λ1ϕ2
+1 + 1
+2 λ345ϕ2
+2 + Π1 −m2
+12 +λ 345ϕ1ϕ2
+−m2
+12 +λ 345ϕ1ϕ2 m2
+22 + 3
+2 λ2ϕ2
+2 + 1
+2 λ345ϕ2
+1 + Π2
+
+,
+M2
+odd =
+m2
+11 + 1
+2 λ1ϕ2
+1 + 1
+2 λ34−5ϕ2
+2 + Π1 −m2
+12 +λ 5ϕ1ϕ2
+−m2
+12 +λ 5ϕ1ϕ2 m2
+22 + 1
+2 λ2ϕ2
+2 + 1
+2 λ34−5ϕ2
+1 + Π2
+
+,
+M2
+ch =
+m2
+11 + 1
+2 λ1ϕ2
+1 + 1
+2 λ3ϕ2
+2 + Π1 −m2
+12 + 1
+2 λ45ϕ1ϕ2
+−m2
+12 + 1
+2 λ45ϕ1ϕ2 m2
+22 + 1
+2 λ2ϕ2
+2 + 1
+2 λ3ϕ2
+1 + Π2
+
+,(A.24)
+withλ 34−5 =λ 3 +λ 4 −λ 5,λ 45 =λ 4 +λ 5 and the thermal masses
+Π1 =
+ 
+12λ1 + 8λ3 + 4λ4 + 3(3g2
+2 +g 2
+1)
+ T 2
+48 + Πferm,1 ,(A.25)
+Π2 =
+ 
+12λ2 + 8λ3 + 4λ4 + 3(3g2
+2 +g 2
+1) + 12y2
+t
+ T 2
+48 + Πferm,2 .(A.26)
+(A.27)
+Here either Π1 or Π2 receive a contribution depending on whether the down-type quarks couple
+to the first or the second Higgs doublet,
+Πferm,i =
+(
+12y2
+b
+T 2
+48 if Yukawa type =i,
+0 else. (A.28)
+The mass matrices can be diagonalised to give the mass eigenstates after symmetry breaking,
+which includes the light and heavy Higgs bosonshandH, the pseudo scalarA, the neutral and
+charged GoldstonesG 0,G ± as well as the charged scalarsH ±. These are related to the gauge
+eigenstates via
+G±
+H ±
+
+=R(β)
+ϕ±
+1
+ϕ±
+2
+
+,
+G0
+A
+
+=R(β)
+ψ1
+ψ2
+
+,
+H
+h
+
+=R(α)
+φ1
+φ2
+
+.(A.29)
+The rotation matricesRare of the form
+R(β) =
+ cosβsinβ
+−sinβcosβ
+
+,(A.30)
+whereβis fixed by the vev ratio tanβ=v 2/v1. The input parameters are therefore the quartic
+couplingsλ i fori= 1, . . . ,5, the soft-breaking massm 2
+12, tanβand the Yukawa type. CP
+conservation further restricts all parameters to be real. The spectrum of the transversal and
+longitudinal gauge boson components is
+m2
+WT = g2
+2
+4 (ϕ2
+1 +ϕ 2
+2), m 2
+WL = g2
+2
+4 (ϕ2
+1 +ϕ 2
+2) + ΠWL .(A.31)
+m2
+BT = g2
+1 +g 2
+2
+4 (ϕ2
+1 +ϕ 2
+2), m 2
+BL = g2
+1 +g 2
+2
+4 (ϕ2
+1 +ϕ 2
+2) + ΠBL .(A.32)
+49
+
+With the thermal masses Π WL = 2g2
+2T 2 and Π BL = 2g2
+1T 2. From the quark and lepton sector
+we only account for the most important contributions to the potential from the top, bottom and
+tau. Their field-dependent masses are
+m2
+t =y 2
+t ϕ2
+i , m 2
+b =y 2
+b ϕ2
+i , m 2
+τ =y 2
+τ ϕ2
+i ,(A.33)
+where the Higgs doublet they couple to depends on the Yukawa type.
+The counterterms are computed using a dedicated solver incounterterms/
+twohdm solver.pyFor the CP-conserving 2HDM we determine one-loop counterterms in
+the on-shell scheme matched to the BSMPT prescription [64].
+The counterterm potential is
+Vct =δm 2
+11 Φ†
+1Φ1 +δm 2
+22 Φ†
+2Φ2 −δm 2
+12
+
+Φ†
+1Φ2 + Φ†
+2Φ1
+
++ δλ1
+2
+
+Φ†
+1Φ1
+2
++ δλ2
+2
+
+Φ†
+2Φ2
+2
++δλ 3
+
+Φ†
+1Φ1
+
+Φ†
+2Φ2
+
++ δλ5
+2
+
+Φ†
+1Φ2
+2
++
+
+Φ†
+2Φ1
+2
+.(A.34)
+The vector of counterterms reads
+δ=
+ 
+δm2
+11, δm2
+22, δm2
+12, δλ1, δλ2, δλ3, δλ5
+T
+,(A.35)
+withδλ 4 = 0 fixed by the chosen renormalisation prescription.
+Derivatives of the Coleman-Weinberg potential at the tree-level minima are evaluated from
+cached curvature tensors (models/generated/2hdm curvature tensors.json), generated via
+sympyif needed. The seven renormalisation conditions are two tadpole conditions and five
+conditions on the Hessian of the Coleman-Weinberg potential, evaluated atv= (v 1, v2):
+∂i (VCW +V ct)|v = 0, i∈ {4,6},
+∂i∂j (VCW +V ct)|v = 0,(i, j)∈ {(4,4),(6,6),(4,6),(5,5),(0,0)}.(A.36)
+Here,i, j= 0, . . . ,7 denote the indices of the fields in the vector
+(Reϕ +
+1 ,Imϕ +
+1 ,Reϕ +
+2 ,Imϕ +
+2 , ϕ1, ψ1, ϕ2, ψ2)T .(A.37)
+We define the Coleman-Weinberg derivative vector entering the linear system as
+∆CW ≡
+ 
+∂4VCW|v , ∂6VCW|v , ∂ 2
+4 VCW
+
+v , ∂ 2
+6 VCW
+
+v , ∂4∂6VCW|v , ∂ 2
+5 VCW
+
+v , ∂ 2
+0 VCW
+
+v
+T
+.(A.38)
+These are assembled into a linear system
+A(v1, v2)δ=−∆ CW,(A.39)
+which is then solved numerically for the countertermsδ.
+B Energy density and effective degrees of freedom
+Here we provide details about the computation of the energy density, as well as the implemen-
+tation of the effective degrees of freedom, introduced in eq. (2.11).
+50
+
+Radiation energy density.The 1-loop temperature-dependent correctionsV T within the
+effective potential in eq. (2.5) are given in terms of the thermal functionsJ b/f. Rewritten in a
+more suggestive way, these read
+Jb/f
+ m2
+T 2
+
+= 1
+T 3
+Z ∞
+0
+dp p2 ln
+
+1∓e −
+√
+p2+m2/T
+
+.(B.1)
+Noting that
+d
+dp ln
+
+1∓e −
+√
+p2+m2/T
+
+=± p
+ET
+1
+eE/T ∓1 (B.2)
+and using integration by parts, we can rewrite the thermal functions as
+Jb/f
+ m2
+T 2
+
+=∓ 1
+T 3
+Z ∞
+0
+dp p4
+3T E
+1
+eE/T ∓1 =∓ 2π2
+T 4
+Z d3p
+(2π)3
+p2
+3E
+1
+eE/T ∓1 .(B.3)
+Using eq. (2.3) we can easily see that the thermal contributions describe the pressure of a bath
+of non-interacting particles
+VT (ϕ) =−
+X
+a
+na
+Z d3p
+(2π)3
+p2
+3E
+1
+eE/T ∓1 =−p rad .(B.4)
+Similarly, the energy density calculated from the effective potential simply yields the analogous
+expression, still assuming non-interacting particles
+ρrad =V T −T ∂VT
+∂T =
+X
+a
+na
+Z d3p
+(2π)3
+E
+eE/T ±1 .(B.5)
+This can be reformulated in terms of the effective degrees of freedomg eff,
+ρrad = π2
+30
+X
+a
+na
+ 
+15
+π4
+Z ∞
+ma/T
+du u2p
+u2 −(m a/T) 2
+eu ∓1
+!
+| {z }
+≡geff,a(T)
+T 4 = π2
+30
+X
+a
+geff,a(T)T 4 ,(B.6)
+whereg eff,a(T) denotes the effective degrees of freedom for speciesa, carrying a massm a, see
+also ref. [142] for equivalent formulations of the same quantity. WithinTransitionListenerwe
+implement the radiation energy density in terms of the thermal functions and their derivatives,
+which are pre-computed and tabulated in terms ofz a =m 2
+a/T 2,
+ρrad =−
+X
+a
+na
+3T 4
+2π2 Jb/f (za)− 2m2T 2
+2π2
+d
+dza
+Jb/f(za)
+
+.(B.7)
+Counting the degrees of freedom.Note that the contribution from the of the gauge sector
+to the thermal corrections of the potential in theR ξ gauge has the following form [151]
+V gauge
+T = T 4
+2π2
+X
+g
+"
+3Jb
+ 
+m2
+g
+T 2
+!
+−J b
+ 
+ξm2
+g
+T 2
+!#
+.(B.8)
+In the Landau gaugeξ= 0 the second term gives a field-independent (pure radiation) contri-
+bution which is often neglected. We include this term in the effective potential to ensure the
+correct number of degrees of freedom from gauge and Goldstone bosons in the true and false
+vacua when computing the pressure and energy densities.
+51
+
+Daisy energy density.The total energy density of a plasma does not only obtain contri-
+butions from the radiation term of non-interacting particles, but also corrections from particle
+interactions, cf. eq. (2.11),
+ρint =V daisy −T ∂Vdaisy
+∂T = T 2
+8π
+X
+i∈BL
+ 
+m2
+i (ϕ) + Πi(T)
+1/2 ∂Πi(T)
+∂T ,(B.9)
+where the sum runs over the scalars and longitudinal modes of the gauge bosons. This term is
+of orderg 3 in the couplings, and hence typically suppressed compared to the radiation energy
+densityρ rad derived above. We therefore neglect this contribution in our computations.
+Effective degrees of freedom.The number of effective degrees of freedom of a single species
+acontributing to the total energy density, the pressure and entropy density are defined through
+ρa = π2
+30 geff,a(T)T 4 , p a = π2
+90 keff,a(T)T 4 ,ands a = ρa +p a
+T = 2π2
+45 heff,a(T)T 3 ,(B.10)
+such that the respective quantities for the full thermal bath can be obtained by summing over
+a. The individual functionsg eff,a(T),k eff,a(T), andh eff,a(T) can be computed in terms of the
+thermal integralsI b/f
+ρ andI b/f
+p ,
+geff,a(T) =g aIb/f
+ρ
+ ma
+T
+
+, k eff,a(T) =g aIb/f
+p
+ ma
+T
+
+, h eff,a(T) = 3geff,a(T) +k eff,a(T)
+4 ,
+(B.11)
+where
+Ib/f
+ρ (x) = 15
+π4
+Z ∞
+x
+u2√
+u2 −x 2
+eu ∓1 du ,andI b/f
+p (x) = 15
+π4
+Z ∞
+x
+(u2 −x 2)3/2
+eu ∓1 du .(B.12)
+We use tabulated values for these integrals within thethermodynamicsmodule to speed up
+numerical computation while preserving accuracy.
+C Analytical relation between transition speed and bubble size
+Here we derive an analytical relation betweenR sep andβat percolation, as first presented in
+ref. [102]. Approximating the nucleation rate as an exponential around the percolation time
+tperc and neglecting the cosmic expansion, we obtain
+Γ(t)≈Γ perce−β(t−tperc) ,andP f(t)≈exp
+
+−8πv3
+w
+β4 Γperce−β(t−tperc)
+
+.(C.1)
+Neglecting cosmic expansion in the bubble density as well, we obtain
+n(t)≈
+Z t
+−∞
+dt′ Γ(t′)Pf(t′) =− β3
+8πv3w
+Z tperc
+−∞
+dt d
+dt
+
+exp
+
+−8πv3
+w
+β4 Γperce−β(t−tperc)
+
+= β3
+8πv3w
+
+1−exp
+
+−8πv3
+w
+β4 Γperc
+
+= β3
+8πv3w
+(1−P f(tperc)) (C.2)
+The mean bubble separation at percolation is hence related to the transition speed through
+Rsep(tperc) = 1
+n(tperc)1/3 ≈
+ 8π
+fperc
+1/3 vw
+β (C.3)
+with the factorf perc = 1−P f(tperc)≈0.29 taking into account the true-vacuum fraction.
+52
+
+D Using TransitionListener in a Python script
+In code snippet 9 we show how to manually perform the steps from initialising the potential
+to plotting the GW spectrum. First the potential is initialised, and phases are traced using
+thePhasesclass, followed by viable transitions being found using theTransitionsclass. The
+evolution of the true-vacuum fraction and the percolation temperature are computed using the
+TransitionsObservableswhich gives back thepercolationResultsobject. The instanton
+solution, the action and the nucleation rate can be computed with the functionsbounceSolution
+andGamma. Lastly the GW spectrum is created from which the SNR ratios are determined
+through theObservabilityclass. More details can be found in the documentation on
+https://tasillo.de/TransitionListener/index.html.
+1from models . T L _ d a r k _ U 1 import s p e c i f i c _ p o t e n t i a l
+2from t r a n s i t i o n l i s t e n e r . phases import Phases
+3from t r a n s i t i o n l i s t e n e r . t r a n s i t i o n s import T r a n s i t i o n s
+4from t r a n s i t i o n l i s t e n e r . t r a n s i t i o n O b s e r v a b l e s import T r a n s i t i o n O b s e r v a b l e s
+5from t r a n s i t i o n l i s t e n e r . o b s e r v a b i l i t y import O b s e r v a b i l i t y
+6from t r a n s i t i o n l i s t e n e r . gwfopt import F O P T s p e c t r u m
+7from t r a n s i t i o n l i s t e n e r . plots import p l o t G W S p e c t r u m
+8from t r a n s i t i o n l i s t e n e r . p a t h D e f o r m a t i o n import b o u n c e S o l u t i o n
+9from t r a n s i t i o n l i s t e n e r . b u b b l e d y n a m i c s import Gamma
+10
+11# I n i t i a l i s i n g the po te nt ia l
+12# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+13pot = s p e c i f i c _ p o t e n t i a l ( inp ={ " g_tilde " : 2.69 , " l " : 1.5 e -3 , " v_GeV " : 1 e7 })
+14
+15# Phases and possible t r a n s i t i o n s
+16# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+17phases = Phases ( pot , verbose = True )
+18t r a n s i t i o n s = T r a n s i t i o n s ( phases , pot , verbose = True )
+19
+20# P e r c o l a t i o n
+21# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+22o b s e r v a b l e s = T r a n s i t i o n O b s e r v a b l e s ( pot , phases , transitions , verbose = True )
+23p e r c o l a t i o n = o b s e r v a b l e s . p e r c o l a t i o n R e s u l t s [0]
+24Tperc = p e r c o l a t i o n . Tperc
+25T pe rc _G eV = Tperc * pot . c o n v e r s i o n F a c t o r
+26
+27# Bounce action , bubble profiles and , n u c l e a t i o n rates
+28# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+29x_start , x_end = phases [1]. valAt ( Tperc ) , phases [0]. valAt ( Tperc )
+30bSol = b o u n c e S o l u t i o n ( pot , Tperc , x_start , x_end )
+31action = bSol . action
+32Phis = bSol . Phi
+33R = bSol . p ro fil e1 D . R
+34nuclRate = Gamma ( Tperc , action )
+35
+36# G r a v i t a t i o n a l wave spectrum
+37# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+38g w s p e c t r u m = F O P T s p e c t r u m ( o b s e r v a b l e s [0] , verbose = False )
+39o b s e r v a b i l i t y = O b s e r v a b i l i t y ( gwspectrum , verbose = True , i n c l u d e _ s m b h b = False )
+40p l o t G W S p e c t r u m ( o b s e r v a b l e s [0] , showplot = True )
+Code snippet 9: Alternative computation of the GW spectrum and other intermediate results
+for the Abelian dark Higgs model without using theTransitionListenerinterface class.
+53
+
+E Tables of error codes, structure of the output and accuracy
+settings
+Table 3 lists the error codes returned byTransitionListenerwtogether with a short explana-
+tion of the underlying issue. Tab. 4 lists the columns used within theoutput table.csvfile
+automatically created during random andUltraNestscans. Tables 5, 6, 7 and 8 list the avail-
+able configuration options for the phase tracing, the bounce action computation, the solution of
+the percolation integral as well as the computation of the GW spectrum, respectively.
+Code Exception Typical meaning
+1TachyonErrorTachyonic mass at theT=T 0 vacuum; usually cured by adjusting
+the model parameters or the renormalisation conditions.
+2NucleationErrorThe nucleation criterionC nuc(Tnuc) = 0 could not be satisfied; sur-
+faces only in thefixed step sizeworkflow.
+3WrongT0MinimumErrorThe last traced phase does not match the expectedT=T 0 mini-
+mum.
+4NoPhasesPhase tracing failed altogether.
+5OnlyOnePhaseOnly the high-temperature phase was found; no transitions can be
+constructed.
+6NoTransitionFoundMultiple phases exist but no viable transitions exist.
+7PercolationApproximation1ErrorThe saddlepoint approximation for percolation failed to converge,
+usually signaling a very flatS 3/Tcurve.
+8TooMuchSupercoolingErrorP t(Tmin)< f perc at the coldest explored temperature: the transition
+did not reach percolation in the evaluated window.
+9OnlySecondOrderTransitionsErrorAll traced transitions are continuous, no GWs are emitted.
+10PercolationErrorThe percolation integral could not be evaluated reliably: the step-
+2/3 Brent solve forT perc did not bracket a root, the ODE step col-
+lapsed below floating-point spacing, or the action evaluation budget
+was exhausted.
+11TunnelingErrorThe path-deformation or overshoot/undershoot solver failed to con-
+verge at the requested temperature.
+12InitPotentialErrorThe model parameters produce an ill-defined potential (e.g. un-
+bounded from below or violating input bounds).
+13SplineErrorConstruction of the deformation spline failed, often because the ini-
+tial path collapses in multi-field space.
+14WrongHighTPhaseErrorThe first transition did not originate from the high-temperature
+phase, indicating an inconsistent phase tree.
+15EternalInflationErrorf perc ≤P t(Tmin)< f final at the coldest explored temperature: per-
+colation occurred but residual false-vacuum regions persist and con-
+tinue to inflate.
+16TimeoutThe per-point timeout (specified in the.yamlfile) elapsed before
+the computation finished.
+17ActionRateJitterErrorJitter in Γ/H 4 across the active percolation band detected, which
+could not be fixed automatically.
+999UnexpectedErrorCatch-all code for uncategorised failures; consulterrormsgfor the
+Python traceback.
+Table 3: Error codes exposed by the CLI and scan backends. Codes are defined in
+transitionlistener/errors.pyand are propagated tooutput table.csvas well as exter-
+nal interfaces.
+54
+
+Column Description
+[model parameters]Model-specific input parameters (names depend on the chosen model).
+smoothened lnLSmoothed PTA log-likelihood for the default PTA label.
+PTArcade lnLPTArcade log-likelihood for the default PTA label.
+mock lnLMock PTA log-likelihood for the default PTA label.
+errorError code (0 for success, see Tab. 3).
+errormsgException message whenerror̸= 0.
+alpha,alpha inf,alpha eqStrength parameters (αand hydrodynamic variants).
+betaH S3,betaH RH(β/H) S3 and (β/H) RH.
+RHMean bubble separationRHat percolation.
+Treh SM GeV,Tperc SM GeVReheating and percolation temperatures in GeV.
+g eff tot reh,h eff tot rehEffective energy/entropy d.o.f. at reheating.
+kappa phi,kappa sw,kappa turbEfficiency factors for collisions, sound waves, turbulence.
+g0,h0Present-day effective d.o.f. used in redshift.
+v wallWall velocity.
+DLate-time dilution factor.
+c s,c s sym,c s broSound speed and phase-specific values.
+step,total stepsTransition step index within a multi-step history; total step number.
+Tnuc SM GeV,Tcrit SM GeV,
+Tf SM GeV
+Nucleation, critical and completion temperatures (GeV).
+xi critξ=v/Tparameter at the critical temperature.
+WARNING:too weak to compute percFlag for weak transitions (percolation skipped).
+WARNING:no perc splinesFlag when percolation splines are unavailable.
+WARNING:betaH [very] smallFlag when (β/H) RH <10 [(β/H) RH <3].
+WARNING:betaH mismatchFlag when (β/H) S3 and (β/H) RH differ by more than a factor 10.
+WARNING:betaH nonfiniteFlag when (β/H) S3 or (β/H) RH are non-finite.
+WARNING:nucleationRate nonexpFlag when (β/H) S3 <0, indicating non-exponential growth of Γ(T).
+WARNING:spline tnuc <missing>Flag when the nucleation temperature spline is unavailable or cannot
+be constructed.
+WARNING:not T0 global minFlag when the reachedT=T 0 minimum is not the global minimum.
+lnL <variant> <pta label>PTA likelihood outputs for each configured dataset label, with
+<variant>∈ {smoothened,PTArcade,mock}.
+<detector> SNRDetector-specific SNR outputs for all enabled sensitivity curves (e.g.
+LISA SNR,ET SNR,BBO SNR,SKA 20 yrs SNR).
+f peak Hz,h2OmegaGW peakGW peak frequency and amplitude.
+f pivot Hz,h2OmegaGW at pivotPivot frequency and GW amplitude at that pivot.
+DNeff GWGW contribution to ∆N eff.
+[masses]Zero-temperature mass spectrum entries (model-dependent).
+Table 4: Standard columns inoutput table.csv. Model parameters and mass-spectrum entries
+are placeholders that expand according to the chosen model and the configuredMassSpectrum.
+55
+
+Parameter Default Role
+internal scale1000 Reference scale in internal units; usually the vev in internal
+units.
+Tmax factor2.5 SetsT max =Tmax factor×internal scaleup to which the
+phases are traced.
+diftol1 Merge phases whose minima distance in field space is less than
+diftol×internal scale.
+Z2 cutof factor−5 Discard far-negative mirror phases forZ 2 symmetries.
+tracing derivative order4 Finite-difference order for∂ϕ/∂Tand Hessians. Either 2 or 4.
+tracing field accuracy10 −3 Accuracy in the fields during phase tracing: Tolerance in the
+minimisation and field space finite difference stepx eps.
+tracing temp accuracy10 −3 Temperature finite difference step size in gradient computation
+∂V /∂T(T eps).
+nucleation Ttol10 −8 Relative root-finding tolerance forT nuc.
+approx strength
+threshold
+10−4 Treat transitions with approximate strength ∆V /T4 below this
+value as second order
+do tachyon testTrue Check if there are tachyonic instabilities atT=T 0 during
+model initialisation.
+tracing args.dtstart10 −4 Relative initial trace step in temperature (∆T=
+dtstart×(Tmax-Tmin)).
+tracing args.dtabsMax20.0 Maximal temperature step in the tracing (relative todtstart).
+tracing args.dtfracMax0.25 Max fractional temperature step (∆T /T).
+tracing args.dtmin10 −6 Minimum step size before declaring a phase endpoint.
+tracing args.minratio10 −4 Smallest eigenvalue ratio before treating an extremum as a
+saddle point.
+tracing args.tjump10 −5 Relative temperature jump after phase vanishes to search for
+new phase, scaled by (Tmax-Tmin).
+tracing args.deltaX tol1.2 Tolerance factor for field-space step errors.
+Table 5: Default values inTracingConf.
+56
+
+Parameter Default Role
+tunneling findProfile params.phitol10 −10 Accuracy target for the profile solver.
+tunneling findProfile params.xtol10 −10 Root-finding tolerance in field space.
+tunneling init params.rscale NoneBubble radius scale. If none, determined from
+the oscillation time around the potential bar-
+rier.
+tunneling findProfile params.rmin10 −4 Minimum radial coordinate for the bounce
+profile (relative to the bubble radius scale
+rscale).
+tunneling findProfile params.rmax10 4 Maximum radial coordinate for the bounce
+profile (relative to the bubble radius scale
+rscale).
+V spline samples1000 Samples used to spline the potential along the
+path.
+tunneling init params.phi eps10 −3 Finite difference step in field space for numer-
+ical derivatives of the potential in the bounce
+equation.
+tunneling findProfile params.npoints500 Number of radial samples in the 1D profile.
+deformation deform params.fRatioConv2×10 −2 Convergence criterion: Stop when the maxi-
+mal force on the path divided by the maximal
+pot. gradient is smaller thanfRatioConv.
+deformation deform params.startstep2×10 −3 Initial path-deformation step size.
+deformation deform params.converge 05.0 Increase the convergence criterion of the first
+iteration by the factorconverge 0.
+deformation deform params.
+fRatioIncrease
+5.0 The maximum fractional amount the normal
+force ratio can increase before raising an error.
+deformation deform params.maxiter500 Maximum number of deformation iterations.
+Table 6: Default values for tunnelling and path-deformation control.
+Parameter Default Role
+wall velocity "LTE"Wall velocity prescription ("LTE"orfloatbe-
+tween 0 and 1).
+bw collisions "off"Bubble-collision source model: If"off"do not
+include contribution; if"NLO", compute from
+NLO friction; if"full", setκ col = 1.
+epsilon turbulence0.1 Fraction of kinetic energy converted to turbu-
+lence. If 0, do not include turbulence as a GW
+source.
+sound speed "compute"Sound-speed prescription ("compute"or value
+between 0< c s ≤1).
+check if T0 global minFalse Enforce theT= 0 global-minimum check.
+Table 7: Default of theGWConfsettings. They control the computation of the bubble wall
+velocity, efficiency factors and contributions to the GW spectrum.
+57
+
+Parameter Default Role
+algorithm mode adaptive
+step size
+Solver mode:adaptive step sizeorfixed step size.
+integral method odeBackend used for the percolation integral evaluation. Op-
+tions:odeordouble integral.
+time temperature mode sound speedChoice of time-temperature relation, using either
+sounds speedorbag model.
+f perc0.28957 True-vacuum fraction at percolation.
+f final0.99 Completion threshold forP(T f).
+maxit10 Maximum iterations in steps 2 and 3 of the percolation
+solver.
+n action30 Fixed number of action support points used in
+fixed step sizemode.
+weight2/3 Fraction of points of the temperature grid to lay between
+Tnuc andT approx
+perc .
+rel increment0.10 Relative expansion of the temperature interval when
+P(T) does not bracket the target range.
+max boundary ratio0.45 Maximum fraction of grid points withP t = 0 orP t = 1
+before expanding the interval.
+f start10 −3 InitialP t, starting point for the ODE solver.
+n action min15 Minimum number of action support points constructed
+before percolation step 2.
+n action increment5 Number of additional action support points added per
+percolation step 2 iteration.
+n action max60 Maximum total number of action support points allowed
+across iterations.
+max action temperatures100 Absolute upper limit on distinct temperatures at which
+the action may be evaluated in one run.
+large delta p refine thr0.1 If the change in neighbouringP(T) values exceeds this
+threshold, additional refinement points are inserted.
+large delta p success thr0.2 If the change in neighbouringP(T) values exceeds this
+threshold, the solution is not accepted as converged.
+jitter GH4 threshold1.0 Tolerance in log 10(Γ/H4) above which unresolved action
+jitter is flagged.
+jitter rescue TrueIf enabled, reruns the calculation with tighter tunnelling
+settings when jitter is detected.
+n jitter save20 Maximum number of jitter diagnostic samples written
+out.
+acc tperc10 −2 Relative accuracy target forT perc.
+acc tfinal10 −2 Relative accuracy target forT f.
+acc rh10 −2 Relative accuracy target forRH.
+Table 8: Default values inPercolationConf. The second (third) block only affects the
+fixed step size(adaptive step size) mode.
+58
+
+References
+[1] N. Aghanim et al. “Planck 2018 results. VI. Cosmological parameters”. In:Astron. As-
+trophys.641 (2020), A6.doi:10 . 1051 / 0004 - 6361 / 201833910. arXiv:1807 . 06209
+[astro-ph.CO].
+[2] Chiara Caprini and Daniel G. Figueroa. “Cosmological Backgrounds of Gravitational
+Waves”. In:Class. Quant. Grav.35.16 (2018), p. 163001.doi:10.1088/1361-6382/aac
+608. arXiv:1801.04268 [astro-ph.CO].
+[3] Pau Amaro-Seoane et al. “Laser Interferometer Space Antenna”. In: (Feb. 2017). arXiv:
+1702.00786 [astro-ph.IM].
+[4] Michele Maggiore et al. “Science Case for the Einstein Telescope”. In:JCAP03 (2020),
+p. 050.doi:10.1088/1475-7516/2020/03/050. arXiv:1912.02622 [astro-ph.CO].
+[5] J. Antoniadis et al. “The International Pulsar Timing Array second data release: Search
+for an isotropic gravitational wave background”. In:Mon. Not. Roy. Astron. Soc.
+510.4 (2022), pp. 4873–4887.doi:10 . 1093 / mnras / stab3418. arXiv:2201 . 03980
+[astro-ph.HE].
+[6] Gabriella Agazie et al. “The NANOGrav 15-year Data Set: Evidence for a Gravitational-
+Wave Background”. In:Astrophys. J. Lett.951.1 (2023).doi:10.3847/2041-8213/acd
+ac6. arXiv:2306.16213 [astro-ph.HE].
+[7] J. Antoniadis et al. “The second data release from the European Pulsar Timing Array
+III. Search for gravitational wave signals”. In:Astron. Astrophys.678 (2023), A50.doi:
+10.1051/0004-6361/202346844. arXiv:2306.16214 [astro-ph.HE].
+[8] Heng Xu et al. “Searching for the Nano-Hertz Stochastic Gravitational Wave Back-
+ground with the Chinese Pulsar Timing Array Data Release I”. In:Res. Astron. As-
+trophys.23.7 (2023), p. 075024.doi:10.1088/1674-4527/acdfa5. arXiv:2306.16216
+[astro-ph.HE].
+[9] Daniel J. Reardon et al. “Search for an Isotropic Gravitational-wave Background with
+the Parkes Pulsar Timing Array”. In:Astrophys. J. Lett.951.1 (2023), p. L6.doi:10.3
+847/2041-8213/acdd02. arXiv:2306.16215 [astro-ph.HE].
+[10] Matthew T. Miles et al. “The MeerKAT Pulsar Timing Array: The first search for grav-
+itational waves with the MeerKAT radio telescope”. In: (Dec. 2024).doi:10.1093/mnr
+as/stae2571. arXiv:2412.01153 [astro-ph.HE].
+[11] D. A. Kirzhnits. “Weinberg model in the hot universe”. In:JETP Lett.15 (1972), pp. 529–
+531.
+[12] L. Dolan and R. Jackiw. “Symmetry Behavior at Finite Temperature”. In:Phys. Rev. D
+9 (1974), pp. 3320–3341.doi:10.1103/PhysRevD.9.3320.
+[13] Steven Weinberg. “Gauge and Global Symmetries at High Temperature”. In:Phys. Rev.
+D9 (1974), pp. 3357–3378.doi:10.1103/PhysRevD.9.3357.
+[14] D. A. Kirzhnits and Andrei D. Linde. “Symmetry Behavior in Gauge Theories”. In:
+Annals Phys.101 (1976), pp. 195–238.doi:10.1016/0003-4916(76)90279-7.
+[15] K. Kajantie et al. “Is there a hot electroweak phase transition atm H ≳m W ?” In:
+Phys. Rev. Lett.77 (1996), pp. 2887–2890.doi:10.1103/PhysRevLett.77.2887. arXiv:
+hep-ph/9605288.
+59
+
+[16] Y. Aoki et al. “The QCD transition temperature: results with physical masses in the
+continuum limit II.” In:JHEP06 (2009), p. 088.doi:10.1088/1126-6708/2009/06/08
+8. arXiv:0903.4155 [hep-lat].
+[17] A. D. Sakharov. “Violation of CP Invariance, C asymmetry, and baryon asymmetry of
+the universe”. In:Pisma Zh. Eksp. Teor. Fiz.5 (1967), pp. 32–35.doi:10.1070/PU1991
+v034n05ABEH002497.
+[18] F. Zwicky. “Die Rotverschiebung von extragalaktischen Nebeln”. In:Helv. Phys. Acta6
+(1933), pp. 110–127.doi:10.1007/s10714-008-0707-4.
+[19] Vera C. Rubin and W. Kent Ford Jr. “Rotation of the Andromeda Nebula from a Spec-
+troscopic Survey of Emission Regions”. In:Astrophys. J.159 (1970), pp. 379–403.doi:
+10.1086/150317.
+[20] Steven Weinberg. “Implications of Dynamical Symmetry Breaking”. In:Phys. Rev. D13
+(1976), pp. 974–996.doi:10.1103/PhysRevD.19.1277.
+[21] Leonard Susskind. “Dynamics of Spontaneous Symmetry Breaking in the Weinberg-
+Salam Theory”. In:Phys. Rev. D20 (1979), pp. 2619–2625.doi:10 . 1103 / PhysRevD
+.20.2619.
+[22] Peter Minkowski. “µ→eγat a Rate of One Out of 10 9 Muon Decays?” In:Phys. Lett.
+B67 (1977), pp. 421–428.doi:10.1016/0370-2693(77)90435-X.
+[23] Tsutomu Yanagida. “Horizontal gauge symmetry and masses of neutrinos”. In:Conf.
+Proc. C7902131 (1979). Ed. by Osamu Sawada and Akio Sugamoto, pp. 95–99.
+[24] T. D. Lee. “A Theory of Spontaneous T Violation”. In:Phys. Rev. D8 (1973). Ed. by
+G. Feinberg, pp. 1226–1239.doi:10.1103/PhysRevD.8.1226.
+[25] Jogesh C. Pati and Abdus Salam. “Lepton Number as the Fourth Color”. In:Phys. Rev.
+D10 (1974), pp. 275–289.doi:10.1103/PhysRevD.10.275.
+[26] Hans Peter Nilles. “Supersymmetry, Supergravity and Particle Physics”. In:Phys. Rept.
+110 (1984), pp. 1–162.doi:10.1016/0370-1573(84)90008-5.
+[27] H. Georgi and S. L. Glashow. “Unity of All Elementary Particle Forces”. In:Phys. Rev.
+Lett.32 (1974), pp. 438–441.doi:10.1103/PhysRevLett.32.438.
+[28] Bob Holdom. “Two U(1)’s and Epsilon Charge Shifts”. In:Phys. Lett. B166 (1986),
+pp. 196–198.doi:10.1016/0370-2693(86)91377-8.
+[29] Pedro Schwaller. “Gravitational Waves from a Dark Phase Transition”. In:Phys. Rev.
+Lett.115.18 (2015), p. 181101.doi:10.1103/PhysRevLett.115.181101. arXiv:1504.0
+7263 [hep-ph].
+[30] V. A. Kuzmin, V. A. Rubakov, and M. E. Shaposhnikov. “On the Anomalous Electroweak
+Baryon Number Nonconservation in the Early Universe”. In:Phys. Lett. B155 (1985),
+p. 36.doi:10.1016/0370-2693(85)91028-7.
+[31] Iason Baldes et al. “Baryogenesis via relativistic bubble expansion”. In:Phys. Rev. D
+104.11 (2021), p. 115029.doi:10 . 1103 / PhysRevD . 104 . 115029. arXiv:2106 . 15602
+[hep-ph].
+[32] Martina Cataldi and Bibhushan Shakya. “Leptogenesis via bubble collisions”. In:JCAP
+11 (2024), p. 047.doi:10.1088/1475-7516/2024/11/047. arXiv:2407.16747 [hep-ph].
+[33] Nabeen Bhusal et al. “Standard Model Baryon Number Violation at Zero Temperature
+from Higgs Bubble Collisions”. In: (Aug. 2025). arXiv:2508.21825 [hep-ph].
+60
+
+[34] Michael J. Baker, Joachim Kopp, and Andrew J. Long. “Filtered Dark Matter at a First
+Order Phase Transition”. In:Phys. Rev. Lett.125.15 (2020), p. 151102.doi:10.1103/P
+hysRevLett.125.151102. arXiv:1912.02830 [hep-ph].
+[35] Aleksandr Azatov, Miguel Vanvlasselaer, and Wen Yin. “Dark Matter production from
+relativistic bubble walls”. In:JHEP03 (2021), p. 288.doi:10.1007/JHEP03(2021)288.
+arXiv:2101.05721 [hep-ph].
+[36] Torsten Bringmann et al. “Hunting WIMPs with LISA: correlating dark matter and
+gravitational wave signals”. In:JCAP05 (2024), p. 065.doi:10.1088/1475-7516/202
+4/05/065. arXiv:2311.06346 [astro-ph.CO].
+[37] Sowmiya Balan et al. “Sub-GeV Dark Matter and Nano-Hertz Gravitational Waves from
+a Classically Conformal Dark Sector”. In:Journal of Cosmology and Astroparticle Physics
+2025.08 (Aug. 2025), p. 062.issn: 1475-7516.doi:10.1088/1475-7516/2025/08/062.
+arXiv:2502.19478 [hep-ph]. (Visited on 09/19/2025).
+[38] Edward Witten. “Cosmic Separation of Phases”. In:Phys. Rev. D30 (1984), pp. 272–285.
+doi:10.1103/PhysRevD.30.272.
+[39] C. J. Hogan. “Gravitational radiation from cosmological phase transitions”. In:Mon.
+Not. Roy. Astron. Soc.218.4 (1986), pp. 629–636.doi:10.1093/mnras/218.4.629.
+[40] Adeela Afzal et al. “The NANOGrav 15-year Data Set: Search for Signals from New
+Physics”. In:Astrophys. J. Lett.951.1 (2023).doi:10.3847/2041-8213/acdc91. arXiv:
+2306.16219 [astro-ph.HE].
+[41] Nancy Aggarwal et al. “Challenges and opportunities of gravitational-wave searches above
+10 kHz”. In:Living Rev. Rel.28.1 (2025), p. 10.doi:10.1007/s41114-025-00060-5.
+arXiv:2501.11723 [gr-qc].
+[42] Peter Athron et al. “Cosmological phase transitions: From perturbative particle physics
+to gravitational waves”. In:Prog. Part. Nucl. Phys.135 (2024), p. 104094.doi:10.1016
+/j.ppnp.2023.104094. arXiv:2305.02357 [hep-ph].
+[43] Sidney Coleman. “Fate of the false vacuum: Semiclassical theory”. In:Phys. Rev. D15
+(10 May 1977), pp. 2929–2936.doi:10.1103/PhysRevD.15.2929.url:https://link
+.aps.org/doi/10.1103/PhysRevD.15.2929.
+[44] A.D. Linde. “Decay of the False Vacuum at Finite Temperature”. In:Nuclear Physics B
+216.2 (May 1983), pp. 421–445.issn: 05503213.doi:10.1016/0550-3213(83)90293-6.
+(Visited on 01/09/2023).
+[45] Alan H. Guth and Erick J. Weinberg. “Cosmological Consequences of a First Order Phase
+Transition in the SU(5) Grand Unified Model”. In:Phys. Rev. D23 (1981), p. 876.doi:
+10.1103/PhysRevD.23.876.
+[46] Michael S. Turner, Erick J. Weinberg, and Lawrence M. Widrow. “Bubble nucleation
+in first order inflation and other cosmological phase transitions”. In:Phys. Rev. D46
+(1992), pp. 2384–2403.doi:10.1103/PhysRevD.46.2384.
+[47] Marc Kamionkowski, Arthur Kosowsky, and Michael S. Turner. “Gravitational radiation
+from first order phase transitions”. In:Phys. Rev. D49 (1994), pp. 2837–2851.doi:
+10.1103/PhysRevD.49.2837. arXiv:astro-ph/9310044.
+[48] Jose R. Espinosa et al. “Energy Budget of Cosmological First-order Phase Transitions”.
+In:JCAP06 (2010), p. 028.doi:10.1088/1475-7516/2010/06/028. arXiv:1004.4187
+[hep-ph].
+61
+
+[49] Andreas Ekstedt et al.How Fast Does the WallGo? A Package for Computing Wall Ve-
+locities in First-Order Phase Transitions. Nov. 2024.doi:10.48550/arXiv.2411.04970.
+eprint:2411.04970(hep-ph). (Visited on 01/07/2025).
+[50] Chiara Caprini, Ruth Durrer, and Geraldine Servant. “The stochastic gravitational wave
+background from turbulence and magnetic fields generated by a first-order phase tran-
+sition”. In:JCAP12 (2009), p. 024.doi:10.1088/1475- 7516/2009/12/024. arXiv:
+0909.0622 [astro-ph.CO].
+[51] Chiara Caprini et al. “General Properties of the Gravitational Wave Spectrum from Phase
+Transitions”. In:Phys. Rev. D79 (2009), p. 083519.doi:10.1103/PhysRevD.79.083519.
+arXiv:0901.1661 [astro-ph.CO].
+[52] Mark Hindmarsh et al. “Gravitational waves from the sound of a first order phase tran-
+sition”. In:Phys. Rev. Lett.112 (2014), p. 041301.doi:10.1103/PhysRevLett.112.04
+1301. arXiv:1304.2433 [hep-ph].
+[53] Mark Hindmarsh et al. “Numerical simulations of acoustically generated gravitational
+waves at a first order phase transition”. In:Phys. Rev. D92.12 (2015), p. 123009.doi:
+10.1103/PhysRevD.92.123009. arXiv:1504.03291 [astro-ph.CO].
+[54] Ryusuke Jinno and Masahiro Takimoto. “Gravitational waves from bubble collisions: An
+analytic derivation”. In:Phys. Rev. D95.2 (2017), p. 024009.doi:10.1103/PhysRevD
+.95.024009. arXiv:1605.01403 [astro-ph.CO].
+[55] Mark Hindmarsh et al. “Shape of the acoustic gravitational wave power spectrum from
+a first order phase transition”. In:Phys. Rev. D96.10 (2017), p. 103520.doi:10.1103
+/PhysRevD.96.103520. arXiv:1704.05871 [astro-ph.CO].
+[56] Daniel Cutting, Mark Hindmarsh, and David J. Weir. “Vorticity, kinetic energy, and
+suppressed gravitational wave production in strong first order phase transitions”. In:
+Phys. Rev. Lett.125.2 (2020), p. 021302.doi:10 . 1103 / PhysRevLett . 125 . 021302.
+arXiv:1906.00480 [hep-ph].
+[57] Alberto Roper Pol et al. “Numerical simulations of gravitational waves from early-
+universe turbulence”. In:Phys. Rev. D102.8 (2020), p. 083512.doi:10.1103/PhysR
+evD.102.083512. arXiv:1903.08585 [astro-ph.CO].
+[58] Ryusuke Jinno et al. “Higgsless simulations of cosmological phase transitions and gravi-
+tational waves”. In:JCAP02 (2023), p. 011.doi:10.1088/1475-7516/2023/02/011.
+arXiv:2209.04369 [astro-ph.CO].
+[59] Chiara Caprini et al. “Gravitational waves from decaying sources in strong phase transi-
+tions”. In: (Sept. 2024). arXiv:2409.03651 [gr-qc].
+[60] Chiara Caprini et al. “Gravitational Waves from First-Order Phase Transitions in LISA:
+Reconstruction Pipeline and Physics Interpretation”. In:Journal of Cosmology and As-
+troparticle Physics2024.10 (Oct. 2024), p. 020.issn: 1475-7516.doi:10.1088/1475-75
+16/2024/10/020. arXiv:2403.03723 [astro-ph]. (Visited on 07/03/2025).
+[61] John Ellis, Marek Lewicki, and Jos´ e Miguel No. “On the Maximal Strength of a First-
+Order Electroweak Phase Transition and its Gravitational Wave Signal”. In:JCAP04
+(2019), p. 003.doi:10.1088/1475-7516/2019/04/003. arXiv:1809.08242 [hep-ph].
+[62] John Ellis et al. “Gravitational wave energy budget in strongly supercooled phase tran-
+sitions”. In:JCAP06 (2019), p. 024.doi:10.1088/1475- 7516/2019/06/024. arXiv:
+1903.09642 [hep-ph].
+62
+
+[63] Torsten Bringmann et al. “Tuning the Violins: Dark Sector Phase Transition Models for
+the PTA Signal”. In: arXiv:2602.09092 (Feb. 2026).doi:10.48550/arXiv.2602.09092.
+arXiv:2602.09092 [hep-ph]. (Visited on 03/31/2026).
+[64] Philipp Basler and Margarete M¨ uhlleitner. “BSMPT (Beyond the Standard Model Phase
+Transitions): A tool for the electroweak phase transition in extended Higgs sectors”. In:
+Comput. Phys. Commun.237 (2019), pp. 62–85.doi:10.1016/j.cpc.2018.11.006.
+arXiv:1803.02846 [hep-ph].
+[65] Philipp Basler, Margarete M¨ uhlleitner, and Jonas M¨ uller. “BSMPT v2 a tool for the
+electroweak phase transition and the baryon asymmetry of the universe in extended
+Higgs Sectors”. In:Comput. Phys. Commun.269 (2021), p. 108124.doi:10.1016/j.cp
+c.2021.108124. arXiv:2007.01725 [hep-ph].
+[66] Philipp Basler et al. “BSMPT v3 a tool for phase transitions and primordial gravitational
+waves in extended Higgs sectors”. In:Comput. Phys. Commun.316 (2025), p. 109766.
+doi:10.1016/j.cpc.2025.109766. arXiv:2404.19037 [hep-ph].
+[67] Peter Athron et al. “PhaseTracer: tracing cosmological phases and calculating transition
+properties”. In:Eur. Phys. J. C80.6 (2020), p. 567.doi:10.1140/epjc/s10052-020-8
+035-2. arXiv:2003.02859 [hep-ph].
+[68] Peter Athron et al. “PhaseTracer2: from the effective potential to gravitational waves”.
+In:Eur. Phys. J. C85.5 (2025), p. 559.doi:10.1140/epjc/s10052- 025- 14258- y.
+arXiv:2412.04881 [astro-ph.CO].
+[69] Francesco Costa et al. “ELENA: a software for fast and precise computation of first
+order phase transitions and gravitational waves production in particle physics models”.
+In: (Sept. 2025). arXiv:2510.00289 [hep-ph].
+[70] Vedran Brdar et al. “PT2GWFinder : A package for cosmological first-order phase transi-
+tions and gravitational waves”. In:Comput. Phys. Commun.323 (2026), p. 110119.doi:
+10.1016/j.cpc.2026.110119. arXiv:2505.04744 [hep-ph].
+[71] Fatih Ertas, Felix Kahlhoefer, and Carlo Tasillo. “Turn up the volume: listening to phase
+transitions in hot dark sectors”. In:JCAP02.02 (2022), p. 014.doi:10.1088/1475-75
+16/2022/02/014. arXiv:2109.06208 [astro-ph.CO].
+[72] Torsten Bringmann et al. “Does NANOGrav observe a dark sector phase transition?” In:
+JCAP11 (2023), p. 053.doi:10.1088/1475-7516/2023/11/053. arXiv:2306.09411
+[astro-ph.CO].
+[73] Andreas Ekstedt, Philipp Schicho, and Tuomas V. I. Tenkanen. “DRalgo: A package
+for effective field theory approach for thermal phase transitions”. In:Comput. Phys.
+Commun.288 (2023), p. 108725.doi:10.1016/j.cpc.2023.108725. arXiv:2205.08815
+[hep-ph].
+[74] Victor Guada, Miha Nemevˇ sek, and Matevˇ z Pintar. “FindBounce: Package for multi-field
+bounce actions”. In:Comput. Phys. Commun.256 (2020), p. 107480.doi:10.1016/j.c
+pc.2020.107480. arXiv:2002.00881 [hep-ph].
+[75] Ryosuke Sato. “SimpleBounce : a simple package for the false vacuum decay”. In:Comput.
+Phys. Commun.258 (2021), p. 107566.doi:10.1016/j.cpc.2020.107566. arXiv:1908
+.10868 [hep-ph].
+63
+
+[76] Andreas Ekstedt, Oliver Gould, and Joonas Hirvonen. “BubbleDet: a Python package
+to compute functional determinants for bubble nucleation”. In:JHEP12 (2023), p. 056.
+doi:10.1007/JHEP12(2023)056. arXiv:2308.15652 [hep-ph].
+[77] Chiara Caprini et al. “Detecting gravitational waves from cosmological phase transitions
+with LISA: an update”. In:JCAP03 (2020), p. 024.doi:10.1088/1475-7516/2020/03
+/024. arXiv:1910.13125 [astro-ph.CO].
+[78] Peter Athron et al. “SpecBit, DecayBit and PrecisionBit: GAMBIT modules for com-
+puting mass spectra, particle decay rates and precision observables”. In:Eur. Phys. J.
+C78.1 (2018), p. 22.doi:10.1140/epjc/s10052- 017- 5390- 8. arXiv:1705.07936
+[hep-ph].
+[79] Janina J. Renk et al. “CosmoBit: A GAMBIT module for computing cosmological ob-
+servables and likelihoods”. In:JCAP02 (2021), p. 022.doi:10.1088/1475-7516/2021
+/02/022. arXiv:2009.03286 [astro-ph.CO].
+[80] Wen-Yuan Ai, Benoit Laurent, and Jorinde van de Vis.Bounds on the Bubble Wall
+Velocity. Nov. 2024.doi:10.48550/arXiv.2411.13641. arXiv:2411.13641 [hep-ph].
+(Visited on 01/13/2025).
+[81] Wen-Yuan Ai, Benoit Laurent, and Jorinde van de Vis. “Model-independent bubble wall
+velocities in local thermal equilibrium”. In:JCAP07 (2023), p. 002.doi:10.1088/147
+5-7516/2023/07/002. arXiv:2303.10171 [astro-ph.CO].
+[82] Andrea Mitridate et al. “PTArcade”. In: (June 2023). arXiv:2306.16377 [hep-ph].
+[83] Johannes Buchner. “UltraNest – a robust, general purpose Bayesian inference engine”.
+In: (Jan. 2021). arXiv:2101.09604 [stat.CO].
+[84] Alexander M. Polyakov. “Compact Gauge Fields and the Infrared Catastrophe”. In:Phys.
+Lett. B59 (1975). Ed. by J. C. Taylor, pp. 82–84.doi:10.1016/0370-2693(75)90162-8.
+[85] Kenji Fukushima. “Chiral effective model with the Polyakov loop”. In:Phys. Lett. B591
+(2004), pp. 277–284.doi:10.1016/j.physletb.2004.04.027. arXiv:hep-ph/0310121.
+[86] Kenji Fukushima and Vladimir Skokov. “Polyakov loop modeling for hot QCD”. In:Prog.
+Part. Nucl. Phys.96 (2017), pp. 154–199.doi:10.1016/j.ppnp.2017.05.002. arXiv:
+1705.00718 [hep-ph].
+[87] Laura Sagunski, Philipp Schicho, and Daniel Schmitt. “Supercool exit: Gravitational
+waves from QCD-triggered conformal symmetry breaking”. In:Phys. Rev. D107.12
+(2023), p. 123512.doi:10.1103/PhysRevD.107.123512. arXiv:2303.02450 [hep-ph].
+[88] Gert Aarts et al. “Phase Transitions in Particle Physics: Results and Perspectives from
+Lattice Quantum Chromo-Dynamics”. In:Prog. Part. Nucl. Phys.133 (2023), p. 104070.
+doi:10.1016/j.ppnp.2023.104070. arXiv:2301.04382 [hep-lat].
+[89] Sidney R. Coleman and Erick J. Weinberg. “Radiative Corrections as the Origin of Spon-
+taneous Symmetry Breaking”. In:Phys. Rev. D7 (1973), pp. 1888–1910.doi:10.1103
+/PhysRevD.7.1888.
+[90] Peter Brockway Arnold and Olivier Espinosa. “The Effective potential and first order
+phase transitions: Beyond leading-order”. In:Phys. Rev. D47 (1993), p. 3546.doi:10
+.1103/PhysRevD.47.3546. arXiv:hep-ph/9212235.
+[91] Rajesh R. Parwani. “Resummation in a hot scalar field theory”. In:Phys. Rev. D45
+(1992), p. 4695.doi:10.1103/PhysRevD.45.4695. arXiv:hep-ph/9204216.
+64
+
+[92] Simone Blasi et al. “Gravitational waves from defect-driven phase transitions: domain
+walls”. In:JCAP10 (2023), p. 051.doi:10.1088/1475- 7516/2023/10/051. arXiv:
+2302.06952 [astro-ph.CO].
+[93] Marek Lewicki et al. “Impact of theoretical uncertainties on model parameter reconstruc-
+tion from GW signals sourced by cosmological phase transitions”. In:Phys. Rev. D110.2
+(2024), p. 023538.doi:10.1103/PhysRevD.110.023538. arXiv:2403.03769 [hep-ph].
+[94] Djuna Croon et al. “Theoretical uncertainties for cosmological first-order phase transi-
+tions”. In:JHEP04 (2021), p. 055.doi:10.1007/JHEP04(2021)055. arXiv:2009.10080
+[hep-ph].
+[95] Maciej Kierkla et al. “Gravitational waves from supercooled phase transitions: dimen-
+sional transmutation meets dimensional reduction”. In:JHEP02 (2024), p. 234.doi:
+10.1007/JHEP02(2024)234. arXiv:2312.12413 [hep-ph].
+[96] Felix Giese et al. “Model-independent energy budget for LISA”. In:JCAP01 (2021),
+p. 072.doi:10.1088/1475-7516/2021/01/072. arXiv:2010.09744 [astro-ph.CO].
+[97] Steven K. Blau, E. I. Guendelman, and Alan H. Guth. “The Dynamics of False Vacuum
+Bubbles”. In:Phys. Rev. D35 (1987), p. 1747.doi:10.1103/PhysRevD.35.1747.
+[98] G. Franciolini, M. Peloso, and A. Riotto. “Dark Matter from Eternity”. In: (Feb. 2026).
+arXiv:2602.08338 [astro-ph.CO].
+[99] Christian D. Lorenz and Robert M. Ziff. “Precise determination of the critical percolation
+threshold for the three-dimensional “Swiss cheese” model using a growth algorithm”. In:
+The Journal of Chemical Physics114.8 (Feb. 2001), pp. 3659–3661.issn: 0021-9606.doi:
+10.1063/1.1338506. eprint:https://pubs.aip.org/aip/jcp/article-pdf/114/8/36
+59/19017114/3659_1_online.pdf.url:https://doi.org/10.1063/1.1338506.
+[100] Peter Athron, Csaba Bal´ azs, and Lachlan Morris. “Supercool subtleties of cosmological
+phase transitions”. In:JCAP03 (2023), p. 006.doi:10.1088/1475-7516/2023/03/006.
+arXiv:2212.07559 [hep-ph].
+[101] Chiara Caprini et al. “Science with the space-based interferometer eLISA. II: Gravita-
+tional waves from cosmological phase transitions”. In:JCAP04 (2016), p. 001.doi:
+10.1088/1475-7516/2016/04/001. arXiv:1512.06239 [astro-ph.CO].
+[102] Ariel Megevand and Santiago Ramirez. “Bubble nucleation and growth in very strong
+cosmological phase transitions”. In:Nucl. Phys. B919 (2017), pp. 74–109.doi:10.101
+6/j.nuclphysb.2017.03.009. arXiv:1611.05853 [astro-ph.CO].
+[103] Felix Giese, Thomas Konstandin, and Jorinde van de Vis. “Model-independent energy
+budget of cosmological first-order phase transitions—A sound argument to go beyond the
+bag model”. In:JCAP07.07 (2020), p. 057.doi:10.1088/1475- 7516/2020/07/057.
+arXiv:2004.06995 [astro-ph.CO].
+[104] Dietrich Bodeker and Guy D. Moore. “Can electroweak bubble walls run away?” In:
+JCAP05 (2009), p. 009.doi:10.1088/1475- 7516/2009/05/009. arXiv:0903.4099
+[hep-ph].
+[105] Arthur Kosowsky and Michael S. Turner. “Gravitational radiation from colliding vacuum
+bubbles: envelope approximation to many bubble collisions”. In:Phys. Rev. D47 (1993),
+pp. 4372–4391.doi:10.1103/PhysRevD.47.4372. arXiv:astro-ph/9211004.
+65
+
+[106] Arthur Kosowsky, Michael S. Turner, and Richard Watkins. “Gravitational radiation
+from colliding vacuum bubbles”. In:Phys. Rev. D45 (1992), pp. 4514–4535.doi:10.11
+03/PhysRevD.45.4514.
+[107] John T. Giblin and James B. Mertens. “Gravitional radiation from first-order phase
+transitions in the presence of a fluid”. In:Phys. Rev. D90.2 (2014), p. 023532.doi:
+10.1103/PhysRevD.90.023532. arXiv:1405.4005 [astro-ph.CO].
+[108] Mark Hindmarsh. “Sound shell model for acoustic gravitational wave production at a first-
+order phase transition in the early Universe”. In:Phys. Rev. Lett.120.7 (2018), p. 071301.
+doi:10.1103/PhysRevLett.120.071301. arXiv:1608.04735 [astro-ph.CO].
+[109] Ryusuke Jinno and Masahiro Takimoto. “Gravitational waves from bubble dynamics:
+Beyond the Envelope”. In:JCAP01 (2019), p. 060.doi:10.1088/1475-7516/2019/01
+/060. arXiv:1707.03111 [hep-ph].
+[110] Thomas Konstandin. “Gravitational radiation from a bulk flow model”. In:JCAP
+03 (2018), p. 047.doi:10 . 1088 / 1475 - 7516 / 2018 / 03 / 047. arXiv:1712 . 06869
+[astro-ph.CO].
+[111] Daniel Cutting, Mark Hindmarsh, and David J. Weir. “Gravitational waves from vac-
+uum first-order phase transitions: from the envelope to the lattice”. In:Phys. Rev. D
+97.12 (2018), p. 123513.doi:10 . 1103 / PhysRevD . 97 . 123513. arXiv:1802 . 05712
+[astro-ph.CO].
+[112] Mark Hindmarsh and Mulham Hijazi. “Gravitational waves from first order cosmological
+phase transitions in the Sound Shell Model”. In:JCAP12 (2019), p. 062.doi:10.1088
+/1475-7516/2019/12/062. arXiv:1909.10040 [astro-ph.CO].
+[113] Mark B. Hindmarsh et al. “Phase transitions in the early universe”. In:SciPost Phys.
+Lect. Notes24 (2021), p. 1.doi:10.21468/SciPostPhysLectNotes.24. arXiv:2008.09
+136 [astro-ph.CO].
+[114] Daniel Cutting et al. “Gravitational waves from vacuum first order phase transitions II:
+from thin to thick walls”. In:Phys. Rev. D103.2 (2021), p. 023531.doi:10.1103/Phys
+RevD.103.023531. arXiv:2005.13537 [astro-ph.CO].
+[115] Alberto Roper Pol, Simona Procacci, and Chiara Caprini. “Characterization of the grav-
+itational wave spectrum from sound waves within the sound shell model”. In:Phys. Rev.
+D109.6 (2024), p. 063531.doi:10.1103/PhysRevD.109.063531. arXiv:2308.12943
+[gr-qc].
+[116] Chiara Caprini et al. “Fluid perturbations from expanding bubbles in first-order phase
+transitions”. In: (Apr. 2026). arXiv:2604.02240 [gr-qc].
+[117] Anson Hook, Gustavo Marques-Tavares, and Davide Racco. “Causal gravitational waves
+as a probe of free streaming particles and the expansion of the Universe”. In:JHEP02
+(2021), p. 117.doi:10.1007/JHEP02(2021)117. arXiv:2010.03568 [hep-ph].
+[118] Gabriele Franciolini, Davide Racco, and Fabrizio Rompineve. “Footprints of the QCD
+Crossover on Cosmological Gravitational Waves at Pulsar Timing Arrays”. In:Phys.
+Rev. Lett.132.8 (2024), p. 081001.doi:10 . 1103 / PhysRevLett . 132 . 081001. arXiv:
+2306.17136 [astro-ph.CO].
+66
+
+[119] Nicklas Ramberg, Wolfram Ratzinger, and Pedro Schwaller. “Oneµto rule them all:
+CMB spectral distortions can probe domain walls, cosmic strings and low scale phase
+transitions”. In:JCAP02 (2023), p. 039.doi:10 . 1088 / 1475 - 7516 / 2023 / 02 / 039.
+arXiv:2209.14313 [hep-ph].
+[120] Jing Liu et al. “Constraining First-Order Phase Transitions with Curvature Perturba-
+tions”. In:Phys. Rev. Lett.130.5 (2023), p. 051001.doi:10.1103/PhysRevLett.130.0
+51001. arXiv:2208.14086 [astro-ph.CO].
+[121] Hengameh Bagherian, Majid Ekhterachian, and Stefan Stelzl. “The bearable inhomo-
+geneity of the baryon asymmetry”. In:JHEP01 (2026), p. 068.doi:10.1007/JHEP01(2
+026)068. arXiv:2505.15904 [hep-ph].
+[122] Moritz Breitbach et al. “Dark, Cold, and Noisy: Constraining Secluded Hidden Sectors
+with Gravitational Waves”. In:JCAP07 (2019), p. 007.doi:10.1088/1475-7516/201
+9/07/007. arXiv:1811.11175 [hep-ph].
+[123] Gemma Janssen et al. “Gravitational wave astronomy with the SKA”. In:PoSAASKA14
+(2015). Ed. by Tyler L. Bourke et al., p. 037.doi:10.22323/1.215.0037. arXiv:1501
+.00127 [astro-ph.IM].
+[124] A. Weltman et al. “Fundamental physics with the Square Kilometre Array”. In:Publ.
+Astron. Soc. Austral.37 (2020), e002.doi:10.1017/pasa.2019.42. arXiv:1810.02680
+[astro-ph.CO].
+[125] L. Lentati et al. “European Pulsar Timing Array Limits On An Isotropic Stochas-
+tic Gravitational-Wave Background”. In:Mon. Not. Roy. Astron. Soc.453.3 (2015),
+pp. 2576–2598.doi:10.1093/mnras/stv1538. arXiv:1504.03692 [astro-ph.CO].
+[126] G. Desvignes et al. “High-precision timing of 42 millisecond pulsars with the European
+Pulsar Timing Array”. In:Mon. Not. Roy. Astron. Soc.458.3 (2016), pp. 3341–3380.doi:
+10.1093/mnras/stw483. arXiv:1602.08511 [astro-ph.HE].
+[127] Z. Arzoumanian et al. “The NANOGrav 11-year Data Set: Pulsar-timing Constraints On
+The Stochastic Gravitational-wave Background”. In:Astrophys. J.859.1 (2018), p. 47.
+doi:10.3847/1538-4357/aabd3b. arXiv:1801.02617 [astro-ph.HE].
+[128] Alberto Sesana et al. “Unveiling the gravitational universe atµ-Hz frequencies”. In:
+Exper. Astron.51.3 (2021), pp. 1333–1383.doi:10.1007/s10686-021-09709-9. arXiv:
+1908.11391 [astro-ph.IM].
+[129] Naoki Seto, Seiji Kawamura, and Takashi Nakamura. “Possibility of direct measurement
+of the acceleration of the universe using 0.1-Hz band laser interferometer gravitational
+wave antenna in space”. In:Phys. Rev. Lett.87 (2001), p. 221103.doi:10.1103/PhysR
+evLett.87.221103. arXiv:astro-ph/0108011.
+[130] Shuichi Sato et al. “The status of DECIGO”. In:J. Phys. Conf. Ser.840.1 (2017). Ed. by
+Domencio Giardini and Philippe Jetzer, p. 012010.doi:10.1088/1742-6596/840/1/01
+2010.
+[131] Jeff Crowder and Neil J. Cornish. “Beyond LISA: Exploring future gravitational wave
+missions”. In:Phys. Rev. D72 (2005), p. 083005.doi:10.1103/PhysRevD.72.083005.
+arXiv:gr-qc/0506015.
+[132] B. Sathyaprakash et al. “Scientific Objectives of Einstein Telescope”. In:Class. Quant.
+Grav.29 (2012). Ed. by Mark Hannam et al., p. 124013.doi:10.1088/0264-9381/29/1
+2/124013. arXiv:1206.0331 [gr-qc].
+67
+
+[133] J. Aasi et al. “Advanced LIGO”. In:Class. Quant. Grav.32 (2015), p. 074001.doi:
+10.1088/0264-9381/32/7/074001. arXiv:1411.4547 [gr-qc].
+[134] F. Acernese et al. “Advanced Virgo: a second-generation interferometric gravitational
+wave detector”. In:Class. Quant. Grav.32.2 (2015), p. 024001.doi:10.1088/0264-938
+1/32/2/024001. arXiv:1408.3978 [gr-qc].
+[135] Keiko Kokeyama. “KAGRA, the underground and cryogenic laser interferometer for grav-
+itational wave detection”. In:14th Pacific Rim Conference on Lasers and Electro-Optics.
+Aug. 2020.doi:10.1364/CLEOPR.2020.C5G_1.
+[136] William G. Lamb, Stephen R. Taylor, and Rutger van Haasteren. “Rapid refitting tech-
+niques for Bayesian spectral characterization of the gravitational wave background using
+pulsar timing arrays”. In:Phys. Rev. D108.10 (2023), p. 103019.doi:10.1103/PhysRe
+vD.108.103019. arXiv:2303.15442 [astro-ph.HE].
+[137] Zaven Arzoumanian et al. “The NANOGrav 12.5 yr Data Set: Search for an Isotropic
+Stochastic Gravitational-wave Background”. In:Astrophys. J. Lett.905.2 (2020), p. L34.
+doi:10.3847/2041-8213/abd401. arXiv:2009.04496 [astro-ph.HE].
+[138] Michele Maggiore.Gravitational Waves. Vol. 2: Astrophysics and Cosmology. Oxford
+University Press, Mar. 2018.isbn: 978-0-19-857089-9.
+[139] Tsung-Han Yeh et al. “Probing physics beyond the standard model: limits from BBN
+and the CMB independently and combined”. In:JCAP10 (2022), p. 046.doi:10.1088
+/1475-7516/2022/10/046. arXiv:2207.13133 [astro-ph.CO].
+[140] Carroll L. Wainwright. “CosmoTransitions: Computing Cosmological Phase Transition
+Temperatures and Bubble Profiles with Multiple Fields”. In:Comput. Phys. Commun.
+183 (2012), pp. 2006–2013.doi:10 . 1016 / j . cpc . 2012 . 04 . 004. arXiv:1109 . 4189
+[hep-ph].
+[141] James M. Cline, Guy D. Moore, and Geraldine Servant. “Was the electroweak phase
+transition preceded by a color broken phase?” In:Phys. Rev. D60 (1999), p. 105035.
+doi:10.1103/PhysRevD.60.105035. arXiv:hep-ph/9902220.
+[142] Lars Husdal. “On Effective Degrees of Freedom in the Early Universe”. In:Galaxies4.4
+(2016), p. 78.doi:10.3390/galaxies4040078. arXiv:1609.04979 [astro-ph.CO].
+[143] Ken’ichi Saikawa and Satoshi Shirai. “Primordial gravitational waves, precisely: The role
+of thermodynamics in the Standard Model”. In:JCAP05 (2018), p. 035.doi:10.1088
+/1475-7516/2018/05/035. arXiv:1803.01038 [hep-ph].
+[144] J. E. Camargo-Molina et al. “Vevacious: A Tool For Finding The Global Minima Of
+One-Loop Effective Potentials With Many Scalars”. In:Eur. Phys. J. C73.10 (2013),
+p. 2588.doi:10.1140/epjc/s10052-013-2588-2. arXiv:1307.1477 [hep-ph].
+[145] Ali Masoumi, Ken D. Olum, and Benjamin Shlaer. “Efficient numerical solution to vac-
+uum decay with many fields”. In:JCAP01 (2017), p. 051.doi:10.1088/1475-7516/20
+17/01/051. arXiv:1610.06594 [gr-qc].
+[146] Peter Athron et al. “BubbleProfiler: finding the field profile and action for cosmological
+phase transitions”. In:Comput. Phys. Commun.244 (2019), pp. 448–468.doi:10.1016
+/j.cpc.2019.05.017. arXiv:1901.03714 [hep-ph].
+[147] Michael Bardsley. “An optimisation based algorithm for finding the nucleation tem-
+perature of cosmological phase transitions”. In:Comput. Phys. Commun.273 (2022),
+p. 108252.doi:10.1016/j.cpc.2021.108252. arXiv:2103.01985 [astro-ph.CO].
+68
+
+[148] Vedran Brdar et al. “PT2GWFinder: A Package for Cosmological First-Order Phase
+Transitions and Gravitational Waves”. In: (May 2025). arXiv:2505.04744 [hep-ph].
+[149] European Space Agency (ESA).LISA Science Requirements Document. May 2018.doi:
+ESA-L3-EST-SCI-RS-001.url:https://www.cosmos.esa.int/documents/678316/17
+00384/SciRD.pdf.
+[150] G.C. Branco et al. “Theory and Phenomenology of Two-Higgs-doublet Models”. In:
+Physics Reports516.1-2 (July 2012), pp. 1–102.issn: 03701573.doi:10 . 1016 / j . ph
+ysrep.2012.02.002. (Visited on 04/13/2026).
+[151] Hiren H. Patel and Michael J. Ramsey-Musolf. “Baryon Washout, Electroweak Phase
+Transition, and Perturbation Theory”. In:JHEP07 (2011), p. 029.doi:10.1007/JHEP
+07(2011)029. arXiv:1101.4665 [hep-ph].
+69
