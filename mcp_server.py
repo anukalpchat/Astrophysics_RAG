@@ -134,6 +134,7 @@ if __name__ == "__main__":
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(AuthMiddleware)
 
-    print("Starting Astrophysics RAG MCP server on http://0.0.0.0:8000")
-    print("SSE endpoint: http://0.0.0.0:8000/sse")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    print(f"Starting Astrophysics RAG MCP server on http://0.0.0.0:{port}")
+    print(f"SSE endpoint: http://0.0.0.0:{port}/sse")
+    uvicorn.run(app, host="0.0.0.0", port=port)
